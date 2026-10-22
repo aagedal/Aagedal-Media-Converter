@@ -73,6 +73,10 @@ struct Aagedal_Media_Converter_App: App {
         // Bring the settings-sync singleton (and its file/UserDefaults observers)
         // online at launch so a snapshot that arrived while closed is pulled in.
         SettingsSyncService.shared.activate()
+        // Settle the previous run's history (interrupted encodes, unclean exit)
+        // and turn its unfinished queue into a one-shot restore offer.
+        EncodeHistoryStore.shared.bootstrap()
+        LastSessionStore.shared.bootstrap()
 
         // Restore local-agent history before the transport layer is connected.
         // A damaged snapshot is reported and retained rather than overwritten.
@@ -243,9 +247,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        terminationGate.requestTermination {
+        let runningCount = EncodeHistoryStore.shared.runningItemCount
+        if runningCount > 0, Self.shouldConfirmQuitWhileEncoding, !Self.confirmQuitWhileEncoding(runningCount: runningCount) {
+            return .terminateCancel
+        }
+        // Snapshot the queue before the session ends so running rows are offered again.
+        LastSessionStore.shared.flush()
+        EncodeHistoryStore.shared.endSession()
+        return terminationGate.requestTermination {
             sender.reply(toApplicationShouldTerminate: true)
         }
+    }
+
+    private static var shouldConfirmQuitWhileEncoding: Bool {
+        UserDefaults.standard.object(forKey: AppConstants.confirmQuitWhileEncodingKey) as? Bool
+            ?? AppConstants.defaultConfirmQuitWhileEncoding
+    }
+
+    private static func confirmQuitWhileEncoding(runningCount: Int) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = String(localized: "\(runningCount) encodes are still running",
+                                   comment: "Quit confirmation title while encoding.")
+        alert.informativeText = String(localized: "Quitting stops the encode. Unfinished items can be restored from Last Session the next time you open the app.")
+        alert.addButton(withTitle: String(localized: "Quit"))
+        alert.addButton(withTitle: String(localized: "Cancel"))
+        alert.showsSuppressionButton = true
+        alert.suppressionButton?.title = String(localized: "Don’t ask again")
+        let response = alert.runModal()
+        if alert.suppressionButton?.state == .on, response == .alertFirstButtonReturn {
+            UserDefaults.standard.set(false, forKey: AppConstants.confirmQuitWhileEncodingKey)
+        }
+        return response == .alertFirstButtonReturn
     }
 
     func applicationWillTerminate(_ notification: Notification) {

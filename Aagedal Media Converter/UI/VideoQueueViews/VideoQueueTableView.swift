@@ -157,8 +157,9 @@ struct VideoQueueTableView: NSViewRepresentable {
     var onToggleDateTag: ((Int) -> Void)?
     var onPlayFullscreen: ((UUID) -> Void)?
     var onRenameOutputFileName: ((UUID, String?) -> Void)?
+    var onSetPresetOverride: ((UUID, ExportPreset?) -> Void)?
     var encodeOnly: ((UUID) async -> Void)?
-    /// Option-click on a group's encode button → encode that group's items
+    /// The group's encode button → encode that group's items
     /// immediately. Mirrors `encodeOnly` for single items.
     var encodeOnlyGroup: ((UUID) async -> Void)?
     var transcribeOnly: ((UUID, SubtitleConversionMethod) async -> Void)?
@@ -1014,6 +1015,10 @@ struct VideoQueueTableView: NSViewRepresentable {
                 return String(format: "%.2f fps", rounded)
             }()
             let videoIsInterlaced = metadata?.primaryVideoStream?.isInterlaced == true
+            let isMergingUngrouped = parent.mergeClipsEnabled && parent.mergeClipsAvailable
+            let rowPreset = item.applicationPresetID?.exportPreset
+                ?? (isGroupItem ? group?.preset : (isMergingUngrouped ? nil : item.presetOverride))
+                ?? parent.preset
 
             return VideoFileCellConfiguration(
                 itemID: item.id,
@@ -1048,7 +1053,11 @@ struct VideoQueueTableView: NSViewRepresentable {
                 showCommentField: isGroupItem ? false : parent.showCommentField,
                 showDateTagButton: isGroupItem ? false : parent.showDateTagButton,
                 isFocusedComment: parent.focusedCommentID == item.id,
-                preset: item.applicationPresetID?.exportPreset ?? group?.preset ?? parent.preset,
+                preset: rowPreset,
+                presetOverride: isGroupItem || isMergingUngrouped ? nil : item.presetOverride,
+                canOverridePreset: !isGroupItem && !isMergingUngrouped && item.status == .waiting
+                    && item.applicationJobID == nil && !item.isDownloading && item.isEncodable,
+                queuePreset: parent.preset,
                 mergeClipsEnabled: group.map { $0.concatEnabled || $0.conformanceMergeEnabled } ?? parent.mergeClipsEnabled,
                 mergeClipsAvailable: isGroupItem ? false : parent.mergeClipsAvailable,
                 outputFileExists: item.outputFileExists,
@@ -1097,10 +1106,10 @@ struct VideoQueueTableView: NSViewRepresentable {
                 waveformVideoEnabled: item.waveformVideoEnabled,
                 isImageSequence: item.isImageSequence,
                 isGroupChild: isGroupItem,
-                isDCPPreset: parent.preset == .dcp,
+                isDCPPreset: rowPreset == .dcp,
                 dcpMetadataTitle: item.dcpMetadata?.contentTitleText,
-                showDCPAudioWarning: parent.preset == .dcp && !(audioRouting?.isCustomized ?? false) && audioStreams.count > 1 && !audioStreams.allSatisfy { ($0.channels ?? 0) == 1 },
-                isIMFPreset: parent.preset == .imfJ2K || parent.preset == .imfProRes,
+                showDCPAudioWarning: rowPreset == .dcp && !(audioRouting?.isCustomized ?? false) && audioStreams.count > 1 && !audioStreams.allSatisfy { ($0.channels ?? 0) == 1 },
+                isIMFPreset: rowPreset == .imfJ2K || rowPreset == .imfProRes,
                 imfMetadataTitle: item.imfMetadata?.contentTitleText,
                 formattedOutputSize: item.formattedOutputSize,
                 isTranscriptionAvailable: parent.isTranscriptionAvailable,
@@ -1290,12 +1299,10 @@ struct VideoQueueTableView: NSViewRepresentable {
                 parent.onCycleGroupSort?(groupID)
             case .openGroupEditor:
                 parent.onOpenGroupEditor?(groupID)
-            case .encodeNow(let optionPressed):
-                if optionPressed {
-                    let callback = parent.encodeOnlyGroup
-                    Task { @MainActor in
-                        await callback?(groupID)
-                    }
+            case .encodeNow:
+                let callback = parent.encodeOnlyGroup
+                Task { @MainActor in
+                    await callback?(groupID)
                 }
             default:
                 break
@@ -1438,13 +1445,11 @@ struct VideoQueueTableView: NSViewRepresentable {
                         Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
                     }
                 }
-            case .encodeNow(let optionPressed):
-                if optionPressed {
-                    // Option+click: encode this single item immediately
-                    let callback = parent.encodeOnly
-                    Task { @MainActor in
-                        await callback?(itemID)
-                    }
+            case .encodeNow:
+                // Encode this single item immediately.
+                let callback = parent.encodeOnly
+                Task { @MainActor in
+                    await callback?(itemID)
                 }
             case .toggleUpload(let optionPressed):
                 if let idx = droppedFilesIndex[itemID] {
@@ -1545,6 +1550,8 @@ struct VideoQueueTableView: NSViewRepresentable {
                 parent.onTabCommentField?(forward)
             case .commitRename(let name):
                 parent.onRenameOutputFileName?(itemID, name)
+            case .setPresetOverride(let preset):
+                parent.onSetPresetOverride?(itemID, preset)
             case .showPreview:
                 parent.onOpenTrim?(itemID)
             case .showMetadata:

@@ -140,6 +140,11 @@ struct ContentView: View {
     @State private var settingsImportAlertMessage: String?
     @State private var showSettingsImportAlert = false
     @State private var showURLInputOverlay = false
+    @State private var showEncodeHistory = false
+    @State private var showLastSession = false
+    @State private var historyStore = EncodeHistoryStore.shared
+    @State private var lastSessionStore = LastSessionStore.shared
+    @AppStorage(AppConstants.encodeHistoryEnabledKey) private var encodeHistoryEnabled = AppConstants.defaultEncodeHistoryEnabled
     @State private var showPresetQuickSelect = false
     @State private var showYTDLPNotConfiguredAlert = false
     // showCaptureSheet removed — capture mode now uses CaptureOverlayWindowController
@@ -218,6 +223,8 @@ struct ContentView: View {
             imfMetadataSheetItemID != nil ||
             CaptureOverlayWindowController.shared.isShowing ||
             showURLInputOverlay ||
+            showEncodeHistory ||
+            showLastSession ||
             showPresetQuickSelect
     }
 
@@ -285,6 +292,152 @@ struct ContentView: View {
             files: droppedFiles, groups: encodingGroups,
             order: queueOrder, selectedPreset: selectedPreset
         )
+        observeQueueForHistory()
+    }
+
+    // MARK: - Encode History & Last Session
+
+    /// Feeds row statuses to the encode history and keeps the last-session
+    /// snapshot fresh. Runs on every queue change, so only IDs and statuses
+    /// are collected up front.
+    private func observeQueueForHistory() {
+        var statuses: [(id: UUID, status: ConversionManager.ConversionStatus)] = droppedFiles.map { ($0.id, $0.status) }
+        for group in encodingGroups {
+            statuses.append(contentsOf: group.items.map { ($0.id, $0.status) })
+        }
+        EncodeHistoryStore.shared.observe(statuses) { id in historyRow(for: id) }
+        LastSessionStore.shared.scheduleUpdate()
+    }
+
+    private func historyRow(for id: UUID) -> HistoryObservedRow? {
+        if let item = droppedFiles.first(where: { $0.id == id }) {
+            return HistoryObservedRow(
+                item: item,
+                preset: item.applicationPresetID?.exportPreset ?? effectivePreset(for: item),
+                groupName: nil,
+                merged: mergeClipsEnabled && item.applicationJobID == nil
+            )
+        }
+        for group in encodingGroups {
+            guard let item = group.items.first(where: { $0.id == id }) else { continue }
+            return HistoryObservedRow(
+                item: item,
+                preset: item.applicationPresetID?.exportPreset ?? group.preset ?? selectedPreset,
+                groupName: group.name,
+                merged: group.concatEnabled && group.items.count > 1
+            )
+        }
+        return nil
+    }
+
+    /// The preset a queued item (grouped or not) encodes with.
+    private func encodingPreset(forItemID id: UUID) -> ExportPreset {
+        if let item = droppedFiles.first(where: { $0.id == id }) {
+            return item.applicationPresetID?.exportPreset ?? effectivePreset(for: item)
+        }
+        for group in encodingGroups {
+            guard let item = group.items.first(where: { $0.id == id }) else { continue }
+            return item.applicationPresetID?.exportPreset ?? group.preset ?? selectedPreset
+        }
+        return selectedPreset
+    }
+
+    private func currentLastSessionSnapshot() -> LastSessionSnapshot {
+        LastSessionStore.makeSnapshot(
+            files: droppedFiles, groups: encodingGroups,
+            order: queueOrder, preset: selectedPreset
+        )
+    }
+
+    private var isQueueEmpty: Bool {
+        droppedFiles.isEmpty && encodingGroups.allSatisfy(\.items.isEmpty)
+    }
+
+    private func restoreLastSession(selectedIDs: Set<UUID>, resolved: [UUID: URL]) {
+        guard let snapshot = lastSessionStore.pending else { return }
+        let request = QueueRestoreRequest.fromSnapshot(snapshot, selectedIDs: selectedIDs, resolved: resolved)
+        restoreQueue(request)
+        lastSessionStore.consume(itemIDs: selectedIDs)
+    }
+
+    private func requeueHistoryRecords(_ records: [EncodeRecord], resolved: [UUID: URL]) {
+        let request = QueueRestoreRequest.fromRecords(records, resolved: resolved)
+        restoreQueue(request)
+    }
+
+    /// Adds restored rows with their saved per-item settings. Sources already
+    /// in the queue are skipped.
+    @MainActor
+    private func restoreQueue(_ request: QueueRestoreRequest) {
+        guard !request.isEmpty else { return }
+        var existingURLs = Set(droppedFiles.map(\.url))
+        for group in encodingGroups { existingURLs.formUnion(group.items.map(\.url)) }
+
+        if isQueueEmpty, let preset = request.preset, preset != selectedPreset, !request.items.isEmpty {
+            applyPresetChange(preset)
+        }
+
+        func makeRows(_ items: [QueueRestoreRequest.Item], context: VideoGroupImportContext, grouped: Bool) -> [VideoItem] {
+            items.compactMap { entry in
+                guard existingURLs.insert(entry.url).inserted,
+                      var row = context.makePlaceholder(from: entry.url) else { return nil }
+                entry.recipe.apply(to: &row)
+                if grouped {
+                    // The group's preset applies to its rows.
+                    row.presetOverride = nil
+                    if row.outputFileNameOverride != nil { row.outputURL = context.outputURL(for: row) }
+                } else {
+                    row.presetOverride = entry.preset.flatMap { $0 == selectedPreset ? nil : $0 }
+                    if row.outputFileNameOverride != nil || row.presetOverride != nil {
+                        row.outputURL = expectedOutputURL(for: row, preset: selectedPreset)
+                    }
+                }
+                return row
+            }
+        }
+
+        let context = VideoGroupImportContext(preset: selectedPreset, outputFolder: outputFolder)
+        let rows = makeRows(request.items, context: context, grouped: false)
+        droppedFiles.append(contentsOf: rows)
+        queueOrder.append(contentsOf: rows.map(\.id))
+        if !rows.isEmpty {
+            let ids = rows.map(\.id)
+            Task { await loadRestoredItemDetails(itemIDs: ids, context: context) }
+        }
+
+        for restored in request.groups {
+            let groupContext = VideoGroupImportContext(preset: restored.preset ?? selectedPreset, outputFolder: outputFolder)
+            let groupRows = makeRows(restored.items, context: groupContext, grouped: true)
+            guard !groupRows.isEmpty else { continue }
+            var group = EncodingGroup(
+                name: restored.name,
+                items: groupRows,
+                isExpanded: true,
+                preset: restored.preset,
+                concatEnabled: restored.concatEnabled,
+                uploadEnabled: restored.uploadEnabled,
+                transcriptionEnabled: restored.transcriptionEnabled,
+                analyticsEnabled: restored.analyticsEnabled,
+                sequentialNamingEnabled: restored.sequentialNamingEnabled
+            )
+            if group.sequentialNamingEnabled { group.normalizeSequentialNaming() }
+            encodingGroups.append(group)
+            queueOrder.append(group.id)
+            let ids = groupRows.map(\.id)
+            Task { await loadGroupItemDetails(groupID: group.id, itemIDs: ids, context: groupContext) }
+        }
+    }
+
+    @MainActor
+    private func loadRestoredItemDetails(itemIDs: [UUID], context: VideoGroupImportContext) async {
+        for itemID in itemIDs {
+            guard let item = droppedFiles.first(where: { $0.id == itemID }) else { continue }
+            let details = await context.loadDetails(for: item)
+            if let index = droppedFiles.firstIndex(where: { $0.id == itemID }) {
+                droppedFiles[index].apply(details: details)
+                droppedFiles[index].detailsLoaded = true
+            }
+        }
     }
 
     /// Presets that are currently visible in the picker
@@ -373,6 +526,9 @@ struct ContentView: View {
             },
             onRenameOutputFileName: { id, newName in
                 handleOutputFileNameOverride(itemID: id, newName: newName)
+            },
+            onSetPresetOverride: { id, preset in
+                setPresetOverride(itemID: id, preset: preset)
             },
             encodeOnly: { itemID in
                 await encodeOnlyItem(itemID: itemID)
@@ -552,6 +708,7 @@ struct ContentView: View {
 
             if shouldClearSettings {
                 droppedFiles[index].clearUserSettings(resetNameOverride: true)
+                droppedFiles[index].outputURL = expectedOutputURL(for: droppedFiles[index], preset: selectedPreset)
             }
         }
     }
@@ -571,6 +728,7 @@ struct ContentView: View {
                 dcpMetadataSheetItemID: $dcpMetadataSheetItemID,
                 imfMetadataSheetItemID: $imfMetadataSheetItemID,
                 selectedPreset: selectedPreset,
+                presetForItem: encodingPreset(forItemID:),
                 showCaptureSheet: .constant(false)
             ))
             .background(keyboardShortcutHandler)
@@ -628,7 +786,11 @@ struct ContentView: View {
             .onChange(of: encodingGroups) { _, _ in publishVisibleQueue() }
             .onChange(of: queueOrder) { _, _ in publishVisibleQueue() }
             .onChange(of: selectedPreset) { _, _ in publishVisibleQueue() }
-            .onDisappear { ApplicationVisibleQueueRegistry.shared.clear() }
+            .onDisappear {
+                ApplicationVisibleQueueRegistry.shared.clear()
+                // Closing the window drops the queue; offer it again in the next window.
+                LastSessionStore.shared.windowClosed()
+            }
             .onChange(of: animatedStillFormat) { _, _ in
                 if selectedPreset == .animatedStill {
                     refreshExpectedOutputURLs(for: selectedPreset)
@@ -847,6 +1009,7 @@ struct ContentView: View {
                     fileImportTaskCoordinator.cancelAll()
                 }
                 .onAppear {
+                    LastSessionStore.shared.snapshotProvider = { currentLastSessionSnapshot() }
                     setupScheduledDownloads()
                     applyWatchFolderLaunchActivationIfNeeded()
                     // Replay any App Intent request that arrived before this
@@ -857,6 +1020,16 @@ struct ContentView: View {
                     conversionToolbar
                 }
                 .background(LiquidGlassToolbarConfigurator())
+                .overlay(alignment: .bottomLeading) {
+                    HistoryCornerButtons(
+                        showHistoryButton: encodeHistoryEnabled || !historyStore.records.isEmpty,
+                        lastSessionCount: lastSessionStore.pending?.itemCount ?? 0,
+                        onShowHistory: { showEncodeHistory = true },
+                        onShowLastSession: { showLastSession = true }
+                    )
+                    .padding(.leading, 12)
+                    .padding(.bottom, 12)
+                }
 
             if isAnyConversionActive {
                 OverallProgressView(
@@ -884,6 +1057,23 @@ struct ContentView: View {
                         handlePlaylistDownload(entries, audioOnly: audioOnly)
                     }
                 )
+            }
+        }
+        .overlay {
+            if showLastSession, let snapshot = lastSessionStore.pending {
+                LastSessionOverlay(
+                    isPresented: $showLastSession,
+                    snapshot: snapshot,
+                    onRestore: { ids, resolved in restoreLastSession(selectedIDs: ids, resolved: resolved) },
+                    onDiscard: { lastSessionStore.discardPending() }
+                )
+            }
+        }
+        .overlay {
+            if showEncodeHistory {
+                EncodeHistoryOverlay(isPresented: $showEncodeHistory) { records, resolved in
+                    requeueHistoryRecords(records, resolved: resolved)
+                }
             }
         }
         .sheet(isPresented: $showPresetQuickSelect) {
@@ -2294,6 +2484,20 @@ struct ContentView: View {
         ApplicationJobRowProjection.apply(record, sourceIndex: sourceIndex, outputURL: outputURL, to: &item)
     }
     
+    /// Splits ungrouped items into consecutive runs that share an effective preset.
+    private func presetRuns(_ items: [VideoItem]) -> [(preset: ExportPreset, items: [VideoItem])] {
+        var runs: [(preset: ExportPreset, items: [VideoItem])] = []
+        for item in items {
+            let preset = effectivePreset(for: item)
+            if let last = runs.indices.last, runs[last].preset == preset {
+                runs[last].items.append(item)
+            } else {
+                runs.append((preset, [item]))
+            }
+        }
+        return runs
+    }
+
     @MainActor
     private func startConversion() async {
         isConverting = true
@@ -2312,13 +2516,16 @@ struct ContentView: View {
                 item.id == id && item.status == .waiting && item.applicationJobID == nil
             }
         }
+        let waitingRuns = presetRuns(orderedWaitingItems)
         if !hasWaitingGroup,
+           waitingRuns.count <= 1,
            orderedWaitingItems.count == droppedFiles.filter({
                $0.status == .waiting && $0.applicationJobID == nil
            }).count,
            await submitManualApplicationJobIfSupported(
                items: orderedWaitingItems,
-               mergeClipsEnabled: mergeClipsEnabled
+               mergeClipsEnabled: mergeClipsEnabled,
+               preset: waitingRuns.first?.preset
            ) {
             isConverting = false
             return
@@ -2387,16 +2594,22 @@ struct ContentView: View {
                 if droppedFiles.contains(where: { $0.status == .waiting && batchIDs.contains($0.id) }) {
                     let itemsByID = Dictionary(uniqueKeysWithValues: droppedFiles.map { ($0.id, $0) })
                     let items = orderedBatchIDs.compactMap { itemsByID[$0] }.filter { $0.status == .waiting }
-                    if await submitManualApplicationJobIfSupported(
-                        items: items, mergeClipsEnabled: mergeClipsEnabled, waitForCompletion: true
-                    ) { continue }
-                    await ConversionManager.shared.startConversion(
-                        droppedFiles: $droppedFiles,
-                        outputFolder: currentOutputFolder.path,
-                        preset: selectedPreset,
-                        mergeClipsEnabled: mergeClipsEnabled,
-                        limitToIDs: batchIDs
-                    )
+                    // Items with a preset override split the batch into runs
+                    // that share a preset, keeping queue order.
+                    for run in presetRuns(items) {
+                        guard isConverting else { break }
+                        if await submitManualApplicationJobIfSupported(
+                            items: run.items, mergeClipsEnabled: mergeClipsEnabled,
+                            preset: run.preset, waitForCompletion: true
+                        ) { continue }
+                        await ConversionManager.shared.startConversion(
+                            droppedFiles: $droppedFiles,
+                            outputFolder: currentOutputFolder.path,
+                            preset: run.preset,
+                            mergeClipsEnabled: mergeClipsEnabled,
+                            limitToIDs: Set(run.items.map(\.id))
+                        )
+                    }
                 }
             }
         }
@@ -2406,7 +2619,7 @@ struct ContentView: View {
         watchFolderCoordinator.startConversion()
     }
 
-    /// Encodes a single item immediately (Option+click on encode button).
+    /// Encodes a single item immediately (the row's encode button).
     @MainActor
     private func encodeOnlyItem(itemID: UUID) async {
         guard !isAnyConversionActive else { return }
@@ -2415,15 +2628,16 @@ struct ContentView: View {
         }) else { return }
         isConverting = true
         dockProgressUpdater.updateProgress(0.0)
+        let preset = droppedFiles.first(where: { $0.id == itemID })?.presetOverride ?? selectedPreset
         if let item = droppedFiles.first(where: { $0.id == itemID }),
-           await submitManualApplicationJobIfSupported(items: [item], mergeClipsEnabled: false) {
+           await submitManualApplicationJobIfSupported(items: [item], mergeClipsEnabled: false, preset: preset) {
             isConverting = false
             return
         }
         await ConversionManager.shared.startConversion(
             droppedFiles: $droppedFiles,
             outputFolder: currentOutputFolder.path,
-            preset: selectedPreset,
+            preset: preset,
             mergeClipsEnabled: false,
             limitToIDs: [itemID]
         )
@@ -2521,7 +2735,7 @@ struct ContentView: View {
         )
     }
 
-    /// Encodes all waiting items in a single group immediately (Option+click on the
+    /// Encodes all waiting items in a single group immediately (the
     /// group's encode button). Mirrors `encodeOnlyItem` but routes through
     /// `convertGroup` so concat/sequential-naming/conformance settings are honoured.
     @MainActor
@@ -2597,6 +2811,15 @@ struct ContentView: View {
         watchFolderCoordinator.cancelConversion()
     }
     
+    private func setPresetOverride(itemID: UUID, preset: ExportPreset?) {
+        guard let index = droppedFiles.firstIndex(where: { $0.id == itemID }),
+              droppedFiles[index].status == .waiting,
+              droppedFiles[index].applicationJobID == nil else { return }
+        // Choosing the queue's own preset is the same as no override.
+        droppedFiles[index].presetOverride = preset == selectedPreset ? nil : preset
+        droppedFiles[index].outputURL = expectedOutputURL(for: droppedFiles[index], preset: selectedPreset)
+    }
+
     private func refreshExpectedOutputURLs(for preset: ExportPreset) {
         for index in droppedFiles.indices
             where droppedFiles[index].status == .waiting && droppedFiles[index].applicationJobID == nil {
@@ -2621,10 +2844,19 @@ struct ContentView: View {
         )
     }
 
-    private func expectedOutputURL(for item: VideoItem, preset: ExportPreset) -> URL? {
-        if mergeClipsEnabled && mergeClipsAvailable, let mergedURL = mergedOutputURL(for: preset) {
+    private var isMergingUngroupedItems: Bool { mergeClipsEnabled && mergeClipsAvailable }
+
+    /// The preset an ungrouped item encodes with. Merging needs one shared
+    /// preset, so per-item overrides only apply when merge is off.
+    private func effectivePreset(for item: VideoItem) -> ExportPreset {
+        isMergingUngroupedItems ? selectedPreset : (item.presetOverride ?? selectedPreset)
+    }
+
+    private func expectedOutputURL(for item: VideoItem, preset queuePreset: ExportPreset) -> URL? {
+        if isMergingUngroupedItems, let mergedURL = mergedOutputURL(for: queuePreset) {
             return mergedURL
         }
+        let preset = item.presetOverride ?? queuePreset
 
         let resolvedExtension = preset.outputExtension(for: item.url)
         let outputBaseName = outputBaseName(for: item, preset: preset)
@@ -3114,6 +3346,7 @@ struct ContentView: View {
             droppedFiles[index].outputURL = expectedOutputURL(for: droppedFiles[index], preset: selectedPreset)
             if shouldClearSettings {
                 droppedFiles[index].clearUserSettings()
+                droppedFiles[index].outputURL = expectedOutputURL(for: droppedFiles[index], preset: selectedPreset)
             }
             didReset = true
         }
@@ -3373,6 +3606,8 @@ private struct ContentViewSheets: ViewModifier {
     @Binding var dcpMetadataSheetItemID: UUID?
     @Binding var imfMetadataSheetItemID: UUID?
     let selectedPreset: ExportPreset
+    /// Preset a queued item encodes with (group, per-item override or queue preset).
+    let presetForItem: (UUID) -> ExportPreset
     @Binding var showCaptureSheet: Bool
 
     func body(content: Content) -> some View {
@@ -3438,7 +3673,7 @@ private struct ContentViewSheets: ViewModifier {
     @ViewBuilder
     private var audioConfigSheetContent: some View {
         if let id = audioConfigSheetItemID, let binding = itemBinding(id: id) {
-            AudioRoutingView(item: binding, preset: selectedPreset)
+            AudioRoutingView(item: binding, preset: presetForItem(id))
         }
     }
 
