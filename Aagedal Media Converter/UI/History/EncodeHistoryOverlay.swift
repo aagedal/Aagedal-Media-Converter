@@ -114,9 +114,11 @@ struct EncodeHistoryOverlay: View {
         let count = store.records.count
         let days = store.retentionDays
         if !store.isEnabled { return String(localized: "History recording is off") }
-        return days > 0
-            ? String(localized: "\(count) encodes · kept for \(days) days", comment: "Encode history footer.")
-            : String(localized: "\(count) encodes · kept indefinitely", comment: "Encode history footer.")
+        let encodes = String(localized: "\(count) encodes", comment: "Encode history footer: number of stored encodes.")
+        let span = days > 0
+            ? String(localized: "kept for \(days) days", comment: "Encode history footer: retention period.")
+            : String(localized: "kept indefinitely", comment: "Encode history footer: retention period.")
+        return "\(encodes) · \(span)"
     }
 
     private var emptyState: some View {
