@@ -232,6 +232,11 @@ final class PreviewPlayerController: ObservableObject {
         return proresCodecs.contains { codec.contains($0) }
     }
 
+    private var hasAV1VideoCodec: Bool {
+        guard let codec = videoItem.metadata?.primaryVideoStream?.codec?.lowercased() else { return false }
+        return codec == "av1" || codec.hasPrefix("av01")
+    }
+
     func preparePreview(startTime: TimeInterval, resetAudioSelection: Bool = true) {
         teardown(resetAudioSelection: resetAudioSelection)
         isPreparing = true
@@ -288,6 +293,13 @@ final class PreviewPlayerController: ObservableObject {
             return
         }
 
+        // AVPlayer decodes AV1 but plays it back unevenly in the preview; MPV is smooth.
+        if hasAV1VideoCodec {
+            logger.info("AV1 video detected, using MPV player for \(url.lastPathComponent, privacy: .public)")
+            setupMPV(url: url, startTime: startTime)
+            return
+        }
+
         // Force MPV for surround audio files - but not for ProRes
         // ProRes handles surround audio correctly, other codecs (HEVC, H.264) may have silent audio
         if hasSurroundAudio && !hasProResVideoCodec {
@@ -312,7 +324,11 @@ final class PreviewPlayerController: ObservableObject {
         let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
         let playerItem = AVPlayerItem(asset: asset)
         let player = AVPlayer(playerItem: playerItem)
-        
+        // Newer macOS offers generated "Transcribed" captions for any file with
+        // speech and turns them on by system preference. Use the file's own
+        // default tracks instead; audio tracks are selected explicitly anyway.
+        player.appliesMediaSelectionCriteriaAutomatically = false
+
         self.player = player
         
         // Monitor player item status for failures, fallback to MPV if needed
@@ -416,6 +432,7 @@ final class PreviewPlayerController: ObservableObject {
             let audioAsset = AVURLAsset(url: audioURL, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
             let audioPlayerItem = AVPlayerItem(asset: audioAsset)
             let audioPlayer = AVPlayer(playerItem: audioPlayerItem)
+            audioPlayer.appliesMediaSelectionCriteriaAutomatically = false
             audioPlayer.volume = Float(volume / 100.0)
             audioPlayer.isMuted = isMuted
             self.imageSequenceAudioPlayer = audioPlayer
