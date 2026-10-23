@@ -2937,7 +2937,41 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         }
 
         XCTAssertTrue(metadata.isEmpty)
+        // One window plus the single retry window for timed-out probes.
         XCTAssertLessThan(start.duration(to: .now), .milliseconds(500))
+    }
+
+    func testBoundedVideoMetadataBatchRetryJoinsSlowInFlightProbe() async throws {
+        // Mirrors VideoMetadataService's single-flight: the retry awaits the read that
+        // the first deadline abandoned instead of starting a new one.
+        final class SharedRead: @unchecked Sendable {
+            let lock = NSLock()
+            var task: Task<VideoMetadata, Error>?
+            var starts = 0
+        }
+        let shared = SharedRead()
+        let expected = videoMetadata(timecode: nil, frameRate: 25)
+        let url = URL(fileURLWithPath: "/private/slow-card-clip.mxf")
+
+        let metadata = try await BoundedVideoMetadataProbe.availableMetadata(
+            for: [url],
+            timeout: .milliseconds(100)
+        ) { _ in
+            let task = shared.lock.withLock { () -> Task<VideoMetadata, Error> in
+                if let task = shared.task { return task }
+                shared.starts += 1
+                let task = Task {
+                    try await Task.sleep(for: .milliseconds(150))
+                    return expected
+                }
+                shared.task = task
+                return task
+            }
+            return try await task.value
+        }
+
+        XCTAssertEqual(metadata[url], expected)
+        XCTAssertEqual(shared.lock.withLock { shared.starts }, 1)
     }
 
     @MainActor
@@ -3028,6 +3062,41 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             return XCTFail("Expected cancelled compatibility result")
         }
         XCTAssertLessThan(start.duration(to: .now), .seconds(1))
+    }
+
+    func testConformanceEncoderAcceptsFourCCCodecNames() {
+        XCTAssertEqual(FFMPEGCommandBuilder.ffmpegVideoEncoder(for: "avc1"), "libx264")
+        XCTAssertEqual(FFMPEGCommandBuilder.ffmpegVideoEncoder(for: "hvc1"), "libx265")
+        XCTAssertEqual(FFMPEGCommandBuilder.ffmpegVideoEncoder(for: "apch"), "prores_ks")
+        XCTAssertNil(FFMPEGCommandBuilder.ffmpegVideoEncoder(for: "j2k"))
+    }
+
+    func testConformanceX264OmitsHighProfileForXAVC422TenBit() {
+        func target(pixelFormat: String?) -> ConversionManager.ConformanceTarget {
+            ConversionManager.ConformanceTarget(
+                referenceItemID: UUID(),
+                referenceURL: URL(fileURLWithPath: "/tmp/ref.mxf"),
+                videoCodec: "avc1",
+                width: 1920, height: 1080,
+                frameRate: 50,
+                pixelFormat: pixelFormat,
+                pixelAspectRatio: "1:1",
+                isInterlaced: false,
+                audioCodec: nil, audioChannels: nil, audioSampleRate: nil,
+                containerExtension: "mxf"
+            )
+        }
+        func args(_ pixelFormat: String?) -> [String] {
+            FFMPEGCommandBuilder.buildConformanceArguments(
+                inputURL: URL(fileURLWithPath: "/tmp/in.mxf"),
+                outputURL: URL(fileURLWithPath: "/tmp/out.mxf"),
+                target: target(pixelFormat: pixelFormat)
+            )
+        }
+        let xavc = args("yuv422p10le")
+        XCTAssertTrue(xavc.contains("libx264"))
+        XCTAssertFalse(xavc.contains("high"))
+        XCTAssertTrue(args("yuv420p").contains("high"))
     }
 
     func testMergeCompatibilityDistinguishesUnavailableMetadataFromMissingVideo() {

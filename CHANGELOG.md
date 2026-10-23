@@ -1,5 +1,7 @@
 # v.4.5.6
 
+- Updated SwiftMediaMetadata to 3.0.3. MXF metadata reads now skip media essence using partition indexes, and XAVC clips report their displayed 1080-line picture size.
+- Retried metadata probes that time out once, and fixed conformance encoding for FourCC codec names and 10-bit 4:2:2 H.264.
 - Added source stereo phase/correlation analysis, mono fold-down checks, a mid/side phase display, paused window navigation and complete JSON export for stereo tracks and mono pairs.
 
 - Added estimated true-peak threshold markers (4× oversampled dBTP) to Peaks and Channel Balance, with paused navigation and complete JSON export for single tracks, mono pairs and 5.1. Source sample peaks and RMS remain separately available.

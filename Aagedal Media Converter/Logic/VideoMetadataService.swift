@@ -42,9 +42,12 @@ enum BoundedVideoMetadataProbe {
         return info
     }
 
-    /// Probes independent files concurrently so a large batch is bounded by one probe
-    /// deadline instead of accumulating that deadline once per file. Individual failures
-    /// remain absent from the result, while parent cancellation is preserved.
+    /// Probes independent files concurrently so a large batch is bounded by two probe
+    /// deadlines instead of accumulating that deadline once per file. A probe that times
+    /// out gets one more window: the shared service keeps the abandoned read in flight,
+    /// so the retry joins it rather than starting over (slow camera cards, drive spin-up).
+    /// Individual failures remain absent from the result, while parent cancellation is
+    /// preserved.
     static func availableMetadata(
         for urls: [URL],
         timeout: Duration = defaultTimeout,
@@ -55,13 +58,18 @@ enum BoundedVideoMetadataProbe {
         try await withThrowingTaskGroup(of: (URL, VideoMetadata?).self) { group in
             for url in urls {
                 group.addTask {
-                    do {
-                        return (url, try await metadata(for: url, timeout: timeout, probe: probe))
-                    } catch is CancellationError {
-                        throw CancellationError()
-                    } catch {
-                        return (url, nil)
+                    for attempt in 1...2 {
+                        do {
+                            return (url, try await metadata(for: url, timeout: timeout, probe: probe))
+                        } catch is CancellationError {
+                            throw CancellationError()
+                        } catch NonJoiningTaskDeadlineError.timedOut where attempt == 1 {
+                            continue
+                        } catch {
+                            break
+                        }
                     }
+                    return (url, nil)
                 }
             }
 
