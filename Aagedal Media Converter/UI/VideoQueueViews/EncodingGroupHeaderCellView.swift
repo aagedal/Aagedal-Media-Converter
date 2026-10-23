@@ -672,7 +672,7 @@ final class EncodingGroupHeaderCellView: NSTableCellView, NSTextFieldDelegate {
         configureToggleButton(concatToggle, onSymbol: GroupSymbol.concat, offSymbol: GroupSymbol.concat, action: #selector(concatClicked))
         configureToggleButton(encodeButton, onSymbol: VideoFileCellView.Symbol.playFill, offSymbol: VideoFileCellView.Symbol.playFill, action: #selector(encodeClicked))
         encodeButton.contentTintColor = .secondaryLabelColor
-        encodeButton.toolTip = String(localized: "Option-click to encode this group immediately")
+        encodeButton.toolTip = String(localized: "Encode this group now")
         configureToggleButton(transcriptionToggle, onSymbol: VideoFileCellView.Symbol.captionsBubbleFill, offSymbol: VideoFileCellView.Symbol.captionsBubble, action: #selector(transcriptionClicked))
         configureToggleButton(analyticsToggle, onSymbol: VideoFileCellView.Symbol.chartAscending, offSymbol: VideoFileCellView.Symbol.chartBase, action: #selector(analyticsClicked))
         configureToggleButton(uploadToggle, onSymbol: VideoFileCellView.Symbol.cloudArrowUpFill, offSymbol: VideoFileCellView.Symbol.cloudArrowUp, action: #selector(uploadClicked))
@@ -1170,7 +1170,7 @@ final class EncodingGroupHeaderCellView: NSTableCellView, NSTextFieldDelegate {
         encodeButton.isEnabled = hasItems && (config.status == .waiting || config.status == .done || config.status == .failed)
         encodeButton.toolTip = isEncoding
             ? String(localized: "Encoding in progress")
-            : String(localized: "Option-click to encode this group immediately")
+            : String(localized: "Encode this group now")
     }
 
     private func updateProgressBar(config: EncodingGroupCellConfiguration) {
@@ -1412,8 +1412,7 @@ final class EncodingGroupHeaderCellView: NSTableCellView, NSTextFieldDelegate {
     @objc private func transcriptionClicked() { actionHandler?(.toggleGroupTranscription) }
     @objc private func analyticsClicked() { actionHandler?(.toggleGroupAnalytics) }
     @objc private func encodeClicked() {
-        let opt = NSEvent.modifierFlags.contains(.option)
-        actionHandler?(.encodeNow(optionPressed: opt))
+        actionHandler?(.encodeNow)
     }
 
     @objc private func presetSelected(_ sender: NSPopUpButton) {

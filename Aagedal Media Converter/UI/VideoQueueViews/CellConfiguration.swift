@@ -56,7 +56,14 @@ struct VideoFileCellConfiguration: Equatable {
     let isFocusedComment: Bool
 
     // Preset & merge
+    /// The preset this row encodes with (job, group, override or queue preset).
     let preset: ExportPreset
+    /// Per-item preset chosen on this row; nil when it follows the queue preset.
+    var presetOverride: ExportPreset? = nil
+    /// The per-item preset button is offered (ungrouped, waiting, not merging).
+    var canOverridePreset: Bool = false
+    /// The queue (toolbar) preset that rows without an override follow.
+    var queuePreset: ExportPreset? = nil
     let mergeClipsEnabled: Bool
     let mergeClipsAvailable: Bool
 
@@ -315,7 +322,7 @@ enum CellAction {
     case cancelScheduledDownload
 
     // Encode
-    case encodeNow(optionPressed: Bool)
+    case encodeNow
 
     // Toggles
     case toggleUpload(optionPressed: Bool)
@@ -340,6 +347,9 @@ enum CellAction {
 
     // Output filename
     case commitRename(String?)
+
+    // Per-item preset (nil follows the queue preset)
+    case setPresetOverride(ExportPreset?)
 
     // Sheet/popover requests
     case showPreview

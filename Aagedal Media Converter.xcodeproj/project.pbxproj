@@ -23,6 +23,7 @@
 		14303B1061214301B2A3C30F /* ConversionPreparationSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF2A7FD698474D319CF8046A /* ConversionPreparationSettings.swift */; };
 		15A41FC10346A7F73664E9A1 /* ComparisonMetadataView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F82CC3B9944D3DAF6B3F9C93 /* ComparisonMetadataView.swift */; };
 		171D39B953F1FA12ECA375B6 /* VideoFileCellView+Comment.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B4BB0C06D28560C6D47EC0 /* VideoFileCellView+Comment.swift */; };
+		ENCHIST0PRESETBF00000001 /* VideoFileCellView+Preset.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0PRESETFR00000001 /* VideoFileCellView+Preset.swift */; };
 		174D1BDBC6CC4B9D8034BF23 /* DCPSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AE2280B3F4048F896DD2FEB /* DCPSettingsTests.swift */; };
 		17B524B2559B24713433EF64 /* RcloneUpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 727051829930996EE4E50306 /* RcloneUpdateService.swift */; };
 		181720894631C3060AB2A6ED /* UploadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5443D834E6673C963291692B /* UploadManager.swift */; };
@@ -344,6 +345,16 @@
 		A91000000000000000000005 /* AudioPeakAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91000000000000000000006 /* AudioPeakAnalysisTests.swift */; };
 		A92000000000000000000021 /* AudioPhaseAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92000000000000000000022 /* AudioPhaseAnalysisTests.swift */; };
 		A91000000000000000000007 /* GroupedAudioPeakAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91000000000000000000008 /* GroupedAudioPeakAnalysisTests.swift */; };
+		ENCHIST0001BF0000000 /* EncodeHistoryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0001FR0000000 /* EncodeHistoryModels.swift */; };
+		ENCHIST0002BF0000000 /* EncodeHistoryTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0002FR0000000 /* EncodeHistoryTracker.swift */; };
+		ENCHIST0003BF0000000 /* EncodeHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0003FR0000000 /* EncodeHistoryStore.swift */; };
+		ENCHIST0004BF0000000 /* LastSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0004FR0000000 /* LastSessionStore.swift */; };
+		ENCHIST0005BF0000000 /* QueueRestoreRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0005FR0000000 /* QueueRestoreRequest.swift */; };
+		ENCHIST0006BF0000000 /* HistoryOverlayComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0006FR0000000 /* HistoryOverlayComponents.swift */; };
+		ENCHIST0007BF0000000 /* LastSessionOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0007FR0000000 /* LastSessionOverlay.swift */; };
+		ENCHIST0008BF0000000 /* EncodeHistoryOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0008FR0000000 /* EncodeHistoryOverlay.swift */; };
+		ENCHIST0009BF0000000 /* HistorySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0009FR0000000 /* HistorySettingsView.swift */; };
+		ENCHIST0010BF0000000 /* EncodeHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0010FR0000000 /* EncodeHistoryTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -600,6 +611,7 @@
 		A15F59A5246B4BA880E781B3 /* AV2ScratchDirectoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2ScratchDirectoryTests.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5D /* CaptureModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureModeView.swift; sourceTree = "<group>"; };
 		A1B4BB0C06D28560C6D47EC0 /* VideoFileCellView+Comment.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "VideoFileCellView+Comment.swift"; sourceTree = "<group>"; };
+		ENCHIST0PRESETFR00000001 /* VideoFileCellView+Preset.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "VideoFileCellView+Preset.swift"; sourceTree = "<group>"; };
 		A45000000000000000000001 /* ApplicationJobContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationJobContract.swift; sourceTree = "<group>"; };
 		A45000000000000000000002 /* ApplicationJobContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationJobContractTests.swift; sourceTree = "<group>"; };
 		A45100000000000000000001 /* ApplicationAgentTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationAgentTransport.swift; sourceTree = "<group>"; };
@@ -761,6 +773,16 @@
 		A91000000000000000000006 /* AudioPeakAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPeakAnalysisTests.swift; sourceTree = "<group>"; };
 		A92000000000000000000022 /* AudioPhaseAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPhaseAnalysisTests.swift; sourceTree = "<group>"; };
 		A91000000000000000000008 /* GroupedAudioPeakAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupedAudioPeakAnalysisTests.swift; sourceTree = "<group>"; };
+		ENCHIST0001FR0000000 /* EncodeHistoryModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeHistoryModels.swift; sourceTree = "<group>"; };
+		ENCHIST0002FR0000000 /* EncodeHistoryTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeHistoryTracker.swift; sourceTree = "<group>"; };
+		ENCHIST0003FR0000000 /* EncodeHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeHistoryStore.swift; sourceTree = "<group>"; };
+		ENCHIST0004FR0000000 /* LastSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastSessionStore.swift; sourceTree = "<group>"; };
+		ENCHIST0005FR0000000 /* QueueRestoreRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueRestoreRequest.swift; sourceTree = "<group>"; };
+		ENCHIST0006FR0000000 /* HistoryOverlayComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryOverlayComponents.swift; sourceTree = "<group>"; };
+		ENCHIST0007FR0000000 /* LastSessionOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastSessionOverlay.swift; sourceTree = "<group>"; };
+		ENCHIST0008FR0000000 /* EncodeHistoryOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeHistoryOverlay.swift; sourceTree = "<group>"; };
+		ENCHIST0009FR0000000 /* HistorySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistorySettingsView.swift; sourceTree = "<group>"; };
+		ENCHIST0010FR0000000 /* EncodeHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeHistoryTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -908,6 +930,7 @@
 		8E0CA7A82C3416EF00EA7C37 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				ENCHISTGRPUI000000000001 /* History */,
 				8EEE45392EC13E7C0049F017 /* Conversion */,
 				8EEE45372EC13AFA0049F017 /* VideoQueueViews */,
 				8EEE45362EC13AE90049F017 /* SettingsView */,
@@ -926,6 +949,7 @@
 		8E0CA7A92C34171300EA7C37 /* Logic */ = {
 			isa = PBXGroup;
 			children = (
+				ENCHISTGRPLOGIC000000001 /* History */,
 				A45000000000000000000005 /* AgentAccess */,
 				7DE49AB8D27E4B9CBE7324A4 /* PostConversionSettings.swift */,
 				E16F395023624188805714C2 /* FileNameSettings.swift */,
@@ -1146,6 +1170,7 @@
 		8EE6EEAC2C31FC6F007B629D /* Aagedal Media ConverterTests */ = {
 			isa = PBXGroup;
 			children = (
+				ENCHIST0010FR0000000 /* EncodeHistoryTests.swift */,
 				A45000000000000000000002 /* ApplicationJobContractTests.swift */,
 				A45A99000000000000000002 /* AnonymousUsageIndicatorTests.swift */,
 				06E2B90D341C4818B814DED4 /* UploadLifecycleTests.swift */,
@@ -1320,6 +1345,7 @@
 		8EEE45362EC13AE90049F017 /* SettingsView */ = {
 			isa = PBXGroup;
 			children = (
+				ENCHIST0009FR0000000 /* HistorySettingsView.swift */,
 				A45200000000000000000001 /* AgentAccessSettingsView.swift */,
 				A95007ED7B0349E3B626F1BE /* ToolDiagnosticsSettingsView.swift */,
 				8EA25FE82F82A7BA0087B1F1 /* TesseractSettingsView.swift */,
@@ -1363,6 +1389,7 @@
 				C2018B1D061B2AD00DB22947 /* VideoFileCellView+Thumbnail.swift */,
 				1B28D978311204AF28106F84 /* VideoFileCellView+Actions.swift */,
 				A1B4BB0C06D28560C6D47EC0 /* VideoFileCellView+Comment.swift */,
+				ENCHIST0PRESETFR00000001 /* VideoFileCellView+Preset.swift */,
 				ENCGRPCELL00000002 /* EncodingGroupHeaderCellView.swift */,
 				GRPEDITWIN000001 /* GroupEditorWindow.swift */,
 				A45919000000000000000001 /* StitchingEditorView.swift */,
@@ -1496,6 +1523,28 @@
 				SYNCSVC000000002 /* SettingsSyncService.swift */,
 			);
 			path = Sync;
+			sourceTree = "<group>";
+		};
+		ENCHISTGRPLOGIC000000001 /* History */ = {
+			isa = PBXGroup;
+			children = (
+				ENCHIST0001FR0000000 /* EncodeHistoryModels.swift */,
+				ENCHIST0002FR0000000 /* EncodeHistoryTracker.swift */,
+				ENCHIST0003FR0000000 /* EncodeHistoryStore.swift */,
+				ENCHIST0004FR0000000 /* LastSessionStore.swift */,
+				ENCHIST0005FR0000000 /* QueueRestoreRequest.swift */,
+			);
+			path = History;
+			sourceTree = "<group>";
+		};
+		ENCHISTGRPUI000000000001 /* History */ = {
+			isa = PBXGroup;
+			children = (
+				ENCHIST0006FR0000000 /* HistoryOverlayComponents.swift */,
+				ENCHIST0007FR0000000 /* LastSessionOverlay.swift */,
+				ENCHIST0008FR0000000 /* EncodeHistoryOverlay.swift */,
+			);
+			path = History;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -1779,6 +1828,15 @@
 				1122330BD4DA4103ACF80E38 /* CommentSettings.swift in Sources */,
 				3E3AFCB991AB43B29AD7B9CE /* KeyboardShortcutSettings.swift in Sources */,
 				CE5F75F4C4B14D14BD081FC8 /* ConversionFollowUp.swift in Sources */,
+				ENCHIST0001BF0000000 /* EncodeHistoryModels.swift in Sources */,
+				ENCHIST0002BF0000000 /* EncodeHistoryTracker.swift in Sources */,
+				ENCHIST0003BF0000000 /* EncodeHistoryStore.swift in Sources */,
+				ENCHIST0004BF0000000 /* LastSessionStore.swift in Sources */,
+				ENCHIST0005BF0000000 /* QueueRestoreRequest.swift in Sources */,
+				ENCHIST0006BF0000000 /* HistoryOverlayComponents.swift in Sources */,
+				ENCHIST0007BF0000000 /* LastSessionOverlay.swift in Sources */,
+				ENCHIST0008BF0000000 /* EncodeHistoryOverlay.swift in Sources */,
+				ENCHIST0009BF0000000 /* HistorySettingsView.swift in Sources */,
 				7FFE54EBBEF744FBB7F6571B /* PackageMetadataSettings.swift in Sources */,
 				14303B1061214301B2A3C30F /* ConversionPreparationSettings.swift in Sources */,
 				BCDC7685DC8A43E4BC04CE65 /* ImageSequenceSettings.swift in Sources */,
@@ -2000,6 +2058,7 @@
 				48711D7073ADAD2177BCF127 /* VideoFileCellView+Thumbnail.swift in Sources */,
 				64B1D5EAD4079C022166DF40 /* VideoFileCellView+Actions.swift in Sources */,
 				171D39B953F1FA12ECA375B6 /* VideoFileCellView+Comment.swift in Sources */,
+				ENCHIST0PRESETBF00000001 /* VideoFileCellView+Preset.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2075,6 +2134,7 @@
 				AF129A6A3D374C449DE8B303 /* AppImprovementTests.swift in Sources */,
 				3068888A137E42F3A0BD3EDC /* KeyboardShortcutSettingsTests.swift in Sources */,
 				68DB0573FE4F499AA72EF9AF /* ConversionQueueStateTests.swift in Sources */,
+				ENCHIST0010BF0000000 /* EncodeHistoryTests.swift in Sources */,
 				3559AE0D84F84065A06C6888 /* ConversionUploadFollowUpTests.swift in Sources */,
 				7D163C3579E64EFABCEBCF29 /* AppIntentHandoffTests.swift in Sources */,
 				0DD876266C3F4454ABDC3895 /* MetadataScopeLifecycleTests.swift in Sources */,

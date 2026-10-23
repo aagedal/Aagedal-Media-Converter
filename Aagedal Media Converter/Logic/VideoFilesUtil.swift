@@ -776,6 +776,9 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var trimEnd: Double? = nil
     /// Nil disables recursive encoding; otherwise this is the total generation count.
     var recursiveEncodingGenerations: Int? = nil
+    /// Preset for this item instead of the queue's preset. Ignored inside
+    /// encoding groups (the group decides) and while merging.
+    var presetOverride: ExportPreset? = nil
     var loopPlayback: Bool = false
     var metadata: VideoMetadata?
     var detailsLoaded: Bool = false
@@ -998,6 +1001,7 @@ struct VideoItem: Identifiable, Equatable, Sendable {
         comment = ""
         metadataEditorSettings = nil
         includeDateTag = settings.includeDateTag
+        presetOverride = nil
         if resetNameOverride {
             outputFileNameOverride = nil
             waveformBackgroundImageURL = nil
@@ -1015,7 +1019,8 @@ struct VideoItem: Identifiable, Equatable, Sendable {
         if let newThumbnail = details.thumbnailData {
             thumbnailData = newThumbnail
         }
-        if outputFileNameOverride == nil {
+        // Details are named for the queue preset; overridden rows keep theirs.
+        if outputFileNameOverride == nil, presetOverride == nil {
             outputURL = details.outputURL
         }
         hasVideoStream = details.hasVideoStream
