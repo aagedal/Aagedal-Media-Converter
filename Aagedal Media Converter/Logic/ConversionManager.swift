@@ -358,6 +358,8 @@ actor ConversionManager: Sendable {
         let conformanceTarget: ConformanceTarget?
         /// Stream Copy MXF merges rewrapped by bmxtranswrap (nil for the FFmpeg concat path)
         var nativeMXFMerge: NativeMXFMergeRequest? = nil
+        /// Shown on the merged rows after success, e.g. why camera metadata was not kept.
+        var mergeNotice: String? = nil
     }
 
     private struct MergeSegment {
@@ -450,24 +452,56 @@ actor ConversionManager: Sendable {
 
         let durationLookup = buildDurationLookup(for: orderedWaitingItems, metadata: lastMergeMetadata)
         let generatedVideoRequests = settings.generatedVideo.requests(for: orderedWaitingItems)
-        let usesNativeMXFMerge = orderedWaitingItems.first.map { first in
-            NativeMXFMerge.isEligible(
+        let hasTrims = orderedWaitingItems.contains(where: hasActiveTrim)
+        func nativeMXFMergeEligible(allowsTrimmedMerge: Bool) -> Bool {
+            guard let first = orderedWaitingItems.first else { return false }
+            return NativeMXFMerge.isEligible(
                 preset: preset,
                 outputExtension: settings.codec?.outputExtension(for: first.url) ?? preset.outputExtension(for: first.url),
                 sourceURLs: orderedWaitingItems.map(\.url),
-                hasTrims: orderedWaitingItems.contains(where: hasActiveTrim),
+                hasTrims: hasTrims,
+                allowsTrimmedMerge: allowsTrimmedMerge,
                 hasGeneratedVideo: generatedVideoRequests.waveform != nil || generatedVideoRequests.synthesized != nil,
                 audioRoutingCustomized: first.audioRoutingConfig?.isCustomized ?? false,
                 hasManualTimecode: { if case .manual = first.timecodeConfig?.mode { return true }; return false }()
             )
-        } ?? false
+        }
+        var usesNativeMXFMerge = nativeMXFMergeEligible(allowsTrimmedMerge: settings.nativeMXFTrimmedMerge)
+        var mergeNotice: String?
+        if hasTrims, !usesNativeMXFMerge, nativeMXFMergeEligible(allowsTrimmedMerge: true) {
+            mergeNotice = String(localized: "Camera metadata was not kept because clips are trimmed. Turn on “Keep camera metadata in trimmed MXF merges” in Encoding settings to keep it.")
+        }
 
-        guard let (segments, temporaryFiles, totalDuration) = await prepareMergeSegments(
-            from: orderedWaitingItems,
-            durationLookup: durationLookup,
-            decodeTrims: preset != .streamCopy && orderedWaitingItems.contains(where: hasActiveTrim),
-            batchID: batchID
-        ) else {
+        var nativeFrameRanges: [UUID: NativeMXFMerge.FrameRange]?
+        var preparedSegments: ([MergeSegment], [URL], Double?)?
+        if usesNativeMXFMerge, hasTrims, let firstItem = orderedWaitingItems.first {
+            let outputFolderURL = URL(fileURLWithPath: settings.outputDestination.resolveFolder(
+                for: firstItem.url, defaultOutputFolder: outputFolder, presetSuffix: settings.fileNameContext.presetSuffix
+            ) ?? outputFolder)
+            switch await prepareNativeMXFTrimmedSegments(
+                from: orderedWaitingItems, durationLookup: durationLookup,
+                outputFolderURL: outputFolderURL, batchID: batchID
+            ) {
+            case .prepared(let segments, let temporaryFiles, let totalDuration, let ranges):
+                preparedSegments = (segments, temporaryFiles, totalDuration)
+                nativeFrameRanges = ranges
+            case .unavailable(let reason):
+                usesNativeMXFMerge = false
+                mergeNotice = reason
+            case .cancelled:
+                return nil
+            }
+        }
+
+        if preparedSegments == nil {
+            preparedSegments = await prepareMergeSegments(
+                from: orderedWaitingItems,
+                durationLookup: durationLookup,
+                decodeTrims: preset != .streamCopy && hasTrims,
+                batchID: batchID
+            )
+        }
+        guard let (segments, temporaryFiles, totalDuration) = preparedSegments else {
             return nil
         }
 
@@ -520,7 +554,7 @@ actor ConversionManager: Sendable {
         }
 
         let nativeMXFMerge = usesNativeMXFMerge
-            ? await makeNativeMXFMergeRequest(items: orderedWaitingItems, segments: segments)
+            ? await makeNativeMXFMergeRequest(items: orderedWaitingItems, segments: segments, frameRanges: nativeFrameRanges)
             : nil
         guard isMergePreparationActive(batchID) else {
             cleanupTemporaryFiles(temporaryFiles)
@@ -545,14 +579,21 @@ actor ConversionManager: Sendable {
             hasExecuted: false,
             sourceHasAudio: sourceHasAudio,
             conformanceTarget: nil,
-            nativeMXFMerge: nativeMXFMerge
+            nativeMXFMerge: nativeMXFMerge,
+            mergeNotice: mergeNotice
         )
     }
 
     /// Collects the Identification company and merged Sony NonRealTimeMeta for a
     /// bmxtranswrap merge. Frame counts come from the camera XML when present, so the
     /// sidecar Duration matches what bmx writes even when container durations round.
-    private func makeNativeMXFMergeRequest(items: [VideoItem], segments: [MergeSegment]) async -> NativeMXFMergeRequest? {
+    /// `frameRanges` holds the trim of each clip (by item ID) when the segments are
+    /// bmx-trimmed copies; the merged XML then counts only the frames kept.
+    private func makeNativeMXFMergeRequest(
+        items: [VideoItem],
+        segments: [MergeSegment],
+        frameRanges: [UUID: NativeMXFMerge.FrameRange]? = nil
+    ) async -> NativeMXFMergeRequest? {
         guard let first = items.first else { return nil }
         var xmlSegments: [NativeMXFMerge.XMLSegment] = []
         for item in items {
@@ -561,7 +602,10 @@ actor ConversionManager: Sendable {
             let xml = NativeMXFMerge.loadNonRealTimeMeta(for: item.url)
             let frames = xml.flatMap(NativeMXFMerge.durationFrames(in:)) ?? metadata?.frameCount
                 ?? metadata?.duration.map { Int(($0 * rate).rounded()) } ?? 0
-            xmlSegments.append(NativeMXFMerge.XMLSegment(xml: xml, frameCount: frames))
+            let range = frameRanges?[item.id]
+            let start = min(range?.start ?? 0, frames)
+            let kept = min(range?.count ?? frames - start, frames - start)
+            xmlSegments.append(NativeMXFMerge.XMLSegment(xml: xml, frameCount: kept, startOffset: start))
         }
         let mergedXML = xmlSegments.contains { $0.xml == nil || $0.frameCount <= 0 }
             ? nil : NativeMXFMerge.mergedNonRealTimeMeta(segments: xmlSegments)
@@ -572,6 +616,134 @@ actor ConversionManager: Sendable {
             companyName: company,
             nonRealTimeMetaXML: mergedXML
         )
+    }
+
+    private enum NativeMXFTrimmedPreparation {
+        case prepared([MergeSegment], [URL], Double?, [UUID: NativeMXFMerge.FrameRange])
+        /// Falls back to the FFmpeg path; the reason is shown on the merged rows.
+        case unavailable(String)
+        case cancelled
+    }
+
+    /// Rewraps every clip, trimmed or not, to a temporary MXF with bmx so all segments
+    /// share one descriptor layout and bmx's sequence reader keeps the video track.
+    private func prepareNativeMXFTrimmedSegments(
+        from items: [VideoItem],
+        durationLookup: [UUID: Double],
+        outputFolderURL: URL,
+        batchID: UUID
+    ) async -> NativeMXFTrimmedPreparation {
+        let fallback = String(localized: "Merged with FFmpeg instead, without camera metadata.")
+        var ranges: [UUID: NativeMXFMerge.FrameRange] = [:]
+        var clips: [(fileSize: Int64, keptFraction: Double)] = []
+        for item in items {
+            guard isMergePreparationActive(batchID) else { return .cancelled }
+            guard let info = await BMXService.shared.getMXFInfo(url: item.url),
+                  let picture = NativeMXFMerge.pictureTrack(fromMXFInfo: info) else {
+                return .unavailable(String(localized: "Could not read the MXF tracks of \(item.name).") + " " + fallback)
+            }
+            guard NativeMXFMerge.isIntraCoded(essenceType: picture.essenceType) else {
+                return .unavailable(String(localized: "\(item.name) uses Long GOP video, which can only be cut on keyframes.") + " " + fallback)
+            }
+            let trimmed = hasActiveTrim(item)
+            guard let range = NativeMXFMerge.frameRange(
+                trimStart: trimmed ? item.effectiveTrimStart : nil,
+                trimEnd: trimmed ? item.trimEnd : nil,
+                editRate: picture.editRate
+            ) else {
+                return .unavailable(String(localized: "The trim of \(item.name) is shorter than one frame.") + " " + fallback)
+            }
+            ranges[item.id] = range
+            let size = (try? item.url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? item.size
+            let sourceFrames = (durationLookup[item.id] ?? 0) * picture.editRate
+            let keptFrames = range.count.map(Double.init) ?? max(sourceFrames - Double(range.start), 0)
+            clips.append((size, sourceFrames > 0 ? keptFrames / sourceFrames : 1))
+        }
+
+        let temporaryFolder = FileManager.default.temporaryDirectory
+        let estimate = NativeMXFMerge.estimatedTemporaryBytes(clips: clips)
+        let keys: Set<URLResourceKey> = [.volumeAvailableCapacityForImportantUsageKey, .volumeIdentifierKey]
+        let temporaryVolume = try? temporaryFolder.resourceValues(forKeys: keys)
+        let outputVolume = try? outputFolderURL.resourceValues(forKeys: keys)
+        if let temporaryAvailable = temporaryVolume?.volumeAvailableCapacityForImportantUsage {
+            let sameVolume = (temporaryVolume?.volumeIdentifier as? NSObject)
+                .map { $0.isEqual(outputVolume?.volumeIdentifier) } ?? true
+            if case .insufficient(let available, let required) = NativeMXFMerge.checkSpace(
+                temporaryBytes: estimate,
+                temporaryAvailable: temporaryAvailable,
+                outputAvailable: outputVolume?.volumeAvailableCapacityForImportantUsage ?? .max,
+                sameVolume: sameVolume
+            ) {
+                let formatter = ByteCountFormatter()
+                return .unavailable(String(localized: "Keeping camera metadata in this trimmed merge needs about \(formatter.string(fromByteCount: required)) of free space, but only \(formatter.string(fromByteCount: available)) is available.") + " " + fallback)
+            }
+        }
+        mergeLogger.info("Rewrapping \(items.count, privacy: .public) MXF clips for a trimmed merge; estimated temporary space \(estimate, privacy: .public) bytes")
+
+        var segments: [MergeSegment] = []
+        var temporaryFiles: [URL] = []
+        var totalDuration: Double = 0
+        for item in items {
+            guard let range = ranges[item.id] else { return .cancelled }
+            let tempURL = temporaryFolder.appendingPathComponent("mxf_segment_\(UUID().uuidString).mxf")
+            let result = await runMergePreparationBMX(
+                inputURL: item.url, outputURL: tempURL,
+                arguments: NativeMXFMerge.segmentRewrapArguments(range: range),
+                itemID: item.id, batchID: batchID
+            )
+            guard isMergePreparationActive(batchID), !result.cancelled else {
+                cleanupTemporaryFiles(temporaryFiles + [tempURL].filter { FileManager.default.fileExists(atPath: $0.path) })
+                return .cancelled
+            }
+            guard result.success else {
+                cleanupTemporaryFiles(temporaryFiles)
+                mergeLogger.error("bmx could not rewrap \(item.name, privacy: .public): \(result.stderr, privacy: .public)")
+                return .unavailable(String(localized: "bmx could not rewrap \(item.name).") + " " + fallback)
+            }
+            temporaryFiles.append(tempURL)
+            let hasTrim = hasActiveTrim(item)
+            let duration = resolveSegmentDuration(for: item, baseDuration: durationLookup[item.id], hasTrim: hasTrim)
+            totalDuration += duration ?? 0
+            segments.append(MergeSegment(
+                timelineMarkers: item.timelineMarkers,
+                itemID: item.id,
+                originalURL: item.url,
+                preparedURL: tempURL,
+                trimStart: item.trimStart,
+                trimEnd: item.trimEnd,
+                isTemporary: true,
+                duration: duration,
+                isConformed: false
+            ))
+        }
+        return .prepared(segments, temporaryFiles, totalDuration > 0 ? totalDuration : nil, ranges)
+    }
+
+    private func runMergePreparationBMX(
+        inputURL: URL,
+        outputURL: URL,
+        arguments: [String],
+        itemID: UUID,
+        batchID: UUID
+    ) async -> BMXRewrapResult {
+        guard isMergePreparationActive(batchID) else { return BMXRewrapResult(success: false, stderr: "", cancelled: true) }
+        let operationID = UUID()
+        let result = OSAllocatedUnfairLock<BMXRewrapResult?>(initialState: nil)
+        // Cancelling this task (see `cancelMergePreparation`) stops bmxtranswrap.
+        let task = Task {
+            let rewrap = await BMXService.shared.mergeMXFSequence(
+                inputURLs: [inputURL], outputURL: outputURL, arguments: arguments,
+                operationID: operationID, progress: { _ in }
+            )
+            result.withLock { $0 = rewrap }
+            return rewrap.success
+        }
+        mergePreparationTask = (operationID, itemID, task)
+        _ = await task.value
+        if mergePreparationTask?.id == operationID {
+            mergePreparationTask = nil
+        }
+        return result.withLock { $0 } ?? BMXRewrapResult(success: false, stderr: "", cancelled: true)
     }
 
     private func prepareMergeSegments(
@@ -1302,6 +1474,17 @@ actor ConversionManager: Sendable {
         )
     }
 
+    /// Starts an output upload that was held for subtitle generation, unless the row
+    /// moved on (re-queued, upload cancelled or disabled) while subtitles were written.
+    @MainActor
+    private static func startUploadAfterSubtitles(followUp: ConversionFollowUp, droppedFiles: Binding<[VideoItem]>) {
+        guard let index = followUp.index(in: droppedFiles.wrappedValue) else { return }
+        let item = droppedFiles.wrappedValue[index]
+        guard item.uploadStatus == .pending, item.uploadOperationID == nil,
+              let itemID = ConversionUploadFollowUp.itemID(afterSuccess: item.status == .done, item: item) else { return }
+        UploadManager.shared.startUpload(itemID: itemID)
+    }
+
     private func handleMergeCompletion(
         plan: MergePlan,
         outputExtension: String,
@@ -1322,6 +1505,7 @@ actor ConversionManager: Sendable {
 
         let finalURL = resolvedOutputURL
         var exportWarning = markerWarning
+        var edlURL: URL?
         if success, !cutMarkers.isEmpty {
             do {
                 let output = try await StitchMarkerMedia.read(finalURL)
@@ -1331,14 +1515,17 @@ actor ConversionManager: Sendable {
                                                             markers: try StitchMarkerExport.coalescedForEDL(cutMarkers, frameRate: rate), frameRate: rate, startTimecode: output.timecode)
                 let access = SecurityScopedBookmarkManager.shared.startAccessing(url: finalURL.deletingLastPathComponent())
                 defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
-                _ = try StitchMarkerExport.writeEDL(text, alongside: finalURL)
+                edlURL = try StitchMarkerExport.writeEDL(text, alongside: finalURL)
             } catch { exportWarning = "Clip markers: " + error.localizedDescription }
         }
-        let completedWarning = exportWarning
-        if success, let completedWarning {
-            mergeLogger.warning("\(completedWarning, privacy: .public)")
-            await StitchMarkerExport.presentWarning(completedWarning, outputURL: finalURL)
+        if success, let exportWarning {
+            mergeLogger.warning("\(exportWarning, privacy: .public)")
+            await StitchMarkerExport.presentWarning(exportWarning, outputURL: finalURL)
         }
+        let mergeNotice = success ? plan.mergeNotice : nil
+        if let mergeNotice { mergeLogger.notice("\(mergeNotice, privacy: .public)") }
+        let warnings = [exportWarning, mergeNotice].compactMap { $0 }
+        let completedWarning = warnings.isEmpty ? nil : warnings.joined(separator: "\n")
 
         // Capture file size - try with security-scoped access
         var outputFileSizeBytes: Int64?
@@ -1359,6 +1546,7 @@ actor ConversionManager: Sendable {
                     droppedFiles.wrappedValue[index].status = success ? .done : .failed
                     droppedFiles.wrappedValue[index].progress = success ? 1.0 : 0.0
                     droppedFiles.wrappedValue[index].outputURL = success ? finalURL : nil
+                    droppedFiles.wrappedValue[index].outputSidecarURLs = success ? [edlURL].compactMap { $0 } : []
                     droppedFiles.wrappedValue[index].outputFileSizeBytes = outputFileSizeBytes
                     droppedFiles.wrappedValue[index].conversionError = success ? completedWarning : errorReason
                     droppedFiles.wrappedValue[index].eta = nil
@@ -2270,13 +2458,25 @@ actor ConversionManager: Sendable {
                     followUp.reserveSubtitles(in: &droppedFiles.wrappedValue)
                     followUp.reserveAnalytics(in: &droppedFiles.wrappedValue)
 
-                    // Trigger upload if enabled for this item
+                    // Trigger upload if enabled for this item. When subtitles will be
+                    // uploaded or embedded, the upload starts after they are written.
+                    let uploadWaitsForSubtitles = droppedFiles.wrappedValue[idx].outputURL != nil
+                        && UploadSidecars.outputUploadWaitsForSubtitles(
+                            item: droppedFiles.wrappedValue[idx],
+                            settings: UploadSidecarSettings(),
+                            embedSubtitles: UserDefaults.standard.bool(forKey: AppConstants.embedSubtitlesKey)
+                        )
                     if let itemID = ConversionUploadFollowUp.itemID(
                         afterSuccess: success, item: droppedFiles.wrappedValue[idx]
                     ) {
-                        // Already on the main actor: install the upload task now so
-                        // an immediate cancel cannot race a deferred start wrapper.
-                        UploadManager.shared.startUpload(itemID: itemID)
+                        if uploadWaitsForSubtitles {
+                            droppedFiles.wrappedValue[idx].uploadStatus = .pending
+                            droppedFiles.wrappedValue[idx].uploadOperationID = nil
+                        } else {
+                            // Already on the main actor: install the upload task now so
+                            // an immediate cancel cannot race a deferred start wrapper.
+                            UploadManager.shared.startUpload(itemID: itemID)
+                        }
                     }
 
                     // Trigger subtitle generation if enabled for this item
@@ -2298,6 +2498,9 @@ actor ConversionManager: Sendable {
                                         followUp: followUp,
                                         droppedFiles: droppedFiles
                                     )
+                                    if uploadWaitsForSubtitles {
+                                        await Self.startUploadAfterSubtitles(followUp: followUp, droppedFiles: droppedFiles)
+                                    }
                                 }
                             }
                         case .whisper:
@@ -2309,12 +2512,18 @@ actor ConversionManager: Sendable {
                                         followUp: followUp,
                                         droppedFiles: droppedFiles
                                     )
+                                    if uploadWaitsForSubtitles {
+                                        await Self.startUploadAfterSubtitles(followUp: followUp, droppedFiles: droppedFiles)
+                                    }
                                 }
                             }
                         case .nemotron:
                             if let outputURL = droppedFiles.wrappedValue[idx].outputURL {
                                 Task {
                                     await self.generateNemotronSubtitles(for: fileId, inputURL: outputURL, followUp: followUp, droppedFiles: droppedFiles)
+                                    if uploadWaitsForSubtitles {
+                                        await Self.startUploadAfterSubtitles(followUp: followUp, droppedFiles: droppedFiles)
+                                    }
                                 }
                             }
                         case .parakeet:
@@ -2326,6 +2535,9 @@ actor ConversionManager: Sendable {
                                         followUp: followUp,
                                         droppedFiles: droppedFiles
                                     )
+                                    if uploadWaitsForSubtitles {
+                                        await Self.startUploadAfterSubtitles(followUp: followUp, droppedFiles: droppedFiles)
+                                    }
                                 }
                             }
                         }

@@ -112,6 +112,10 @@ final class NativeMXFMergeTests: XCTestCase {
         XCTAssertFalse(eligible(routing: true))
         XCTAssertFalse(eligible(timecode: true))
         XCTAssertFalse(eligible(trims: true))
+        XCTAssertTrue(NativeMXFMerge.isEligible(
+            preset: .streamCopy, outputExtension: "mxf", sourceURLs: [a, b], hasTrims: true, allowsTrimmedMerge: true,
+            hasGeneratedVideo: false, audioRoutingCustomized: false, hasManualTimecode: false
+        ))
         XCTAssertFalse(eligible(urls: [a]))
         XCTAssertFalse(eligible(urls: [a, URL(fileURLWithPath: "/c.mov")]))
     }
@@ -147,9 +151,78 @@ final class NativeMXFMergeTests: XCTestCase {
         XCTAssertEqual(NativeMXFMerge.essenceKinds(fromMXFInfo: tracks), ["Picture", "Sound", "Data"])
     }
 
+    func testTrimmedSegmentShiftsTimecodeAndCountsKeptFrames() throws {
+        let first = nrtXML(duration: 298, start: "00000000", end: "23050080")
+        let second = nrtXML(duration: 214, start: "09580200", end: "15020380")
+        let merged = try XCTUnwrap(NativeMXFMerge.mergedNonRealTimeMeta(segments: [
+            .init(xml: first, frameCount: 298),
+            .init(xml: second, frameCount: 100, startOffset: 50),
+        ]))
+        XCTAssertTrue(merged.contains(#"<Duration value="398"/>"#))
+        let start = SonyLTC.value(frameIndex: 8918 + 50, tcFps: 25, halfStep: true)
+        let end = SonyLTC.value(frameIndex: 8918 + 149, tcFps: 25, halfStep: true)
+        XCTAssertTrue(merged.contains(#"<LtcChange frameCount="298" value="\#(start)" status="increment"/>"#), merged)
+        XCTAssertTrue(merged.contains(#"<LtcChange frameCount="397" value="\#(end)" status="end"/>"#), merged)
+    }
+
+    func testPictureTrackAndIntraDetectionFromMXFInfo() {
+        let info = """
+              Tracks: (3)
+                Track #0:
+                  essence_kind    : Picture
+                  essence_type    : AVCI_100_1080p
+                  edit_rate       : 50/1
+                Track #1:
+                  essence_kind    : Sound
+                  essence_type    : WAVE_PCM
+                  edit_rate       : 48000/1
+            """
+        XCTAssertEqual(NativeMXFMerge.pictureTrack(fromMXFInfo: info), .init(essenceType: "AVCI_100_1080p", editRate: 50))
+        let ntsc = info.replacingOccurrences(of: "50/1", with: "60000/1001")
+        XCTAssertEqual(NativeMXFMerge.pictureTrack(fromMXFInfo: ntsc)?.editRate ?? 0, 59.94, accuracy: 0.001)
+        XCTAssertNil(NativeMXFMerge.pictureTrack(fromMXFInfo: "essence_kind : Sound\nedit_rate : 48000/1"))
+        XCTAssertTrue(NativeMXFMerge.isIntraCoded(essenceType: "AVCI_100_1080p"))
+        XCTAssertTrue(NativeMXFMerge.isIntraCoded(essenceType: "AVC_High_422_Intra"))
+        XCTAssertTrue(NativeMXFMerge.isIntraCoded(essenceType: "VC3_1080p_1235"))
+        XCTAssertFalse(NativeMXFMerge.isIntraCoded(essenceType: "AVC_High_422"))
+        XCTAssertFalse(NativeMXFMerge.isIntraCoded(essenceType: "MPEG2LG_422P_HL_1080I"))
+    }
+
+    func testFrameRangeAndSegmentArguments() {
+        XCTAssertEqual(NativeMXFMerge.frameRange(trimStart: 1, trimEnd: 3, editRate: 50), .init(start: 50, count: 100))
+        XCTAssertEqual(NativeMXFMerge.frameRange(trimStart: nil, trimEnd: nil, editRate: 50), .init(start: 0, count: nil))
+        XCTAssertEqual(NativeMXFMerge.frameRange(trimStart: 0.2, trimEnd: nil, editRate: 25), .init(start: 5, count: nil))
+        XCTAssertNil(NativeMXFMerge.frameRange(trimStart: 2, trimEnd: 2.001, editRate: 50))
+        XCTAssertEqual(NativeMXFMerge.segmentRewrapArguments(range: .init(start: 0, count: nil)), ["-t", "op1a", "--pass-anc", "all"])
+        XCTAssertEqual(NativeMXFMerge.segmentRewrapArguments(range: .init(start: 50, count: 100)),
+                       ["-t", "op1a", "--pass-anc", "all", "--start", "50", "--dur", "100"])
+    }
+
+    func testTemporarySpaceEstimateAndCheck() {
+        let gib: Int64 = 1 << 30
+        let estimate = NativeMXFMerge.estimatedTemporaryBytes(clips: [(10 * gib, 1), (4 * gib, 0.5)])
+        XCTAssertGreaterThan(estimate, 12 * gib)
+        XCTAssertLessThan(estimate, 13 * gib)
+        XCTAssertEqual(NativeMXFMerge.checkSpace(temporaryBytes: 10, temporaryAvailable: 15, outputAvailable: 15, sameVolume: true),
+                       .insufficient(available: 15, required: 20))
+        XCTAssertEqual(NativeMXFMerge.checkSpace(temporaryBytes: 10, temporaryAvailable: 20, outputAvailable: 0, sameVolume: true), .sufficient)
+        XCTAssertEqual(NativeMXFMerge.checkSpace(temporaryBytes: 10, temporaryAvailable: 15, outputAvailable: 9, sameVolume: false),
+                       .insufficient(available: 9, required: 10))
+        XCTAssertEqual(NativeMXFMerge.checkSpace(temporaryBytes: 10, temporaryAvailable: 15, outputAvailable: 10, sameVolume: false), .sufficient)
+    }
+
     /// Opt-in: merges real Sony FX9 card clips through the Stream Copy merge path.
     /// Run with TEST_RUNNER_AMC_NATIVE_MXF_CARD=/path/to/XDROOT/Clip.
     func testStreamCopyMergeOfSonyCardUsesBMXAndWritesSidecar() async throws {
+        try await assertSonyCardMerge(trimSecondClip: false)
+    }
+
+    /// Opt-in: the second clip is trimmed to frames 50..<150, so every clip is rewrapped first.
+    func testTrimmedStreamCopyMergeOfSonyCardKeepsCameraMetadata() async throws {
+        try await assertSonyCardMerge(trimSecondClip: true)
+    }
+
+    private func assertSonyCardMerge(trimSecondClip: Bool) async throws {
         guard let folder = ProcessInfo.processInfo.environment["AMC_NATIVE_MXF_CARD"] else {
             throw XCTSkip("Set AMC_NATIVE_MXF_CARD to a Sony XDROOT/Clip folder")
         }
@@ -164,6 +237,7 @@ final class NativeMXFMergeTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
         defaults.set(false, forKey: AppConstants.exportStitchMarkersKey)
         defaults.set(false, forKey: AppConstants.saveNextToOriginalKey)
+        defaults.set(true, forKey: AppConstants.nativeMXFTrimmedMergeKey)
         let settings = ConversionPreparationSettings(preset: .streamCopy, defaults: defaults)
         let manager = ConversionManager(preparationSettingsProvider: { _ in settings })
         var items = clips.map { url in
@@ -171,6 +245,11 @@ final class NativeMXFMergeTests: XCTestCase {
                       progress: 0, eta: nil, outputURL: nil)
         }
         for index in items.indices { items[index].includeDateTag = false }
+        if trimSecondClip {
+            items[1].trimStart = 1
+            items[1].trimEnd = 3
+        }
+        let secondFrames = trimSecondClip ? 100 : 214
         let storage = OSAllocatedUnfairLock(initialState: items)
         let binding = Self.binding(storage)
 
@@ -187,11 +266,13 @@ final class NativeMXFMergeTests: XCTestCase {
         let merged = try XCTUnwrap(finished.first?.outputURL)
         XCTAssertEqual(merged.lastPathComponent, "card1.mxf")
 
-        // 298 + 214 frames, plus the third clip's Duration from its sidecar.
+        // 298 + second-clip frames, plus the third clip's Duration from its sidecar.
         let third = try XCTUnwrap(NativeMXFMerge.loadNonRealTimeMeta(for: clips[2]).flatMap(NativeMXFMerge.durationFrames(in:)))
         let sidecar = try String(contentsOf: NativeMXFMerge.sidecarURL(for: merged), encoding: .utf8)
-        XCTAssertTrue(sidecar.contains("<Duration value=\"\(298 + 214 + third)\"/>"), sidecar)
+        XCTAssertTrue(sidecar.contains("<Duration value=\"\(298 + secondFrames + third)\"/>"), sidecar)
         XCTAssertTrue(sidecar.contains(#"modelName="PXW-FX9V""#))
+        let secondStart = SonyLTC.value(frameIndex: 8918 + (trimSecondClip ? 50 : 0), tcFps: 25, halfStep: true)
+        XCTAssertTrue(sidecar.contains(#"<LtcChange frameCount="298" value="\#(secondStart)" status="increment"/>"#), sidecar)
 
         let probed = await BMXService.shared.getMXFInfo(url: merged)
         let info = try XCTUnwrap(probed)
@@ -199,9 +280,9 @@ final class NativeMXFMergeTests: XCTestCase {
         XCTAssertTrue(info.contains("Aagedal Media Converter"))
         XCTAssertTrue(info.contains("ANC_Data"), "Per-frame acquisition metadata track must survive")
         XCTAssertEqual(NativeMXFMerge.essenceKinds(fromMXFInfo: info).filter { $0 == "Picture" }.count, 1, "Video must survive")
-        XCTAssertTrue(info.contains("count='\(298 + 214 + third)'"), "Merged duration in edit units")
+        XCTAssertTrue(info.contains("count='\(298 + secondFrames + third)'"), "Merged duration in edit units")
         let embedded = try XCTUnwrap(NativeMXFMerge.embeddedNonRealTimeMeta(in: merged))
-        XCTAssertTrue(embedded.contains("<Duration value=\"\(298 + 214 + third)\"/>"))
+        XCTAssertTrue(embedded.contains("<Duration value=\"\(298 + secondFrames + third)\"/>"))
     }
 
     private nonisolated static func binding(_ storage: OSAllocatedUnfairLock<[VideoItem]>) -> Binding<[VideoItem]> {

@@ -79,6 +79,7 @@ struct UploadSettingsView: View {
             } else {
                 profileSection
                 uploadBehaviorSection
+                sidecarSection
                 testConnectionSection
             }
         }
@@ -638,6 +639,41 @@ struct UploadSettingsView: View {
                 Text("Number of times to retry a failed upload before giving up.")
                     .font(.caption)
                     .foregroundColor(.secondary)
+            }
+            .padding(8)
+        }
+    }
+
+    // MARK: - Sidecar files
+
+    @AppStorage(AppConstants.uploadCameraMetadataSidecarKey)
+    private var uploadCameraMetadataSidecar = AppConstants.uploadCameraMetadataSidecarDefault
+    @AppStorage(AppConstants.uploadSubtitleSidecarKey)
+    private var uploadSubtitleSidecar = AppConstants.uploadSubtitleSidecarDefault
+    @AppStorage(AppConstants.uploadClipMarkerSidecarKey)
+    private var uploadClipMarkerSidecar = AppConstants.uploadClipMarkerSidecarDefault
+
+    private var sidecarSection: some View {
+        Section(header: Text("Sidecar Files")) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Upload these files beside the main file when they exist. They keep their file names.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Toggle("Camera metadata XML (Sony M01.XML)", isOn: $uploadCameraMetadataSidecar)
+                    .toggleStyle(SwitchToggleStyle())
+                Text("DaVinci Resolve reads camera model, serial number and lens from this file.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Toggle("Subtitles (.srt)", isOn: $uploadSubtitleSidecar)
+                    .toggleStyle(SwitchToggleStyle())
+                Text("When subtitles are generated after conversion, the upload waits until they are finished.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Toggle("Clip-marker EDL (.cuts.edl)", isOn: $uploadClipMarkerSidecar)
+                    .toggleStyle(SwitchToggleStyle())
             }
             .padding(8)
         }

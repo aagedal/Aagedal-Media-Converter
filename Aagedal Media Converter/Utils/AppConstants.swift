@@ -242,6 +242,10 @@ enum AppConstants {
     // toggle handlers enforce that only one can be on at a time.
     static let exportStitchMarkersKey = "exportStitchMarkers"
     static let exportStitchMarkersDefault = true
+    /// Trimmed Stream Copy MXF merges rewrap every clip to a temporary copy first so
+    /// bmx can keep camera metadata. Off by default: it needs extra free space.
+    static let nativeMXFTrimmedMergeKey = "nativeMXFTrimmedMerge"
+    static let nativeMXFTrimmedMergeDefault = false
     static let defaultGroupMergeEnabledKey = "defaultGroupMergeEnabled"
     static let defaultGroupSequentialNamingEnabledKey = "defaultGroupSequentialNamingEnabled"
     static let defaultGroupPresetKey = "defaultGroupPreset"
@@ -772,6 +776,13 @@ enum AppConstants {
 
     static let uploadDefaultEnabledKey = "uploadDefaultEnabled"
     static let uploadRetryCountKey = "uploadRetryCount"
+    // Sidecar files uploaded alongside the main file, one switch per format.
+    static let uploadCameraMetadataSidecarKey = "uploadCameraMetadataSidecar"
+    static let uploadCameraMetadataSidecarDefault = true
+    static let uploadSubtitleSidecarKey = "uploadSubtitleSidecar"
+    static let uploadSubtitleSidecarDefault = false
+    static let uploadClipMarkerSidecarKey = "uploadClipMarkerSidecar"
+    static let uploadClipMarkerSidecarDefault = false
     static let defaultUploadPort = 21
     static let defaultUploadRetryCount = 3
     static let defaultSFTPPort = 22

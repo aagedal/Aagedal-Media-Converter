@@ -758,10 +758,13 @@ struct VideoItem: Identifiable, Equatable, Sendable {
         didSet {
             if outputURL != oldValue {
                 analyticsSourceRange = nil
+                outputSidecarURLs = []
                 refreshOutputFileCache()
             }
         }
     }
+    /// Files written beside `outputURL` by the export itself (e.g. the clip-marker EDL).
+    var outputSidecarURLs: [URL] = []
     /// Cached result of filesystem check — updated via `outputURL` didSet.
     var cachedOutputFileExists: Bool = false
     var cachedOutputFileSize: Int64? = nil

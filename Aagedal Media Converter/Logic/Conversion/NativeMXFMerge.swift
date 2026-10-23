@@ -12,7 +12,7 @@ import Foundation
 /// parsing. bmx keeps all three; Sony NonRealTimeMeta XML is re-embedded and written as
 /// the `<name>M01.XML` sidecar that Resolve reads for camera model, serial and lens.
 struct NativeMXFMergeRequest: Sendable, Equatable {
-    /// Source clips in merge order.
+    /// Clips in merge order: the sources, or bmx-rewrapped temporaries when trimmed.
     let segmentURLs: [URL]
     /// Company Name for the Identification set, copied from the first source.
     let companyName: String
@@ -29,21 +29,121 @@ enum NativeMXFMerge {
 
     // MARK: - Eligibility
 
-    /// Trimmed merges stay on the FFmpeg path: a bmx-trimmed segment is rewritten with a
+    /// Trimmed merges need `allowsTrimmedMerge`: a bmx-trimmed segment is rewritten with a
     /// normalised descriptor (e.g. stored height 1080 instead of Sony's 1088), and bmx's
-    /// sequence reader then silently drops the video track as incompatible.
+    /// sequence reader silently drops the video track when segments disagree. Rewrapping
+    /// every clip first (see `segmentRewrapArguments`) makes the descriptors match again.
     static func isEligible(
         preset: ExportPreset,
         outputExtension: String,
         sourceURLs: [URL],
         hasTrims: Bool,
+        allowsTrimmedMerge: Bool = false,
         hasGeneratedVideo: Bool,
         audioRoutingCustomized: Bool,
         hasManualTimecode: Bool
     ) -> Bool {
         preset == .streamCopy && outputExtension.lowercased() == "mxf" && sourceURLs.count >= 2
             && sourceURLs.allSatisfy { $0.pathExtension.lowercased() == "mxf" }
-            && !hasTrims && !hasGeneratedVideo && !audioRoutingCustomized && !hasManualTimecode
+            && (!hasTrims || allowsTrimmedMerge)
+            && !hasGeneratedVideo && !audioRoutingCustomized && !hasManualTimecode
+    }
+
+    // MARK: - Trimmed merges
+
+    struct PictureTrack: Equatable, Sendable {
+        let essenceType: String
+        let editRate: Double
+    }
+
+    /// The first Picture track's essence type and edit rate from `mxf2raw --info`.
+    static func pictureTrack(fromMXFInfo info: String) -> PictureTrack? {
+        var inPicture = false
+        var essenceType: String?
+        for line in info.split(separator: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard let colon = trimmed.firstIndex(of: ":") else { continue }
+            let key = trimmed[..<colon].trimmingCharacters(in: .whitespaces)
+            let value = trimmed[trimmed.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            switch key {
+            case "essence_kind":
+                if inPicture { return nil }
+                inPicture = value == "Picture"
+            case "essence_type" where inPicture:
+                essenceType = value
+            case "edit_rate" where inPicture:
+                let parts = value.split(separator: "/").compactMap { Double($0) }
+                guard let essenceType, parts.count == 2, parts[0] > 0, parts[1] > 0 else { return nil }
+                return PictureTrack(essenceType: essenceType, editRate: parts[0] / parts[1])
+            default:
+                continue
+            }
+        }
+        return nil
+    }
+
+    /// bmx cuts on edit units, so only intra-coded pictures can start on any frame.
+    /// Long GOP essence (XAVC-L, MPEG-2 422 LongGOP) keeps the FFmpeg path.
+    static func isIntraCoded(essenceType: String) -> Bool {
+        let type = essenceType.uppercased()
+        if type.contains("INTRA") { return true }
+        return ["AVCI", "D10", "DV", "VC3", "DNXHD", "UNC", "JPEG2000", "J2C", "RDD36", "VC2"]
+            .contains { type.hasPrefix($0) }
+    }
+
+    struct FrameRange: Equatable, Sendable {
+        let start: Int
+        /// Nil keeps every frame after `start`.
+        let count: Int?
+    }
+
+    /// Converts the queue's trim points (seconds) to whole edit units.
+    static func frameRange(trimStart: Double?, trimEnd: Double?, editRate: Double) -> FrameRange? {
+        guard editRate > 0 else { return nil }
+        let start = max(Int(((trimStart ?? 0) * editRate).rounded()), 0)
+        guard let trimEnd else { return FrameRange(start: start, count: nil) }
+        let count = Int((trimEnd * editRate).rounded()) - start
+        return count > 0 ? FrameRange(start: start, count: count) : nil
+    }
+
+    /// Rewraps one clip unchanged apart from the trim. Every clip goes through this,
+    /// trimmed or not, so all segments share bmx's descriptor layout.
+    static func segmentRewrapArguments(range: FrameRange) -> [String] {
+        var arguments = ["-t", "op1a", "--pass-anc", "all"]
+        if range.start > 0 { arguments += ["--start", String(range.start)] }
+        if let count = range.count { arguments += ["--dur", String(count)] }
+        return arguments
+    }
+
+    /// Temporary bytes needed for the rewrapped copies: each clip's file size scaled by
+    /// the share of frames kept, plus a margin for container overhead.
+    static func estimatedTemporaryBytes(clips: [(fileSize: Int64, keptFraction: Double)]) -> Int64 {
+        let essence = clips.reduce(0.0) { $0 + Double($1.fileSize) * min(max($1.keptFraction, 0), 1) }
+        return Int64((essence * 1.02).rounded(.up)) + 64 * 1024 * 1024
+    }
+
+    enum SpaceCheck: Equatable, Sendable {
+        case sufficient
+        /// Free bytes on the volume holding the temporary copies, and the bytes needed there.
+        case insufficient(available: Int64, required: Int64)
+    }
+
+    /// The merged output is about as large as the temporary copies. When both live on one
+    /// volume it must hold both until the copies are deleted.
+    static func checkSpace(
+        temporaryBytes: Int64,
+        temporaryAvailable: Int64,
+        outputAvailable: Int64,
+        sameVolume: Bool
+    ) -> SpaceCheck {
+        let requiredOnTemporaryVolume = sameVolume ? temporaryBytes * 2 : temporaryBytes
+        if temporaryAvailable < requiredOnTemporaryVolume {
+            return .insufficient(available: temporaryAvailable, required: requiredOnTemporaryVolume)
+        }
+        if !sameVolume, outputAvailable < temporaryBytes {
+            return .insufficient(available: outputAvailable, required: temporaryBytes)
+        }
+        return .sufficient
     }
 
     /// Essence kinds per track from `mxf2raw --info`, e.g. ["Picture", "Sound", …].
@@ -106,12 +206,19 @@ enum NativeMXFMerge {
         return mediaURL.deletingLastPathComponent().appendingPathComponent(base + "M01.XML")
     }
 
-    static func loadNonRealTimeMeta(for mediaURL: URL) -> String? {
+    /// The existing sidecar beside `mediaURL`, matched case-insensitively (cards use
+    /// upper case; merged outputs keep the output's own case).
+    static func existingSidecarURL(for mediaURL: URL) -> URL? {
         let folder = mediaURL.deletingLastPathComponent()
         let expected = sidecarURL(for: mediaURL).lastPathComponent.lowercased()
-        if let name = try? FileManager.default.contentsOfDirectory(atPath: folder.path)
-            .first(where: { $0.lowercased() == expected }),
-           let text = try? String(contentsOf: folder.appendingPathComponent(name), encoding: .utf8),
+        return (try? FileManager.default.contentsOfDirectory(atPath: folder.path))?
+            .first(where: { $0.lowercased() == expected })
+            .map { folder.appendingPathComponent($0) }
+    }
+
+    static func loadNonRealTimeMeta(for mediaURL: URL) -> String? {
+        if let url = existingSidecarURL(for: mediaURL),
+           let text = try? String(contentsOf: url, encoding: .utf8),
            text.contains("<NonRealTimeMeta") {
             return text
         }
@@ -145,6 +252,8 @@ enum NativeMXFMerge {
         let xml: String?
         /// Frames contributed to the merged file.
         let frameCount: Int
+        /// Frames trimmed from the head of the source clip.
+        var startOffset: Int = 0
     }
 
     /// Builds the merged document from the first segment's XML: total Duration, a
@@ -180,7 +289,7 @@ enum NativeMXFMerge {
             guard table.tcFps == tcFps, table.halfStep == halfStep,
                   let sourceStart = SonyLTC.frameIndex(table.firstValue, tcFps: table.tcFps, halfStep: table.halfStep)
             else { return nil }
-            let start = sourceStart
+            let start = sourceStart + segment.startOffset
             if start != expectedNext {
                 entries.append((mergedFrame, SonyLTC.value(frameIndex: start, tcFps: table.tcFps, halfStep: table.halfStep), "increment"))
             }
