@@ -30,6 +30,15 @@ final class UploadSidecarTests: XCTestCase {
         )
     }
 
+    func testNoSidecarIsUploadedByDefault() throws {
+        let suite = "UploadSidecars.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        XCTAssertTrue(UploadSidecarSettings(defaults: defaults).enabledKinds.isEmpty)
+        defaults.set(true, forKey: AppConstants.uploadCameraMetadataSidecarKey)
+        XCTAssertEqual(UploadSidecarSettings(defaults: defaults).enabledKinds, [.cameraMetadata])
+    }
+
     func testEachFormatFollowsItsOwnSwitch() throws {
         let output = try touch("card1.mxf")
         let xml = try touch("card1M01.XML")

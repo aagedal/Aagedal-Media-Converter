@@ -777,8 +777,9 @@ enum AppConstants {
     static let uploadDefaultEnabledKey = "uploadDefaultEnabled"
     static let uploadRetryCountKey = "uploadRetryCount"
     // Sidecar files uploaded alongside the main file, one switch per format.
+    // All off by default: only the main file is uploaded unless the user opts in.
     static let uploadCameraMetadataSidecarKey = "uploadCameraMetadataSidecar"
-    static let uploadCameraMetadataSidecarDefault = true
+    static let uploadCameraMetadataSidecarDefault = false
     static let uploadSubtitleSidecarKey = "uploadSubtitleSidecar"
     static let uploadSubtitleSidecarDefault = false
     static let uploadClipMarkerSidecarKey = "uploadClipMarkerSidecar"
