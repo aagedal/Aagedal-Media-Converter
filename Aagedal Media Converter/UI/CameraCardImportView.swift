@@ -23,6 +23,8 @@ struct UploadServerEntry: Identifiable, Hashable {
 struct CameraCardImportView: View {
     @Environment(\.openSettings) private var openSettings
     let clipCount: Int
+    /// First clip, so Stream Copy's "Keep Current" container shows the real extension.
+    var sampleClipURL: URL? = nil
     let folderName: String
     let hasRemovableSources: Bool
     @Binding var masterName: String
@@ -307,7 +309,7 @@ struct CameraCardImportView: View {
 
     private var namingPreview: String {
         let name = trimmedMasterName
-        let ext = selectedPreset.fileExtension
+        let ext = selectedPreset.outputExtension(for: sampleClipURL)
         if concatEnabled {
             return String(
                 localized: "Output: \(name).\(ext)",

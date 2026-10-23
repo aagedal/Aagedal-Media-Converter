@@ -356,6 +356,8 @@ actor ConversionManager: Sendable {
         let sourceHasAudio: Bool
         /// Conformance target for two-pass force merge (nil for standard merge)
         let conformanceTarget: ConformanceTarget?
+        /// Stream Copy MXF merges rewrapped by bmxtranswrap (nil for the FFmpeg concat path)
+        var nativeMXFMerge: NativeMXFMergeRequest? = nil
     }
 
     private struct MergeSegment {
@@ -447,6 +449,18 @@ actor ConversionManager: Sendable {
         let itemIDs = orderedWaitingItems.map { $0.id }
 
         let durationLookup = buildDurationLookup(for: orderedWaitingItems, metadata: lastMergeMetadata)
+        let generatedVideoRequests = settings.generatedVideo.requests(for: orderedWaitingItems)
+        let usesNativeMXFMerge = orderedWaitingItems.first.map { first in
+            NativeMXFMerge.isEligible(
+                preset: preset,
+                outputExtension: settings.codec?.outputExtension(for: first.url) ?? preset.outputExtension(for: first.url),
+                sourceURLs: orderedWaitingItems.map(\.url),
+                hasTrims: orderedWaitingItems.contains(where: hasActiveTrim),
+                hasGeneratedVideo: generatedVideoRequests.waveform != nil || generatedVideoRequests.synthesized != nil,
+                audioRoutingCustomized: first.audioRoutingConfig?.isCustomized ?? false,
+                hasManualTimecode: { if case .manual = first.timecodeConfig?.mode { return true }; return false }()
+            )
+        } ?? false
 
         guard let (segments, temporaryFiles, totalDuration) = await prepareMergeSegments(
             from: orderedWaitingItems,
@@ -494,7 +508,6 @@ actor ConversionManager: Sendable {
         let baseOutputURL = URL(fileURLWithPath: resolvedOutputFolder)
             .appendingPathComponent(mergeBaseName)
 
-        let generatedVideoRequests = settings.generatedVideo.requests(for: orderedWaitingItems)
         let waveformRequest = generatedVideoRequests.waveform
         let synthesizedVideoRequest = generatedVideoRequests.synthesized
 
@@ -504,6 +517,14 @@ actor ConversionManager: Sendable {
                 return !(meta.audioStreams.isEmpty)
             }
             return false
+        }
+
+        let nativeMXFMerge = usesNativeMXFMerge
+            ? await makeNativeMXFMergeRequest(items: orderedWaitingItems, segments: segments)
+            : nil
+        guard isMergePreparationActive(batchID) else {
+            cleanupTemporaryFiles(temporaryFiles)
+            return nil
         }
 
         return MergePlan(
@@ -523,7 +544,33 @@ actor ConversionManager: Sendable {
             totalDuration: totalDuration,
             hasExecuted: false,
             sourceHasAudio: sourceHasAudio,
-            conformanceTarget: nil
+            conformanceTarget: nil,
+            nativeMXFMerge: nativeMXFMerge
+        )
+    }
+
+    /// Collects the Identification company and merged Sony NonRealTimeMeta for a
+    /// bmxtranswrap merge. Frame counts come from the camera XML when present, so the
+    /// sidecar Duration matches what bmx writes even when container durations round.
+    private func makeNativeMXFMergeRequest(items: [VideoItem], segments: [MergeSegment]) async -> NativeMXFMergeRequest? {
+        guard let first = items.first else { return nil }
+        var xmlSegments: [NativeMXFMerge.XMLSegment] = []
+        for item in items {
+            let metadata = lastMergeMetadata[item.id]
+            let rate = metadata?.primaryVideoStream?.frameRate?.value ?? 0
+            let xml = NativeMXFMerge.loadNonRealTimeMeta(for: item.url)
+            let frames = xml.flatMap(NativeMXFMerge.durationFrames(in:)) ?? metadata?.frameCount
+                ?? metadata?.duration.map { Int(($0 * rate).rounded()) } ?? 0
+            xmlSegments.append(NativeMXFMerge.XMLSegment(xml: xml, frameCount: frames))
+        }
+        let mergedXML = xmlSegments.contains { $0.xml == nil || $0.frameCount <= 0 }
+            ? nil : NativeMXFMerge.mergedNonRealTimeMeta(segments: xmlSegments)
+        let company = await BMXService.shared.getMXFInfo(url: first.url).flatMap(NativeMXFMerge.companyName(fromMXFInfo:))
+            ?? (mergedXML != nil ? "Sony" : NativeMXFMerge.fallbackCompanyName)
+        return NativeMXFMergeRequest(
+            segmentURLs: segments.map(\.preparedURL),
+            companyName: company,
+            nonRealTimeMetaXML: mergedXML
         )
     }
 
@@ -960,7 +1007,8 @@ actor ConversionManager: Sendable {
             synthesizedVideoRequest: plan.synthesizedVideoRequest,
             waveformBackgroundImageURL: primaryInput.waveformBackgroundImageURL,
             customInputArguments: customInputs,
-            additionalOutputArguments: mergeOutputArguments
+            additionalOutputArguments: mergeOutputArguments,
+            nativeMXFMerge: plan.nativeMXFMerge
         )
 
         // Throttle UI updates to ~4 Hz to avoid SwiftUI re-render storms during encoding

@@ -64,6 +64,9 @@ struct ConversionRequest: Sendable {
     var customInputArguments: [String]? = nil
     var additionalOutputArguments: [String]? = nil
 
+    /// Stream Copy MXF merges are rewrapped by bmxtranswrap (see `NativeMXFMerge`).
+    var nativeMXFMerge: NativeMXFMergeRequest? = nil
+
     func applyingMetadataEditor(outputExtension: String? = nil) -> Self {
         guard let editor = metadataEditorSettings, !metadataEditorWasApplied else { return self }
         let ext = requiredOutputURL?.pathExtension.lowercased()
