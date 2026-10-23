@@ -64,8 +64,9 @@ struct VideoFileListView: View {
     var onPlayFullscreen: ((UUID) -> Void)?
     var onURLDrop: ((String) -> Void)?
     var onRenameOutputFileName: ((UUID, String?) -> Void)? = nil
+    var onSetPresetOverride: ((UUID, ExportPreset?) -> Void)? = nil
     var encodeOnly: ((UUID) async -> Void)?
-    /// Encodes a single group immediately (Option-click on the group's encode
+    /// Encodes a single group immediately (the group's encode
     /// button). Mirrors `encodeOnly` for items.
     var encodeOnlyGroup: ((UUID) async -> Void)?
     var onDeleteGroup: ((UUID) -> Void)?
@@ -263,6 +264,7 @@ struct VideoFileListView: View {
                     onToggleDateTag: onToggleDateTag,
                     onPlayFullscreen: onPlayFullscreen,
                     onRenameOutputFileName: onRenameOutputFileName,
+                    onSetPresetOverride: onSetPresetOverride,
                     encodeOnly: { itemID in
                         await encodeOnly?(itemID)
                     },
@@ -335,7 +337,8 @@ struct VideoFileListView: View {
                 SortModeOverlay(text: text)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                     .padding(.leading, 16)
-                    .padding(.bottom, 16)
+                    // Clears the history/last-session corner buttons below it.
+                    .padding(.bottom, 52)
             }
         }
         .animation(.easeInOut(duration: 0.2), value: sortOverlayText)

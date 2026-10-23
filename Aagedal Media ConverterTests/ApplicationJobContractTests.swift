@@ -1448,6 +1448,40 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: stateURL), damagedData)
     }
 
+    func testEntryThatNoLongerValidatesIsDroppedInsteadOfBlockingNewWork() async throws {
+        let directory = try makeTemporaryDirectory()
+        let staleURL = directory.appendingPathComponent("stale.mov")
+        let freshURL = directory.appendingPathComponent("fresh.mov")
+        try Data("source".utf8).write(to: staleURL)
+        try Data("source".utf8).write(to: freshURL)
+        let store = ApplicationJobStore(fileURL: directory.appendingPathComponent("jobs.json"))
+        let original = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+        let plan = try await original.plan(makeRequest(sourceURLs: [staleURL], destinationFolderURL: directory))
+        let accepted = try await original.submit(planID: plan.id)
+
+        // Simulate validation rules tightening after the job was accepted.
+        var snapshot = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: store.fileURL)) as? [String: Any]
+        )
+        for key in ["plans", "records"] {
+            var entries = try XCTUnwrap(snapshot[key] as? [[String: Any]])
+            var request = try XCTUnwrap(entries[0]["request"] as? [String: Any])
+            request["requesterID"] = "no longer valid!"
+            entries[0]["request"] = request
+            snapshot[key] = entries
+        }
+        try JSONSerialization.data(withJSONObject: snapshot).write(to: store.fileURL)
+
+        let restored = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+        let recovered = try await restored.restorePersistedState()
+        XCTAssertTrue(recovered.isEmpty)
+        let staleRecord = try await restored.record(for: accepted.record.id)
+        XCTAssertNil(staleRecord)
+        let freshPlan = try await restored.plan(makeRequest(sourceURLs: [freshURL], destinationFolderURL: directory))
+        let fresh = try await restored.submit(planID: freshPlan.id)
+        XCTAssertFalse(fresh.wasAlreadyAccepted)
+    }
+
     func testInvalidSnapshotDoesNotExposePartialRecoveryAndCanRetryAfterRepair() async throws {
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("input.mov")

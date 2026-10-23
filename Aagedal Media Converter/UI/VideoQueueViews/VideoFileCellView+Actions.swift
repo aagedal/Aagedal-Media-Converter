@@ -21,9 +21,17 @@ extension VideoFileCellView {
         let isEncoding = config.status == .converting
         encodeButton.image = VideoFileCellView.Symbol.playFill
         encodeButton.contentTintColor = isEncoding ? .systemGreen : .systemGreen.withAlphaComponent(0.75)
-        encodeButton.isEnabled = config.status == .waiting || config.status == .done || config.status == .failed
-        encodeButton.toolTip = isEncoding ? "Encoding in progress" : "Start encoding"
+        // Only waiting, ungrouped rows not owned by a shared job can start on their own.
+        let canEncodeNow = config.status == .waiting && !config.isGroupChild
+            && config.applicationJobID == nil && !config.isDownloading
+        encodeButton.isEnabled = canEncodeNow
+        encodeButton.toolTip = isEncoding
+            ? String(localized: "Encoding in progress")
+            : (config.isGroupChild
+                ? String(localized: "Encode the group from its header", comment: "Tooltip on a grouped item's disabled encode button.")
+                : String(localized: "Encode this file now", comment: "Tooltip on a queue item's encode button."))
         applyProcessingRing(to: encodeButton, active: isEncoding, color: .systemGreen)
+        updatePresetButton(config: config)
 
         recursiveEncodingButton.isHidden = config.recursiveEncodingGenerations == nil
         recursiveEncodingButton.isEnabled = config.status != .converting && config.preset.supportsRecursiveEncoding && !config.mergeClipsEnabled

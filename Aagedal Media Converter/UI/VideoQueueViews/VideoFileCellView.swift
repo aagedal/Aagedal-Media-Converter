@@ -102,6 +102,8 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     let encodeButton = NSButton()
     let autoEncodeButton = NSButton()
     let recursiveEncodingButton = NSButton()
+    let presetButton = NSButton()
+    var presetPopover: NSPopover?
     let uploadButton = NSButton()
     let transcriptionButton = NSButton()
     let ocrButton = NSButton()
@@ -777,6 +779,8 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         setupToggleButton(recursiveEncodingButton, symbol: "arrow.triangle.2.circlepath", action: #selector(recursiveEncodingClicked))
         recursiveEncodingButton.isHidden = true
         recursiveEncodingButton.setAccessibilityIdentifier("queue.item.recursiveEncoding")
+        setupToggleButton(presetButton, symbol: "slider.horizontal.3", action: #selector(presetButtonClicked))
+        presetButton.setAccessibilityIdentifier("queue.item.presetOverride")
         setupToggleButton(transcriptionButton, symbol: "captions.bubble", action: #selector(transcriptionButtonClicked))
         setupToggleButton(ocrButton, symbol: "text.viewfinder", action: #selector(ocrButtonClicked))
         ocrButton.isHidden = true
@@ -808,7 +812,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         trailingSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         trailingSpacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        for view in [encodeButton, autoEncodeButton, recursiveEncodingButton, encodeDivider, transcriptionButton, ocrButton, analyticsButton, uploadButton,
+        for view in [encodeButton, autoEncodeButton, recursiveEncodingButton, presetButton, encodeDivider, transcriptionButton, ocrButton, analyticsButton, uploadButton,
                      metaDivider,
                      dateTagButton, commentToggleButton, metadataToggleButton, waveformButton, waveformBgButton,
                      trailingSpacer,
@@ -1686,8 +1690,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         actionHandler?(.showAnalyticsResults)
     }
     @objc private func encodeButtonClicked() {
-        let opt = NSEvent.modifierFlags.contains(.option)
-        actionHandler?(.encodeNow(optionPressed: opt))
+        actionHandler?(.encodeNow)
     }
     @objc private func recursiveEncodingClicked() {
         guard let config = currentConfig, config.status != .converting else { return }
