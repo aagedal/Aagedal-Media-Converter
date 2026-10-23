@@ -635,15 +635,13 @@ actor ConversionManager: Sendable {
     ) async -> NativeMXFTrimmedPreparation {
         let fallback = String(localized: "Merged with FFmpeg instead, without camera metadata.")
         var ranges: [UUID: NativeMXFMerge.FrameRange] = [:]
+        var sourceInfos: [UUID: String] = [:]
         var clips: [(fileSize: Int64, keptFraction: Double)] = []
         for item in items {
             guard isMergePreparationActive(batchID) else { return .cancelled }
             guard let info = await BMXService.shared.getMXFInfo(url: item.url),
                   let picture = NativeMXFMerge.pictureTrack(fromMXFInfo: info) else {
                 return .unavailable(String(localized: "Could not read the MXF tracks of \(item.name).") + " " + fallback)
-            }
-            guard NativeMXFMerge.isIntraCoded(essenceType: picture.essenceType) else {
-                return .unavailable(String(localized: "\(item.name) uses Long GOP video, which can only be cut on keyframes.") + " " + fallback)
             }
             let trimmed = hasActiveTrim(item)
             guard let range = NativeMXFMerge.frameRange(
@@ -654,6 +652,7 @@ actor ConversionManager: Sendable {
                 return .unavailable(String(localized: "The trim of \(item.name) is shorter than one frame.") + " " + fallback)
             }
             ranges[item.id] = range
+            sourceInfos[item.id] = info
             let size = (try? item.url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? item.size
             let sourceFrames = (durationLookup[item.id] ?? 0) * picture.editRate
             let keptFrames = range.count.map(Double.init) ?? max(sourceFrames - Double(range.start), 0)
@@ -701,16 +700,31 @@ actor ConversionManager: Sendable {
                 return .unavailable(String(localized: "bmx could not rewrap \(item.name).") + " " + fallback)
             }
             temporaryFiles.append(tempURL)
-            let hasTrim = hasActiveTrim(item)
-            let duration = resolveSegmentDuration(for: item, baseDuration: durationLookup[item.id], hasTrim: hasTrim)
+            var trimStart = item.trimStart
+            var trimEnd = item.trimEnd
+            var duration = resolveSegmentDuration(for: item, baseDuration: durationLookup[item.id], hasTrim: hasActiveTrim(item))
+            // Long GOP trims grow to whole GOPs; describe what the copy really holds.
+            if let sourceInfo = sourceInfos[item.id],
+               let segmentInfo = await BMXService.shared.getMXFInfo(url: tempURL),
+               let editRate = NativeMXFMerge.pictureTrack(fromMXFInfo: segmentInfo)?.editRate {
+                let kept = NativeMXFMerge.keptRange(requested: range, sourceInfo: sourceInfo, segmentInfo: segmentInfo)
+                ranges[item.id] = kept
+                let moved = kept.start != range.start || range.count.map { $0 != kept.count } ?? false
+                if moved, let count = kept.count {
+                    trimStart = Double(kept.start) / editRate
+                    trimEnd = Double(kept.start + count) / editRate
+                    duration = Double(count) / editRate
+                    mergeLogger.info("\(item.name, privacy: .public): kept frames \(kept.start, privacy: .public)+\(count, privacy: .public) for requested \(range.start, privacy: .public)+\(range.count ?? -1, privacy: .public)")
+                }
+            }
             totalDuration += duration ?? 0
             segments.append(MergeSegment(
                 timelineMarkers: item.timelineMarkers,
                 itemID: item.id,
                 originalURL: item.url,
                 preparedURL: tempURL,
-                trimStart: item.trimStart,
-                trimEnd: item.trimEnd,
+                trimStart: trimStart,
+                trimEnd: trimEnd,
                 isTemporary: true,
                 duration: duration,
                 isConformed: false

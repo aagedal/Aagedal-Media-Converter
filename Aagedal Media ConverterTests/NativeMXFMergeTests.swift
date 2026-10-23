@@ -165,27 +165,50 @@ final class NativeMXFMergeTests: XCTestCase {
         XCTAssertTrue(merged.contains(#"<LtcChange frameCount="397" value="\#(end)" status="end"/>"#), merged)
     }
 
-    func testPictureTrackAndIntraDetectionFromMXFInfo() {
+    func testPictureTrackFromMXFInfo() {
         let info = """
               Tracks: (3)
                 Track #0:
                   essence_kind    : Picture
                   essence_type    : AVCI_100_1080p
                   edit_rate       : 50/1
+                  duration        : 00:00:04:14 (count='214')
                 Track #1:
                   essence_kind    : Sound
                   essence_type    : WAVE_PCM
                   edit_rate       : 48000/1
             """
-        XCTAssertEqual(NativeMXFMerge.pictureTrack(fromMXFInfo: info), .init(essenceType: "AVCI_100_1080p", editRate: 50))
+        XCTAssertEqual(NativeMXFMerge.pictureTrack(fromMXFInfo: info),
+                       .init(essenceType: "AVCI_100_1080p", editRate: 50, duration: 214))
         let ntsc = info.replacingOccurrences(of: "50/1", with: "60000/1001")
         XCTAssertEqual(NativeMXFMerge.pictureTrack(fromMXFInfo: ntsc)?.editRate ?? 0, 59.94, accuracy: 0.001)
         XCTAssertNil(NativeMXFMerge.pictureTrack(fromMXFInfo: "essence_kind : Sound\nedit_rate : 48000/1"))
-        XCTAssertTrue(NativeMXFMerge.isIntraCoded(essenceType: "AVCI_100_1080p"))
-        XCTAssertTrue(NativeMXFMerge.isIntraCoded(essenceType: "AVC_High_422_Intra"))
-        XCTAssertTrue(NativeMXFMerge.isIntraCoded(essenceType: "VC3_1080p_1235"))
-        XCTAssertFalse(NativeMXFMerge.isIntraCoded(essenceType: "AVC_High_422"))
-        XCTAssertFalse(NativeMXFMerge.isIntraCoded(essenceType: "MPEG2LG_422P_HL_1080I"))
+    }
+
+    /// `mxf2raw --info` excerpts for a Long GOP (GOP 12, M=3) trim of frames 17..<47:
+    /// bmx moved the start back to frame 10 and kept 39 frames.
+    func testKeptRangeReadsBackLongGOPAdjustment() {
+        func info(start: String, count: Int) -> String {
+            """
+              StartTimecodes:
+                material        : \(start)
+                file_source     : \(start)
+              Tracks: (2)
+                Track #0:
+                  essence_kind    : Picture
+                  essence_type    : MPEG_2_Long_GOP_422P_HL_1080i
+                  edit_rate       : 25/1
+                  duration        : 00:00:01:14 (count='\(count)')
+            """
+        }
+        let requested = NativeMXFMerge.FrameRange(start: 17, count: 30)
+        let source = info(start: "10:00:01:00", count: 150)
+        XCTAssertEqual(NativeMXFMerge.startTimecodeFrames(fromMXFInfo: source, editRate: 25), (36_000 + 1) * 25)
+        XCTAssertEqual(NativeMXFMerge.keptRange(requested: requested, sourceInfo: source, segmentInfo: info(start: "10:00:01:10", count: 39)),
+                       .init(start: 10, count: 39))
+        XCTAssertEqual(NativeMXFMerge.keptRange(requested: requested, sourceInfo: "", segmentInfo: info(start: "10:00:01:10", count: 39)),
+                       .init(start: 17, count: 39), "Without source timecode only the length is read back")
+        XCTAssertEqual(NativeMXFMerge.keptRange(requested: requested, sourceInfo: source, segmentInfo: ""), requested)
     }
 
     func testFrameRangeAndSegmentArguments() {
@@ -193,9 +216,10 @@ final class NativeMXFMergeTests: XCTestCase {
         XCTAssertEqual(NativeMXFMerge.frameRange(trimStart: nil, trimEnd: nil, editRate: 50), .init(start: 0, count: nil))
         XCTAssertEqual(NativeMXFMerge.frameRange(trimStart: 0.2, trimEnd: nil, editRate: 25), .init(start: 5, count: nil))
         XCTAssertNil(NativeMXFMerge.frameRange(trimStart: 2, trimEnd: 2.001, editRate: 50))
-        XCTAssertEqual(NativeMXFMerge.segmentRewrapArguments(range: .init(start: 0, count: nil)), ["-t", "op1a", "--pass-anc", "all"])
+        let base = ["-t", "op1a", "--pass-anc", "all", "--no-precharge", "--no-rollout"]
+        XCTAssertEqual(NativeMXFMerge.segmentRewrapArguments(range: .init(start: 0, count: nil)), base)
         XCTAssertEqual(NativeMXFMerge.segmentRewrapArguments(range: .init(start: 50, count: 100)),
-                       ["-t", "op1a", "--pass-anc", "all", "--start", "50", "--dur", "100"])
+                       base + ["--start", "50", "--dur", "100"])
     }
 
     func testTemporarySpaceEstimateAndCheck() {
@@ -209,6 +233,72 @@ final class NativeMXFMergeTests: XCTestCase {
         XCTAssertEqual(NativeMXFMerge.checkSpace(temporaryBytes: 10, temporaryAvailable: 15, outputAvailable: 9, sameVolume: false),
                        .insufficient(available: 9, required: 10))
         XCTAssertEqual(NativeMXFMerge.checkSpace(temporaryBytes: 10, temporaryAvailable: 15, outputAvailable: 10, sameVolume: false), .sufficient)
+    }
+
+    /// Trimming Long GOP must keep the keyframe before the in-point and every frame of
+    /// the selection, so the clip grows to whole GOPs instead of falling back to FFmpeg.
+    func testTrimmedLongGOPMergeKeepsKeyframeBeforeInPoint() async throws {
+        guard let ffmpeg = BinaryPathResolver.ffmpegPath else { throw XCTSkip("FFmpeg is not bundled") }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("NativeMXFLongGOP-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        // XDCAM HD422-style MPEG-2: open GOP of 12 with two B-frames, 3 s at 25 fps.
+        let clips = try ["A001", "A002"].enumerated().map { index, name in
+            let url = folder.appendingPathComponent(name + ".mxf")
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: ffmpeg)
+            process.arguments = [
+                "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=1920x1080:rate=25",
+                "-f", "lavfi", "-i", "sine=sample_rate=48000", "-t", "3",
+                "-c:v", "mpeg2video", "-pix_fmt", "yuv422p", "-b:v", "50M", "-minrate", "50M", "-maxrate", "50M",
+                "-bufsize", "17825792", "-g", "12", "-bf", "2", "-flags", "+ildct+ilme",
+                "-c:a", "pcm_s24le", "-timecode", "10:00:0\(index):00", "-f", "mxf", url.path,
+            ]
+            try process.run()
+            process.waitUntilExit()
+            XCTAssertEqual(process.terminationStatus, 0)
+            return url
+        }
+        let output = folder.appendingPathComponent("out", isDirectory: true)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        let suite = "NativeMXFLongGOP.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(false, forKey: AppConstants.exportStitchMarkersKey)
+        defaults.set(false, forKey: AppConstants.saveNextToOriginalKey)
+        defaults.set(true, forKey: AppConstants.nativeMXFTrimmedMergeKey)
+        let settings = ConversionPreparationSettings(preset: .streamCopy, defaults: defaults)
+        let manager = ConversionManager(preparationSettingsProvider: { _ in settings })
+        var items = clips.map { url in
+            VideoItem(url: url, name: url.lastPathComponent, size: 0, duration: "--:--", status: .waiting,
+                      progress: 0, eta: nil, outputURL: nil)
+        }
+        for index in items.indices { items[index].includeDateTag = false }
+        // Frames 17..<47; the GOP holding frame 17 starts at keyframe 12.
+        items[1].trimStart = 17.0 / 25
+        items[1].trimEnd = 47.0 / 25
+        let storage = OSAllocatedUnfairLock(initialState: items)
+
+        await manager.convertGroup(
+            items: Self.binding(storage), outputFolder: output.path, preset: .streamCopy,
+            concatEnabled: true, groupName: "longgop",
+            transcriptionEnabled: false, uploadEnabled: false, analyticsEnabled: false
+        )
+        for _ in 0..<600 where storage.withLock({ $0.contains { $0.status == .converting || $0.status == .waiting } }) {
+            try await Task.sleep(for: .milliseconds(200))
+        }
+        let finished = storage.withLock { $0 }
+        XCTAssertEqual(finished.map(\.status), [.done, .done])
+        XCTAssertNil(finished[0].conversionError, "Expected the bmx path without a fallback notice")
+        let merged = try XCTUnwrap(finished.first?.outputURL)
+        let probed = await BMXService.shared.getMXFInfo(url: merged)
+        let info = try XCTUnwrap(probed)
+        XCTAssertTrue(info.contains("Aagedal Media Converter"), "Merged by bmx")
+        let picture = try XCTUnwrap(NativeMXFMerge.pictureTrack(fromMXFInfo: info))
+        let secondFrames = try XCTUnwrap(picture.duration) - 75
+        // At least the selection plus the frames back to keyframe 12, at most one extra GOP each side.
+        XCTAssertGreaterThanOrEqual(secondFrames, 30 + 5)
+        XCTAssertLessThanOrEqual(secondFrames, 30 + 2 * 12)
     }
 
     /// Opt-in: merges real Sony FX9 card clips through the Stream Copy merge path.

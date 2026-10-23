@@ -54,12 +54,20 @@ enum NativeMXFMerge {
     struct PictureTrack: Equatable, Sendable {
         let essenceType: String
         let editRate: Double
+        /// Duration in edit units, when listed.
+        var duration: Int? = nil
     }
 
-    /// The first Picture track's essence type and edit rate from `mxf2raw --info`.
+    /// The first Picture track's essence type, edit rate and duration from `mxf2raw --info`.
     static func pictureTrack(fromMXFInfo info: String) -> PictureTrack? {
         var inPicture = false
         var essenceType: String?
+        var editRate: Double?
+        var duration: Int?
+        func track() -> PictureTrack? {
+            guard let essenceType, let editRate else { return nil }
+            return PictureTrack(essenceType: essenceType, editRate: editRate, duration: duration)
+        }
         for line in info.split(separator: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard let colon = trimmed.firstIndex(of: ":") else { continue }
@@ -67,28 +75,41 @@ enum NativeMXFMerge {
             let value = trimmed[trimmed.index(after: colon)...].trimmingCharacters(in: .whitespaces)
             switch key {
             case "essence_kind":
-                if inPicture { return nil }
+                if inPicture { return track() }
                 inPicture = value == "Picture"
             case "essence_type" where inPicture:
                 essenceType = value
-            case "edit_rate" where inPicture:
+            case "edit_rate" where inPicture && editRate == nil:
                 let parts = value.split(separator: "/").compactMap { Double($0) }
-                guard let essenceType, parts.count == 2, parts[0] > 0, parts[1] > 0 else { return nil }
-                return PictureTrack(essenceType: essenceType, editRate: parts[0] / parts[1])
+                guard parts.count == 2, parts[0] > 0, parts[1] > 0 else { return nil }
+                editRate = parts[0] / parts[1]
+            case "duration" where inPicture && duration == nil:
+                duration = firstMatch(#"count='(\d+)'"#, in: value).flatMap(Int.init)
             default:
                 continue
             }
         }
-        return nil
+        return inPicture ? track() : nil
     }
 
-    /// bmx cuts on edit units, so only intra-coded pictures can start on any frame.
-    /// Long GOP essence (XAVC-L, MPEG-2 422 LongGOP) keeps the FFmpeg path.
-    static func isIntraCoded(essenceType: String) -> Bool {
-        let type = essenceType.uppercased()
-        if type.contains("INTRA") { return true }
-        return ["AVCI", "D10", "DV", "VC3", "DNXHD", "UNC", "JPEG2000", "J2C", "RDD36", "VC2"]
-            .contains { type.hasPrefix($0) }
+    /// The file-source start timecode in frames at the rounded edit rate (non-drop only).
+    static func startTimecodeFrames(fromMXFInfo info: String, editRate: Double) -> Int? {
+        let base = Int(editRate.rounded())
+        guard base > 0, let value = firstMatch(#"file_source\s*:\s*(\d{2}:\d{2}:\d{2}:\d{2})"#, in: info) else { return nil }
+        let parts = value.split(separator: ":").compactMap { Int($0) }
+        guard parts.count == 4 else { return nil }
+        return ((parts[0] * 60 + parts[1]) * 60 + parts[2]) * base + parts[3]
+    }
+
+    /// The frames bmx actually kept. Long GOP trims move out to whole GOPs (see
+    /// `segmentRewrapArguments`), so the start and length are read back from the copy.
+    static func keptRange(requested: FrameRange, sourceInfo: String, segmentInfo: String) -> FrameRange {
+        guard let picture = pictureTrack(fromMXFInfo: segmentInfo), let count = picture.duration else { return requested }
+        guard let sourceStart = startTimecodeFrames(fromMXFInfo: sourceInfo, editRate: picture.editRate),
+              let segmentStart = startTimecodeFrames(fromMXFInfo: segmentInfo, editRate: picture.editRate) else {
+            return FrameRange(start: requested.start, count: count)
+        }
+        return FrameRange(start: max(segmentStart - sourceStart, 0), count: count)
     }
 
     struct FrameRange: Equatable, Sendable {
@@ -107,9 +128,12 @@ enum NativeMXFMerge {
     }
 
     /// Rewraps one clip unchanged apart from the trim. Every clip goes through this,
-    /// trimmed or not, so all segments share bmx's descriptor layout.
+    /// trimmed or not, so all segments share bmx's descriptor layout. For Long GOP,
+    /// `--no-precharge` moves the start back to include the keyframe before the in-point
+    /// and `--no-rollout` extends the end until the last frame decodes: a few frames too
+    /// many rather than too few. Intra-coded essence needs neither and is unaffected.
     static func segmentRewrapArguments(range: FrameRange) -> [String] {
-        var arguments = ["-t", "op1a", "--pass-anc", "all"]
+        var arguments = ["-t", "op1a", "--pass-anc", "all", "--no-precharge", "--no-rollout"]
         if range.start > 0 { arguments += ["--start", String(range.start)] }
         if let count = range.count { arguments += ["--dur", String(count)] }
         return arguments
