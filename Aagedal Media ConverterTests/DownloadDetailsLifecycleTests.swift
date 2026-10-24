@@ -593,6 +593,7 @@ final class DownloadRetryDrainTests: XCTestCase {
 
 private struct DownloadDrainResolver: YTDLPUpdating {
     func resolveYTDLPPath() async -> String? { "/fixture/yt-dlp" }
+    func resolveYTDLPRSPath() async -> String? { nil }
     func ensureDenoInstalled() async -> String? { nil }
 }
 

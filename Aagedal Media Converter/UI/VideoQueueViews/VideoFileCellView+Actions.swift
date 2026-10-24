@@ -238,7 +238,28 @@ extension VideoFileCellView {
         capsuleIcon.image = VideoFileCellView.Symbol.named(icon)
         capsuleIcon.contentTintColor = color
         statusCapsule.layer?.borderColor = color.withAlphaComponent(0.6).cgColor
-        statusCapsule.toolTip = config.status == .failed ? config.conversionError : nil
+        statusCapsule.toolTip = config.isDownloading
+            ? downloadEngineDescription(config: config)
+            : (config.status == .failed ? config.conversionError : nil)
+    }
+
+    /// Which downloader is fetching (or fetched) this row, for tooltips; nil for
+    /// rows that weren't downloaded or whose engine isn't known yet.
+    func downloadEngineDescription(config: VideoFileCellConfiguration) -> String? {
+        guard let engine = config.downloadEngine else { return nil }
+        if engine == .ytdlp, let reason = config.downloadEngineFallbackReason {
+            return config.isDownloading
+                ? String(localized: "Downloading with yt-dlp (yt-dlp-rs failed: \(reason))",
+                         comment: "Queue row tooltip while downloading after the bundled yt-dlp-rs downloader failed. The argument is the error message.")
+                : String(localized: "Downloaded with yt-dlp (yt-dlp-rs failed: \(reason))",
+                         comment: "Queue row tooltip for a file downloaded with yt-dlp after the bundled yt-dlp-rs downloader failed. The argument is the error message.")
+        }
+        let name = engine.rawValue
+        return config.isDownloading
+            ? String(localized: "Downloading with \(name)",
+                     comment: "Queue row tooltip while downloading. The argument is the downloader tool name (yt-dlp-rs or yt-dlp).")
+            : String(localized: "Downloaded with \(name)",
+                     comment: "Queue row tooltip for a downloaded file. The argument is the downloader tool name (yt-dlp-rs or yt-dlp).")
     }
 
     // MARK: - Status Row Update
@@ -264,7 +285,13 @@ extension VideoFileCellView {
             if case .failed = config.subtitleStatus { return true }
             return false
         }()
-        statusLabel.toolTip = (config.status == .failed || config.downloadError != nil || isSubtitleFailed) ? text : nil
+        if config.status == .failed || config.downloadError != nil || isSubtitleFailed {
+            statusLabel.toolTip = text
+        } else if config.isDownloading {
+            statusLabel.toolTip = downloadEngineDescription(config: config)
+        } else {
+            statusLabel.toolTip = nil
+        }
     }
 
     // MARK: - Progress Text
@@ -283,12 +310,14 @@ extension VideoFileCellView {
         if config.isDownloading {
             if config.downloadStopping { return "Stopping..." }
             if config.isLiveStreamRecording { return "" }
-            if !config.downloadHasProgress { return "Preparing..." }
+            // Tool name as a subtle suffix (not localized: it's a program name)
+            let engineSuffix = config.downloadEngine.map { " · \($0.rawValue)" } ?? ""
+            if !config.downloadHasProgress { return "Preparing...\(engineSuffix)" }
             let pct = Int(config.downloadProgress * 100)
             if let speed = config.downloadSpeed {
-                return "\(pct)% (\(speed))"
+                return "\(pct)% (\(speed))\(engineSuffix)"
             }
-            return "\(pct)%"
+            return "\(pct)%\(engineSuffix)"
         }
 
         // Download error — show detail

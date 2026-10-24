@@ -77,6 +77,8 @@ struct Aagedal_Media_Converter_App: App {
         // and turn its unfinished queue into a one-shot restore offer.
         EncodeHistoryStore.shared.bootstrap()
         LastSessionStore.shared.bootstrap()
+        // Daily automatic updates for app-managed yt-dlp, deno and yt-dlp-rs.
+        ManagedToolUpdateScheduler.shared.start()
 
         // Restore local-agent history before the transport layer is connected.
         // A damaged snapshot is reported and retained rather than overwritten.

@@ -108,6 +108,14 @@ TOOL_METADATA: dict[str, dict[str, Any]] = {
         "versionArguments": ["--version"],
         "versionPattern": r"ssimulacra2_rs ([^\s]+)",
     },
+    "yt-dlp-rs": {
+        "component": "yt-dlp-rs",
+        "license": "Unlicense AND MIT AND Apache-2.0 AND MPL-2.0 AND ISC AND BSD-3-Clause AND Unicode-3.0 AND Zlib AND CDLA-Permissive-2.0",
+        "licenseFile": "Licenses/yt-dlp-rs-LICENSE.txt",
+        "requiredSourceComponents": ["yt-dlp-rs MPL-2.0 crate sources"],
+        "versionArguments": ["--version"],
+        "versionPattern": r"yt-dlp-rs ([^\s]+)",
+    },
     "tesseract": {
         "component": "Tesseract OCR",
         "license": "Apache-2.0",

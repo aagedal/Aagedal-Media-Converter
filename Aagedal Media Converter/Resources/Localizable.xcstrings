@@ -134827,6 +134827,1447 @@
           }
         }
       }
+    },
+    "%@ (included with the app)" : {
+      "comment" : "Version picker entry for the copy bundled with the app. The placeholder is a version number.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ (in der App enthalten)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ (incluida con la app)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ (incluse avec l’app)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ (inclusa nell’app)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@（アプリに同梱）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@(앱에 포함됨)"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ (følger med appen)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ (incluída no app)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@（随附于应用）"
+          }
+        }
+      }
+    },
+    "App-downloaded yt-dlp, deno and yt-dlp-rs are kept in versioned folders in Application Support. Homebrew and custom tools are never updated by the app." : {
+      "comment" : "Downloads settings: where app-managed tools are stored.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Von der App geladene Versionen von yt-dlp, deno und yt-dlp-rs werden in versionierten Ordnern unter „Application Support“ gespeichert. Homebrew- und eigene Tools aktualisiert die App nie."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp, deno y yt-dlp-rs descargados por la app se guardan en carpetas por versión en Application Support. La app nunca actualiza las herramientas de Homebrew ni las personalizadas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Les versions de yt-dlp, deno et yt-dlp-rs téléchargées par l’app sont conservées dans des dossiers versionnés d’Application Support. L’app ne met jamais à jour les outils Homebrew ou personnalisés."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp, deno e yt-dlp-rs scaricati dall’app vengono conservati in cartelle per versione in Application Support. L’app non aggiorna mai gli strumenti di Homebrew o personalizzati."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "アプリがダウンロードした yt-dlp、deno、yt-dlp-rs は Application Support 内のバージョン別フォルダに保存されます。Homebrew やカスタムのツールがアプリによってアップデートされることはありません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "앱이 다운로드한 yt-dlp, deno, yt-dlp-rs는 Application Support의 버전별 폴더에 보관됩니다. Homebrew 및 사용자 지정 도구는 앱이 업데이트하지 않습니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp, deno og yt-dlp-rs som appen laster ned, lagres i versjonsmapper i Application Support. Appen oppdaterer aldri Homebrew- eller egendefinerte verktøy."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "O yt-dlp, o deno e o yt-dlp-rs baixados pelo app ficam em pastas por versão no Application Support. O app nunca atualiza ferramentas do Homebrew ou personalizadas."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "应用下载的 yt-dlp、deno 和 yt-dlp-rs 保存在 Application Support 中按版本划分的文件夹里。应用绝不会更新 Homebrew 或自定义工具。"
+          }
+        }
+      }
+    },
+    "Automatic updates are paused because a specific version is chosen. Choose Newest to resume them." : {
+      "comment" : "Shown when the user rolled a download tool back to a specific version.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Automatische Updates sind pausiert, weil eine bestimmte Version ausgewählt ist. Wähle „Neueste“, um sie fortzusetzen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Las actualizaciones automáticas están en pausa porque se eligió una versión concreta. Elige «Más reciente» para reanudarlas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Les mises à jour automatiques sont suspendues, car une version précise est choisie. Choisissez « La plus récente » pour les reprendre."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Gli aggiornamenti automatici sono in pausa perché è scelta una versione specifica. Scegli “Più recente” per riprenderli."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "特定のバージョンが選択されているため、自動アップデートは一時停止しています。再開するには「最新」を選択してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "특정 버전이 선택되어 자동 업데이트가 일시 정지되었습니다. 다시 시작하려면 ‘최신’을 선택하세요."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Automatiske oppdateringer er satt på pause fordi en bestemt versjon er valgt. Velg «Nyeste» for å gjenoppta dem."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "As atualizações automáticas estão pausadas porque uma versão específica foi escolhida. Escolha “Mais recente” para retomá-las."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "由于选择了特定版本，自动更新已暂停。选择“最新”即可恢复。"
+          }
+        }
+      }
+    },
+    "Checks at most once a day and never switches versions while a download is running. The last 3 downloaded versions are kept, so you can roll back by choosing an older version." : {
+      "comment" : "Caption explaining automatic updates and rollback for a download tool.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sucht höchstens einmal täglich und wechselt nie die Version, während ein Download läuft. Die letzten 3 heruntergeladenen Versionen bleiben erhalten, sodass du durch Auswahl einer älteren Version zurückkehren kannst."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Comprueba como máximo una vez al día y nunca cambia de versión mientras hay una descarga en curso. Se conservan las 3 últimas versiones descargadas, así que puedes volver atrás eligiendo una versión anterior."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vérifie au plus une fois par jour et ne change jamais de version pendant un téléchargement. Les 3 dernières versions téléchargées sont conservées : vous pouvez revenir en arrière en choisissant une version plus ancienne."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Controlla al massimo una volta al giorno e non cambia mai versione durante un download. Le ultime 3 versioni scaricate vengono conservate, così puoi tornare indietro scegliendo una versione precedente."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "確認は1日に最大1回で、ダウンロード中にバージョンを切り替えることはありません。直近3つのダウンロード済みバージョンが保持されるため、古いバージョンを選んでロールバックできます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "최대 하루에 한 번 확인하며 다운로드 중에는 버전을 바꾸지 않습니다. 최근에 다운로드한 3개 버전이 보관되므로 이전 버전을 선택해 되돌릴 수 있습니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ser etter oppdateringer høyst én gang om dagen og bytter aldri versjon mens en nedlasting pågår. De 3 siste nedlastede versjonene beholdes, så du kan gå tilbake ved å velge en eldre versjon."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Verifica no máximo uma vez por dia e nunca troca de versão durante um download. As 3 últimas versões baixadas são mantidas, para que você possa voltar escolhendo uma versão anterior."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "每天最多检查一次，且不会在下载进行时切换版本。会保留最近下载的 3 个版本，你可以选择较旧的版本进行回滚。"
+          }
+        }
+      }
+    },
+    "Clip range" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ausschnittbereich"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rango del clip"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Plage de l’extrait"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Intervallo della clip"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "クリップ範囲"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "클립 범위"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Utdragsområde"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Intervalo do clipe"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "剪辑范围"
+          }
+        }
+      }
+    },
+    "Clips download at about twice playback speed. For videos under 10 minutes, or clips longer than half the video, downloading the whole video and trimming it in the queue is likely faster." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Clips werden mit etwa doppelter Wiedergabegeschwindigkeit geladen. Bei Videos unter 10 Minuten oder Clips, die länger als die Hälfte des Videos sind, ist es wahrscheinlich schneller, das ganze Video zu laden und es in der Warteschlange zu trimmen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los clips se descargan a aproximadamente el doble de la velocidad de reproducción. Con vídeos de menos de 10 minutos, o clips de más de la mitad del vídeo, probablemente sea más rápido descargar el vídeo completo y recortarlo en la cola."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Les extraits se téléchargent à environ deux fois la vitesse de lecture. Pour les vidéos de moins de 10 minutes, ou les extraits couvrant plus de la moitié de la vidéo, télécharger la vidéo entière et la découper dans la file sera probablement plus rapide."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Le clip si scaricano a circa il doppio della velocità di riproduzione. Per i video sotto i 10 minuti, o le clip più lunghe di metà del video, scaricare l'intero video e tagliarlo nella coda è probabilmente più veloce."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "クリップは再生速度の約2倍でダウンロードされます。10分未満の動画や、動画の半分を超えるクリップでは、動画全体をダウンロードしてキューでトリミングする方が速い可能性があります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "클립은 재생 속도의 약 2배로 다운로드됩니다. 10분 미만의 동영상이거나 클립이 동영상의 절반보다 길면, 전체를 다운로드한 후 대기열에서 트리밍하는 것이 더 빠를 가능성이 높습니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Utdrag lastes ned med omtrent dobbel avspillingshastighet. For videoer under 10 minutter, eller utdrag lengre enn halve videoen, går det sannsynligvis raskere å laste ned hele videoen og trimme den i køen."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Os clipes são baixados a cerca do dobro da velocidade de reprodução. Para vídeos com menos de 10 minutos, ou clipes com mais da metade do vídeo, baixar o vídeo inteiro e cortá-lo na fila provavelmente será mais rápido."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "片段的下载速度约为播放速度的两倍。对于不到 10 分钟的视频，或超过视频一半长度的片段，下载完整视频再在队列中修剪可能更快。"
+          }
+        }
+      }
+    },
+    "Downloaded update" : {
+      "comment" : "Status: the active yt-dlp-rs is a downloaded update.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Heruntergeladenes Update"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Actualización descargada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mise à jour téléchargée"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aggiornamento scaricato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ダウンロードしたアップデート"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "다운로드한 업데이트"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nedlastet oppdatering"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Atualização baixada"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已下载的更新"
+          }
+        }
+      }
+    },
+    "Downloaded with %@" : {
+      "comment" : "Queue row tooltip for a downloaded file. The argument is the downloader tool name (yt-dlp-rs or yt-dlp).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloaded with %@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mit %@ heruntergeladen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descargado con %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Téléchargé avec %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Scaricato con %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@でダウンロード済み"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@(으)로 다운로드됨"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lastet ned med %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Baixado com %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已使用 %@ 下载"
+          }
+        }
+      }
+    },
+    "Downloaded with yt-dlp (yt-dlp-rs failed: %@)" : {
+      "comment" : "Queue row tooltip for a file downloaded with yt-dlp after the bundled yt-dlp-rs downloader failed. The argument is the error message.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloaded with yt-dlp (yt-dlp-rs failed: %@)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mit yt-dlp heruntergeladen (yt-dlp-rs fehlgeschlagen: %@)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descargado con yt-dlp (yt-dlp-rs falló: %@)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Téléchargé avec yt-dlp (échec de yt-dlp-rs : %@)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Scaricato con yt-dlp (yt-dlp-rs non riuscito: %@)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlpでダウンロード済み（yt-dlp-rsが失敗しました：%@）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp로 다운로드됨(yt-dlp-rs 실패: %@)"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lastet ned med yt-dlp (yt-dlp-rs mislyktes: %@)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Baixado com yt-dlp (yt-dlp-rs falhou: %@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已使用 yt-dlp 下载（yt-dlp-rs 失败：%@）"
+          }
+        }
+      }
+    },
+    "Downloading with %@" : {
+      "comment" : "Queue row tooltip while downloading. The argument is the downloader tool name (yt-dlp-rs or yt-dlp).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloading with %@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Wird mit %@ heruntergeladen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descargando con %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Téléchargement avec %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Download con %@ in corso"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@でダウンロード中"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@(으)로 다운로드 중"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lastes ned med %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Baixando com %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "正在使用 %@ 下载"
+          }
+        }
+      }
+    },
+    "Downloading with yt-dlp (yt-dlp-rs failed: %@)" : {
+      "comment" : "Queue row tooltip while downloading after the bundled yt-dlp-rs downloader failed. The argument is the error message.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloading with yt-dlp (yt-dlp-rs failed: %@)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Wird mit yt-dlp heruntergeladen (yt-dlp-rs fehlgeschlagen: %@)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descargando con yt-dlp (yt-dlp-rs falló: %@)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Téléchargement avec yt-dlp (échec de yt-dlp-rs : %@)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Download con yt-dlp in corso (yt-dlp-rs non riuscito: %@)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlpでダウンロード中（yt-dlp-rsが失敗しました：%@）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp로 다운로드 중(yt-dlp-rs 실패: %@)"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lastes ned med yt-dlp (yt-dlp-rs mislyktes: %@)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Baixando com yt-dlp (yt-dlp-rs falhou: %@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "正在使用 yt-dlp 下载（yt-dlp-rs 失败：%@）"
+          }
+        }
+      }
+    },
+    "Included with the app" : {
+      "comment" : "Status: the active yt-dlp-rs is the copy bundled with the app.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "In der App enthalten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Incluido con la app"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Inclus avec l’app"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Incluso nell’app"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "アプリに同梱"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "앱에 포함됨"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Følger med appen"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Incluído no app"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "随应用附带"
+          }
+        }
+      }
+    },
+    "Loading video length…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Videolänge wird geladen …"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cargando la duración del vídeo…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Chargement de la durée de la vidéo…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Caricamento della durata del video…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "動画の長さを読み込み中…"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "동영상 길이 불러오는 중…"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Henter videolengde …"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Carregando a duração do vídeo…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "正在加载视频时长…"
+          }
+        }
+      }
+    },
+    "Newest" : {
+      "comment" : "Managed tool version picker: automatic newest version.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Neueste"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Más reciente"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La plus récente"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Più recente"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "最新"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "최신"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nyeste"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mais recente"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "最新"
+          }
+        }
+      }
+    },
+    "Newest (%@)" : {
+      "comment" : "Managed tool version picker: automatic newest version.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Neueste (%@)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Más reciente (%@)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La plus récente (%@)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Più recente (%@)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "最新（%@）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "최신(%@)"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nyeste (%@)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mais recente (%@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "最新（%@）"
+          }
+        }
+      }
+    },
+    "The downloaded tool did not run or reported an unexpected version, so it was not activated." : {
+      "comment" : "Error when a downloaded tool fails its --version check.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Das heruntergeladene Tool ließ sich nicht ausführen oder meldete eine unerwartete Version und wurde daher nicht aktiviert."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La herramienta descargada no se ejecutó o indicó una versión inesperada, por lo que no se activó."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "L’outil téléchargé ne s’est pas exécuté ou a indiqué une version inattendue ; il n’a donc pas été activé."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lo strumento scaricato non si è avviato o ha indicato una versione inattesa, quindi non è stato attivato."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ダウンロードしたツールが実行できなかったか、予期しないバージョンを報告したため、有効にしませんでした。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "다운로드한 도구가 실행되지 않았거나 예상과 다른 버전을 보고하여 활성화하지 않았습니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Det nedlastede verktøyet kunne ikke kjøres eller oppga en uventet versjon, så det ble ikke aktivert."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "A ferramenta baixada não foi executada ou informou uma versão inesperada, por isso não foi ativada."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "下载的工具无法运行或报告了意外的版本，因此未启用。"
+          }
+        }
+      }
+    },
+    "Update automatically" : {
+      "comment" : "Toggle that enables automatic updates for an app-managed download tool.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Automatisch aktualisieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Actualizar automáticamente"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mettre à jour automatiquement"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aggiorna automaticamente"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "自動的にアップデート"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "자동으로 업데이트"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Oppdater automatisk"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Atualizar automaticamente"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "自动更新"
+          }
+        }
+      }
+    },
+    "Use yt-dlp-rs for supported sites (beta)" : {
+      "comment" : "Toggle that routes downloads from supported sites to yt-dlp-rs.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs für unterstützte Websites verwenden (Beta)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usar yt-dlp-rs en sitios compatibles (beta)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Utiliser yt-dlp-rs pour les sites pris en charge (bêta)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usa yt-dlp-rs per i siti supportati (beta)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "対応サイトで yt-dlp-rs を使用（ベータ）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "지원되는 사이트에 yt-dlp-rs 사용(베타)"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bruk yt-dlp-rs for støttede nettsteder (beta)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usar yt-dlp-rs em sites compatíveis (beta)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "对支持的网站使用 yt-dlp-rs（测试版）"
+          }
+        }
+      }
+    },
+    "Version" : {
+      "comment" : "Accessibility label of the version picker of an app-managed download tool.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Version"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Versión"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Version"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Versione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "バージョン"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "버전"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Versjon"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Versão"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "版本"
+          }
+        }
+      }
+    },
+    "Version:" : {
+      "comment" : "Label before the version picker of an app-managed download tool.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Version:"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Versión:"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Version :"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Versione:"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "バージョン:"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "버전:"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Versjon:"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Versão:"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "版本："
+          }
+        }
+      }
+    },
+    "yt-dlp-rs" : {
+      "comment" : "Link to the yt-dlp-rs project.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs"
+          }
+        }
+      }
+    },
+    "yt-dlp-rs (Beta)" : {
+      "comment" : "Settings section header for the bundled yt-dlp-rs downloader.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs (Beta)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs (beta)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs (bêta)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs (beta)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs（ベータ）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs(베타)"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs (beta)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs (beta)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs（测试版）"
+          }
+        }
+      }
+    },
+    "yt-dlp-rs is a native Rust port of yt-dlp included with the app. When it is on, supported sites download with yt-dlp-rs; if a site is not supported or yt-dlp-rs fails, the download automatically falls back to yt-dlp." : {
+      "comment" : "Caption for the yt-dlp-rs toggle.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs ist eine native Rust-Portierung von yt-dlp, die in der App enthalten ist. Wenn die Option aktiviert ist, werden unterstützte Websites mit yt-dlp-rs geladen; wird eine Website nicht unterstützt oder schlägt yt-dlp-rs fehl, wechselt der Download automatisch zu yt-dlp."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs es una adaptación nativa en Rust de yt-dlp incluida con la app. Si está activada, los sitios compatibles se descargan con yt-dlp-rs; si un sitio no es compatible o yt-dlp-rs falla, la descarga recurre automáticamente a yt-dlp."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs est un portage natif en Rust de yt-dlp inclus avec l’app. Lorsqu’il est activé, les sites pris en charge sont téléchargés avec yt-dlp-rs ; si un site n’est pas pris en charge ou si yt-dlp-rs échoue, le téléchargement se rabat automatiquement sur yt-dlp."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs è un port nativo in Rust di yt-dlp incluso nell’app. Se attivo, i siti supportati vengono scaricati con yt-dlp-rs; se un sito non è supportato o yt-dlp-rs non riesce, il download passa automaticamente a yt-dlp."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs はアプリに同梱されている yt-dlp のネイティブ Rust 移植版です。オンにすると対応サイトは yt-dlp-rs でダウンロードされます。サイトが未対応の場合や yt-dlp-rs が失敗した場合は、自動的に yt-dlp に切り替わります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs는 앱에 포함된 yt-dlp의 네이티브 Rust 포트입니다. 켜면 지원되는 사이트는 yt-dlp-rs로 다운로드되며, 사이트가 지원되지 않거나 yt-dlp-rs가 실패하면 자동으로 yt-dlp로 대체됩니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs er en innebygd Rust-versjon av yt-dlp som følger med appen. Når den er på, lastes støttede nettsteder ned med yt-dlp-rs. Hvis et nettsted ikke støttes eller yt-dlp-rs feiler, går nedlastingen automatisk over til yt-dlp."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "O yt-dlp-rs é uma versão nativa em Rust do yt-dlp incluída no app. Quando ativado, os sites compatíveis são baixados com o yt-dlp-rs; se um site não for compatível ou o yt-dlp-rs falhar, o download passa automaticamente para o yt-dlp."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs 是随应用附带的 yt-dlp 原生 Rust 移植版。开启后，受支持的网站将使用 yt-dlp-rs 下载；如果网站不受支持或 yt-dlp-rs 失败，下载会自动改用 yt-dlp。"
+          }
+        }
+      }
+    },
+    "yt-dlp-rs not available" : {
+      "comment" : "Status when no yt-dlp-rs executable can be found.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs nicht verfügbar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs no disponible"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs indisponible"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs non disponibile"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs を利用できません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs를 사용할 수 없음"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs er ikke tilgjengelig"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs indisponível"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "yt-dlp-rs 不可用"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

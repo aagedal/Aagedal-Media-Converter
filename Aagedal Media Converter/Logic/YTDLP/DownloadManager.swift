@@ -749,6 +749,16 @@ class DownloadManager {
                         }
                         self.logger.info("Updated item name to: \(title)")
                     }
+                },
+                engineUpdate: { [weak self] engine, fallbackReason in
+                    Task { @MainActor in
+                        guard let self,
+                              self.downloadControls[itemID] === control else { return }
+                        self.updateItem(itemID) { item in
+                            item.downloadEngine = engine
+                            item.downloadEngineFallbackReason = fallbackReason
+                        }
+                    }
                 }
             )
 
@@ -769,6 +779,9 @@ class DownloadManager {
             let downloadElapsed = Date().timeIntervalSince(actualDownloadStartTime)
             let totalElapsed = Date().timeIntervalSince(downloadStartTime)
             logger.info("[TIMING] Download complete: \(result.outputURL.path)")
+            if let reason = result.engineFallbackReason {
+                logger.info("[Engine] Downloaded with yt-dlp after yt-dlp-rs failed: \(reason, privacy: .public)")
+            }
             logger.info("[TIMING] Actual download took \(String(format: "%.2f", downloadElapsed))s, total elapsed: \(String(format: "%.2f", totalElapsed))s")
 
             let videoTitle = result.title.isEmpty
@@ -787,6 +800,8 @@ class DownloadManager {
 
             updateItem(itemID) { item in
                 item.url = result.outputURL
+                item.downloadEngine = result.engine
+                item.downloadEngineFallbackReason = result.engineFallbackReason
                 item.name = result.outputURL.lastPathComponent
                 item.isDownloading = false
                 item.isLiveStreamRecording = false
@@ -1110,6 +1125,16 @@ class DownloadManager {
                             item.name = title
                         }
                     }
+                },
+                engineUpdate: { [weak self] engine, fallbackReason in
+                    Task { @MainActor in
+                        guard let self,
+                              self.downloadControls[itemID] === control else { return }
+                        self.updateItem(itemID) { item in
+                            item.downloadEngine = engine
+                            item.downloadEngineFallbackReason = fallbackReason
+                        }
+                    }
                 }
             )
 
@@ -1140,6 +1165,8 @@ class DownloadManager {
 
             updateItem(itemID) { item in
                 item.url = result.outputURL
+                item.downloadEngine = result.engine
+                item.downloadEngineFallbackReason = result.engineFallbackReason
                 item.name = result.outputURL.lastPathComponent
                 item.isDownloading = false
                 item.downloadProgress = 1.0

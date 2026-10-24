@@ -90,6 +90,17 @@ bundle. Shared-cache checks use the build host's dyld cache; this does not repla
 clean-machine checks on the minimum supported macOS release. None of these size
 or dependency checks resolve the 99 outstanding license attributions.
 
+## yt-dlp-rs
+
+The app bundles the official yt-dlp-rs Apple Silicon release binary as
+`Aagedal Media Converter/Binaries/yt-dlp-rs`, pinned and checksum-verified by
+`scripts/update-ytdlp-rs.sh`. `Licenses/yt-dlp-rs-LICENSE.txt` retains the
+Unlicense, the embedded ejs solver notices, every locked crate's notices and the
+Rust standard-library notices. The four MPL-2.0 crates' sources are a required
+source component (`yt-dlp-rs MPL-2.0 crate sources`). Details are in
+`docs/provenance/yt-dlp-rs/README.md`. Newer releases downloaded at runtime into
+Application Support are not part of the app bundle.
+
 ## NeMo Speech runtime
 
 The app includes the official NeMo-Speech.cpp 0.2.0 Apple Silicon Metal runtime

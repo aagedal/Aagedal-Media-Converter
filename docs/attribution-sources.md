@@ -42,6 +42,11 @@ pins. Apple SDKs, system libraries and general build tools are not redistributed
   inputs. The package review distinguishes direct archive/payload matches from
   version/build-date inferences for some upstream runtime notices. It does not
   claim every upstream binary has been independently reproduced.
+- **yt-dlp-rs MPL-2.0 crates:** the unmodified crates.io sources of the four
+  MPL-2.0 crates statically linked into the bundled yt-dlp-rs helper, verified
+  against its `Cargo.lock` checksums. Recreate the archive byte-for-byte with
+  `python3 scripts/generate-ytdlp-rs-notices.py <tag>`; see
+  `docs/provenance/yt-dlp-rs/README.md`.
 - **SwiftMediaMetadata 3.0.1:** the exact pinned source tree, including the GeoNames
   database and its upstream acknowledgement. Its source package identifies
   required platform tools and dependencies in `Package.swift`.

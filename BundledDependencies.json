@@ -730,6 +730,13 @@
       "bytes": 123220,
       "sha256": "aa229dfc6d607949accd53512b1e9e9d5884501945563135697e38aa06f5e8bb",
       "url": "https://github.com/aagedal/MPVKit/tree/68c8989362a0daedabcc1540b2b5f0e1fea4be1f"
+    },
+    {
+      "component": "yt-dlp-rs MPL-2.0 crate sources",
+      "path": "build/attribution/yt-dlp-rs-mpl-crate-sources.tar.gz",
+      "bytes": 136266,
+      "sha256": "3c5897760e283aef5c4e294e6fdc510a5193712454559fc54338b48d60cdfa16",
+      "url": "https://github.com/aagedal/yt-dlp-rs/blob/v0.3.0-beta.1/Cargo.lock"
     }
   ],
   "tools": [
@@ -1005,6 +1012,26 @@
       "version": "5.5.2",
       "license": "Apache-2.0",
       "licenseFile": "Licenses/tesseract-LICENSE.txt"
+    },
+    {
+      "path": "Aagedal Media Converter/Binaries/yt-dlp-rs",
+      "bytes": 19234112,
+      "sha256": "e8f113939a43c2917637813f3ae7518eafe269df3d5d8d9d9b9f1e288857bc00",
+      "mode": "0755",
+      "architectures": [
+        "arm64"
+      ],
+      "linkedLibraries": [
+        "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libiconv.2.dylib"
+      ],
+      "component": "yt-dlp-rs",
+      "version": "0.3.0-beta.1",
+      "license": "Unlicense AND MIT AND Apache-2.0 AND MPL-2.0 AND ISC AND BSD-3-Clause AND Unicode-3.0 AND Zlib AND CDLA-Permissive-2.0",
+      "licenseFile": "Licenses/yt-dlp-rs-LICENSE.txt",
+      "requiredSourceComponents": [
+        "yt-dlp-rs MPL-2.0 crate sources"
+      ]
     }
   ],
   "libraries": [
@@ -1327,12 +1354,17 @@
       "path": "Licenses/tesseract-LICENSE.txt",
       "bytes": 19143,
       "sha256": "99f26126f391f8c909c63222597c5b8bdcf592b0f8818c653966606e6cdf6b41"
+    },
+    {
+      "path": "Licenses/yt-dlp-rs-LICENSE.txt",
+      "bytes": 3342149,
+      "sha256": "d398c91a0280ed5960abaaacb40e5039c58f9b2794ec91392ade6b6416c49cab"
     }
   ],
   "summary": {
-    "toolCount": 12,
+    "toolCount": 13,
     "libraryCount": 12,
-    "totalBytes": 159884080,
+    "totalBytes": 179118192,
     "entriesMissingLocalLicenseFile": []
   }
 }
