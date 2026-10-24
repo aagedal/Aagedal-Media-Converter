@@ -7,6 +7,8 @@ import OSLog
 
 protocol YTDLPUpdating: Sendable {
     func resolveYTDLPPath() async -> String?
+    /// The yt-dlp-rs binary, or nil when it is disabled or unavailable.
+    func resolveYTDLPRSPath() async -> String?
     func ensureDenoInstalled() async -> String?
 }
 
@@ -29,6 +31,8 @@ final class YTDLPDownloadControl: @unchecked Sendable {
     private var outputPath: String?
     private var initialOutputSignature: OutputSignature?
     private var outputFinalized = false
+    /// Every destination reported during the current attempt, for engine-fallback cleanup.
+    private var reportedPaths: [String] = []
 
     private struct OutputSignature: Equatable {
         let size: UInt64
@@ -50,6 +54,7 @@ final class YTDLPDownloadControl: @unchecked Sendable {
     func recordOutputPath(_ path: String, in folder: URL, finalized: Bool = false) {
         let destination = path.hasPrefix("/") ? URL(fileURLWithPath: path) : folder.appendingPathComponent(path)
         lock.withLock {
+            if !reportedPaths.contains(path) { reportedPaths.append(path) }
             if outputPath != path {
                 outputPath = path
                 initialOutputSignature = OutputSignature(url: destination)
@@ -91,6 +96,19 @@ final class YTDLPDownloadControl: @unchecked Sendable {
     @discardableResult
     func cancel() -> Bool {
         terminate(reason: .userRequested)
+    }
+
+    /// Returns and forgets the destinations of a failed attempt before another engine
+    /// retries the same download.
+    fileprivate func takeReportedPaths() -> [String] {
+        lock.withLock {
+            let paths = reportedPaths
+            reportedPaths = []
+            outputPath = nil
+            initialOutputSignature = nil
+            outputFinalized = false
+            return paths
+        }
     }
 
     @discardableResult
@@ -158,6 +176,10 @@ struct YTDLPDownloadResult: Sendable {
     let title: String
     /// Full length of the source video as reported by the extractor, when known.
     var sourceDuration: Double? = nil
+    /// The downloader that produced the file.
+    var engine: YTDLPEngine = .ytdlp
+    /// Why yt-dlp-rs was abandoned for yt-dlp, when it was.
+    var engineFallbackReason: String? = nil
 }
 
 /// A time range of the source video to download instead of the whole thing.
@@ -572,6 +594,7 @@ actor YTDLPService {
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "YTDLPService")
     private let updateService: any YTDLPUpdating
     private let subprocessRunner: any SubprocessRunning
+    private let engineFailures: YTDLPEngineFailureMemory
 
     private static let probeTimeout: Duration = .seconds(300)
     private static let probeOutputLimit = 16 * 1024 * 1024
@@ -583,10 +606,65 @@ actor YTDLPService {
 
     init(
         updateService: any YTDLPUpdating = YTDLPUpdateService.shared,
-        subprocessRunner: any SubprocessRunning = SubprocessRunner()
+        subprocessRunner: any SubprocessRunning = SubprocessRunner(),
+        engineFailures: YTDLPEngineFailureMemory = .shared
     ) {
         self.updateService = updateService
         self.subprocessRunner = subprocessRunner
+        self.engineFailures = engineFailures
+    }
+
+    /// Runs `body` with the engine the router picks. A failed yt-dlp-rs attempt is retried
+    /// once with yt-dlp (after `beforeFallback`), unless the user stopped it. `onAttempt`
+    /// reports each engine (and the fallback reason, if any) just before it runs.
+    private func withEngineFallback<T>(
+        url: String,
+        operation: YTDLPEngineOperation,
+        beforeFallback: () -> Void = {},
+        onAttempt: (YTDLPEngine, String?) -> Void = { _, _ in },
+        _ body: (YTDLPEngine, String) async throws -> T
+    ) async throws -> (value: T, engine: YTDLPEngine, fallbackReason: String?) {
+        let rsPath = await updateService.resolveYTDLPRSPath()
+        let decision = YTDLPEngineRouter.decide(
+            url: url, operation: operation, rsAvailable: rsPath != nil,
+            rsSkippedForSite: await engineFailures.isSkipped(url: url)
+        )
+        logger.info("[Engine] \(decision.engine.rawValue, privacy: .public) for \(String(describing: operation), privacy: .public): \(decision.reason, privacy: .public)")
+
+        if decision.engine == .ytdlpRS, let rsPath {
+            do {
+                onAttempt(.ytdlpRS, nil)
+                return (try await body(.ytdlpRS, rsPath), .ytdlpRS, nil)
+            } catch {
+                guard YTDLPEngineRouter.shouldFallBack(after: error), !Task.isCancelled else { throw error }
+                let failures = await engineFailures.recordFailure(url: url)
+                let reason = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+                logger.warning("[Engine] yt-dlp-rs failed (\(failures, privacy: .public) this session for this site), retrying with yt-dlp: \(reason, privacy: .public)")
+                guard let ytdlpPath = await updateService.resolveYTDLPPath() else { throw error }
+                beforeFallback()
+                onAttempt(.ytdlp, reason)
+                return (try await body(.ytdlp, ytdlpPath), .ytdlp, reason)
+            }
+        }
+        guard let ytdlpPath = await updateService.resolveYTDLPPath() else {
+            throw YTDLPError.binaryNotFound
+        }
+        onAttempt(.ytdlp, nil)
+        return (try await body(.ytdlp, ytdlpPath), .ytdlp, nil)
+    }
+
+    /// Arguments shared by every invocation. yt-dlp-rs bundles its EJS solver and caches
+    /// nothing, so the remote-component and cache options only go to yt-dlp. Both get
+    /// --ignore-config so neither picks up the user's own config files.
+    private func commonArguments(engine: YTDLPEngine) async -> [String] {
+        var arguments = ["--ignore-config"]
+        if engine == .ytdlp {
+            arguments += ["--remote-components", "ejs:github", "--cache-dir", AppConstants.ytdlpCacheDirectory.path]
+        }
+        if let denoPath = await updateService.ensureDenoInstalled() {
+            arguments += ["--js-runtimes", "deno:\(denoPath)"]
+        }
+        return arguments
     }
 
     /// How long yt-dlp may produce no output before the stall watchdog kills it.
@@ -739,19 +817,52 @@ actor YTDLPService {
         guard InstagramCarouselSelection.isPostURL(url) || TwitterPostSelection.isPostURL(url) else {
             throw YTDLPError.metadataFetchFailed("Enter an Instagram or Twitter/X post URL.")
         }
-        guard let path = await updateService.resolveYTDLPPath() else { throw YTDLPError.binaryNotFound }
-        var arguments = ["--ignore-config", "--remote-components", "ejs:github",
-                         "--cache-dir", AppConstants.ytdlpCacheDirectory.path]
-        if let denoPath = await updateService.ensureDenoInstalled() {
-            arguments.append(contentsOf: ["--js-runtimes", "deno:\(denoPath)"])
-        }
         let cookies = try YTDLPCookieSource.configured()
         defer { cookies.cleanup() }
-        arguments.append(contentsOf: cookies.arguments)
-        let json = try await probePostJSON(url: url, ytdlpPath: path, arguments: arguments)
+        let json = try await withEngineFallback(url: url, operation: .postListing) { engine, path in
+            let arguments = await commonArguments(engine: engine) + cookies.arguments
+            return try await probePostJSON(url: url, ytdlpPath: path, arguments: arguments)
+        }.value
         return TwitterPostSelection.isPostURL(url)
             ? TwitterPostSelection.videos(from: json, url: url)
             : InstagramCarouselSelection.videos(from: json, url: url)
+    }
+
+    private func probeMetadataJSON(url: String, ytdlpPath: String, arguments: [String]) async throws -> [String: Any] {
+        if InstagramCarouselSelection.isPostURL(url) {
+            return try await probeInstagramPost(url: url, ytdlpPath: ytdlpPath, arguments: arguments).metadata
+        }
+        if TwitterPostSelection.isPostURL(url) {
+            let index = try TwitterPostSelection.selectedIndex(url)
+            var probeArguments = arguments + ["--no-playlist"]
+            if !TwitterPostSelection.hasAttachmentIndex(url) {
+                probeArguments += ["--playlist-items", String(index)]
+            }
+            let post = try await probePostJSON(url: TwitterPostSelection.sourceURL(url), ytdlpPath: ytdlpPath, arguments: probeArguments)
+            return try TwitterPostSelection.metadata(from: post, index: index)
+        }
+        let processStartTime = Date()
+        let probe = try await runProbe(
+            ytdlpPath: ytdlpPath,
+            arguments: arguments + ["-j", "--no-download", "--no-warnings", "--", url]
+        )
+        let result = probe.subprocess
+
+        let processElapsed = Date().timeIntervalSince(processStartTime)
+        logger.info("[TIMING] yt-dlp metadata process completed in \(String(format: "%.2f", processElapsed))s, exit status: \(result.terminationStatus)")
+
+        guard result.succeeded else {
+            let errorMessage = probe.safeStandardError.isEmpty ? "Unknown error" : probe.safeStandardError
+            logger.error("yt-dlp metadata fetch failed: \(errorMessage)")
+            throw YTDLPError.metadataFetchFailed(errorMessage)
+        }
+        guard result.discardedStandardOutputBytes == 0 else {
+            throw YTDLPError.metadataFetchFailed("yt-dlp metadata response exceeded the 16 MB safety limit")
+        }
+        guard let parsedJSON = try? JSONSerialization.jsonObject(with: result.standardOutput) as? [String: Any] else {
+            throw YTDLPError.metadataFetchFailed("Failed to parse JSON response")
+        }
+        return parsedJSON
     }
 
     /// Fetches video metadata without downloading
@@ -759,64 +870,19 @@ actor YTDLPService {
         let startTime = Date()
         logger.info("[TIMING] fetchMetadata started")
 
-        let pathResolveStart = Date()
-        guard let ytdlpPath = await updateService.resolveYTDLPPath() else {
-            throw YTDLPError.binaryNotFound
-        }
-        let pathResolveElapsed = Date().timeIntervalSince(pathResolveStart)
-        logger.info("[TIMING] yt-dlp path resolved in \(String(format: "%.3f", pathResolveElapsed))s: \(ytdlpPath)")
-
-        let denoPath = await updateService.ensureDenoInstalled()
-
-        let processStartTime = Date()
-        var arguments = [
-            "--ignore-config",
-            "--remote-components", "ejs:github",
-            "--cache-dir", AppConstants.ytdlpCacheDirectory.path
-        ]
-        if let denoPath {
-            arguments.append(contentsOf: ["--js-runtimes", "deno:\(denoPath)"])
-        }
         let cookies = try YTDLPCookieSource.configured()
         defer { cookies.cleanup() }
-        arguments.append(contentsOf: cookies.arguments)
-        let json: [String: Any]
-        if InstagramCarouselSelection.isPostURL(url) {
-            json = try await probeInstagramPost(url: url, ytdlpPath: ytdlpPath, arguments: arguments).metadata
-        } else if TwitterPostSelection.isPostURL(url) {
-            let index = try TwitterPostSelection.selectedIndex(url)
-            var probeArguments = arguments + ["--no-playlist"]
-            if !TwitterPostSelection.hasAttachmentIndex(url) {
-                probeArguments += ["--playlist-items", String(index)]
+        let json = try await withEngineFallback(url: url, operation: .metadata) { engine, ytdlpPath in
+            let json = try await probeMetadataJSON(
+                url: url, ytdlpPath: ytdlpPath,
+                arguments: await commonArguments(engine: engine) + cookies.arguments
+            )
+            // A yt-dlp-rs result without formats points at an incomplete port; let yt-dlp try.
+            if engine == .ytdlpRS, !InstagramCarouselSelection.hasVideo(json) {
+                throw YTDLPError.metadataFetchFailed("yt-dlp-rs returned no formats")
             }
-            let post = try await probePostJSON(url: TwitterPostSelection.sourceURL(url), ytdlpPath: ytdlpPath, arguments: probeArguments)
-            json = try TwitterPostSelection.metadata(from: post, index: index)
-        } else {
-            arguments.append(contentsOf: ["-j", "--no-download", "--no-warnings", "--", url])
-
-            let probe = try await runProbe(ytdlpPath: ytdlpPath, arguments: arguments)
-            let result = probe.subprocess
-
-            let processElapsed = Date().timeIntervalSince(processStartTime)
-            logger.info("[TIMING] yt-dlp metadata process completed in \(String(format: "%.2f", processElapsed))s, exit status: \(result.terminationStatus)")
-
-            guard result.succeeded else {
-                let errorMessage = probe.safeStandardError.isEmpty ? "Unknown error" : probe.safeStandardError
-                logger.error("yt-dlp metadata fetch failed: \(errorMessage)")
-                throw YTDLPError.metadataFetchFailed(errorMessage)
-            }
-
-            guard result.discardedStandardOutputBytes == 0 else {
-                throw YTDLPError.metadataFetchFailed("yt-dlp metadata response exceeded the 16 MB safety limit")
-            }
-
-            guard let parsedJSON = try? JSONSerialization.jsonObject(with: result.standardOutput) as? [String: Any] else {
-                throw YTDLPError.metadataFetchFailed("Failed to parse JSON response")
-            }
-
-            json = parsedJSON
-        }
-
+            return json
+        }.value
         let title = json["title"] as? String ?? "Unknown Title"
         let duration = json["duration"] as? Double
         let thumbnailURLString = json["thumbnail"] as? String
@@ -839,39 +905,31 @@ actor YTDLPService {
     /// Probes a URL with `--flat-playlist -J` and returns its entries. Works for
     /// playlists, channels, and single-video URLs (the latter returns a single entry).
     func fetchPlaylistEntries(url: String) async throws -> [YTDLPPlaylistEntry] {
-        guard let ytdlpPath = await updateService.resolveYTDLPPath() else {
-            throw YTDLPError.binaryNotFound
-        }
-        let denoPath = await updateService.ensureDenoInstalled()
-
-        var arguments = [
-            "--ignore-config",
-            "--remote-components", "ejs:github",
-            "--cache-dir", AppConstants.ytdlpCacheDirectory.path
-        ]
-        if let denoPath {
-            arguments.append(contentsOf: ["--js-runtimes", "deno:\(denoPath)"])
-        }
         let cookies = try YTDLPCookieSource.configured()
         defer { cookies.cleanup() }
-        arguments.append(contentsOf: cookies.arguments)
-        arguments.append(contentsOf: ["--flat-playlist", "-J", "--no-warnings", "--", url])
+        let json = try await withEngineFallback(url: url, operation: .playlistListing) { engine, ytdlpPath in
+            let arguments = await commonArguments(engine: engine) + cookies.arguments
+                + ["--flat-playlist", "-J", "--no-warnings", "--", url]
+            let probe = try await runProbe(ytdlpPath: ytdlpPath, arguments: arguments)
+            let result = probe.subprocess
 
-        let probe = try await runProbe(ytdlpPath: ytdlpPath, arguments: arguments)
-        let result = probe.subprocess
+            guard result.succeeded else {
+                let errorMessage = probe.safeStandardError.isEmpty ? "Unknown error" : probe.safeStandardError
+                throw YTDLPError.metadataFetchFailed(errorMessage)
+            }
 
-        guard result.succeeded else {
-            let errorMessage = probe.safeStandardError.isEmpty ? "Unknown error" : probe.safeStandardError
-            throw YTDLPError.metadataFetchFailed(errorMessage)
-        }
+            guard result.discardedStandardOutputBytes == 0 else {
+                throw YTDLPError.metadataFetchFailed("yt-dlp playlist response exceeded the 16 MB safety limit")
+            }
 
-        guard result.discardedStandardOutputBytes == 0 else {
-            throw YTDLPError.metadataFetchFailed("yt-dlp playlist response exceeded the 16 MB safety limit")
-        }
-
-        guard let json = try? JSONSerialization.jsonObject(with: result.standardOutput) as? [String: Any] else {
-            throw YTDLPError.metadataFetchFailed("Failed to parse playlist JSON")
-        }
+            guard let json = try? JSONSerialization.jsonObject(with: result.standardOutput) as? [String: Any] else {
+                throw YTDLPError.metadataFetchFailed("Failed to parse playlist JSON")
+            }
+            if engine == .ytdlpRS, YTDLPPlaylistEntry.parse(playlistJSON: json).isEmpty {
+                throw YTDLPError.metadataFetchFailed("yt-dlp-rs returned no playlist entries")
+            }
+            return json
+        }.value
 
         let parsed = YTDLPPlaylistEntry.parse(playlistJSON: json)
         let unavailable = parsed.filter { !$0.isAvailable }.count
@@ -889,6 +947,8 @@ actor YTDLPService {
     ///   - section: Optional time range to download instead of the whole video
     ///   - progress: Callback for progress updates (progress 0-1, speed string, isLiveStream)
     ///   - titleUpdate: Callback when video title is discovered
+    ///   - engineUpdate: Callback with the downloader about to run (and, after a yt-dlp-rs
+    ///     failure, the fallback reason)
     /// - Returns: The path to the downloaded file
     func download(
         url: String,
@@ -899,31 +959,60 @@ actor YTDLPService {
         section: DownloadSection? = nil,
         control: YTDLPDownloadControl = YTDLPDownloadControl(),
         progress: @escaping @Sendable (Double, String?, Bool) -> Void,
-        titleUpdate: @escaping @Sendable (String) -> Void = { _ in }
+        titleUpdate: @escaping @Sendable (String) -> Void = { _ in },
+        engineUpdate: @escaping @Sendable (YTDLPEngine, String?) -> Void = { _, _ in }
+    ) async throws -> YTDLPDownloadResult {
+        let ffmpegPath = BinaryPathResolver.ffmpegPath
+        let ffprobeExists = ffmpegPath.map {
+            FileManager.default.isExecutableFile(
+                atPath: (($0 as NSString).deletingLastPathComponent as NSString).appendingPathComponent("ffprobe")
+            )
+        } ?? false
+        let operation = YTDLPEngineOperation.download(.init(
+            section: section != nil, audioOnly: audioOnly, liveFromStart: liveFromStart,
+            hasFFmpeg: ffmpegPath != nil, hasFFprobe: ffprobeExists
+        ))
+        // Files present before the yt-dlp-rs attempt are never removed by its cleanup.
+        let preexisting = YTDLPAttemptCleanup.snapshot(of: outputFolder)
+        let outcome = try await withEngineFallback(url: url, operation: operation, beforeFallback: { [logger] in
+            let removed = YTDLPAttemptCleanup.removeLeftovers(
+                in: outputFolder, reportedPaths: control.takeReportedPaths(), preexisting: preexisting
+            )
+            if !removed.isEmpty {
+                logger.info("[Engine] Removed \(removed.count, privacy: .public) partial file(s) from the yt-dlp-rs attempt")
+            }
+        }, onAttempt: engineUpdate) { engine, executablePath in
+            try await runDownload(
+                engine: engine, executablePath: executablePath, url: url, outputFolder: outputFolder,
+                forceOverwrite: forceOverwrite, liveFromStart: liveFromStart, audioOnly: audioOnly,
+                section: section, control: control, progress: progress, titleUpdate: titleUpdate
+            )
+        }
+        var result = outcome.value
+        result.engine = outcome.engine
+        result.engineFallbackReason = outcome.fallbackReason
+        return result
+    }
+
+    private func runDownload(
+        engine: YTDLPEngine,
+        executablePath ytdlpPath: String,
+        url: String,
+        outputFolder: URL,
+        forceOverwrite: Bool,
+        liveFromStart: Bool,
+        audioOnly: Bool,
+        section: DownloadSection?,
+        control: YTDLPDownloadControl,
+        progress: @escaping @Sendable (Double, String?, Bool) -> Void,
+        titleUpdate: @escaping @Sendable (String) -> Void
     ) async throws -> YTDLPDownloadResult {
         let downloadStartTime = Date()
-        logger.info("[TIMING] download() started")
+        logger.info("[TIMING] download() started with \(engine.rawValue, privacy: .public)")
 
-        let pathResolveStart = Date()
-        guard let ytdlpPath = await updateService.resolveYTDLPPath() else {
-            throw YTDLPError.binaryNotFound
-        }
-        let pathResolveElapsed = Date().timeIntervalSince(pathResolveStart)
-        logger.info("[TIMING] yt-dlp path resolved in \(String(format: "%.3f", pathResolveElapsed))s")
-
-        // Build arguments array
         // Note: --ignore-config prevents yt-dlp from reading user config files
         // Note: --remote-components ejs:github is required for YouTube JS challenge solving
-        var args: [String] = [
-            "--ignore-config",
-            "--remote-components", "ejs:github",
-            "--cache-dir", AppConstants.ytdlpCacheDirectory.path
-        ]
-        if let denoPath = await updateService.ensureDenoInstalled() {
-            args.append(contentsOf: ["--js-runtimes", "deno:\(denoPath)"])
-            logger.info("[YTDLPService] Using deno runtime at: \(denoPath)")
-        }
-        logger.info("[YTDLPService] Using cache dir: \(AppConstants.ytdlpCacheDirectory.path)")
+        var args = await commonArguments(engine: engine)
 
         // Add ffmpeg location if available
         let ffmpegResolveStart = Date()
@@ -961,6 +1050,10 @@ actor YTDLPService {
 
         if let section {
             args.append(contentsOf: ["--download-sections", section.ytdlpArgument])
+            // `--print` implies `--quiet`, which makes yt-dlp (and yt-dlp-rs) run
+            // ffmpeg with `-loglevel quiet`. Its stats lines are the only progress
+            // for section downloads, so keep quiet mode off explicitly.
+            args.append("--no-quiet")
             outputTemplate = outputTemplate.replacingOccurrences(
                 of: ".%(ext)s", with: " (\(section.fileNameLabel)).%(ext)s"
             )
@@ -1151,7 +1244,14 @@ actor YTDLPService {
                     let delta = Date().timeIntervalSince(processStartBox.value)
                     logger.debug("First yt-dlp progress after \(String(format: "%.3f", delta))s")
                 }
-                progress(progressInfo.progress, progressInfo.speed, progressInfo.isLiveStream)
+                var reported = progressInfo.progress
+                // Setup lines map to coarse steps (e.g. 50% when ffmpeg starts). For
+                // section downloads ffmpeg's position is the real progress, so keep
+                // those steps low instead of jumping back once it reports.
+                if section != nil, progressInfo.total == nil, progressInfo.speed == nil, reported < 1 {
+                    reported = min(reported, 0.05)
+                }
+                progress(reported, progressInfo.speed, progressInfo.isLiveStream)
             }
 
             // Parse title from either stream

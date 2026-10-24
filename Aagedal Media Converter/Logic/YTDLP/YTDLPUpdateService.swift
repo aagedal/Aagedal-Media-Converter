@@ -290,17 +290,30 @@ actor YTDLPUpdateService {
         task: Task<String, Error>
     )?
     private var activeYTDLPUpdate: (id: UUID, task: Task<Void, Error>)?
+    private var activeYTDLPRSUpdate: (id: UUID, task: Task<Void, Error>)?
     private var cachedDenoPath: String?
     private var activeDownloadTasks: [YTDLPDownloadKind: URLSessionDownloadTask] = [:]
+    private let subprocessRunner: any SubprocessRunning
+    /// Versioned layout for app-managed yt-dlp, deno and yt-dlp-rs copies.
+    let managedStore: ManagedToolStore
+    private let bundledYTDLPRSPathProvider: @Sendable () -> String?
+    private var managedToolsPrepared = false
 
     init(
         subprocessRunner: any SubprocessRunning = SubprocessRunner(),
-        denoRuntimeInstaller: DenoRuntimeInstaller = DenoRuntimeInstaller()
+        denoRuntimeInstaller: DenoRuntimeInstaller = DenoRuntimeInstaller(),
+        managedStore: ManagedToolStore = ManagedToolStore(),
+        bundledYTDLPRSPathProvider: @escaping @Sendable () -> String? = {
+            Bundle.main.path(forResource: "yt-dlp-rs", ofType: nil)
+        }
     ) {
+        self.subprocessRunner = subprocessRunner
         versionProbe = YTDLPVersionProbe(subprocessRunner: subprocessRunner)
         warmUpRunner = YTDLPWarmUpRunner(subprocessRunner: subprocessRunner)
         denoArchiveExtractor = DenoArchiveExtractor(subprocessRunner: subprocessRunner)
         self.denoRuntimeInstaller = denoRuntimeInstaller
+        self.managedStore = managedStore
+        self.bundledYTDLPRSPathProvider = bundledYTDLPRSPathProvider
     }
 
     /// Path to bundled yt-dlp binary in app bundle
@@ -313,17 +326,17 @@ actor YTDLPUpdateService {
 
     /// Path to downloaded yt-dlp binary in Application Support
     var downloadedPath: URL {
-        AppConstants.ytdlpToolsDirectory.appendingPathComponent("yt-dlp")
+        managedStore.stableLinkURL(for: .ytdlp)
     }
 
     /// Path to version file for downloaded binary
     private var versionFilePath: URL {
-        AppConstants.ytdlpToolsDirectory.appendingPathComponent("version.txt")
+        managedStore.root.appendingPathComponent("version.txt")
     }
 
     /// Path to downloaded deno binary in Application Support
     private var denoDownloadedPath: URL {
-        AppConstants.ytdlpToolsDirectory.appendingPathComponent("deno")
+        managedStore.stableLinkURL(for: .deno)
     }
 
     private func selectedYTDLPSource() -> BinarySourceSelection? {
@@ -585,9 +598,14 @@ actor YTDLPUpdateService {
     /// Gets the current deno version from the resolved runtime
     func getCurrentDenoVersion() async -> String? {
         guard let denoPath = resolveDenoPath() else { return nil }
-        if denoPath == denoDownloadedPath.path,
-           let cached = UserDefaults.standard.string(forKey: AppConstants.denoVersionKey) {
-            return cached
+        if denoPath == denoDownloadedPath.path {
+            if let linked = managedStore.linkedVersion(for: .deno),
+               linked != ManagedToolPolicy.legacyVersionName {
+                return linked
+            }
+            if let cached = UserDefaults.standard.string(forKey: AppConstants.denoVersionKey) {
+                return cached
+            }
         }
 
         return await versionProbe.denoVersion(at: denoPath)
@@ -601,9 +619,7 @@ actor YTDLPUpdateService {
                 return false
             }
 
-            let normalizedCurrent = currentVersion.trimmingCharacters(in: CharacterSet(charactersIn: "v"))
-            let normalizedLatest = latestVersion.trimmingCharacters(in: CharacterSet(charactersIn: "v"))
-            let isNewer = normalizedLatest.compare(normalizedCurrent, options: .numeric) == .orderedDescending
+            let isNewer = ManagedToolPolicy.isNewer(latestVersion, than: currentVersion)
             logger.info("deno - Current: \(currentVersion), Latest: \(latestVersion), Update available: \(isNewer)")
             return isNewer
         } catch {
@@ -736,9 +752,14 @@ actor YTDLPUpdateService {
     /// Gets the version of the currently active yt-dlp binary
     func getCurrentVersion() async -> String? {
         guard let ytdlpPath = resolveYTDLPPath() else { return nil }
-        if ytdlpPath == downloadedPath.path,
-           let cached = UserDefaults.standard.string(forKey: AppConstants.ytdlpVersionKey) {
-            return cached
+        if ytdlpPath == downloadedPath.path {
+            if let linked = managedStore.linkedVersion(for: .ytdlp),
+               linked != ManagedToolPolicy.legacyVersionName {
+                return linked
+            }
+            if let cached = UserDefaults.standard.string(forKey: AppConstants.ytdlpVersionKey) {
+                return cached
+            }
         }
 
         return await versionProbe.ytdlpVersion(at: ytdlpPath)
@@ -840,7 +861,10 @@ actor YTDLPUpdateService {
 
         // Find the macOS asset and, if present, the SHA256 checksum manifest
         // yt-dlp publishes alongside it.
+        // Prefer the onedir zip: the onefile build unpacks its Python runtime
+        // on every launch (~5 s), the onedir build starts in ~0.3 s.
         var binaryURL: URL?
+        var onedirURL: URL?
         var checksumURL: URL?
         for asset in assets {
             guard let name = asset["name"] as? String,
@@ -850,12 +874,14 @@ actor YTDLPUpdateService {
             }
             if name == AppConstants.ytdlpMacOSAssetName {
                 binaryURL = assetURL
+            } else if name == AppConstants.ytdlpMacOSOnedirAssetName {
+                onedirURL = assetURL
             } else if name == "SHA2-256SUMS" {
                 checksumURL = assetURL
             }
         }
 
-        guard let binaryURL else { throw YTDLPUpdateError.assetNotFound }
+        guard let binaryURL = onedirURL ?? binaryURL else { throw YTDLPUpdateError.assetNotFound }
         return (version: tagName, downloadURL: binaryURL, checksumURL: checksumURL)
     }
 
@@ -864,7 +890,8 @@ actor YTDLPUpdateService {
     /// Owns the complete Deno update, including release lookup, checksum fetch,
     /// extraction, and publication, so Settings cancellation reaches every phase.
     private func runDenoUpdate(
-        progress: @escaping @Sendable (Double) -> Void
+        progress: @escaping @Sendable (Double) -> Void,
+        activationGate: ManagedToolActivationGate? = nil
     ) async throws -> String {
         try Task.checkCancellation()
         let previousUpdate = activeDenoUpdate
@@ -876,7 +903,7 @@ actor YTDLPUpdateService {
             // update must drain its predecessor before the next update can start.
             _ = try? await previousUpdate?.task.value
             try Task.checkCancellation()
-            return try await self.downloadDenoRuntime(progress: progress)
+            return try await self.downloadDenoRuntime(progress: progress, activationGate: activationGate)
         }
         activeDenoUpdate = (updateID, updateTask)
 
@@ -933,13 +960,30 @@ actor YTDLPUpdateService {
     }
 
     private func downloadDenoRuntime(
-        progress: @escaping @Sendable (Double) -> Void
+        progress: @escaping @Sendable (Double) -> Void,
+        activationGate: ManagedToolActivationGate? = nil
     ) async throws -> String {
-        guard let (version, downloadURL) = try await getLatestDenoRelease() else {
+        prepareManagedTools()
+        guard let (tag, downloadURL) = try await getLatestDenoRelease() else {
             throw YTDLPUpdateError.assetNotFound
         }
+        guard let version = ManagedToolPolicy.normalizedVersionName(tag) else {
+            throw YTDLPUpdateError.parseError
+        }
+        let installed = managedStore.installedVersions(for: .deno)
+        if activationGate != nil {
+            guard ManagedToolPolicy.shouldInstall(latest: version, installed: installed, bundled: nil) else {
+                recordManagedToolCheck(.deno)
+                return denoDownloadedPath.path
+            }
+        } else if installed.contains(version) {
+            setManagedToolPin(.automatic, for: .deno)
+            recordManagedToolCheck(.deno)
+            cachedDenoPath = denoDownloadedPath.path
+            return denoDownloadedPath.path
+        }
 
-        logger.info("Auto-downloading deno \(version) from \(downloadURL)")
+        logger.info("Downloading deno \(version) from \(downloadURL)")
 
         let (tempZipURL, response) = try await downloadWithProgress(from: downloadURL, kind: .deno, progress: progress)
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
@@ -967,22 +1011,23 @@ actor YTDLPUpdateService {
         let extraction = try await extractDenoArchive(from: tempZipURL)
         defer { try? fm.removeItem(at: extraction.workingDirectoryURL) }
 
-        let destinationPath = denoDownloadedPath
         let installer = denoRuntimeInstaller
-        let installTask = Task.detached {
-            try installer.install(extraction, at: destinationPath)
+        try await installManagedVersion(.deno, version: version, activationGate: activationGate) { staging in
+            let destination = staging.appendingPathComponent(ManagedTool.deno.executableName)
+            let installTask = Task.detached {
+                try installer.install(extraction, at: destination)
+            }
+            try await withTaskCancellationHandler {
+                try await installTask.value
+            } onCancel: {
+                installTask.cancel()
+            }
+            return destination
         }
-        try await withTaskCancellationHandler {
-            try await installTask.value
-        } onCancel: {
-            installTask.cancel()
-        }
-        UserDefaults.standard.set(Date(), forKey: AppConstants.denoLastUpdateCheckKey)
-        UserDefaults.standard.set(version, forKey: AppConstants.denoVersionKey)
 
-        logger.info("Installed deno at \(destinationPath.path)")
-        cachedDenoPath = destinationPath.path
-        return destinationPath.path
+        logger.info("Installed deno \(version)")
+        cachedDenoPath = denoDownloadedPath.path
+        return denoDownloadedPath.path
     }
 
     /// Runs extraction in an explicitly owned task so the Settings cancel action
@@ -1043,9 +1088,18 @@ actor YTDLPUpdateService {
         }
         try Task.checkCancellation()
 
-        let isNewer = latestVersion.compare(currentVersion, options: .numeric) == .orderedDescending
+        let isNewer = ManagedToolPolicy.isNewer(latestVersion, than: currentVersion)
+            || activeYTDLPIsSingleFileBuild()
         logger.info("Current: \(currentVersion), Latest: \(latestVersion), Update available: \(isNewer)")
         return isNewer
+    }
+
+    /// True when the active app-managed yt-dlp is the slow-starting onefile
+    /// build from before onedir installs; an update replaces it.
+    private func activeYTDLPIsSingleFileBuild() -> Bool {
+        guard resolveYTDLPPath() == downloadedPath.path,
+              let version = managedStore.linkedVersion(for: .ytdlp) else { return false }
+        return !managedStore.hasSupportDirectory(for: .ytdlp, version: version)
     }
 
     /// Downloads and installs the latest yt-dlp release (without progress)
@@ -1087,9 +1141,33 @@ actor YTDLPUpdateService {
         }
     }
 
-    private func downloadYTDLPRuntime(progress: @escaping @Sendable (Double) -> Void) async throws {
-        guard let (version, downloadURL, checksumURL) = try await getLatestReleaseVersion() else {
+    private func downloadYTDLPRuntime(
+        progress: @escaping @Sendable (Double) -> Void,
+        activationGate: ManagedToolActivationGate? = nil
+    ) async throws {
+        prepareManagedTools()
+        guard let (tag, downloadURL, checksumURL) = try await getLatestReleaseVersion() else {
             throw YTDLPUpdateError.assetNotFound
+        }
+        guard let version = ManagedToolPolicy.normalizedVersionName(tag) else {
+            throw YTDLPUpdateError.parseError
+        }
+        // Onefile installs (pre-onedir) do not count: the same version is
+        // reinstalled as the faster onedir build.
+        let installed = managedStore.installedVersions(for: .ytdlp).filter {
+            managedStore.hasSupportDirectory(for: .ytdlp, version: $0)
+        }
+        if activationGate != nil {
+            // Scheduled: only a release newer than every kept onedir version.
+            guard ManagedToolPolicy.shouldInstall(latest: version, installed: installed, bundled: nil) else {
+                recordManagedToolCheck(.ytdlp)
+                return
+            }
+        } else if installed.contains(version) {
+            // Already kept (e.g. after a rollback): make it active again.
+            setManagedToolPin(.automatic, for: .ytdlp)
+            recordManagedToolCheck(.ytdlp)
+            return
         }
 
         logger.info("Downloading yt-dlp \(version) from \(downloadURL)")
@@ -1113,7 +1191,7 @@ actor YTDLPUpdateService {
         do {
             try await verifyChecksum(
                 of: tempURL,
-                expectedFilename: AppConstants.ytdlpMacOSAssetName,
+                expectedFilename: downloadURL.lastPathComponent,
                 checksumFileURL: checksumURL
             )
         } catch {
@@ -1122,57 +1200,34 @@ actor YTDLPUpdateService {
         }
 
         // Cancellation after checksum verification must not publish the binary.
-        let fm = FileManager.default
-        defer { try? fm.removeItem(at: tempURL) }
+        defer { try? FileManager.default.removeItem(at: tempURL) }
         try Task.checkCancellation()
-        let destinationPath = downloadedPath
-        let destinationDir = destinationPath.deletingLastPathComponent()
-
-        logger.info("Tools directory: \(destinationDir.path)")
-        logger.info("Destination file: \(destinationPath.path)")
-
-        // Ensure destination directory exists
-        do {
-            try fm.createDirectory(at: destinationDir, withIntermediateDirectories: true, attributes: nil)
-            logger.info("Created/verified tools directory")
-        } catch {
-            logger.error("Failed to create tools directory: \(error.localizedDescription)")
-            throw YTDLPUpdateError.installFailed
+        let store = managedStore
+        if downloadURL.lastPathComponent == AppConstants.ytdlpMacOSOnedirAssetName {
+            let extractionDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("YTDLPOnedirExtraction-\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: extractionDirectory, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: extractionDirectory) }
+            try await extractArchive(
+                arguments: ["-xk", tempURL.path, extractionDirectory.path],
+                tool: "/usr/bin/ditto",
+                sensitivePaths: [tempURL.path, extractionDirectory.path]
+            )
+            try await installManagedVersion(.ytdlp, version: version, activationGate: activationGate) { staging in
+                try store.stageDirectoryContents(
+                    for: .ytdlp,
+                    from: extractionDirectory,
+                    executableName: AppConstants.ytdlpMacOSAssetName,
+                    in: staging
+                )
+            }
+        } else {
+            try await installManagedVersion(.ytdlp, version: version, activationGate: activationGate) { staging in
+                try store.stageExecutable(for: .ytdlp, from: tempURL, in: staging)
+            }
         }
-
-        logger.info("Installing yt-dlp to: \(destinationPath.path)")
-
-        // Remove existing file if present
-        if fm.fileExists(atPath: destinationPath.path) {
-            try fm.removeItem(at: destinationPath)
-        }
-
-        try fm.moveItem(at: tempURL, to: destinationPath)
-
-        // Verify file exists after move
-        guard fm.fileExists(atPath: destinationPath.path) else {
-            logger.error("File not found after move!")
-            throw YTDLPUpdateError.installFailed
-        }
-
-        // Remove quarantine attribute (critical for sandbox)
-        removeQuarantine(at: destinationPath.path)
-
-        // Set executable permission
-        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: destinationPath.path)
-
-        // Verify file is executable
-        let isExec = fm.isExecutableFile(atPath: destinationPath.path)
-        logger.info("File exists: true, isExecutable: \(isExec)")
-
-        // Save version info
-        try version.write(to: versionFilePath, atomically: true, encoding: .utf8)
-
-        // Update last check date
-        UserDefaults.standard.set(Date(), forKey: AppConstants.ytdlpLastUpdateCheckKey)
-        UserDefaults.standard.set(version, forKey: AppConstants.ytdlpVersionKey)
-
-        logger.info("Successfully installed yt-dlp \(version) at \(destinationPath.path)")
+        try? version.write(to: versionFilePath, atomically: true, encoding: .utf8)
+        logger.info("Successfully installed yt-dlp \(version)")
     }
 
     /// Verifies that the file at `fileURL` matches the SHA256 hash published for
@@ -1261,6 +1316,10 @@ actor YTDLPUpdateService {
             update.task.cancel()
             cancelledWork = true
         }
+        if kind == .ytdlpRS, let update = activeYTDLPRSUpdate {
+            update.task.cancel()
+            cancelledWork = true
+        }
         if cancelledWork {
             logger.info("Cancelled \(String(describing: kind)) download")
         }
@@ -1325,35 +1384,479 @@ actor YTDLPUpdateService {
         }
     }
 
-    /// Updates the active app-managed binary at most once per day when requested.
-    func performUpdateCheckIfNeeded() async {
-        guard resolveYTDLPPath() == downloadedPath.path else { return }
-        // Check if we should check for updates (once per day)
-        let lastCheck = UserDefaults.standard.object(forKey: AppConstants.ytdlpLastUpdateCheckKey) as? Date
-        let shouldCheck: Bool
-        if let lastCheck = lastCheck {
-            shouldCheck = Date().timeIntervalSince(lastCheck) > 86400 // 24 hours
-        } else {
-            shouldCheck = true
-        }
+    // MARK: - Managed Tool Versions
 
-        guard shouldCheck else {
-            logger.info("Skipping yt-dlp update check (checked recently)")
+    /// Moves pre-versioning installs into the versioned layout (no download)
+    /// and points the stable links at the active versions. Cheap; safe to call
+    /// before every managed operation.
+    func prepareManagedTools() {
+        if !managedToolsPrepared {
+            // Only at the first call: later leftovers may be in-progress installs.
+            for tool in ManagedTool.allCases {
+                managedStore.removeLeftovers(for: tool)
+            }
+            managedToolsPrepared = true
+        }
+        for tool in ManagedTool.allCases where tool.usesStableLink && managedStore.hasLegacyInstall(for: tool) {
+            let versionFile = tool == .ytdlp ? try? String(contentsOf: versionFilePath, encoding: .utf8) : nil
+            guard let plan = ManagedToolPolicy.legacyMigration(
+                legacyIsRegularFile: true,
+                recordedVersion: tool.recordedVersionKey.flatMap { UserDefaults.standard.string(forKey: $0) },
+                versionFileContents: versionFile,
+                installed: managedStore.installedVersions(for: tool)
+            ) else { continue }
+            do {
+                try managedStore.migrateLegacyInstall(for: tool, plan: plan)
+                logger.info("Migrated \(tool.rawValue) into the versioned tools layout")
+            } catch {
+                logger.error("Could not migrate \(tool.rawValue) install: \(error.localizedDescription)")
+            }
+        }
+        for tool in ManagedTool.allCases {
+            syncActiveVersion(tool)
+        }
+    }
+
+    func managedToolPin(for tool: ManagedTool) -> ManagedToolPin {
+        ManagedToolPin(storageValue: UserDefaults.standard.string(forKey: tool.pinKey))
+    }
+
+    /// Chooses a version (rollback) or returns to the newest. Choosing a
+    /// specific version pauses automatic updates for that tool until the user
+    /// returns to `.automatic`. Takes effect immediately: the stable link is
+    /// swapped atomically, so running processes are unaffected.
+    func setManagedToolPin(_ pin: ManagedToolPin, for tool: ManagedTool) {
+        if let value = pin.storageValue {
+            UserDefaults.standard.set(value, forKey: tool.pinKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: tool.pinKey)
+        }
+        syncActiveVersion(tool)
+    }
+
+    func isManagedToolAutoUpdateEnabled(_ tool: ManagedTool) -> Bool {
+        UserDefaults.standard.object(forKey: tool.autoUpdateKey) as? Bool ?? true
+    }
+
+    private func bundledVersion(for tool: ManagedTool) -> String? {
+        guard tool == .ytdlpRS, bundledYTDLPRSPath() != nil else { return nil }
+        return AppConstants.bundledYTDLPRSVersion
+    }
+
+    private func bundledYTDLPRSPath() -> String? {
+        guard let path = bundledYTDLPRSPathProvider(),
+              FileManager.default.isExecutableFile(atPath: path) else { return nil }
+        return path
+    }
+
+    private func activeChoice(for tool: ManagedTool) -> ManagedToolActiveChoice {
+        ManagedToolPolicy.activeChoice(
+            installed: managedStore.installedVersions(for: tool),
+            bundled: bundledVersion(for: tool),
+            pin: managedToolPin(for: tool)
+        )
+    }
+
+    /// Re-points the stable link (yt-dlp/deno) at the pinned or newest kept
+    /// version and drops pins whose version no longer exists.
+    @discardableResult
+    private func syncActiveVersion(_ tool: ManagedTool) -> ManagedToolActiveChoice {
+        let installed = managedStore.installedVersions(for: tool)
+        switch managedToolPin(for: tool) {
+        case .version(let version) where !installed.contains(version):
+            UserDefaults.standard.removeObject(forKey: tool.pinKey)
+        case .bundled where bundledVersion(for: tool) == nil:
+            UserDefaults.standard.removeObject(forKey: tool.pinKey)
+        default:
+            break
+        }
+        let choice = activeChoice(for: tool)
+        guard tool.usesStableLink, case .installed(let version) = choice,
+              !managedStore.hasLegacyInstall(for: tool) else { return choice }
+        if managedStore.linkedVersion(for: tool) != version {
+            do {
+                try managedStore.pointStableLink(for: tool, to: version)
+                logger.info("Activated \(tool.rawValue) \(version)")
+            } catch {
+                logger.error("Could not activate \(tool.rawValue) \(version): \(error.localizedDescription)")
+                return choice
+            }
+        }
+        if let key = tool.recordedVersionKey, version != ManagedToolPolicy.legacyVersionName {
+            UserDefaults.standard.set(version, forKey: key)
+        }
+        return choice
+    }
+
+    private func pruneManagedVersions(_ tool: ManagedTool) {
+        var protected = Set<String>()
+        if case .installed(let version) = activeChoice(for: tool) { protected.insert(version) }
+        if case .version(let version) = managedToolPin(for: tool) { protected.insert(version) }
+        if let linked = managedStore.linkedVersion(for: tool) { protected.insert(linked) }
+        let removable = ManagedToolPolicy.versionsToPrune(
+            installed: managedStore.installedVersions(for: tool),
+            keep: AppConstants.managedToolRetainedVersionCount,
+            protected: protected
+        )
+        for version in removable {
+            do {
+                try managedStore.remove(version, for: tool)
+                logger.info("Removed old \(tool.rawValue) \(version)")
+            } catch {
+                logger.warning("Could not remove old \(tool.rawValue) \(version): \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func recordManagedToolCheck(_ tool: ManagedTool, at date: Date = Date()) {
+        UserDefaults.standard.set(date, forKey: tool.lastCheckKey)
+    }
+
+    /// Stages, verifies (`--version`), optionally waits for the activation
+    /// gate, then publishes `version` and activates it. A tool that fails
+    /// verification is discarded and never becomes active.
+    private func installManagedVersion(
+        _ tool: ManagedTool,
+        version: String,
+        activationGate: ManagedToolActivationGate?,
+        place: (URL) async throws -> URL
+    ) async throws {
+        let staging = try managedStore.makeStagingDirectory(for: tool)
+        var published = false
+        defer {
+            if !published { try? FileManager.default.removeItem(at: staging) }
+        }
+        let executable = try await place(staging)
+        try managedStore.prepareExecutable(at: executable)
+        try await verifyStagedExecutable(tool, at: executable.path, expectedVersion: version)
+        try Task.checkCancellation()
+        if let activationGate {
+            try await activationGate()
+            try Task.checkCancellation()
+        }
+        try managedStore.publish(staging: staging, for: tool, version: version)
+        published = true
+        if activationGate == nil {
+            // A user-requested update means "use the newest".
+            UserDefaults.standard.removeObject(forKey: tool.pinKey)
+        }
+        syncActiveVersion(tool)
+        pruneManagedVersions(tool)
+        recordManagedToolCheck(tool)
+    }
+
+    private func verifyStagedExecutable(_ tool: ManagedTool, at path: String, expectedVersion: String) async throws {
+        let request: SubprocessRequest
+        switch tool {
+        case .ytdlp:
+            // The PyInstaller build unpacks itself on first launch; allow time.
+            let configuration = HomebrewPythonExecutor.ytDLPExecutionConfiguration(
+                scriptPath: path,
+                arguments: ["--version"]
+            )
+            request = SubprocessRequest(
+                executableURL: configuration.executableURL,
+                arguments: configuration.arguments,
+                environment: configuration.environment,
+                timeout: .seconds(90),
+                standardOutputCaptureLimit: 64 * 1024,
+                standardErrorCaptureLimit: 64 * 1024,
+                sensitiveValues: [path]
+            )
+        case .deno, .ytdlpRS:
+            request = SubprocessRequest(
+                executableURL: URL(fileURLWithPath: path),
+                arguments: ["--version"],
+                timeout: .seconds(60),
+                standardOutputCaptureLimit: 64 * 1024,
+                standardErrorCaptureLimit: 64 * 1024,
+                sensitiveValues: [path]
+            )
+        }
+        let result: SubprocessResult
+        do {
+            result = try await subprocessRunner.run(request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            logger.error("\(tool.rawValue) \(expectedVersion) could not be started: \(error.localizedDescription)")
+            throw YTDLPUpdateError.verificationFailed
+        }
+        guard result.succeeded,
+              ManagedToolPolicy.versionOutput(result.standardOutputText, matches: expectedVersion) else {
+            logger.error("\(tool.rawValue) \(expectedVersion) failed its --version check; not activating")
+            throw YTDLPUpdateError.verificationFailed
+        }
+    }
+
+    /// Current state for the settings UI.
+    func managedToolSnapshot(for tool: ManagedTool) -> ManagedToolSnapshot {
+        prepareManagedTools()
+        let isAppManaged: Bool
+        switch tool {
+        case .ytdlp: isAppManaged = resolveYTDLPPath() == downloadedPath.path
+        case .deno: isAppManaged = resolveDenoPath() == denoDownloadedPath.path
+        case .ytdlpRS: isAppManaged = true
+        }
+        return ManagedToolSnapshot(
+            tool: tool,
+            installedVersions: ManagedToolPolicy.sortedNewestFirst(managedStore.installedVersions(for: tool)),
+            bundledVersion: bundledVersion(for: tool),
+            activeChoice: activeChoice(for: tool),
+            pin: managedToolPin(for: tool),
+            isAppManaged: isAppManaged,
+            autoUpdateEnabled: isManagedToolAutoUpdateEnabled(tool),
+            lastCheck: UserDefaults.standard.object(forKey: tool.lastCheckKey) as? Date
+        )
+    }
+
+    // MARK: - yt-dlp-rs
+
+    private var isYTDLPRSEnabled: Bool {
+        UserDefaults.standard.object(forKey: AppConstants.ytdlpRSEnabledKey) as? Bool ?? true
+    }
+
+    /// Path of the active yt-dlp-rs executable: the pinned version, otherwise
+    /// the newer of the bundled copy and the newest downloaded update. Nil when
+    /// "Use yt-dlp-rs for supported sites" is off or nothing is available.
+    func resolveYTDLPRSPath() -> String? {
+        guard isYTDLPRSEnabled else { return nil }
+        switch activeChoice(for: .ytdlpRS) {
+        case .bundled:
+            return bundledYTDLPRSPath()
+        case .installed(let version):
+            let path = managedStore.executableURL(for: .ytdlpRS, version: version).path
+            if FileManager.default.isExecutableFile(atPath: path) { return path }
+            return bundledYTDLPRSPath()
+        case .none:
+            return nil
+        }
+    }
+
+    /// Version of the executable `resolveYTDLPRSPath()` returns (nil when off).
+    func getCurrentYTDLPRSVersion() async -> String? {
+        guard isYTDLPRSEnabled else { return nil }
+        return activeYTDLPRSVersion()
+    }
+
+    private func activeYTDLPRSVersion() -> String? {
+        switch activeChoice(for: .ytdlpRS) {
+        case .bundled: return bundledVersion(for: .ytdlpRS)
+        case .installed(let version): return version
+        case .none: return nil
+        }
+    }
+
+    private func getLatestYTDLPRSRelease() async throws -> YTDLPRSRelease {
+        guard let url = URL(string: AppConstants.ytdlpRSGitHubReleasesURL) else {
+            throw YTDLPUpdateError.invalidURL
+        }
+        let (data, response) = try await URLSession.shared.data(from: url)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw YTDLPUpdateError.networkError
+        }
+        guard let release = try YTDLPRSReleaseSelector.newest(fromGitHubReleasesJSON: data) else {
+            throw YTDLPUpdateError.assetNotFound
+        }
+        return release
+    }
+
+    /// Whether a release newer than the active yt-dlp-rs is available
+    /// (pre-releases included, since yt-dlp-rs is in beta).
+    func checkForYTDLPRSUpdates() async throws -> Bool {
+        let release = try await getLatestYTDLPRSRelease()
+        let isNewer = ManagedToolPolicy.isNewer(release.version, than: activeYTDLPRSVersion())
+        logger.info("yt-dlp-rs - Active: \(self.activeYTDLPRSVersion() ?? "none"), Latest: \(release.version), Update available: \(isNewer)")
+        return isNewer
+    }
+
+    /// Downloads the newest yt-dlp-rs release into Application Support and
+    /// activates it (user-initiated; clears any version choice).
+    func downloadYTDLPRSUpdate(progress: @escaping @Sendable (Double) -> Void) async throws {
+        try await runYTDLPRSUpdate {
+            try await self.downloadYTDLPRSRuntime(progress: progress, activationGate: nil)
+        }
+    }
+
+    func runYTDLPRSUpdate(operation: @escaping @Sendable () async throws -> Void) async throws {
+        try Task.checkCancellation()
+        let previous = activeYTDLPRSUpdate
+        previous?.task.cancel()
+        let id = UUID()
+        let task = Task {
+            _ = try? await previous?.task.value
+            try Task.checkCancellation()
+            try await operation()
+            try Task.checkCancellation()
+        }
+        activeYTDLPRSUpdate = (id, task)
+        defer {
+            if activeYTDLPRSUpdate?.id == id { activeYTDLPRSUpdate = nil }
+        }
+        try await withTaskCancellationHandler {
+            try await task.value
+            try Task.checkCancellation()
+            guard activeYTDLPRSUpdate?.id == id else { throw CancellationError() }
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    private func downloadYTDLPRSRuntime(
+        progress: @escaping @Sendable (Double) -> Void,
+        activationGate: ManagedToolActivationGate?
+    ) async throws {
+        prepareManagedTools()
+        let release = try await getLatestYTDLPRSRelease()
+        let installed = managedStore.installedVersions(for: .ytdlpRS)
+        guard ManagedToolPolicy.shouldInstall(
+            latest: release.version,
+            installed: installed,
+            bundled: bundledVersion(for: .ytdlpRS)
+        ) else {
+            if activationGate == nil {
+                // Nothing newer exists: return to the newest available copy.
+                setManagedToolPin(.automatic, for: .ytdlpRS)
+            }
+            recordManagedToolCheck(.ytdlpRS)
             return
         }
 
-        logger.info("Checking for yt-dlp updates...")
-
-        do {
-            if try await checkForUpdates() {
-                try await downloadUpdate()
-            } else {
-                // Update last check date even if no update needed
-                UserDefaults.standard.set(Date(), forKey: AppConstants.ytdlpLastUpdateCheckKey)
-            }
-        } catch {
-            logger.error("yt-dlp update failed: \(error.localizedDescription)")
+        logger.info("Downloading yt-dlp-rs \(release.version) from \(release.archiveURL)")
+        let (archiveURL, response) = try await downloadWithProgress(
+            from: release.archiveURL,
+            kind: .ytdlpRS,
+            progress: progress
+        )
+        let fm = FileManager.default
+        defer { try? fm.removeItem(at: archiveURL) }
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw YTDLPUpdateError.downloadFailed
         }
+        try await verifyChecksum(
+            of: archiveURL,
+            expectedFilename: release.assetName,
+            checksumFileURL: release.checksumURL
+        )
+        try Task.checkCancellation()
+
+        let extractionDirectory = fm.temporaryDirectory
+            .appendingPathComponent("YTDLPRSExtraction-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: extractionDirectory, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: extractionDirectory) }
+        let binaryURL = try await extractYTDLPRSArchive(archiveURL, into: extractionDirectory, release: release)
+
+        let store = managedStore
+        try await installManagedVersion(.ytdlpRS, version: release.version, activationGate: activationGate) { staging in
+            try store.stageExecutable(for: .ytdlpRS, from: binaryURL, in: staging)
+        }
+        logger.info("Installed yt-dlp-rs \(release.version)")
+    }
+
+    private func extractArchive(arguments: [String], tool: String, sensitivePaths: Set<String>) async throws {
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: tool),
+            arguments: arguments,
+            timeout: .seconds(5 * 60),
+            standardOutputCaptureLimit: 0,
+            standardErrorCaptureLimit: 64 * 1024,
+            sensitiveValues: sensitivePaths
+        )
+        let result: SubprocessResult
+        do {
+            result = try await subprocessRunner.run(request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw YTDLPUpdateError.extractionFailed
+        }
+        guard result.succeeded else { throw YTDLPUpdateError.extractionFailed }
+    }
+
+    private func extractYTDLPRSArchive(_ archiveURL: URL, into directory: URL, release: YTDLPRSRelease) async throws -> URL {
+        try await extractArchive(
+            arguments: ["-xzf", archiveURL.path, "-C", directory.path],
+            tool: "/usr/bin/tar",
+            sensitivePaths: [archiveURL.path, directory.path]
+        )
+        let fm = FileManager.default
+        let expected = directory
+            .appendingPathComponent(release.archiveDirectoryName, isDirectory: true)
+            .appendingPathComponent(ManagedTool.ytdlpRS.executableName)
+        if fm.fileExists(atPath: expected.path) { return expected }
+        let direct = directory.appendingPathComponent(ManagedTool.ytdlpRS.executableName)
+        if fm.fileExists(atPath: direct.path) { return direct }
+        throw YTDLPUpdateError.binaryNotFound
+    }
+
+    // MARK: - Scheduled Updates
+
+    private func isAppManaged(_ tool: ManagedTool) -> Bool {
+        switch tool {
+        case .ytdlp: return resolveYTDLPPath() == downloadedPath.path
+        case .deno: return resolveDenoPath() == denoDownloadedPath.path
+        case .ytdlpRS: return true
+        }
+    }
+
+    func scheduledCheckDecision(for tool: ManagedTool, now: Date = Date()) -> ManagedToolScheduledCheckDecision {
+        ManagedToolPolicy.scheduledCheckDecision(
+            autoUpdateEnabled: isManagedToolAutoUpdateEnabled(tool),
+            pin: managedToolPin(for: tool),
+            isAppManagedSource: isAppManaged(tool),
+            isToolEnabled: tool == .ytdlpRS ? isYTDLPRSEnabled : true,
+            lastCheck: UserDefaults.standard.object(forKey: tool.lastCheckKey) as? Date,
+            now: now,
+            interval: AppConstants.managedToolUpdateCheckInterval
+        )
+    }
+
+    /// Checks each app-managed tool at most once per interval. Nothing starts
+    /// while downloads are running (`isBusy`); a verified update waits for
+    /// `waitUntilIdle` before it is published and activated.
+    func runScheduledUpdates(
+        isBusy: @escaping @Sendable () async -> Bool,
+        waitUntilIdle: @escaping ManagedToolActivationGate
+    ) async {
+        prepareManagedTools()
+        for tool in ManagedTool.allCases {
+            guard !Task.isCancelled else { return }
+            let decision = scheduledCheckDecision(for: tool)
+            guard decision == .check else {
+                logger.debug("Skipping scheduled \(tool.rawValue) update: \(String(describing: decision))")
+                continue
+            }
+            if await isBusy() {
+                logger.info("Deferring scheduled \(tool.rawValue) update while downloads are running")
+                continue
+            }
+            do {
+                switch tool {
+                case .ytdlp:
+                    guard activeYTDLPUpdate == nil else { continue }
+                    try await runYTDLPUpdate {
+                        try await self.downloadYTDLPRuntime(progress: { _ in }, activationGate: waitUntilIdle)
+                    }
+                case .deno:
+                    guard activeDenoUpdate == nil else { continue }
+                    _ = try await runDenoUpdate(progress: { _ in }, activationGate: waitUntilIdle)
+                case .ytdlpRS:
+                    guard activeYTDLPRSUpdate == nil else { continue }
+                    try await runYTDLPRSUpdate {
+                        try await self.downloadYTDLPRSRuntime(progress: { _ in }, activationGate: waitUntilIdle)
+                    }
+                }
+            } catch is CancellationError {
+                logger.info("Scheduled \(tool.rawValue) update cancelled")
+            } catch {
+                logger.error("Scheduled \(tool.rawValue) update failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Updates app-managed tools at most once per day (no download deferral).
+    func performUpdateCheckIfNeeded() async {
+        await runScheduledUpdates(isBusy: { false }, waitUntilIdle: {})
     }
 }
 
@@ -1417,7 +1920,12 @@ private final class YTDLPDownloadProgressDelegate: NSObject, URLSessionDownloadD
 enum YTDLPDownloadKind: Sendable {
     case ytdlp
     case deno
+    case ytdlpRS
 }
+
+/// Waits until a newly verified version may be activated (scheduled updates
+/// wait for running downloads to finish). Throws to abandon the install.
+typealias ManagedToolActivationGate = @Sendable () async throws -> Void
 
 enum YTDLPUpdateError: Error, LocalizedError {
     case versionUnavailable
@@ -1432,6 +1940,7 @@ enum YTDLPUpdateError: Error, LocalizedError {
     case checksumFetchFailed
     case checksumNotFoundForAsset
     case checksumMismatch
+    case verificationFailed
 
     var errorDescription: String? {
         switch self {
@@ -1447,6 +1956,7 @@ enum YTDLPUpdateError: Error, LocalizedError {
         case .checksumFetchFailed: return "Could not download the SHA256 checksum manifest"
         case .checksumNotFoundForAsset: return "The release's checksum manifest did not list this asset"
         case .checksumMismatch: return "Downloaded binary failed SHA256 verification; refusing to install"
+        case .verificationFailed: return String(localized: "The downloaded tool did not run or reported an unexpected version, so it was not activated.")
         }
     }
 }

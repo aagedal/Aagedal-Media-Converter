@@ -849,6 +849,11 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var downloadAudioOnly: Bool = false
     /// Source time range to download instead of the whole video (nil = whole video)
     var downloadSection: DownloadSection? = nil
+    /// Downloader running or used for this download (set when the attempt starts,
+    /// updated on fallback to yt-dlp; nil for non-downloaded items)
+    var downloadEngine: YTDLPEngine? = nil
+    /// Why yt-dlp-rs was abandoned for yt-dlp, when it was
+    var downloadEngineFallbackReason: String? = nil
     /// Whether a live stream download is currently recording
     var isLiveStreamRecording: Bool = false
     /// Whether the download is in the process of stopping (provides immediate UI feedback)

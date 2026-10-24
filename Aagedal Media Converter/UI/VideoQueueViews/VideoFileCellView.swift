@@ -1030,12 +1030,18 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         }
 
         // Filenames
-        if isFirstConfigure || prev?.name != config.name || prev?.sourceURL != config.sourceURL {
+        if isFirstConfigure || prev?.name != config.name || prev?.sourceURL != config.sourceURL
+            || prev?.downloadEngine != config.downloadEngine
+            || prev?.downloadEngineFallbackReason != config.downloadEngineFallbackReason
+            || prev?.isDownloading != config.isDownloading {
             inputNameLabel.stringValue = config.name
-            // Show full path in tooltip; append source URL for downloads
+            // Show full path in tooltip; append source URL and downloader for downloads
             var tip = config.url.path
             if let source = config.sourceURL {
                 tip += "\n\nSource: \(source)"
+            }
+            if let engineDescription = downloadEngineDescription(config: config) {
+                tip += "\n\(engineDescription)"
             }
             inputNameLabel.toolTip = tip
         }
@@ -1190,6 +1196,8 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
             || prev?.downloadProgress != config.downloadProgress
             || prev?.downloadHasProgress != config.downloadHasProgress
             || prev?.downloadSpeed != config.downloadSpeed
+            || prev?.downloadEngine != config.downloadEngine
+            || prev?.downloadEngineFallbackReason != config.downloadEngineFallbackReason
             || prev?.downloadStopping != config.downloadStopping
             || prev?.isLiveStreamRecording != config.isLiveStreamRecording
             || prev?.fileAlreadyExistsPath != config.fileAlreadyExistsPath
@@ -1218,6 +1226,8 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
             || prev?.subtitleStatus != config.subtitleStatus
             || prev?.analyticsStatus != config.analyticsStatus
             || prev?.downloadError != config.downloadError
+            || prev?.downloadEngine != config.downloadEngine
+            || prev?.downloadEngineFallbackReason != config.downloadEngineFallbackReason
             || prev?.conversionError != config.conversionError {
             updateStatusCapsule(config: config)
         }

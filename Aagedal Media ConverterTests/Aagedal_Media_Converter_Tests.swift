@@ -14796,6 +14796,10 @@ private struct StubYTDLPUpdateService: YTDLPUpdating {
         path
     }
 
+    func resolveYTDLPRSPath() async -> String? {
+        nil
+    }
+
     func ensureDenoInstalled() async -> String? {
         nil
     }
@@ -17492,6 +17496,60 @@ final class InstagramCarouselSelectionTests: XCTestCase {
         XCTAssertEqual(metadata.thumbnailURL?.absoluteString, "https://example.com/10.jpg")
         let result = try await service.download(url: url, outputFolder: folder, progress: { _, _, _ in })
         XCTAssertEqual(result.outputURL, outputURL)
+    }
+}
+
+final class SectionDownloadProgressTests: XCTestCase {
+    /// `--print` implies quiet mode, which silences ffmpeg's stats; section
+    /// downloads must turn it back off and follow ffmpeg's output position
+    /// instead of the coarse 50% step for "Invoking ffmpeg downloader".
+    func testSectionDownloadKeepsFFmpegProgressAndIgnoresCoarseSteps() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let outputURL = folder.appendingPathComponent("Clip.mp4")
+        let runner = RecordingSubprocessRunner { request, outputHandler in
+            guard request.arguments.contains("--newline") else {
+                return SubprocessResult(terminationStatus: 1, termination: .exited,
+                                        standardOutput: Data(), standardError: Data(),
+                                        discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0, duration: .zero)
+            }
+            XCTAssertTrue(request.arguments.contains("--no-quiet"), "\(request.arguments)")
+            XCTAssertTrue(request.arguments.containsAdjacent("--download-sections", "*55.000-85.000"), "\(request.arguments)")
+            let lines = [
+                (SubprocessOutputStream.standardError, "[debug] Invoking ffmpeg downloader on \"https://example.com/v\"\n"),
+                (.standardError, "frame=  100 fps= 40 q=-1.0 size=  1024KiB time=00:00:06.00 bitrate=1.0kbits/s speed=1.5x\r"),
+                (.standardOutput, "[download] 100% of   10.00MiB in 00:00:20 at 1.00MiB/s\n"),
+            ]
+            for (stream, line) in lines {
+                outputHandler?(SubprocessOutputChunk(stream: stream, data: Data(line.utf8)))
+            }
+            try Data("fixture".utf8).write(to: outputURL)
+            outputHandler?(SubprocessOutputChunk(stream: .standardOutput, data: Data((outputURL.path + "\n").utf8)))
+            return SubprocessResult(terminationStatus: 0, termination: .exited,
+                                    standardOutput: Data(), standardError: Data(),
+                                    discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0, duration: .zero)
+        }
+        let service = YTDLPService(updateService: StubYTDLPUpdateService(path: "/bin/sh"), subprocessRunner: runner)
+        let reported = LockedValues()
+        _ = try await service.download(
+            url: "https://example.com/video", outputFolder: folder,
+            section: DownloadSection(start: 60, end: 80),
+            progress: { value, _, _ in reported.append(value) }
+        )
+        let values = reported.values
+        XCTAssertFalse(values.contains(0.5), "coarse ffmpeg step leaked: \(values)")
+        // 6 s into the padded 55–85 s range.
+        XCTAssertTrue(values.contains { abs($0 - 0.2) < 0.001 }, "ffmpeg position missing: \(values)")
+        XCTAssertTrue(values.prefix { $0 < 1 }.allSatisfy { $0 <= 0.2 + 0.001 }, "progress jumped ahead: \(values)")
+        XCTAssertEqual(values.last, 1.0)
+    }
+
+    private final class LockedValues: @unchecked Sendable {
+        private let lock = NSLock()
+        private var storage: [Double] = []
+        func append(_ value: Double) { lock.withLock { storage.append(value) } }
+        var values: [Double] { lock.withLock { storage } }
     }
 }
 

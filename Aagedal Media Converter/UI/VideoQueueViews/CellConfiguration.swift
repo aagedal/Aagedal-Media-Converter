@@ -87,6 +87,10 @@ struct VideoFileCellConfiguration: Equatable {
     var isQueuedForDownload: Bool = false
     /// Row belongs to a "Download all" playlist batch that can be cancelled as a whole.
     var isPlaylistDownload: Bool = false
+    /// Downloader running or used for this row's web download (nil = not downloaded).
+    var downloadEngine: YTDLPEngine? = nil
+    /// Why yt-dlp-rs was abandoned for yt-dlp, when it was.
+    var downloadEngineFallbackReason: String? = nil
 
     // Upload state
     let uploadEnabled: Bool

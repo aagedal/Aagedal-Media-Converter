@@ -95,6 +95,7 @@ private struct BundledLicensesView: View {
         ("rclone", "rclone-LICENSE.txt"),
         ("MPVKit", "mpvkit-LICENSE.txt"),
         ("SSIMULACRA2", "ssimulacra2-LICENSE.txt"),
+        ("yt-dlp-rs", "yt-dlp-rs-LICENSE.txt"),
         ("NeMo Speech", "nemo-speech-LICENSE.txt")
     ]
 

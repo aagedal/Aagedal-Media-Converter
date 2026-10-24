@@ -45,6 +45,34 @@ struct URLInputOverlay: View {
     @State private var isClipEnabled = false
     @State private var clipStartText = ""
     @State private var clipEndText = ""
+    /// Source duration probed in the background so the clip range can be set
+    /// with a slider and kept within the video. Keyed by URL so typing a new
+    /// URL never shows the previous video's length.
+    @State private var clipDurationURL: String?
+    @State private var clipSourceDuration: Double?
+    @State private var clipDurationIsLoading = false
+
+    /// Section downloads stream through ffmpeg at roughly 2× playback speed,
+    /// while full downloads use fast ranged requests. Below this length the
+    /// full download usually wins, as it does for clips covering most of the
+    /// video, so the clip row says so.
+    private static let shortVideoClipHintThreshold: Double = 600
+    /// Clips covering more than this share of the video also download faster whole.
+    private static let largeClipShareHintThreshold: Double = 0.5
+
+    /// Whether the current clip would likely finish sooner as a full download.
+    private var isWholeDownloadLikelyFaster: Bool {
+        guard let duration = knownClipDuration, let section = clipSection else { return false }
+        if duration < Self.shortVideoClipHintThreshold { return true }
+        let clipLength = min(section.end ?? duration, duration) - section.start
+        return clipLength > duration * Self.largeClipShareHintThreshold
+    }
+
+    /// Duration of the current URL's video, once known.
+    private var knownClipDuration: Double? {
+        guard clipDurationURL == sanitizedURL, let clipSourceDuration, clipSourceDuration > 0 else { return nil }
+        return clipSourceDuration
+    }
 
     /// Section downloads target one finite video: not playlists, multi-video posts,
     /// or live recordings rewound from the start.
@@ -83,6 +111,15 @@ struct URLInputOverlay: View {
         }
         if let end, end <= start {
             return .failure(ClipInputError("End time must be after start time"))
+        }
+        if let duration = knownClipDuration {
+            let length = DownloadSection.formatTime(duration)
+            if start >= duration {
+                return .failure(ClipInputError("Start time is after the end of the video (\(length))"))
+            }
+            if let end, end > duration + 0.5 {
+                return .failure(ClipInputError("End time is after the end of the video (\(length))"))
+            }
         }
         guard let section = DownloadSection(start: start, end: end) else {
             return .failure(ClipInputError("Set a start or end time"))
@@ -199,6 +236,9 @@ struct URLInputOverlay: View {
         }
         .task(id: "\(sanitizedURL)|\(isPlaylistContext)|\(postRetry)") {
             await loadPostVideos()
+        }
+        .task(id: "\(sanitizedURL)|\(isClipAvailable)") {
+            await loadClipDuration()
         }
         .onAppear {
             // Pre-warm yt-dlp binary in background (helps with PyInstaller startup)
@@ -373,6 +413,7 @@ struct URLInputOverlay: View {
             .opacity(isClipAvailable ? 1.0 : 0.5)
 
             if isClipActive {
+                clipRangeSlider
                 if let clipError {
                     Label(clipError, systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
@@ -381,6 +422,11 @@ struct URLInputOverlay: View {
                     Text("Downloads \(Int(DownloadSection.padding)) s extra on each side; the exact in and out points are set as trim points in the queue.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if isWholeDownloadLikelyFaster {
+                        Label("Clips download at about twice playback speed. For videos under 10 minutes, or clips longer than half the video, downloading the whole video and trimming it in the queue is likely faster.", systemImage: "hare")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }
@@ -404,6 +450,93 @@ struct URLInputOverlay: View {
                     }
                 }
         }
+    }
+
+    /// In/out slider over the probed source duration. The time fields stay the
+    /// source of truth; the slider reads and writes them.
+    @ViewBuilder
+    private var clipRangeSlider: some View {
+        if let duration = knownClipDuration {
+            let range = currentClipRange(duration: duration)
+            VStack(spacing: 2) {
+                RangeSlider(
+                    lowerValue: Binding(
+                        get: { range.lower },
+                        set: { clipStartText = $0 <= 0 ? "" : DownloadSection.formatTime($0) }
+                    ),
+                    upperValue: Binding(
+                        get: { range.upper },
+                        // The end of the video is the same as no end time.
+                        set: { clipEndText = $0 >= duration ? "" : DownloadSection.formatTime($0) }
+                    ),
+                    bounds: 0...duration,
+                    step: clipSliderStep(duration: duration),
+                    handleSize: 14,
+                    trackHeight: 4
+                )
+                .padding(.horizontal, 7)
+                .accessibilityIdentifier("downloadClipRangeSlider")
+                .accessibilityLabel("Clip range")
+                HStack {
+                    Text(verbatim: "0:00")
+                    Spacer()
+                    Text(verbatim: DownloadSection.formatTime(duration))
+                }
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+            }
+        } else if clipDurationIsLoading {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Loading video length…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// Slider positions for the typed times, clamped to the video. Invalid or
+    /// empty fields fall back to the start and end of the video.
+    private func currentClipRange(duration: Double) -> (lower: Double, upper: Double) {
+        let step = clipSliderStep(duration: duration)
+        let start = DownloadSection.parseTime(clipStartText).map { min(max(0, $0), duration) } ?? 0
+        let end = DownloadSection.parseTime(clipEndText).map { min(max(0, $0), duration) } ?? duration
+        let lower = min(start, max(0, duration - step))
+        return (lower, max(end, min(duration, lower + step)))
+    }
+
+    /// Whole seconds keep the fields readable; very short clips get finer steps.
+    private func clipSliderStep(duration: Double) -> Double {
+        duration < 10 ? 0.1 : 1
+    }
+
+    /// Probes the video's length for the clip slider. Runs for single-video URLs
+    /// that allow clips, debounced like the post picker, and only once per URL.
+    @MainActor
+    private func loadClipDuration() async {
+        let url = sanitizedURL
+        guard isClipAvailable, DownloadManager.isValidURL(url) else {
+            clipDurationIsLoading = false
+            return
+        }
+        guard clipDurationURL != url else { return }
+        clipDurationIsLoading = true
+        do {
+            try await Task.sleep(for: .milliseconds(400))
+            let metadata = try await postService.fetchMetadata(url: url)
+            try Task.checkCancellation()
+            guard sanitizedURL == url else { return }
+            clipDurationURL = url
+            clipSourceDuration = metadata.duration
+        } catch is CancellationError {
+            return
+        } catch {
+            // Live streams and failed probes just keep the time fields.
+            guard !Task.isCancelled, sanitizedURL == url else { return }
+            clipDurationURL = url
+            clipSourceDuration = nil
+        }
+        clipDurationIsLoading = false
     }
 
     private func clipDurationText(_ section: DownloadSection) -> String {

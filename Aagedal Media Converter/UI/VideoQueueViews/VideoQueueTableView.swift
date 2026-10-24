@@ -1079,6 +1079,8 @@ struct VideoQueueTableView: NSViewRepresentable {
                 downloadStopping: item.downloadStopping,
                 isQueuedForDownload: item.isQueuedForDownload,
                 isPlaylistDownload: item.playlistDownloadBatchID != nil,
+                downloadEngine: item.downloadEngine,
+                downloadEngineFallbackReason: item.downloadEngineFallbackReason,
                 uploadEnabled: item.uploadEnabled,
                 uploadSourceFile: item.uploadSourceFile,
                 uploadStatus: item.uploadStatus,

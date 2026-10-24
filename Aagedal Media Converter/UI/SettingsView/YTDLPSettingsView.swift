@@ -48,6 +48,15 @@ struct YTDLPSettingsView: View {
     @State private var denoDownloadError: String?
     @State private var denoDownloadInfo: String?
 
+    @AppStorage(AppConstants.ytdlpRSEnabledKey) private var ytdlpRSEnabled = true
+    @State private var ytdlpRSSnapshot: ManagedToolSnapshot?
+    @State private var isDownloadingYTDLPRS = false
+    @State private var ytdlpRSDownloadProgress: Double = 0.0
+    @State private var ytdlpRSDownloadError: String?
+    @State private var ytdlpRSDownloadInfo: String?
+    /// Bumped after every refresh so the version pickers reload.
+    @State private var managedToolRefreshToken = 0
+
     @AppStorage(AppConstants.ytdlpBinarySourceKey) private var ytdlpBinarySource = BinarySourceSelection.app.rawValue
     @AppStorage(AppConstants.denoBinarySourceKey) private var denoBinarySource = BinarySourceSelection.app.rawValue
     @AppStorage(AppConstants.ffmpegBinarySourceKey) private var ffmpegBinarySource = BinarySourceSelection.app.rawValue
@@ -65,6 +74,7 @@ struct YTDLPSettingsView: View {
         Form {
             downloadDirectorySection
             ytdlpSection
+            ytdlpRSSection
             denoSection
             authenticationSection
             downloadAutomationSection
@@ -245,6 +255,12 @@ struct YTDLPSettingsView: View {
                     Text(info)
                         .font(.caption)
                         .foregroundColor(.secondary)
+                }
+
+                if selectedYTDLPSource == .app && ytdlpStatus == .configured {
+                    ManagedToolVersionControls(tool: .ytdlp, refreshToken: managedToolRefreshToken) {
+                        await refreshVersions()
+                    }
                 }
 
                 // Show performance tip when using app-downloaded binary
@@ -499,6 +515,12 @@ struct YTDLPSettingsView: View {
                         .foregroundColor(.secondary)
                 }
 
+                if selectedDenoSource == .app && denoStatus == .configured {
+                    ManagedToolVersionControls(tool: .deno, refreshToken: managedToolRefreshToken) {
+                        await refreshVersions()
+                    }
+                }
+
                 Divider()
 
                 if selectedDenoSource == .custom {
@@ -541,7 +563,107 @@ struct YTDLPSettingsView: View {
         }
     }
 
+    // MARK: - yt-dlp-rs Section
+
+    private var ytdlpRSSection: some View {
+        Section(header: Text("yt-dlp-rs (Beta)")) {
+            VStack(alignment: .leading, spacing: 12) {
+                Toggle("Use yt-dlp-rs for supported sites (beta)", isOn: $ytdlpRSEnabled)
+                    .toggleStyle(SwitchToggleStyle())
+
+                Text("yt-dlp-rs is a native Rust port of yt-dlp included with the app. When it is on, supported sites download with yt-dlp-rs; if a site is not supported or yt-dlp-rs fails, the download automatically falls back to yt-dlp.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack {
+                    if let snapshot = ytdlpRSSnapshot, let version = snapshot.activeVersion {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(ytdlpRSEnabled ? .green : .secondary)
+                        if case .bundled = snapshot.activeChoice {
+                            Text("Included with the app")
+                                .font(.headline)
+                        } else {
+                            Text("Downloaded update")
+                                .font(.headline)
+                        }
+                        Spacer()
+                        Text(verbatim: "v\(version)")
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    } else if ytdlpRSSnapshot != nil {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                        Text("yt-dlp-rs not available")
+                            .font(.headline)
+                        Spacer()
+                    } else {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                        Spacer()
+                    }
+                }
+
+                if !isDownloadingYTDLPRS {
+                    Button {
+                        checkAndUpdateYTDLPRS()
+                    } label: {
+                        Label("Check for Updates", systemImage: "arrow.clockwise")
+                    }
+                } else {
+                    HStack(spacing: 8) {
+                        ProgressView(value: ytdlpRSDownloadProgress)
+                            .progressViewStyle(.linear)
+                            .frame(width: 140)
+                        Text("\(Int(ytdlpRSDownloadProgress * 100))%")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("Downloading...")
+                            .foregroundColor(.secondary)
+                        Button {
+                            Task { await YTDLPUpdateService.shared.cancelDownload(.ytdlpRS) }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Cancel download")
+                    }
+                }
+
+                if let error = ytdlpRSDownloadError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                } else if let info = ytdlpRSDownloadInfo {
+                    Text(info)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                ManagedToolVersionControls(tool: .ytdlpRS, refreshToken: managedToolRefreshToken) {
+                    await refreshVersions()
+                }
+            }
+            .padding(8)
+        }
+    }
+
     // MARK: - Download Actions
+
+    private func checkAndUpdateYTDLPRS() {
+        runDownload(
+            checkForUpdate: true,
+            progressSetter: { ytdlpRSDownloadProgress = $0 },
+            busySetter: { isDownloadingYTDLPRS = $0 },
+            errorSetter: { ytdlpRSDownloadError = $0 },
+            infoSetter: { ytdlpRSDownloadInfo = $0 },
+            checkForUpdates: { try await YTDLPUpdateService.shared.checkForYTDLPRSUpdates() },
+            download: { progress in
+                try await YTDLPUpdateService.shared.downloadYTDLPRSUpdate(progress: progress)
+            }
+        )
+    }
 
     private func downloadYTDLP() {
         guard selectedYTDLPSource == .app else { return }
@@ -938,10 +1060,17 @@ struct YTDLPSettingsView: View {
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
+                Text("App-downloaded yt-dlp, deno and yt-dlp-rs are kept in versioned folders in Application Support. Homebrew and custom tools are never updated by the app.")
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 HStack {
                     Link("FFmpeg", destination: URL(string: "https://ffmpeg.org")!)
                     Spacer()
                     Link("yt-dlp", destination: URL(string: "https://github.com/yt-dlp/yt-dlp")!)
+                    Spacer()
+                    Link("yt-dlp-rs", destination: URL(string: "https://github.com/aagedal/yt-dlp-rs")!)
                     Spacer()
                     Link("Homebrew", destination: URL(string: "https://brew.sh")!)
                 }
@@ -1163,6 +1292,7 @@ struct YTDLPSettingsView: View {
         async let ffmpegVer = BinaryPathResolver.getFFmpegVersion()
 
         let (yt, deno, ff) = await (ytdlpVer, denoVer, ffmpegVer)
+        let rsSnapshot = await YTDLPUpdateService.shared.managedToolSnapshot(for: .ytdlpRS)
 
         await MainActor.run {
             ytdlpVersion = yt
@@ -1172,6 +1302,8 @@ struct YTDLPSettingsView: View {
             installationStatus = instStatus
             denoStatus = denoStatusValue
             denoInstallationStatus = denoInstStatus
+            ytdlpRSSnapshot = rsSnapshot
+            managedToolRefreshToken += 1
             isCheckingVersions = false
         }
     }

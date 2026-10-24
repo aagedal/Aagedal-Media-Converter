@@ -152,7 +152,9 @@ struct ToolDiagnosticsSettingsView: View {
             let ytdlp = await YTDLPUpdateService.shared.resolveYTDLPPath()
             let deno = await YTDLPUpdateService.shared.resolveDenoPath()
             let rclone = await RcloneUpdateService.shared.resolveRclonePath()
-            let tools: [(String, String, String?, [String]?)] = [
+            // Only listed while enabled; when off, downloads use yt-dlp alone.
+            let ytdlpRS = await YTDLPUpdateService.shared.resolveYTDLPRSPath()
+            var tools: [(String, String, String?, [String]?)] = [
                 ("ffmpeg", "FFmpeg", BinaryPathResolver.ffmpegPath, ["-version"]),
                 ("ytdlp", "yt-dlp", ytdlp, ["--version"]),
                 ("deno", "Deno", deno, ["--version"]),
@@ -160,6 +162,9 @@ struct ToolDiagnosticsSettingsView: View {
                 ("tesseract", "Tesseract", BinaryPathResolver.tesseractPath, ["--version"]),
                 ("ssimulacra2", "SSIMULACRA2", BinaryPathResolver.ssimulacra2Path, ["--version"])
             ]
+            if let ytdlpRS {
+                tools.insert(("ytdlp-rs", "yt-dlp-rs", ytdlpRS, ["--version"]), at: 2)
+            }
             for (id, name, path, arguments) in tools + ToolDiagnostics.helperChecks {
                 try Task.checkCancellation()
                 var configuration: HomebrewPythonExecutor.ToolExecutionConfiguration?

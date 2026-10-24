@@ -57,6 +57,7 @@
 		544D2AB7862149BB973E7E64 /* FileNameSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E16F395023624188805714C2 /* FileNameSettings.swift */; };
 		550B38605304491DB16F9879 /* CodecExportSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FD0FB88746A404DB8BB3AF6 /* CodecExportSettingsTests.swift */; };
 		557166FCAF354294BA821011 /* PostConversionSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DE49AB8D27E4B9CBE7324A4 /* PostConversionSettings.swift */; };
+		A907D1D50000000000000305 /* ManagedToolVersioningTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A907D1D50000000000000405 /* ManagedToolVersioningTests.swift */; };
 		57105645EB2B47EE9B17F716 /* YTDLPUpdateOwnershipTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDC94AC62B82453580FBD4E4 /* YTDLPUpdateOwnershipTests.swift */; };
 		59050FF1288247E2E02A60CA /* UploadModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BBC06DAF3F395A5C54B3064 /* UploadModels.swift */; };
 		5C8B19E42F69000100A1C2D4 /* SubprocessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C8B19E42F69000100A1C2D3 /* SubprocessRunner.swift */; };
@@ -244,12 +245,14 @@
 		B15C008BDFBA4E8893B1C380 /* ToolDiagnosticsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A95007ED7B0349E3B626F1BE /* ToolDiagnosticsSettingsView.swift */; };
 		B1C2D3E4F5061728394A5B70 /* ScreenCaptureSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5061728394A5B6F /* ScreenCaptureSettingsView.swift */; };
 		B33D258C71A742F9A3D2D8DD /* AudioRoutingPlanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3645F27A874241C7AF89277E /* AudioRoutingPlanTests.swift */; };
+		A907D1D50000000000000304 /* ManagedToolVersionControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A907D1D50000000000000404 /* ManagedToolVersionControls.swift */; };
 		B709DBE54F69E12A7484E1CE /* YTDLPSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07D71BE05D85B5DEBAEB0A7A /* YTDLPSettingsView.swift */; };
 		BC6905B16FDDC57467098ECF /* KeychainCredentialManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8BDFDD325A4DF89E8766843 /* KeychainCredentialManager.swift */; };
 		BCDC7685DC8A43E4BC04CE65 /* ImageSequenceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 045E9C8BA166403190A5B12D /* ImageSequenceSettings.swift */; };
 		C1DCF31F2FB2341100D617D4 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = C1DCF31E2FB2341100D617D4 /* Sparkle */; };
 		C2D3E4F5061728394A5B6C7D /* ScreenCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D3E4F5061728394A5B6C7E /* ScreenCaptureManager.swift */; };
 		C4D287CF98164FE5AF3C20AB /* DownloadDetailsLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA9E57AC40EF429691668B6D /* DownloadDetailsLifecycleTests.swift */; };
+		A7E1R0UTT00000000000001 /* YTDLPEngineRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E1R0UTT00000000000002 /* YTDLPEngineRouterTests.swift */; };
 		C7166A0F2716B52C985E6275 /* MetadataWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74E3B8A6D800B9AF62A3BF1E /* MetadataWindowController.swift */; };
 		C954573AF1D84E73A9596708 /* DownloadHistoryServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1CFA07927E49B1A1883FBD /* DownloadHistoryServiceTests.swift */; };
 		C9C0A673908A4105B116FEDB /* IMFSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F96374D9F9450B93232C46 /* IMFSettings.swift */; };
@@ -259,6 +262,9 @@
 		CAPOVRL00000001000BUILD /* CaptureOverlayWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAPOVRL00000001000FREF1 /* CaptureOverlayWindowController.swift */; };
 		CAPREGN00000001000BUILD /* CaptureRegionOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAPREGN00000001000FREF1 /* CaptureRegionOverlayView.swift */; };
 		CC01A1C0PY00010000000002 /* CopyableCommandRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC01A1C0PY00010000000001 /* CopyableCommandRow.swift */; };
+		A907D1D50000000000000301 /* ManagedToolVersioning.swift in Sources */ = {isa = PBXBuildFile; fileRef = A907D1D50000000000000401 /* ManagedToolVersioning.swift */; };
+		A907D1D50000000000000302 /* ManagedToolStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A907D1D50000000000000402 /* ManagedToolStore.swift */; };
+		A907D1D50000000000000303 /* ManagedToolUpdateScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A907D1D50000000000000403 /* ManagedToolUpdateScheduler.swift */; };
 		CCF14EFA815D8DCCB62749E1 /* YTDLPUpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE5D4D8671AB2EB5948179AE /* YTDLPUpdateService.swift */; };
 		CD4320100000000000000001 /* CaptureFrameRateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD4320100000000000000002 /* CaptureFrameRateTests.swift */; };
 		CE5F75F4C4B14D14BD081FC8 /* ConversionFollowUp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 204052BD416D4C0D98872778 /* ConversionFollowUp.swift */; };
@@ -296,6 +302,7 @@
 		FBA41D8157AC4F0DBD63B192 /* TimelineKeyframeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA41D8157AC4F0DBD63B191 /* TimelineKeyframeService.swift */; };
 		FBA41D8157AC4F0DBD63B194 /* TimelineKeyframeServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA41D8157AC4F0DBD63B193 /* TimelineKeyframeServiceTests.swift */; };
 		FE7150EDC2D2BFA59C20A1F1 /* YTDLPService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66B862E87364609527CEEC84 /* YTDLPService.swift */; };
+		A7E1R0UT0000000000000001 /* YTDLPEngineRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E1R0UT0000000000000002 /* YTDLPEngineRouter.swift */; };
 		FF177DE1EC9B44B5A401A49D /* AnalyticsAttemptTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B605ED7FEDF34BA59ECB33BB /* AnalyticsAttemptTests.swift */; };
 		FILENAMESETV0000000000B1 /* FileNameSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FILENAMESETV0000000000B2 /* FileNameSettingsView.swift */; };
 		GRPEDITWIN000002 /* GroupEditorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = GRPEDITWIN000001 /* GroupEditorWindow.swift */; };
@@ -328,6 +335,7 @@
 		VDISPMENU0001000BUILD /* VirtualDisplayMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = VDISPMENU0001000FREF1 /* VirtualDisplayMenu.swift */; };
 		VDISPMGR00001000BUILD /* VirtualDisplayManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = VDISPMGR00001000FREF1 /* VirtualDisplayManager.swift */; };
 		VIDITEMIDX00000001 /* VideoItemIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = VIDITEMIDX00000002 /* VideoItemIndex.swift */; };
+		A907D1D50000000000000101 /* yt-dlp-rs-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A907D1D50000000000000201 /* yt-dlp-rs-LICENSE.txt */; };
 		A906AA120000000000000101 /* ssimulacra2-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A906AA120000000000000201 /* ssimulacra2-LICENSE.txt */; };
 		46B0B00A2A6A498898911DEF /* AV2ResourcePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20BBB011334640A3A8D04D5D /* AV2ResourcePolicy.swift */; };
 		A598C35C58B24CE8BBE4CF00 /* AV2RecoveryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B62CDCA03AD943938CBC4A43 /* AV2RecoveryStore.swift */; };
@@ -424,6 +432,7 @@
 		02B1DCFCB3DC44408B8C4598 /* MergeCompatibilityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MergeCompatibilityPolicy.swift; sourceTree = "<group>"; };
 		045E9C8BA166403190A5B12D /* ImageSequenceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSequenceSettings.swift; sourceTree = "<group>"; };
 		06E2B90D341C4818B814DED4 /* UploadLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadLifecycleTests.swift; sourceTree = "<group>"; };
+		A907D1D50000000000000404 /* ManagedToolVersionControls.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ManagedToolVersionControls.swift; sourceTree = "<group>"; };
 		07D71BE05D85B5DEBAEB0A7A /* YTDLPSettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = YTDLPSettingsView.swift; sourceTree = "<group>"; };
 		0A661B3187048E83E24FB0AB /* WhisperModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WhisperModels.swift; sourceTree = "<group>"; };
 		0FEA89ED716FE15C8986DB34 /* BinaryPathResolver.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BinaryPathResolver.swift; sourceTree = "<group>"; };
@@ -471,6 +480,7 @@
 		60A8FB8DB2F86F528514D26E /* PresetQuickSelectOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetQuickSelectOverlay.swift; sourceTree = "<group>"; };
 		63ABBF018D774A599B331811 /* ConversionDependencyPreflight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionDependencyPreflight.swift; sourceTree = "<group>"; };
 		66B862E87364609527CEEC84 /* YTDLPService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = YTDLPService.swift; path = YTDLP/YTDLPService.swift; sourceTree = "<group>"; };
+		A7E1R0UT0000000000000002 /* YTDLPEngineRouter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = YTDLPEngineRouter.swift; path = YTDLP/YTDLPEngineRouter.swift; sourceTree = "<group>"; };
 		67BAE582711E2F5E020591A9 /* ConversionRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionRequest.swift; sourceTree = "<group>"; };
 		6956B138C1E69D90CBBCB7D3 /* WhisperSettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WhisperSettingsView.swift; sourceTree = "<group>"; };
 		7011C648F17F49E8BE84BB2D /* AV2AudioPacketTiming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2AudioPacketTiming.swift; sourceTree = "<group>"; };
@@ -681,6 +691,7 @@
 		CC01A1C0PY00010000000001 /* CopyableCommandRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopyableCommandRow.swift; sourceTree = "<group>"; };
 		CD4320100000000000000002 /* CaptureFrameRateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureFrameRateTests.swift; sourceTree = "<group>"; };
 		CD5693B21A7341B2A3FA32A7 /* ConversionQueueState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionQueueState.swift; sourceTree = "<group>"; };
+		A907D1D50000000000000405 /* ManagedToolVersioningTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagedToolVersioningTests.swift; sourceTree = "<group>"; };
 		CDC94AC62B82453580FBD4E4 /* YTDLPUpdateOwnershipTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YTDLPUpdateOwnershipTests.swift; sourceTree = "<group>"; };
 		CDD5417879E5419D97AE3672 /* CodecExportSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodecExportSettings.swift; sourceTree = "<group>"; };
 		CF2A7FD698474D319CF8046A /* ConversionPreparationSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionPreparationSettings.swift; sourceTree = "<group>"; };
@@ -717,10 +728,14 @@
 		F4D04393D4534BA2A77B8F64 /* ImageSequenceSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSequenceSettingsTests.swift; sourceTree = "<group>"; };
 		F82CC3B9944D3DAF6B3F9C93 /* ComparisonMetadataView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComparisonMetadataView.swift; sourceTree = "<group>"; };
 		FA9E57AC40EF429691668B6D /* DownloadDetailsLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadDetailsLifecycleTests.swift; sourceTree = "<group>"; };
+		A7E1R0UTT00000000000002 /* YTDLPEngineRouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YTDLPEngineRouterTests.swift; sourceTree = "<group>"; };
 		FB97784F4F5459DC7E6D8CD3 /* AudioFrequencyAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFrequencyAnalyzer.swift; sourceTree = "<group>"; };
 		FBA41D8157AC4F0DBD63B191 /* TimelineKeyframeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineKeyframeService.swift; sourceTree = "<group>"; };
 		FBA41D8157AC4F0DBD63B193 /* TimelineKeyframeServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineKeyframeServiceTests.swift; sourceTree = "<group>"; };
 		FC6C7287376844AF919CCFE0 /* AnalyticsAttempt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsAttempt.swift; sourceTree = "<group>"; };
+		A907D1D50000000000000401 /* ManagedToolVersioning.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ManagedToolVersioning.swift; path = YTDLP/ManagedToolVersioning.swift; sourceTree = "<group>"; };
+		A907D1D50000000000000402 /* ManagedToolStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ManagedToolStore.swift; path = YTDLP/ManagedToolStore.swift; sourceTree = "<group>"; };
+		A907D1D50000000000000403 /* ManagedToolUpdateScheduler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ManagedToolUpdateScheduler.swift; path = YTDLP/ManagedToolUpdateScheduler.swift; sourceTree = "<group>"; };
 		FE5D4D8671AB2EB5948179AE /* YTDLPUpdateService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = YTDLPUpdateService.swift; path = YTDLP/YTDLPUpdateService.swift; sourceTree = "<group>"; };
 		FFDA902947BA4C97BAD3B996 /* PostConversionSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostConversionSettingsTests.swift; sourceTree = "<group>"; };
 		FILENAMESETV0000000000B2 /* FileNameSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileNameSettingsView.swift; sourceTree = "<group>"; };
@@ -756,6 +771,8 @@
 		VDISPMGR00001000FREF1 /* VirtualDisplayManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualDisplayManager.swift; sourceTree = "<group>"; };
 		VIDITEMIDX00000002 /* VideoItemIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoItemIndex.swift; sourceTree = "<group>"; };
 		A906AA120000000000000201 /* ssimulacra2-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "ssimulacra2-LICENSE.txt"; sourceTree = "<group>"; };
+		A907D1D50000000000000201 /* yt-dlp-rs-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "yt-dlp-rs-LICENSE.txt"; sourceTree = "<group>"; };
+		A907D1D50000000000000202 /* yt-dlp-rs */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = "yt-dlp-rs"; sourceTree = "<group>"; };
 		A906AA120000000000000202 /* ssimulacra2_rs */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = ssimulacra2_rs; sourceTree = "<group>"; };
 		20BBB011334640A3A8D04D5D /* AV2ResourcePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2ResourcePolicy.swift; sourceTree = "<group>"; };
 		B62CDCA03AD943938CBC4A43 /* AV2RecoveryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2RecoveryStore.swift; sourceTree = "<group>"; };
@@ -834,8 +851,12 @@
 				SCHEDDL01SERV00000002 /* ScheduledDownloadService.swift */,
 				1A1EE023174847EFC6A551B7 /* YTDLPProgressParser.swift */,
 				66B862E87364609527CEEC84 /* YTDLPService.swift */,
+				A7E1R0UT0000000000000002 /* YTDLPEngineRouter.swift */,
 				EA25C0011234567890000002 /* YTDLPCookieSource.swift */,
 				FE5D4D8671AB2EB5948179AE /* YTDLPUpdateService.swift */,
+				A907D1D50000000000000403 /* ManagedToolUpdateScheduler.swift */,
+				A907D1D50000000000000402 /* ManagedToolStore.swift */,
+				A907D1D50000000000000401 /* ManagedToolVersioning.swift */,
 			);
 			name = YTDLP;
 			sourceTree = "<group>";
@@ -896,6 +917,7 @@
 				A90606000000000000000202 /* bmx-LICENSE.txt */,
 				8E0C32CE2E09F5E400F22B21 /* ffmpeg-LICENSE.txt */,
 				A906AA120000000000000201 /* ssimulacra2-LICENSE.txt */,
+				A907D1D50000000000000201 /* yt-dlp-rs-LICENSE.txt */,
 			);
 			path = Licenses;
 			sourceTree = "<group>";
@@ -905,6 +927,7 @@
 			children = (
 				8EFBDA8F2EA56F8E005ADDCF /* ffmpeg */,
 				A906AA120000000000000202 /* ssimulacra2_rs */,
+				A907D1D50000000000000202 /* yt-dlp-rs */,
 				8488177BC5403EC6637A5C25 /* bmxtranswrap */,
 				AF20AF20AF20AF20AF20AF20 /* avmenc */,
 				AF24AF24AF24AF24AF24AF24 /* avmdec */,
@@ -1189,6 +1212,7 @@
 				2FD0FB88746A404DB8BB3AF6 /* CodecExportSettingsTests.swift */,
 				3134DA738FF74AC8BA27ADE5 /* SubtitleExportSettingsTests.swift */,
 				FA9E57AC40EF429691668B6D /* DownloadDetailsLifecycleTests.swift */,
+				A7E1R0UTT00000000000002 /* YTDLPEngineRouterTests.swift */,
 				3171BC386A1446B89E470B2C /* MPVPreviewObservationTests.swift */,
 				04A0EDA5FFC64786A28DB95C /* MPVAudioMeterHistoryTests.swift */,
 				F14AA070D0CA4AB1A0B157B2 /* AudioMeterBenchmarkTests.swift */,
@@ -1215,6 +1239,7 @@
 				EA25C0011234567890000004 /* YTDLPCookieSourceTests.swift */,
 				7A3E5C1D2B4F6A8C9E0D1F02 /* PlaylistQueueAndAutoMuteTests.swift */,
 				CDC94AC62B82453580FBD4E4 /* YTDLPUpdateOwnershipTests.swift */,
+				A907D1D50000000000000405 /* ManagedToolVersioningTests.swift */,
 				758CDC06BC9341C186C773BD /* DenoExtractionDrainTests.swift */,
 				7748A92962A74E189CB18CD7 /* AV2AACParserTests.swift */,
 				D5826C72F8754C839D8C9A62 /* PackageMetadataSettingsTests.swift */,
@@ -1359,6 +1384,7 @@
 				8E13CD4050F24D1788FD6C8C /* ShortcutsSettingsView.swift */,
 				8ECEBC1F2ED8782800F1F67C /* MetadataSettingsView.swift */,
 				07D71BE05D85B5DEBAEB0A7A /* YTDLPSettingsView.swift */,
+				A907D1D50000000000000404 /* ManagedToolVersionControls.swift */,
 				6956B138C1E69D90CBBCB7D3 /* WhisperSettingsView.swift */,
 				8EA25DC12F7AC9A80087B1F1 /* UploadSettingsView.swift */,
 				F12A11220000111111111113 /* FileZillaImportSheet.swift */,
@@ -1711,6 +1737,7 @@
 				A90606000000000000000102 /* bmx-LICENSE.txt in Resources */,
 				A90606000000000000000101 /* ffmpeg-LICENSE.txt in Resources */,
 				A906AA120000000000000101 /* ssimulacra2-LICENSE.txt in Resources */,
+				A907D1D50000000000000101 /* yt-dlp-rs-LICENSE.txt in Resources */,
 				A90606000000000000000100 /* LICENSE in Resources */,
 				8EE6EEA02C31FC6F007B629D /* Assets.xcassets in Resources */,
 			);
@@ -1755,6 +1782,7 @@
 				"$(SRCROOT)/Aagedal Media Converter/Binaries/avmdec",
 				"$(SRCROOT)/Aagedal Media Converter/Binaries/mxf2raw",
 				"$(SRCROOT)/Aagedal Media Converter/Binaries/ssimulacra2_rs",
+				"$(SRCROOT)/Aagedal Media Converter/Binaries/yt-dlp-rs",
 			);
 			inputFileListPaths = ("$(SRCROOT)/scripts/nemo-runtime-inputs.xcfilelist");
 			outputFileListPaths = ("$(SRCROOT)/scripts/nemo-runtime-outputs.xcfilelist");
@@ -1773,6 +1801,7 @@
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/avmdec",
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/mxf2raw",
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/ssimulacra2_rs",
+				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/yt-dlp-rs",
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/ffmpeg.cstemp",
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/rclone.cstemp",
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/tesseract.cstemp",
@@ -1784,6 +1813,7 @@
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/avmdec.cstemp",
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/mxf2raw.cstemp",
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/ssimulacra2_rs.cstemp",
+				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/yt-dlp-rs.cstemp",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/ffmpeg",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/rclone",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/tesseract",
@@ -1795,6 +1825,7 @@
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/avmdec",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/mxf2raw",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/ssimulacra2_rs",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/yt-dlp-rs",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/bash;
@@ -1988,11 +2019,16 @@
 				SCHEDDL01SERV00000001 /* ScheduledDownloadService.swift in Sources */,
 				8567742F36A93E24233F8006 /* YTDLPProgressParser.swift in Sources */,
 				FE7150EDC2D2BFA59C20A1F1 /* YTDLPService.swift in Sources */,
+				A7E1R0UT0000000000000001 /* YTDLPEngineRouter.swift in Sources */,
 				EA25C0011234567890000001 /* YTDLPCookieSource.swift in Sources */,
 				CCF14EFA815D8DCCB62749E1 /* YTDLPUpdateService.swift in Sources */,
+				A907D1D50000000000000303 /* ManagedToolUpdateScheduler.swift in Sources */,
+				A907D1D50000000000000302 /* ManagedToolStore.swift in Sources */,
+				A907D1D50000000000000301 /* ManagedToolVersioning.swift in Sources */,
 				E69050ED114BBF6B493BE257 /* URLInputOverlay.swift in Sources */,
 				LQGLSTB00000001 /* LiquidGlassToolbarConfigurator.swift in Sources */,
 				B709DBE54F69E12A7484E1CE /* YTDLPSettingsView.swift in Sources */,
+				A907D1D50000000000000304 /* ManagedToolVersionControls.swift in Sources */,
 				7ECCCED958C0A9560D4FE7F0 /* FileSafetyUtils.swift in Sources */,
 				20C58566170247A891A6724C /* PowerAssertion.swift in Sources */,
 				515A407918750E4E62409DA5 /* BinaryPathResolver.swift in Sources */,
@@ -2083,6 +2119,7 @@
 				550B38605304491DB16F9879 /* CodecExportSettingsTests.swift in Sources */,
 				6A8F1890F8004362BBE6461C /* SubtitleExportSettingsTests.swift in Sources */,
 				C4D287CF98164FE5AF3C20AB /* DownloadDetailsLifecycleTests.swift in Sources */,
+				A7E1R0UTT00000000000001 /* YTDLPEngineRouterTests.swift in Sources */,
 				7A7E2E5F4BA94EE6A50474C7 /* MPVPreviewObservationTests.swift in Sources */,
 				08AFA6848AC541E892F89336 /* MPVAudioMeterHistoryTests.swift in Sources */,
 				F14AA070D0CA4AB1A0B157B1 /* AudioMeterBenchmarkTests.swift in Sources */,
@@ -2109,6 +2146,7 @@
 				EA25C0011234567890000003 /* YTDLPCookieSourceTests.swift in Sources */,
 				7A3E5C1D2B4F6A8C9E0D1F01 /* PlaylistQueueAndAutoMuteTests.swift in Sources */,
 				57105645EB2B47EE9B17F716 /* YTDLPUpdateOwnershipTests.swift in Sources */,
+				A907D1D50000000000000305 /* ManagedToolVersioningTests.swift in Sources */,
 				E1ACF6BCCBB0485C81D569A9 /* DenoExtractionDrainTests.swift in Sources */,
 				EC4CE91691E24FB19B6E1838 /* AV2AACParserTests.swift in Sources */,
 				D59F0C939A18421EB3F88F5D /* PackageMetadataSettingsTests.swift in Sources */,

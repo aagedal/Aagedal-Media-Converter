@@ -720,6 +720,8 @@ enum AppConstants {
     static let ytdlpLastUpdateCheckKey = "ytdlpLastUpdateCheck"
     static let ytdlpGitHubReleasesURL = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
     static let ytdlpMacOSAssetName = "yt-dlp_macos"
+    /// Onedir build (executable + `_internal/`): no per-launch unpacking.
+    static let ytdlpMacOSOnedirAssetName = "yt-dlp_macos.zip"
     static let ytdlpBinarySourceKey = "ytdlpBinarySource"
 
     static let denoVersionKey = "denoInstalledVersion"
@@ -727,6 +729,26 @@ enum AppConstants {
     static let denoGitHubReleasesURL = "https://api.github.com/repos/denoland/deno/releases/latest"
     static let denoBinarySourceKey = "denoBinarySource"
     static let denoCustomPathKey = "denoCustomPath"
+
+    // yt-dlp-rs (bundled; newer releases can be downloaded into ytdlpToolsDirectory)
+    /// Use yt-dlp-rs for supported sites, falling back to yt-dlp. Default true.
+    static let ytdlpRSEnabledKey = "ytdlpRSEnabled"
+    static let ytdlpRSLastUpdateCheckKey = "ytdlpRSLastUpdateCheck"
+    /// Includes pre-releases: yt-dlp-rs is in beta.
+    static let ytdlpRSGitHubReleasesURL = "https://api.github.com/repos/aagedal/yt-dlp-rs/releases?per_page=20"
+    /// Version of `Binaries/yt-dlp-rs`; scripts/update-ytdlp-rs.sh keeps it in sync.
+    static let bundledYTDLPRSVersion = "0.3.0-beta.1"
+
+    // Managed tool versions (yt-dlp, deno, yt-dlp-rs). Auto-update keys default to true.
+    static let ytdlpAutoUpdateKey = "ytdlpAutoUpdate"
+    static let denoAutoUpdateKey = "denoAutoUpdate"
+    static let ytdlpRSAutoUpdateKey = "ytdlpRSAutoUpdate"
+    /// Chosen (rolled-back) version; absent = newest. Pauses automatic updates.
+    static let ytdlpPinnedVersionKey = "ytdlpPinnedVersion"
+    static let denoPinnedVersionKey = "denoPinnedVersion"
+    static let ytdlpRSPinnedVersionKey = "ytdlpRSPinnedVersion"
+    static let managedToolRetainedVersionCount = 3
+    static let managedToolUpdateCheckInterval: TimeInterval = 24 * 60 * 60
 
     // Custom binary paths (no longer need security-scoped bookmarks without sandbox)
     static let ytdlpCustomPathKey = "ytdlpCustomPath"

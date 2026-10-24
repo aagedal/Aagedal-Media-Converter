@@ -276,6 +276,10 @@ enum SettingsSyncKeys {
         AppConstants.ytdlpAudioOnlyKey,
         AppConstants.ytdlpDownloadPlaylistKey,
         AppConstants.ytdlpFilenameRestrictionModeKey,
+        AppConstants.ytdlpRSEnabledKey,
+        AppConstants.ytdlpAutoUpdateKey,
+        AppConstants.denoAutoUpdateKey,
+        AppConstants.ytdlpRSAutoUpdateKey,
         AppConstants.allowPrivateNetworkDownloadsKey,
 
         // Transcription / OCR preferences (model & language choices, not paths)
