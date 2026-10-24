@@ -142,7 +142,10 @@ final class PresetManager {
         return ExportPreset(rawValue: rawValue) ?? .videoLoop
     }
 
-    /// Applies auto-mute settings when switching between presets
+    /// Applies auto-mute settings when the queue (toolbar) preset changes.
+    /// Rows with a per-item `presetOverride` don't follow the queue preset, so
+    /// they are left alone unless `respectingPresetOverrides` is false (merging
+    /// ignores overrides and encodes every row with the queue preset).
     /// - Parameters:
     ///   - items: The video items to modify
     ///   - oldPreset: The previous preset
@@ -152,20 +155,65 @@ final class PresetManager {
         to items: inout [VideoItem],
         oldPreset: ExportPreset,
         newPreset: ExportPreset,
+        videoLoopDefaultMuted: Bool,
+        respectingPresetOverrides: Bool = true
+    ) {
+        guard let muted = Self.autoMuteState(
+            from: oldPreset, to: newPreset, videoLoopDefaultMuted: videoLoopDefaultMuted
+        ) else { return }
+        for index in items.indices where items[index].status == .waiting {
+            if respectingPresetOverrides, items[index].presetOverride != nil { continue }
+            items[index].isMuted = muted
+        }
+    }
+
+    /// Applies the auto-mute transition to one row whose own effective preset
+    /// changed (per-item override set, changed or cleared). No-op when the
+    /// effective preset is unchanged or the row isn't waiting.
+    nonisolated static func applyAutoMuteTransition(
+        to item: inout VideoItem,
+        from oldPreset: ExportPreset,
+        to newPreset: ExportPreset,
         videoLoopDefaultMuted: Bool
     ) {
-        // Auto-mute items when switching to VideoLoop preset if the setting is enabled
-        if newPreset == .videoLoop && videoLoopDefaultMuted {
-            for index in items.indices where items[index].status == .waiting {
-                items[index].isMuted = true
-            }
+        guard oldPreset != newPreset, item.status == .waiting,
+              let muted = autoMuteState(from: oldPreset, to: newPreset, videoLoopDefaultMuted: videoLoopDefaultMuted)
+        else { return }
+        item.isMuted = muted
+    }
+
+    /// Applies the auto-mute transition to every waiting row of an encoding
+    /// group whose effective preset changed.
+    nonisolated static func applyAutoMuteTransition(
+        to items: inout [VideoItem],
+        from oldPreset: ExportPreset,
+        to newPreset: ExportPreset,
+        videoLoopDefaultMuted: Bool
+    ) {
+        for index in items.indices {
+            applyAutoMuteTransition(
+                to: &items[index], from: oldPreset, to: newPreset, videoLoopDefaultMuted: videoLoopDefaultMuted
+            )
         }
-        // Auto-unmute items when switching away from VideoLoop
-        else if oldPreset == .videoLoop && newPreset != .videoLoop {
-            for index in items.indices where items[index].status == .waiting {
-                items[index].isMuted = false
-            }
-        }
+    }
+
+    /// The mute state a waiting row takes when its effective preset changes:
+    /// muted when entering Video Loop (if that default is on), unmuted when
+    /// leaving Video Loop, otherwise unchanged (nil).
+    nonisolated static func autoMuteState(
+        from oldPreset: ExportPreset,
+        to newPreset: ExportPreset,
+        videoLoopDefaultMuted: Bool
+    ) -> Bool? {
+        if newPreset == .videoLoop && videoLoopDefaultMuted { return true }
+        if oldPreset == .videoLoop && newPreset != .videoLoop { return false }
+        return nil
+    }
+
+    /// The persisted "Video Loop defaults to muted" preference.
+    nonisolated static var videoLoopDefaultMutedPreference: Bool {
+        UserDefaults.standard.object(forKey: AppConstants.videoLoopDefaultMutedKey) as? Bool
+            ?? AppConstants.defaultVideoLoopMuted
     }
 
     /// Reloads visibility settings from UserDefaults

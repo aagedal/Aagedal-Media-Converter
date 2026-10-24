@@ -66,7 +66,7 @@ extension VideoFileCellView: NSPopoverDelegate {
         // sheet), image sequences, animated stills, and MXF-based presets.
         let commentsAvailable = config.preset.supportsMetadataComment
         commentToggleButton.isHidden = !commentsAvailable
-        commentToggleButton.isEnabled = !config.isDownloading && config.scheduledDownloadTime == nil && !config.isLiveStreamRecording && config.downloadError == nil
+        commentToggleButton.isEnabled = !config.isDownloading && !config.isQueuedForDownload && config.scheduledDownloadTime == nil && !config.isLiveStreamRecording && config.downloadError == nil
         if commentsAvailable {
             // The speech bubble reflects Comment's override, rather than the
             // mere existence of saved settings for any of the editor's fields.

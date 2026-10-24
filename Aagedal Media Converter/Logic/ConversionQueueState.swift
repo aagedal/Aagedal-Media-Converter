@@ -27,6 +27,7 @@ enum ConversionQueueState {
         items.first {
             $0.applicationJobID == nil
                 && $0.status == .waiting
+                && !$0.hasPendingDownload
                 && (allowedItemIDs?.contains($0.id) ?? true)
         }
     }
@@ -123,8 +124,11 @@ enum ConversionQueueState {
         for index in items.indices {
             guard items[index].applicationJobID == nil else { continue }
             let status = items[index].status
+            // Rows still waiting for their source download aren't conversion work;
+            // download cancellation owns them.
             guard status == .converting ||
-                    (scope == .waitingAndConverting && status == .waiting) else { continue }
+                    (scope == .waitingAndConverting && status == .waiting
+                        && !items[index].hasPendingDownload) else { continue }
             items[index].status = .cancelled
             items[index].progress = 0
             items[index].eta = nil

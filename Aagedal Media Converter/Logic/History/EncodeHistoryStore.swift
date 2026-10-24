@@ -30,8 +30,11 @@ final class EncodeHistoryStore {
     /// Newest first.
     private(set) var records: [EncodeRecord] = []
     private(set) var sessions: [HistorySession] = []
+    /// Statistics of records already removed by retention (see `EncodeStatistics`).
+    private(set) var rollups: [MonthlyRollup] = []
     private(set) var currentSessionID: UUID?
     /// Number of encodes interrupted by the previous run (crash or quit mid-encode).
+    /// Shown once in the history overlay until acknowledged.
     private(set) var interruptedAtLaunchCount = 0
     /// Rows encoding right now, tracked even when history recording is off.
     private(set) var runningItemCount = 0
@@ -42,10 +45,12 @@ final class EncodeHistoryStore {
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored private let directory: URL
     @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let calendar: Calendar
 
-    init(directory: URL = AppConstants.encodeHistoryDirectory, defaults: UserDefaults = .standard) {
+    init(directory: URL = AppConstants.encodeHistoryDirectory, defaults: UserDefaults = .standard, calendar: Calendar = .current) {
         self.directory = directory
         self.defaults = defaults
+        self.calendar = calendar
     }
 
     private var fileURL: URL { directory.appendingPathComponent(Self.fileName) }
@@ -92,6 +97,7 @@ final class EncodeHistoryStore {
 
         records = file.records.sorted { $0.startedAt > $1.startedAt }
         sessions = file.sessions
+        rollups = file.rollups
         prune(now: now)
         writeNow()
     }
@@ -186,11 +192,33 @@ final class EncodeHistoryStore {
         scheduleSave()
     }
 
+    /// Clears the history and the statistics built from it (rollups and
+    /// past sessions), keeping only the current session.
     func clearAll() {
         records.removeAll()
         openRecordIDs.removeAll()
+        rollups.removeAll()
         sessions = sessions.filter { $0.id == currentSessionID }
+        interruptedAtLaunchCount = 0
         scheduleSave()
+    }
+
+    /// Whether there is anything `clearAll()` would remove.
+    var hasClearableData: Bool {
+        !records.isEmpty || !rollups.isEmpty || sessions.contains { $0.id != currentSessionID }
+    }
+
+    /// Hides the "interrupted last time" notice.
+    func acknowledgeInterruptedAtLaunch() {
+        interruptedAtLaunchCount = 0
+    }
+
+    /// Statistics for a period, from live records plus rollups.
+    func statistics(for period: StatisticsPeriod, now: Date = Date()) -> EncodeStatisticsSummary {
+        EncodeStatistics.summarize(
+            records: records, sessions: sessions, rollups: rollups,
+            period: period, currentSessionID: currentSessionID, now: now, calendar: calendar
+        )
     }
 
     /// Re-applies the retention setting (called after it changes).
@@ -208,35 +236,62 @@ final class EncodeHistoryStore {
         scheduleSave()
     }
 
+    /// Deletes records and sessions older than the retention period. They are
+    /// folded into the monthly rollups first, in the same in-memory step and
+    /// the same file write, so statistics count each exactly once.
     private func prune(now: Date) {
         let days = retentionDays
         guard days > 0 else { return }
         let cutoff = now.addingTimeInterval(-Double(days) * 86_400)
-        records.removeAll { $0.startedAt < cutoff && $0.outcome != .running }
+        let isExpired: (EncodeRecord) -> Bool = { $0.startedAt < cutoff && $0.outcome != .running }
+        let expiredRecords = records.filter(isExpired)
+        records.removeAll(where: isExpired)
         let referenced = Set(records.map(\.sessionID))
         // Keep sessions that still own records, are recent (crash stats), or are current.
-        sessions.removeAll { session in
-            session.id != currentSessionID && !referenced.contains(session.id) && session.startedAt < cutoff
+        let isExpiredSession: (HistorySession) -> Bool = { session in
+            session.id != self.currentSessionID && !referenced.contains(session.id) && session.startedAt < cutoff
         }
+        let expiredSessions = sessions.filter(isExpiredSession)
+        sessions.removeAll(where: isExpiredSession)
+        EncodeStatistics.fold(records: expiredRecords, sessions: expiredSessions, into: &rollups, calendar: calendar)
     }
 
     // MARK: - Persistence
 
+    /// Reads what it can. Damaged elements are dropped individually; the
+    /// original file is copied aside before the first rewrite whenever it was
+    /// damaged or written by a newer version, so nothing is lost silently.
     private func load() -> EncodeHistoryFile {
         guard let data = try? Data(contentsOf: fileURL) else { return EncodeHistoryFile() }
+        let file: EncodeHistoryFile
         do {
-            return try Self.decoder.decode(EncodeHistoryFile.self, from: data)
+            file = try Self.decoder.decode(EncodeHistoryFile.self, from: data)
         } catch {
             Self.logger.error("Unreadable encode history, starting fresh: \(error.localizedDescription, privacy: .public)")
-            // Keep the unreadable file for inspection instead of overwriting it.
-            let backup = fileURL.deletingPathExtension().appendingPathExtension("corrupt-\(Int(Date().timeIntervalSince1970)).json")
-            try? FileManager.default.moveItem(at: fileURL, to: backup)
+            Self.backUp(fileURL, suffix: "corrupt")
             return EncodeHistoryFile()
         }
+        if file.version > EncodeHistoryFile.currentVersion {
+            // Written by a newer app; fields this version doesn't know would be
+            // lost on the next write, so keep the original next to it.
+            Self.logger.notice("Encode history is version \(file.version), newer than \(EncodeHistoryFile.currentVersion); keeping a backup")
+            Self.backUp(fileURL, suffix: "v\(file.version)")
+        } else if file.droppedElementCount > 0 {
+            Self.logger.error("Dropped \(file.droppedElementCount) unreadable encode history entries; keeping a backup")
+            Self.backUp(fileURL, suffix: "corrupt")
+        }
+        return file
+    }
+
+    /// Copies (never moves) a file aside as `<name>.<suffix>-<timestamp>.json`.
+    nonisolated private static func backUp(_ url: URL, suffix: String) {
+        let backup = url.deletingPathExtension()
+            .appendingPathExtension("\(suffix)-\(Int(Date().timeIntervalSince1970)).json")
+        try? FileManager.default.copyItem(at: url, to: backup)
     }
 
     private func snapshotData() -> Data? {
-        let file = EncodeHistoryFile(sessions: sessions, records: records)
+        let file = EncodeHistoryFile(sessions: sessions, records: records, rollups: rollups)
         return try? Self.encoder.encode(file)
     }
 

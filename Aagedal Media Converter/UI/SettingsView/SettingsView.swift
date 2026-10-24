@@ -15,6 +15,7 @@ struct SettingsView: View {
         case general
         case encoding
         case history
+        case statistics
         case fileNames
         case metadata
         case presets
@@ -39,6 +40,7 @@ struct SettingsView: View {
             case .agentAccess: return String(localized: "Agent Access", comment: "Settings sidebar tab.")
             case .encoding: return String(localized: "Encoding Groups", comment: "Settings sidebar tab.")
             case .history: return String(localized: "History", comment: "Settings sidebar tab.")
+            case .statistics: return String(localized: "Statistics", comment: "Settings sidebar tab.")
             case .fileNames: return String(localized: "File Names", comment: "Settings sidebar tab.")
             case .metadata: return String(localized: "Metadata", comment: "Settings sidebar tab.")
             case .presets: return String(localized: "Presets", comment: "Settings sidebar tab.")
@@ -110,6 +112,19 @@ struct SettingsView: View {
                     String(localized: "Offer to restore unfinished items"),
                     String(localized: "Ask before quitting while encoding"),
                     String(localized: "Archive"),
+                ]
+            case .statistics:
+                return [
+                    String(localized: "Period"),
+                    String(localized: "Overview"),
+                    String(localized: "Encodes over Time"),
+                    String(localized: "Top Presets"),
+                    String(localized: "Top Video Codecs"),
+                    String(localized: "Top Containers"),
+                    String(localized: "Top Resolutions"),
+                    String(localized: "Unexpected exits"),
+                    String(localized: "Average speed"),
+                    String(localized: "Space saved"),
                 ]
             case .fileNames:
                 return [
@@ -605,6 +620,7 @@ struct SettingsView: View {
             case .agentAccess: return "network"
             case .encoding: return "rectangle.stack"
             case .history: return "clock.arrow.circlepath"
+            case .statistics: return "chart.bar"
             case .fileNames: return "textformat"
             case .metadata: return "info.circle"
             case .presets: return "slider.horizontal.3"
@@ -645,6 +661,7 @@ struct SettingsView: View {
         case .agentAccess: AgentAccessSettingsView()
         case .encoding: EncodingSettingsView()
         case .history: HistorySettingsView()
+        case .statistics: StatisticsSettingsView()
         case .fileNames: FileNameSettingsView()
         case .metadata: MetadataSettingsView()
         case .presets: PresetsSettingsView()

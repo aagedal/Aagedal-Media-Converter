@@ -413,7 +413,7 @@ struct URLInputOverlay: View {
 
     private var downloadButtonTitle: String {
         guard needsPicker else { return "Download" }
-        if !postVideos.isEmpty && selectedPostVideos.count == postVideos.count {
+        if !selectablePostVideoIndices.isEmpty && selectedPostVideos == selectablePostVideoIndices {
             return "Download All (\(selectedPostVideos.count))"
         }
         return "Download Selected (\(selectedPostVideos.count))"
@@ -428,11 +428,12 @@ struct URLInputOverlay: View {
                         .font(.subheadline.weight(.semibold))
                     Spacer()
                     if !postVideos.isEmpty {
-                        Toggle("Download all (\(postVideos.count))", isOn: Binding(
-                            get: { selectedPostVideos.count == postVideos.count },
-                            set: { selectedPostVideos = $0 ? Set(postVideos.map(\.slideIndex)) : [] }
+                        Toggle("Download all (\(selectablePostVideoIndices.count))", isOn: Binding(
+                            get: { !selectablePostVideoIndices.isEmpty && selectedPostVideos == selectablePostVideoIndices },
+                            set: { selectedPostVideos = $0 ? selectablePostVideoIndices : [] }
                         ))
                         .toggleStyle(.checkbox)
+                        .disabled(selectablePostVideoIndices.isEmpty)
                         .accessibilityIdentifier("postVideoSelectAll")
                     }
                 }
@@ -479,9 +480,9 @@ struct URLInputOverlay: View {
 
     private func postVideoRow(_ video: PostDownloadVideo) -> some View {
         Toggle(isOn: Binding(
-            get: { selectedPostVideos.contains(video.slideIndex) },
+            get: { video.isAvailable && selectedPostVideos.contains(video.slideIndex) },
             set: { selected in
-                if selected { selectedPostVideos.insert(video.slideIndex) }
+                if selected, video.isAvailable { selectedPostVideos.insert(video.slideIndex) }
                 else { selectedPostVideos.remove(video.slideIndex) }
             }
         )) {
@@ -507,8 +508,11 @@ struct URLInputOverlay: View {
             }
         }
         .toggleStyle(.checkbox)
+        .disabled(!video.isAvailable)
+        .opacity(video.isAvailable ? 1 : 0.55)
         .padding(6)
         .background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+        .help(video.unavailability.map(Self.unavailabilityDescription) ?? "")
         .accessibilityIdentifier(postVideoIdentifier(video))
     }
 
@@ -518,8 +522,31 @@ struct URLInputOverlay: View {
     }
 
     private func playlistRowDetail(_ video: PostDownloadVideo) -> String {
+        if let unavailability = video.unavailability {
+            return "#\(video.slideIndex) · \(Self.unavailabilityDescription(unavailability))"
+        }
         guard let duration = video.duration, duration > 0 else { return "#\(video.slideIndex)" }
         return "#\(video.slideIndex) · \(DownloadSection.formatTime(duration.rounded()))"
+    }
+
+    /// Videos that can be picked; unavailable playlist entries are shown but never selectable.
+    private var selectablePostVideoIndices: Set<Int> {
+        Set(postVideos.filter(\.isAvailable).map(\.slideIndex))
+    }
+
+    private static func unavailabilityDescription(_ reason: YTDLPPlaylistEntry.Unavailability) -> String {
+        switch reason {
+        case .privateVideo:
+            return String(localized: "Unavailable: private video", comment: "Playlist picker reason a video can't be downloaded.")
+        case .deleted:
+            return String(localized: "Unavailable: deleted video", comment: "Playlist picker reason a video can't be downloaded.")
+        case .membersOnly:
+            return String(localized: "Unavailable: members only", comment: "Playlist picker reason a video can't be downloaded.")
+        case .premiumOnly:
+            return String(localized: "Unavailable: Premium only", comment: "Playlist picker reason a video can't be downloaded.")
+        case .needsAuth:
+            return String(localized: "Unavailable: sign-in required", comment: "Playlist picker reason a video can't be downloaded.")
+        }
     }
 
     @MainActor
@@ -542,7 +569,8 @@ struct URLInputOverlay: View {
             if isPlaylist {
                 videos = try await postService.fetchPlaylistEntries(url: url).enumerated().map { offset, entry in
                     PostDownloadVideo(slideIndex: offset + 1, url: entry.url, title: entry.title,
-                                      thumbnailURL: entry.thumbnailURL, duration: entry.duration)
+                                      thumbnailURL: entry.thumbnailURL, duration: entry.duration,
+                                      unavailability: entry.unavailability)
                 }
             } else {
                 videos = try await postService.fetchPostVideos(url: url)
@@ -553,7 +581,9 @@ struct URLInputOverlay: View {
             postLoadedURL = url
             // Playlists default to everything, matching the old whole-playlist
             // behaviour; a single-video post requires no further choice.
-            if isPlaylist || videos.count == 1 { selectedPostVideos = Set(videos.map(\.slideIndex)) }
+            if isPlaylist || videos.count == 1 {
+                selectedPostVideos = Set(videos.filter(\.isAvailable).map(\.slideIndex))
+            }
         } catch is CancellationError {
             return
         } catch {
@@ -853,7 +883,7 @@ struct URLInputOverlay: View {
         guard !sanitized.isEmpty, DownloadManager.isValidURL(sanitized) else { return }
         let trimmed = sanitized
         guard !downloadDisabled else { return }
-        let selected = postVideos.filter { selectedPostVideos.contains($0.slideIndex) }
+        let selected = postVideos.filter { $0.isAvailable && selectedPostVideos.contains($0.slideIndex) }
 
         // Only honour the stored playlist preference when the URL actually looks
         // like a playlist or channel — the toggle is hidden otherwise, so the

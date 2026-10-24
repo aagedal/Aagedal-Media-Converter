@@ -23,7 +23,7 @@ extension VideoFileCellView {
         encodeButton.contentTintColor = isEncoding ? .systemGreen : .systemGreen.withAlphaComponent(0.75)
         // Only waiting, ungrouped rows not owned by a shared job can start on their own.
         let canEncodeNow = config.status == .waiting && !config.isGroupChild
-            && config.applicationJobID == nil && !config.isDownloading
+            && config.applicationJobID == nil && !config.isDownloading && !config.isQueuedForDownload
         encodeButton.isEnabled = canEncodeNow
         encodeButton.toolTip = isEncoding
             ? String(localized: "Encoding in progress")
@@ -41,7 +41,7 @@ extension VideoFileCellView {
         recursiveEncodingButton.toolTip = "Recursive encoding: \(config.recursiveEncodingGenerations ?? 10) generations. Click to configure."
 
         // Auto-encode button (only during download)
-        let showAutoEncode = config.isDownloading || config.scheduledDownloadTime != nil
+        let showAutoEncode = config.isDownloading || config.isQueuedForDownload || config.scheduledDownloadTime != nil
         autoEncodeButton.isHidden = !showAutoEncode
         if showAutoEncode {
             autoEncodeButton.image = config.autoEncodeAfterDownload ? VideoFileCellView.Symbol.playFill : VideoFileCellView.Symbol.play
@@ -170,7 +170,12 @@ extension VideoFileCellView {
             stopDownloadButton.isHidden = false
             stopDownloadButton.toolTip = "Stop download and keep partial file"
             cancelDownloadButton.isHidden = false
-            cancelDownloadButton.toolTip = "Cancel and discard download"
+            cancelDownloadButton.toolTip = config.isPlaylistDownload
+                ? String(localized: "Cancel and discard download. Shift-Command-click to cancel the rest of the playlist.", comment: "Tooltip on the cancel button of a downloading playlist row.")
+                : "Cancel and discard download"
+        } else if config.isQueuedForDownload {
+            cancelDownloadButton.isHidden = false
+            cancelDownloadButton.toolTip = String(localized: "Skip this playlist entry. Shift-Command-click to cancel the rest of the playlist.", comment: "Tooltip on the cancel button of a playlist row waiting to download.")
         } else if config.scheduledDownloadTime != nil {
             cancelScheduledButton.isHidden = false
             cancelScheduledButton.toolTip = "Cancel scheduled download"
@@ -210,6 +215,7 @@ extension VideoFileCellView {
                 if config.isLiveStreamRecording { return ("LIVE", "bolt.fill", .systemPurple) }
                 return ("DOWNLOADING", "arrow.down.circle", .systemPurple)
             }
+            if config.isQueuedForDownload { return ("QUEUED", "arrow.down.circle", .secondaryLabelColor) }
             if config.uploadStatus == .uploading { return ("UPLOADING", "arrow.up.circle", .systemBlue) }
             if config.uploadStatus == .uploaded { return ("UPLOADED", "checkmark.circle", .systemGreen) }
             if case .failed = config.uploadStatus { return ("UPLOAD ERR", "exclamationmark.circle", .systemRed) }
@@ -267,6 +273,10 @@ extension VideoFileCellView {
         // Scheduled download — capsule can't show time detail
         if let scheduledTime = config.scheduledDownloadTime {
             return "Scheduled \(scheduledTimeFormatter.string(from: scheduledTime))"
+        }
+
+        if config.isQueuedForDownload {
+            return String(localized: "Waiting to download", comment: "Status of a playlist row queued behind other downloads.")
         }
 
         // Downloading — show percentage and speed (capsule shows DOWNLOADING)
@@ -409,9 +419,14 @@ extension VideoFileCellView {
 
         menu.addItem(.separator())
 
-        if !config.isDownloading && config.scheduledDownloadTime == nil {
+        if !config.isDownloading && !config.isQueuedForDownload && config.scheduledDownloadTime == nil {
             menu.addItem(withTitle: "Preview / Trim", action: #selector(ctxPreview), keyEquivalent: "")
                 .target = self
+        }
+
+        if config.isPlaylistDownload && (config.isDownloading || config.isQueuedForDownload) {
+            menu.addItem(withTitle: String(localized: "Cancel Remaining Playlist Downloads", comment: "Queue row context menu item; cancels the running and queued downloads of the row's playlist."),
+                         action: #selector(ctxCancelPlaylistDownloads), keyEquivalent: "").target = self
         }
 
         menu.addItem(withTitle: "Metadata", action: #selector(ctxMetadata), keyEquivalent: "")
@@ -477,6 +492,7 @@ extension VideoFileCellView {
     @objc private func ctxReset() { actionHandler?(.reset(optionKeyPressed: false)) }
     @objc private func ctxMoveSelectionToNewGroup() { actionHandler?(.moveSelectionToNewGroup) }
     @objc private func ctxRemove() { actionHandler?(.delete) }
+    @objc private func ctxCancelPlaylistDownloads() { actionHandler?(.cancelPlaylistDownloads) }
 }
 
 

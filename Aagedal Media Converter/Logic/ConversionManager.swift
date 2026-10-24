@@ -440,7 +440,8 @@ actor ConversionManager: Sendable {
             return nil
         }
 
-        let waitingItems = items.filter { $0.status == .waiting }
+        // Rows still waiting for their download have placeholder URLs.
+        let waitingItems = items.filter { $0.status == .waiting && !$0.hasPendingDownload }
         guard waitingItems.count >= 2 else { return nil }
 
         let orderedWaitingItems = waitingItems

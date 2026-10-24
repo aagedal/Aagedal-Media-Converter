@@ -1149,7 +1149,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
             || prev?.isCompactMode != config.isCompactMode
             || prev?.status != config.status
             || prev?.isDownloading != config.isDownloading
-            || prev?.scheduledDownloadTime != config.scheduledDownloadTime
+            || prev?.scheduledDownloadTime != config.scheduledDownloadTime || prev?.isQueuedForDownload != config.isQueuedForDownload
             || prev?.recursiveEncodingGenerations != config.recursiveEncodingGenerations
             || prev?.preset != config.preset
             || prev?.mergeClipsEnabled != config.mergeClipsEnabled
@@ -1171,7 +1171,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         }
 
         // Action buttons — only when status changes
-        if isFirstConfigure || prev?.status != config.status || prev?.isDownloading != config.isDownloading || prev?.scheduledDownloadTime != config.scheduledDownloadTime || prev?.downloadError != config.downloadError || prev?.fileAlreadyExistsPath != config.fileAlreadyExistsPath || prev?.subtitleStatus != config.subtitleStatus || prev?.analyticsStatus != config.analyticsStatus {
+        if isFirstConfigure || prev?.status != config.status || prev?.isDownloading != config.isDownloading || prev?.scheduledDownloadTime != config.scheduledDownloadTime || prev?.isQueuedForDownload != config.isQueuedForDownload || prev?.downloadError != config.downloadError || prev?.fileAlreadyExistsPath != config.fileAlreadyExistsPath || prev?.subtitleStatus != config.subtitleStatus || prev?.analyticsStatus != config.analyticsStatus {
             updateActionButtons(config: config)
         }
 
@@ -1199,7 +1199,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
             || prev?.subtitleProgress != config.subtitleProgress
             || prev?.analyticsStatus != config.analyticsStatus
             || prev?.analyticsProgress != config.analyticsProgress
-            || prev?.scheduledDownloadTime != config.scheduledDownloadTime {
+            || prev?.scheduledDownloadTime != config.scheduledDownloadTime || prev?.isQueuedForDownload != config.isQueuedForDownload {
             updateStatusRow(config: config)
         }
 
@@ -1213,6 +1213,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
             || prev?.status != config.status
             || prev?.isDownloading != config.isDownloading
             || prev?.isLiveStreamRecording != config.isLiveStreamRecording
+            || prev?.isQueuedForDownload != config.isQueuedForDownload
             || prev?.uploadStatus != config.uploadStatus
             || prev?.subtitleStatus != config.subtitleStatus
             || prev?.analyticsStatus != config.analyticsStatus
@@ -1229,7 +1230,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
             || prev?.comment != config.comment
             || prev?.metadataEditorSettings != config.metadataEditorSettings
             || prev?.isDownloading != config.isDownloading
-            || prev?.scheduledDownloadTime != config.scheduledDownloadTime
+            || prev?.scheduledDownloadTime != config.scheduledDownloadTime || prev?.isQueuedForDownload != config.isQueuedForDownload
             || prev?.isLiveStreamRecording != config.isLiveStreamRecording
             || prev?.downloadError != config.downloadError
             || prev?.isCompactMode != config.isCompactMode
@@ -1617,7 +1618,15 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     }
     @objc private func cancelButtonClicked() { actionHandler?(.cancel) }
     @objc private func stopDownloadClicked() { actionHandler?(.stopLiveRecording) }
-    @objc private func cancelDownloadClicked() { actionHandler?(.cancelDownload) }
+    @objc private func cancelDownloadClicked() {
+        // Shift+Cmd reaches the handler intact (plain Shift/Cmd are table selection).
+        let flags = NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if currentConfig?.isPlaylistDownload == true, flags.contains([.shift, .command]) {
+            actionHandler?(.cancelPlaylistDownloads)
+        } else {
+            actionHandler?(.cancelDownload)
+        }
+    }
     @objc private func cancelScheduledClicked() { actionHandler?(.cancelScheduledDownload) }
     @objc private func retryDownloadClicked() { actionHandler?(.retryDownload) }
     @objc private func redownloadClicked() { actionHandler?(.forceRedownload) }

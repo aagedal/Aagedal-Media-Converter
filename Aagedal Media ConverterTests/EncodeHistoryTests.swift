@@ -263,7 +263,158 @@ final class EncodeHistoryTests: XCTestCase {
         XCTAssertEqual(Set(matches.keys), ["/gone/b.mov"])
     }
 
+    // MARK: - Tolerant decoding
+
+    /// A file as written before rollups existed, with fields trimmed to the
+    /// bare minimum the way an older or hand-edited file might look.
+    func testOldHistoryFileWithMissingFieldsLoads() throws {
+        let session = UUID(), record = UUID()
+        try writeHistory("""
+        {
+          "sessions": [{"id": "\(session)", "startedAt": "2026-10-20T10:00:00Z", "endedAt": "2026-10-20T11:00:00Z",
+                        "endedCleanly": true, "deviceName": "Old Mac"}],
+          "records": [{"id": "\(record)", "sessionID": "\(session)", "startedAt": "2026-10-20T10:05:00Z",
+                       "outcome": "completed", "source": {"path": "/clips/a.mov"},
+                       "recipe": {"trimStart": 2}, "presetRawValue": "VideoLoop"}]
+        }
+        """)
+        let store = EncodeHistoryStore(directory: directory, defaults: defaults)
+        store.bootstrap(now: date("2026-10-24T10:00:00Z"))
+        XCTAssertEqual(store.records.map(\.id), [record])
+        let loaded = try XCTUnwrap(store.records.first)
+        XCTAssertEqual(loaded.recipe.trimStart, 2)
+        XCTAssertTrue(loaded.recipe.includeDateTag)
+        XCTAssertEqual(loaded.presetDisplayName, "VideoLoop")
+        XCTAssertEqual(loaded.kind, .file)
+        XCTAssertFalse(loaded.merged)
+        XCTAssertNil(loaded.sourceFacts.durationSeconds)
+        XCTAssertEqual(store.sessions.first?.endedCleanly, true)
+        XCTAssertFalse(backups().contains { $0.contains("corrupt") })
+
+        store.flush()
+        let written = try JSONSerialization.jsonObject(with: Data(contentsOf: historyURL)) as? [String: Any]
+        XCTAssertEqual(written?["version"] as? Int, EncodeHistoryFile.currentVersion)
+    }
+
+    func testOneCorruptRecordIsDroppedAndTheRestKept() throws {
+        let session = UUID(), good = UUID()
+        try writeHistory("""
+        {
+          "version": 1,
+          "sessions": [{"id": "\(session)", "startedAt": "2026-10-20T10:00:00Z", "endedCleanly": true, "deviceName": "Mac"},
+                       {"startedAt": 12}],
+          "records": [
+            {"id": "\(good)", "sessionID": "\(session)", "startedAt": "2026-10-20T10:05:00Z", "outcome": "failed",
+             "source": {"path": "/clips/good.mov"}, "sourceFacts": {"width": "wide", "height": 1080},
+             "recipe": {"cropConfig": {"unexpected": true}, "comment": "kept"},
+             "presetRawValue": "VideoLoop", "presetDisplayName": "Loop", "deviceName": "Mac"},
+            {"id": "\(UUID())", "sessionID": "\(session)", "startedAt": "not a date",
+             "source": {"path": "/clips/bad.mov"}}
+          ]
+        }
+        """)
+        let store = EncodeHistoryStore(directory: directory, defaults: defaults)
+        store.bootstrap(now: date("2026-10-24T10:00:00Z"))
+        XCTAssertEqual(store.records.map(\.id), [good])
+        XCTAssertEqual(store.records.first?.recipe.comment, "kept")
+        XCTAssertNil(store.records.first?.recipe.cropConfig)
+        XCTAssertNil(store.records.first?.sourceFacts.width)
+        XCTAssertEqual(store.records.first?.sourceFacts.height, 1080)
+        // The damaged original is kept next to the rewritten file.
+        XCTAssertTrue(backups().contains { $0.contains("corrupt") })
+    }
+
+    func testNewerVersionFileIsBackedUpBeforeRewrite() throws {
+        let session = UUID(), record = UUID()
+        try writeHistory("""
+        {
+          "version": 99,
+          "futureField": {"anything": [1, 2, 3]},
+          "sessions": [{"id": "\(session)", "startedAt": "2026-10-20T10:00:00Z", "endedAt": "2026-10-20T11:00:00Z",
+                        "endedCleanly": true, "deviceName": "Mac", "newSessionField": 1}],
+          "records": [{"id": "\(record)", "sessionID": "\(session)", "startedAt": "2026-10-20T10:05:00Z",
+                       "outcome": "teleported", "source": {"path": "/clips/a.mov"}, "presetRawValue": "VideoLoop",
+                       "recipe": {"newRecipeField": "x"}, "deviceName": "Mac"}],
+          "rollups": [{"month": "2026-01", "deviceName": "Mac", "encodeCount": 3, "newRollupField": 1}]
+        }
+        """)
+        let store = EncodeHistoryStore(directory: directory, defaults: defaults)
+        store.bootstrap(now: date("2026-10-24T10:00:00Z"))
+        XCTAssertEqual(store.records.map(\.id), [record])
+        // Unknown outcomes are treated as unfinished.
+        XCTAssertEqual(store.records.first?.outcome, .interrupted)
+        XCTAssertEqual(store.rollups.first?.encodeCount, 3)
+
+        let backup = try XCTUnwrap(backups().first { $0.contains("v99") })
+        let original = try String(contentsOf: directory.appendingPathComponent(backup), encoding: .utf8)
+        XCTAssertTrue(original.contains("futureField"))
+    }
+
+    func testUnreadableHistoryFileIsKeptAndStoreStartsFresh() throws {
+        try writeHistory("this is not json")
+        let store = EncodeHistoryStore(directory: directory, defaults: defaults)
+        store.bootstrap()
+        XCTAssertTrue(store.records.isEmpty)
+        XCTAssertTrue(backups().contains { $0.contains("corrupt") })
+    }
+
+    func testLegacySnapshotStatusLabelIsStillShown() throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let item = UUID()
+        let json = """
+        {"savedAt": "\(ISO8601DateFormatter().string(from: Date()))", "presetRawValue": "VideoLoop",
+         "items": [{"id": "\(item)", "source": {"path": "/clips/a.mov"}, "recipe": {}, "statusLabel": "Venter"},
+                   {"source": 5}],
+         "groups": []}
+        """
+        try Data(json.utf8).write(to: directory.appendingPathComponent("last-session.json"))
+        let store = LastSessionStore(directory: directory, defaults: defaults)
+        store.bootstrap()
+        XCTAssertEqual(store.pending?.items.map(\.id), [item])
+        XCTAssertEqual(store.pending?.items.first?.statusLabel, "Venter")
+    }
+
+    func testSnapshotPersistsRawStatusAndSourceBookmark() throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let sourceURL = directory.appendingPathComponent("source.mov")
+        FileManager.default.createFile(atPath: sourceURL.path, contents: Data([0]))
+        var item = makeItem(path: sourceURL.path)
+        item.status = .failed
+
+        let store = LastSessionStore(directory: directory, defaults: defaults)
+        store.bootstrap()
+        store.snapshotProvider = { LastSessionStore.makeSnapshot(files: [item], groups: [], order: [item.id], preset: .h265) }
+        store.flush()
+
+        let raw = try String(contentsOf: directory.appendingPathComponent("last-session.json"), encoding: .utf8)
+        XCTAssertTrue(raw.contains("\"status\":\"failed\""))
+        XCTAssertFalse(raw.contains("statusLabel"))
+
+        let relaunched = LastSessionStore(directory: directory, defaults: defaults)
+        relaunched.bootstrap()
+        let pending = try XCTUnwrap(relaunched.pending?.items.first)
+        XCTAssertEqual(pending.status, .failed)
+        XCTAssertNotNil(pending.source.bookmark)
+        XCTAssertEqual(pending.source.resolve()?.standardizedFileURL.path, sourceURL.standardizedFileURL.path)
+    }
+
     // MARK: - Helpers
+
+    private var historyURL: URL { directory.appendingPathComponent(EncodeHistoryStore.fileName) }
+
+    private func writeHistory(_ json: String) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data(json.utf8).write(to: historyURL)
+    }
+
+    private func backups() -> [String] {
+        ((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [])
+            .filter { $0 != EncodeHistoryStore.fileName && $0.hasPrefix("encode-history") }
+    }
+
+    private func date(_ iso: String) -> Date {
+        ISO8601DateFormatter().date(from: iso)!
+    }
 
     private func observe(_ store: EncodeHistoryStore, _ item: VideoItem, now: Date = Date()) {
         store.observe([(item.id, item.status)], resolve: { _ in

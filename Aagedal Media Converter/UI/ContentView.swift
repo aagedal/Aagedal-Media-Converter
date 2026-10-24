@@ -173,7 +173,7 @@ struct ContentView: View {
     
     // Only allow starting conversion when at least one item is still waiting
     private var canStartConversion: Bool {
-        droppedFiles.contains { $0.status == .waiting && $0.applicationJobID == nil }
+        droppedFiles.contains { $0.status == .waiting && $0.applicationJobID == nil && !$0.hasPendingDownload }
         || encodingGroups.contains { $0.items.contains { $0.status == .waiting } }
     }
 
@@ -238,12 +238,7 @@ struct ContentView: View {
             await Task.yield()
             self.scheduleMergeCompatibilityEvaluation()
         }
-        presetManager.applyAutoMuteSettings(
-            to: &droppedFiles,
-            oldPreset: oldValue,
-            newPreset: preset,
-            videoLoopDefaultMuted: videoLoopDefaultMuted
-        )
+        applyQueuePresetAutoMute(from: oldValue, to: preset)
     }
 
     private var currentConvertingItem: VideoItem? {
@@ -315,7 +310,7 @@ struct ContentView: View {
                 item: item,
                 preset: item.applicationPresetID?.exportPreset ?? effectivePreset(for: item),
                 groupName: nil,
-                merged: mergeClipsEnabled && item.applicationJobID == nil
+                merged: isMergingUngroupedItems && item.applicationJobID == nil
             )
         }
         for group in encodingGroups {
@@ -1139,7 +1134,8 @@ struct ContentView: View {
                 return
             }
 
-            await DownloadManager.shared.startPlaylistDownload(
+            // The manager owns the sequential batch so rows can cancel it.
+            DownloadManager.shared.startPlaylistDownload(
                 entries: entries,
                 items: $droppedFiles,
                 outputFolder: downloadFolderURL,
@@ -2511,16 +2507,19 @@ struct ContentView: View {
         let hasWaitingGroup = encodingGroups.contains {
             $0.items.contains { $0.status == .waiting }
         }
+        // Rows whose source is still downloading (or queued in a playlist) have
+        // placeholder URLs and are skipped; they can be encoded once downloaded.
         let orderedWaitingItems = queueOrder.compactMap { id in
             droppedFiles.first { item in
                 item.id == id && item.status == .waiting && item.applicationJobID == nil
+                    && !item.hasPendingDownload
             }
         }
         let waitingRuns = presetRuns(orderedWaitingItems)
         if !hasWaitingGroup,
            waitingRuns.count <= 1,
            orderedWaitingItems.count == droppedFiles.filter({
-               $0.status == .waiting && $0.applicationJobID == nil
+               $0.status == .waiting && $0.applicationJobID == nil && !$0.hasPendingDownload
            }).count,
            await submitManualApplicationJobIfSupported(
                items: orderedWaitingItems,
@@ -2593,7 +2592,8 @@ struct ContentView: View {
                 }
                 if droppedFiles.contains(where: { $0.status == .waiting && batchIDs.contains($0.id) }) {
                     let itemsByID = Dictionary(uniqueKeysWithValues: droppedFiles.map { ($0.id, $0) })
-                    let items = orderedBatchIDs.compactMap { itemsByID[$0] }.filter { $0.status == .waiting }
+                    let items = orderedBatchIDs.compactMap { itemsByID[$0] }
+                        .filter { $0.status == .waiting && !$0.hasPendingDownload }
                     // Items with a preset override split the batch into runs
                     // that share a preset, keeping queue order.
                     for run in presetRuns(items) {
@@ -2624,7 +2624,7 @@ struct ContentView: View {
     private func encodeOnlyItem(itemID: UUID) async {
         guard !isAnyConversionActive else { return }
         guard droppedFiles.contains(where: {
-            $0.id == itemID && $0.status == .waiting && $0.applicationJobID == nil
+            $0.id == itemID && $0.status == .waiting && $0.applicationJobID == nil && !$0.hasPendingDownload
         }) else { return }
         isConverting = true
         dockProgressUpdater.updateProgress(0.0)
@@ -2815,9 +2815,36 @@ struct ContentView: View {
         guard let index = droppedFiles.firstIndex(where: { $0.id == itemID }),
               droppedFiles[index].status == .waiting,
               droppedFiles[index].applicationJobID == nil else { return }
+        let oldEffective = effectivePreset(for: droppedFiles[index])
         // Choosing the queue's own preset is the same as no override.
         droppedFiles[index].presetOverride = preset == selectedPreset ? nil : preset
+        PresetManager.applyAutoMuteTransition(
+            to: &droppedFiles[index], from: oldEffective, to: effectivePreset(for: droppedFiles[index]),
+            videoLoopDefaultMuted: videoLoopDefaultMuted
+        )
         droppedFiles[index].outputURL = expectedOutputURL(for: droppedFiles[index], preset: selectedPreset)
+    }
+
+    /// Video Loop auto-mute for a queue preset change: ungrouped rows following
+    /// the queue preset (all rows while merging, which ignores overrides) and
+    /// groups without their own preset.
+    private func applyQueuePresetAutoMute(from oldPreset: ExportPreset, to newPreset: ExportPreset) {
+        presetManager.applyAutoMuteSettings(
+            to: &droppedFiles,
+            oldPreset: oldPreset,
+            newPreset: newPreset,
+            videoLoopDefaultMuted: videoLoopDefaultMuted,
+            respectingPresetOverrides: !isMergingUngroupedItems
+        )
+        for groupIndex in encodingGroups.indices where encodingGroups[groupIndex].preset == nil {
+            presetManager.applyAutoMuteSettings(
+                to: &encodingGroups[groupIndex].items,
+                oldPreset: oldPreset,
+                newPreset: newPreset,
+                videoLoopDefaultMuted: videoLoopDefaultMuted,
+                respectingPresetOverrides: false
+            )
+        }
     }
 
     private func refreshExpectedOutputURLs(for preset: ExportPreset) {
@@ -2865,7 +2892,7 @@ struct ContentView: View {
     }
 
     private func mergedOutputURL(for preset: ExportPreset) -> URL? {
-        guard let referenceItem = droppedFiles.first(where: { $0.status == .waiting }) else {
+        guard let referenceItem = droppedFiles.first(where: { $0.status == .waiting && !$0.hasPendingDownload }) else {
             return nil
         }
 
@@ -2937,12 +2964,7 @@ struct ContentView: View {
                 }
 
                 // Apply auto-mute settings via PresetManager
-                presetManager.applyAutoMuteSettings(
-                    to: &droppedFiles,
-                    oldPreset: oldValue,
-                    newPreset: newValue,
-                    videoLoopDefaultMuted: videoLoopDefaultMuted
-                )
+                applyQueuePresetAutoMute(from: oldValue, to: newValue)
             }
         )
     }

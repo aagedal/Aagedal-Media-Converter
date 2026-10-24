@@ -853,8 +853,8 @@ struct VideoFileListView: View {
         guard !selectedIndices.isEmpty else { return }
 
         for index in selectedIndices {
-            // Only toggle for items that are downloading or scheduled
-            if droppedFiles[index].isDownloading || droppedFiles[index].scheduledDownloadTime != nil {
+            // Only toggle for items that are downloading, queued or scheduled
+            if droppedFiles[index].hasPendingDownload {
                 droppedFiles[index].autoEncodeAfterDownload.toggle()
             }
         }

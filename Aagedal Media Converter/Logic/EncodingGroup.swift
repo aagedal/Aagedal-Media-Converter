@@ -99,6 +99,17 @@ struct EncodingGroup: Identifiable, Equatable, Sendable {
         items.reduce(0) { $0 + $1.size }
     }
 
+    /// Changes the group's preset (nil follows the queue preset) and applies the
+    /// Video Loop auto-mute transition to waiting items whose effective preset changed.
+    mutating func setPreset(_ newPreset: ExportPreset?, queuePreset: ExportPreset, videoLoopDefaultMuted: Bool) {
+        let oldEffective = preset ?? queuePreset
+        preset = newPreset
+        PresetManager.applyAutoMuteTransition(
+            to: &items, from: oldEffective, to: newPreset ?? queuePreset,
+            videoLoopDefaultMuted: videoLoopDefaultMuted
+        )
+    }
+
     /// Re-applies (or clears) sequential output-filename overrides on `items`
     /// in place, matching the current `sequentialNamingEnabled` flag and `name`.
     /// Call from: toggle, name change, and any time items are added/removed.
@@ -229,8 +240,8 @@ enum QueueGrouping {
             group.status == .converting && group.items.contains { ids.contains($0.id) }
         }) else { return false }
         return items.allSatisfy {
-            $0.applicationJobID == nil && $0.status != .converting && !$0.isDownloading
-                && $0.scheduledDownloadTime == nil && !$0.subtitleStatus.isInProgress
+            $0.applicationJobID == nil && $0.status != .converting && !$0.hasPendingDownload
+                && !$0.subtitleStatus.isInProgress
                 && !$0.analyticsStatus.isInProgress && $0.uploadStatus != .uploading
         }
     }
