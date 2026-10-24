@@ -712,6 +712,10 @@ struct VideoQueueTableView: NSViewRepresentable {
                     }
                 }
 
+                // Grouped rows follow the group's preset picker, so a per-item
+                // override from the ungrouped queue no longer applies.
+                for index in itemsToMove.indices { itemsToMove[index].presetOverride = nil }
+
                 if let gIdx2 = parent.encodingGroups.firstIndex(where: { $0.id == targetGroup.id }) {
                     parent.encodingGroups[gIdx2].items.append(contentsOf: itemsToMove)
                 }
@@ -1073,6 +1077,8 @@ struct VideoQueueTableView: NSViewRepresentable {
                 autoEncodeAfterDownload: item.autoEncodeAfterDownload,
                 isLiveStreamRecording: item.isLiveStreamRecording,
                 downloadStopping: item.downloadStopping,
+                isQueuedForDownload: item.isQueuedForDownload,
+                isPlaylistDownload: item.playlistDownloadBatchID != nil,
                 uploadEnabled: item.uploadEnabled,
                 uploadSourceFile: item.uploadSourceFile,
                 uploadStatus: item.uploadStatus,
@@ -1286,7 +1292,10 @@ struct VideoQueueTableView: NSViewRepresentable {
                 }
                 parent.encodingGroups[idx].normalizeSequentialNaming()
             case .setGroupPreset(let preset):
-                parent.encodingGroups[idx].preset = preset
+                parent.encodingGroups[idx].setPreset(
+                    preset, queuePreset: parent.preset,
+                    videoLoopDefaultMuted: PresetManager.videoLoopDefaultMutedPreference
+                )
             case .deleteGroup:
                 parent.onDeleteGroup?(groupID)
             case .addFilesToGroup:
@@ -1381,6 +1390,8 @@ struct VideoQueueTableView: NSViewRepresentable {
                 }
             case .cancelDownload:
                 DownloadManager.shared.cancelDownload(itemID: itemID)
+            case .cancelPlaylistDownloads:
+                DownloadManager.shared.cancelPlaylistBatch(containing: itemID)
             case .stopLiveRecording:
                 DownloadManager.shared.stopLiveDownload(itemID: itemID)
             case .retryDownload:

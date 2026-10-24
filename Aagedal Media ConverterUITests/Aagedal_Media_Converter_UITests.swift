@@ -3064,7 +3064,9 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         if #available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 7.0, *) {
             // This measures how long it takes to launch your application.
             measure(metrics: [XCTApplicationLaunchMetric()]) {
-                XCUIApplication().launch()
+                let app = XCUIApplication()
+                app.isolateHistoryStore()
+                app.launch()
             }
         }
     }
@@ -3162,6 +3164,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
             app.launchEnvironment["AMC_UI_TEST_YTDLP_FAILURE"] = "1"
         }
         app.launchEnvironment["AMC_UI_TEST_APPLICATION_JOB_STORE_ID"] = UUID().uuidString
+        app.isolateHistoryStore()
         app.launchEnvironment["AMC_UI_TEST_AGENT_PORT_ID"] = UUID().uuidString
         if resetAgentAccess {
             app.launchEnvironment["AMC_UI_TEST_RESET_AGENT_ACCESS"] = "1"
@@ -3279,5 +3282,14 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     @MainActor
     private func element(_ identifier: String) -> XCUIElement {
         app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+    }
+}
+
+extension XCUIApplication {
+    /// Points the encode history and last-session snapshot at a fresh store in
+    /// the app's UI-test fixture directory, so test runs never read or write
+    /// the user's real history. Call before every `launch()`.
+    func isolateHistoryStore() {
+        launchEnvironment["AMC_UI_TEST_HISTORY_STORE_ID"] = UUID().uuidString
     }
 }

@@ -1,6 +1,6 @@
 # Encode History & Last-Session Restore — Implementation Plan
 
-Status: phases 1–3 implemented (store, tracking, last-session snapshot, overlays, History settings tab, per-item preset override). Phase 4 next. Cloud sync deferred.
+Status: phases 1–4 implemented (store, tracking, last-session snapshot, overlays, History settings tab, per-item preset override, monthly rollups + Statistics settings tab, tolerant/versioned decoding). Cloud sync deferred.
 
 ## Goals
 
@@ -95,6 +95,29 @@ Monthly rollups folded in before pruning (counts by outcome/preset/codec/contain
 seconds encoded, bytes in/out). Settings → **Statistics** tab with Swift Charts:
 counts for 7d / 30d / 90d / 1y / all, encodes over time, top codecs/containers/resolutions/presets,
 failed / cancelled / interrupted / unexpected exits, speed vs realtime, bytes saved.
+
+Implemented rules:
+- `MonthlyRollup` (in `EncodeHistoryFile.rollups`, file version 2) is keyed by `yyyy-MM` + device and holds
+  counts by outcome / preset display name / video codec / container (file extension, else first ffprobe
+  format name) / resolution bucket (short edge), media seconds encoded (trimmed length), wall-clock encode
+  seconds, paired media/wall seconds for speed, paired bytes in/out, sessions and unexpected exits.
+- `prune` folds expiring records and sessions into rollups in the same step (and the same write) that
+  deletes them, so statistics = rollups + live records with nothing counted twice. Retention 0 never prunes.
+  Removing single records from the history does not fold them.
+- Clear History also clears rollups and past sessions (statistics reset).
+- Aggregation is pure (`EncodeStatistics`, unit-tested). A rollup month counts toward a period only when the
+  whole month is inside it, so 7d/30d (and usually 90d) come from live records only. "1 Year" = current
+  month + 11 before it. Bars are daily for 7d/30d/90d, monthly for 1y/All.
+- The "N encodes didn't finish" notice in the history overlay surfaces `interruptedAtLaunchCount` until dismissed.
+
+### Robust decoding
+- Arrays (sessions, records, rollups, snapshot items/groups) decode element by element; a bad element is
+  dropped and the original file is copied to `encode-history.corrupt-<ts>.json` before it is rewritten.
+- Records, recipes, source facts, sessions, snapshot items/groups decode non-essential fields with
+  defaults; embedded `CropConfig` / `MetadataEditorSettings` / `AudioRoutingConfig` fall back to nil.
+- A file with a newer `version` is loaded as far as possible and copied to `…v<N>-<ts>.json` first.
+- Last-session items persist a raw `status` (localized at display) plus a source bookmark; snapshots
+  from before that keep showing their stored `statusLabel`.
 
 ### Later
 Cloud sync (per-device files), merge/stitch as one record with multiple inputs, DCP/IMF/image-sequence

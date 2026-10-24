@@ -66,7 +66,7 @@ struct YTDLPCookieSource {
         guard let database = candidates.first(where: { FileManager.default.fileExists(atPath: $0.path) }) else {
             throw CookieError.message("No cookies found for \(source.label) (\(profile)). Open \(source.label), sign in, and select the correct profile in Downloads settings.")
         }
-        let contents = try ChromiumCookieExport.read(database: database) {
+        let contents = try ChromiumCookieExport.read(database: database, browserName: source.label) {
             try storagePassword(source.keychainService, source.keychainAccount)
         }
         return try exported(contents: contents)
@@ -171,7 +171,7 @@ enum ChromiumCookieExport {
         return value
     }
 
-    static func read(database: URL, password: () throws -> Data) throws -> String {
+    static func read(database: URL, browserName: String = "Helium", password: () throws -> Data) throws -> String {
         var source: OpaquePointer?
         guard sqlite3_open_v2(database.path, &source, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
             if let source { sqlite3_close(source) }
@@ -227,7 +227,7 @@ enum ChromiumCookieExport {
                 let fields = [domain, host.hasPrefix(".") ? "TRUE" : "FALSE", text(1),
                               sqlite3_column_int(statement, 2) != 0 ? "TRUE" : "FALSE", String(unixExpiry), text(4), value]
                 guard fields.allSatisfy({ !$0.contains("\t") && !$0.contains("\n") && !$0.contains("\r") }) else {
-                    throw CookieError.message("Helium contains a cookie that cannot be exported safely.")
+                    throw CookieError.message("\(browserName) contains a cookie that cannot be exported safely.")
                 }
                 lines.append(fields.joined(separator: "\t"))
             }

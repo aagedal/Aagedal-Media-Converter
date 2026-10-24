@@ -25,6 +25,8 @@ final class LastSessionStore {
     /// Set at quit so window teardown doesn't rewrite the snapshot just flushed.
     @ObservationIgnored private var isTerminating = false
     @ObservationIgnored private var didBootstrap = false
+    /// Bookmarks by source path, created once per path (nil = couldn't create).
+    @ObservationIgnored private var bookmarkCache: [String: Data?] = [:]
     @ObservationIgnored private let directory: URL
     @ObservationIgnored private let defaults: UserDefaults
 
@@ -90,7 +92,7 @@ final class LastSessionStore {
         if snapshot.isEmpty {
             remove(url)
         } else {
-            guard let data = try? EncodeHistoryStore.encoder.encode(snapshot) else { return }
+            guard let data = try? EncodeHistoryStore.encoder.encode(withBookmarks(snapshot)) else { return }
             EncodeHistoryStore.writeQueue.async { Self.writeData(data, to: url) }
         }
     }
@@ -115,8 +117,9 @@ final class LastSessionStore {
         lastWritten = nil
         remove(liveURL)
         guard isEnabled, let snapshot, !snapshot.isEmpty else { return }
-        pending = snapshot
-        write(snapshot, to: pendingURL)
+        let withBookmarks = withBookmarks(snapshot)
+        pending = withBookmarks
+        write(withBookmarks, to: pendingURL)
     }
 
     /// Removes restored items from the offer; discards it when empty.
@@ -158,6 +161,31 @@ final class LastSessionStore {
 
     // MARK: - Snapshot building
 
+    /// Adds a bookmark to every source so a file moved before the next launch
+    /// can still be found (restore resolves path → bookmark → missing).
+    /// Bookmarks are cached per path: snapshots are rebuilt on queue changes.
+    private func withBookmarks(_ snapshot: LastSessionSnapshot) -> LastSessionSnapshot {
+        func enrich(_ item: SnapshotItem) -> SnapshotItem {
+            guard item.source.bookmark == nil else { return item }
+            var item = item
+            let path = item.source.path
+            if let cached = bookmarkCache[path] {
+                item.source.bookmark = cached
+            } else {
+                let bookmark = HistoryFileReference(url: URL(fileURLWithPath: path)).bookmark
+                bookmarkCache[path] = bookmark
+                item.source.bookmark = bookmark
+            }
+            return item
+        }
+        var result = snapshot
+        result.items = result.items.map(enrich)
+        for index in result.groups.indices {
+            result.groups[index].items = result.groups[index].items.map(enrich)
+        }
+        return result
+    }
+
     /// Whether a row is worth offering again. Finished, downloading and
     /// scheduled rows are skipped; image sequences aren't restorable yet.
     static func isRestorable(_ item: VideoItem) -> Bool {
@@ -173,7 +201,7 @@ final class LastSessionStore {
     ) -> LastSessionSnapshot {
         func snapshotItem(_ item: VideoItem) -> SnapshotItem {
             SnapshotItem(id: item.id, source: HistoryFileReference(path: item.url.path), recipe: EncodeRecipe(item: item),
-                         statusLabel: statusLabel(item.status))
+                         status: SnapshotItemStatus(item.status))
         }
         let position = Dictionary(order.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
         let orderedFiles = files.sorted { (position[$0.id] ?? .max) < (position[$1.id] ?? .max) }
@@ -198,21 +226,29 @@ final class LastSessionStore {
         return LastSessionSnapshot(savedAt: now, presetRawValue: preset.rawValue, items: items, groups: snapshotGroups)
     }
 
-    static func statusLabel(_ status: ConversionManager.ConversionStatus) -> String {
-        switch status {
-        case .waiting: return String(localized: "Waiting", comment: "Last session item status.")
-        case .converting: return String(localized: "Interrupted", comment: "Encode history outcome: the app quit or crashed during the encode.")
-        case .done: return String(localized: "Done", comment: "Last session item status.")
-        case .failed: return String(localized: "Failed", comment: "Encode history outcome.")
-        case .cancelled: return String(localized: "Cancelled", comment: "Encode history outcome.")
-        }
-    }
-
     // MARK: - Files
 
+    /// Tolerant read (see `LastSessionSnapshot.init(from:)`). An unreadable
+    /// file, or one from a newer version that this one will rewrite, is
+    /// copied aside first.
     private func read(_ url: URL) -> LastSessionSnapshot? {
         guard let data = try? Data(contentsOf: url) else { return nil }
-        return try? EncodeHistoryStore.decoder.decode(LastSessionSnapshot.self, from: data)
+        guard var snapshot = try? EncodeHistoryStore.decoder.decode(LastSessionSnapshot.self, from: data) else {
+            Self.backUp(url, suffix: "corrupt")
+            return nil
+        }
+        if snapshot.version > LastSessionSnapshot.currentVersion {
+            Self.backUp(url, suffix: "v\(snapshot.version)")
+        }
+        // Rewritten in this version's format from here on.
+        snapshot.version = LastSessionSnapshot.currentVersion
+        return snapshot
+    }
+
+    nonisolated private static func backUp(_ url: URL, suffix: String) {
+        let backup = url.deletingPathExtension()
+            .appendingPathExtension("\(suffix)-\(Int(Date().timeIntervalSince1970)).json")
+        try? FileManager.default.copyItem(at: url, to: backup)
     }
 
     private func write(_ snapshot: LastSessionSnapshot, to url: URL) {

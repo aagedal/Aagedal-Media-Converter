@@ -6,8 +6,7 @@ enum MergeCompatibilityPolicy {
     static func eligibleItems(_ items: [VideoItem]) -> [VideoItem] {
         items.filter {
             $0.status == .waiting &&
-            !$0.isDownloading &&
-            $0.scheduledDownloadTime == nil &&
+            !$0.hasPendingDownload &&
             !$0.isImageSequence
         }
     }

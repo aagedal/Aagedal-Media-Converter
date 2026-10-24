@@ -287,6 +287,71 @@ struct YTDLPPlaylistEntry: Sendable {
     let title: String
     let duration: Double?
     let thumbnailURL: URL?
+    /// Set when the probe reports the entry can't be downloaded (private,
+    /// deleted, members-only …). Such entries stay visible in the picker but
+    /// are never queued.
+    var unavailability: Unavailability? = nil
+
+    var isAvailable: Bool { unavailability == nil }
+
+    enum Unavailability: String, Sendable, Equatable {
+        case privateVideo
+        case deleted
+        case membersOnly
+        case premiumOnly
+        case needsAuth
+    }
+
+    /// Classifies a flat-playlist entry. yt-dlp keeps placeholder titles like
+    /// "[Private video]" for entries YouTube hides, and reports `availability`
+    /// when the extractor knows it.
+    static func unavailability(title: String?, availability: String?) -> Unavailability? {
+        switch availability {
+        case "private": return .privateVideo
+        case "subscriber_only": return .membersOnly
+        case "premium_only": return .premiumOnly
+        case "needs_auth": return .needsAuth
+        default: break
+        }
+        switch title?.trimmingCharacters(in: .whitespaces).lowercased() {
+        case "[private video]": return .privateVideo
+        case "[deleted video]": return .deleted
+        default: return nil
+        }
+    }
+
+    /// Parses a `--flat-playlist -J` response. yt-dlp's flat-playlist sometimes
+    /// uses `url` and sometimes `webpage_url` depending on the extractor.
+    /// Single-video responses become a one-element list.
+    static func parse(playlistJSON json: [String: Any]) -> [YTDLPPlaylistEntry] {
+        func makeEntry(from obj: [String: Any]) -> YTDLPPlaylistEntry? {
+            let entryURL = (obj["webpage_url"] as? String) ?? (obj["url"] as? String)
+            guard let entryURL else { return nil }
+            let rawTitle = obj["title"] as? String
+            let title = rawTitle ?? "Untitled"
+            let duration = obj["duration"] as? Double
+            let thumbnailURL: URL? = {
+                if let thumbStr = obj["thumbnail"] as? String,
+                   let u = URL(string: thumbStr) {
+                    return u
+                }
+                if let thumbnails = obj["thumbnails"] as? [[String: Any]],
+                   let last = thumbnails.last,
+                   let thumbStr = last["url"] as? String {
+                    return URL(string: thumbStr)
+                }
+                return nil
+            }()
+            return YTDLPPlaylistEntry(
+                url: entryURL, title: title, duration: duration, thumbnailURL: thumbnailURL,
+                unavailability: unavailability(title: rawTitle, availability: obj["availability"] as? String)
+            )
+        }
+        if let entries = json["entries"] as? [[String: Any]] {
+            return entries.compactMap { makeEntry(from: $0) }
+        }
+        return makeEntry(from: json).map { [$0] } ?? []
+    }
 }
 
 /// How aggressively yt-dlp should sanitize downloaded filenames.
@@ -323,6 +388,9 @@ struct PostDownloadVideo: Identifiable, Sendable {
     let thumbnailURL: URL?
     /// Known for playlist entries; posts leave it unset.
     var duration: Double? = nil
+    /// Playlist entries the probe flagged as not downloadable.
+    var unavailability: YTDLPPlaylistEntry.Unavailability? = nil
+    var isAvailable: Bool { unavailability == nil }
     var id: Int { slideIndex }
 }
 
@@ -805,41 +873,10 @@ actor YTDLPService {
             throw YTDLPError.metadataFetchFailed("Failed to parse playlist JSON")
         }
 
-        // Pull a single entry's url/title/duration/thumbnail from a JSON object.
-        // yt-dlp's flat-playlist sometimes uses `url` and sometimes `webpage_url`
-        // depending on the extractor; fall back across both.
-        func makeEntry(from obj: [String: Any]) -> YTDLPPlaylistEntry? {
-            let entryURL = (obj["webpage_url"] as? String) ?? (obj["url"] as? String)
-            guard let entryURL else { return nil }
-            let title = (obj["title"] as? String) ?? "Untitled"
-            let duration = obj["duration"] as? Double
-            let thumbnailURL: URL? = {
-                if let thumbStr = obj["thumbnail"] as? String,
-                   let u = URL(string: thumbStr) {
-                    return u
-                }
-                if let thumbnails = obj["thumbnails"] as? [[String: Any]],
-                   let last = thumbnails.last,
-                   let thumbStr = last["url"] as? String {
-                    return URL(string: thumbStr)
-                }
-                return nil
-            }()
-            return YTDLPPlaylistEntry(url: entryURL, title: title, duration: duration, thumbnailURL: thumbnailURL)
-        }
-
-        if let entries = json["entries"] as? [[String: Any]] {
-            let parsed = entries.compactMap { makeEntry(from: $0) }
-            logger.info("[YTDLPService] Playlist probe returned \(parsed.count) entries")
-            return parsed
-        }
-
-        // Single video — return as a one-element list so the caller can handle
-        // both shapes the same way.
-        if let entry = makeEntry(from: json) {
-            return [entry]
-        }
-        return []
+        let parsed = YTDLPPlaylistEntry.parse(playlistJSON: json)
+        let unavailable = parsed.filter { !$0.isAvailable }.count
+        logger.info("[YTDLPService] Playlist probe returned \(parsed.count) entries (\(unavailable) unavailable)")
+        return parsed
     }
 
     /// Downloads a video using yt-dlp

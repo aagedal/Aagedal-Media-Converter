@@ -423,28 +423,94 @@ final class DownloadRetryDrainTests: XCTestCase {
         XCTAssertEqual(manager.videoItems?.wrappedValue.first?.status, .cancelled)
     }
 
-    func testCancellingPlaylistSubmissionCancelsCurrentProcessAndSkipsRemainingEntries() async throws {
+    func testCancellingPlaylistBatchCancelsCurrentProcessAndSkipsRemainingEntries() async throws {
         let started = expectation(description: "Playlist process started")
         let cancelled = expectation(description: "Playlist cancellation reaches subprocess")
         let runner = DownloadDrainRunner(started: [started], cancelled: cancelled)
         let (manager, _) = makeManager(runner: runner)
         let items = try XCTUnwrap(manager.videoItems)
-        let playlist = Task {
-            await manager.startPlaylistDownload(
-                url: "https://example.com/playlist", items: items,
-                outputFolder: FileManager.default.temporaryDirectory
-            )
-        }
+        let ids = manager.startPlaylistDownload(
+            entries: Self.playlistEntries, items: items,
+            outputFolder: FileManager.default.temporaryDirectory
+        )
+        XCTAssertEqual(ids.count, 2)
+        let batchID = try XCTUnwrap(items.wrappedValue.first { $0.id == ids[0] }?.playlistDownloadBatchID)
+        XCTAssertEqual(items.wrappedValue.first { $0.id == ids[1] }?.isQueuedForDownload, true)
         await fulfillment(of: [started], timeout: 2)
-        playlist.cancel()
+        manager.cancelPlaylistBatch(containing: ids[1])
         await fulfillment(of: [cancelled], timeout: 2)
         runner.finish(run: 0)
-        let ids = await playlist.value
-        XCTAssertEqual(ids.count, 2)
+        await manager.waitForPlaylistBatch(batchID)
         XCTAssertEqual(runner.startCount, 1)
         for id in ids {
-            XCTAssertEqual(items.wrappedValue.first { $0.id == id }?.status, .cancelled)
+            let row = try XCTUnwrap(items.wrappedValue.first { $0.id == id })
+            XCTAssertEqual(row.status, .cancelled)
+            XCTAssertFalse(row.isDownloading)
+            XCTAssertFalse(row.isQueuedForDownload)
         }
+    }
+
+    func testCancellingWaitingPlaylistRowSkipsOnlyThatEntry() async throws {
+        let started = expectation(description: "First entry started")
+        let unexpected = expectation(description: "Cancelled entry must not start")
+        unexpected.isInverted = true
+        let runner = DownloadDrainRunner(
+            started: [started, unexpected], cancelled: XCTestExpectation(description: "Unused cancellation")
+        )
+        let (manager, _) = makeManager(runner: runner)
+        let items = try XCTUnwrap(manager.videoItems)
+        let ids = manager.startPlaylistDownload(
+            entries: Self.playlistEntries, items: items,
+            outputFolder: FileManager.default.temporaryDirectory
+        )
+        let batchID = try XCTUnwrap(items.wrappedValue.first { $0.id == ids[0] }?.playlistDownloadBatchID)
+        await fulfillment(of: [started], timeout: 2)
+        manager.cancelDownload(itemID: ids[1])
+        XCTAssertEqual(items.wrappedValue.first { $0.id == ids[1] }?.status, .cancelled)
+        XCTAssertEqual(items.wrappedValue.first { $0.id == ids[0] }?.isDownloading, true)
+        runner.finish(run: 0)
+        await manager.waitForPlaylistBatch(batchID)
+        await fulfillment(of: [unexpected], timeout: 0.1)
+        XCTAssertEqual(runner.startCount, 1)
+        XCTAssertNotEqual(items.wrappedValue.first { $0.id == ids[0] }?.status, .cancelled)
+    }
+
+    func testRemovingWaitingPlaylistRowSkipsIt() async throws {
+        let started = expectation(description: "First entry started")
+        let unexpected = expectation(description: "Removed entry must not start")
+        unexpected.isInverted = true
+        let runner = DownloadDrainRunner(
+            started: [started, unexpected], cancelled: XCTestExpectation(description: "Unused cancellation")
+        )
+        let (manager, _) = makeManager(runner: runner)
+        let items = try XCTUnwrap(manager.videoItems)
+        let ids = manager.startPlaylistDownload(
+            entries: Self.playlistEntries, items: items,
+            outputFolder: FileManager.default.temporaryDirectory
+        )
+        let batchID = try XCTUnwrap(items.wrappedValue.first { $0.id == ids[0] }?.playlistDownloadBatchID)
+        await fulfillment(of: [started], timeout: 2)
+        items.wrappedValue.removeAll { $0.id == ids[1] }
+        runner.finish(run: 0)
+        await manager.waitForPlaylistBatch(batchID)
+        await fulfillment(of: [unexpected], timeout: 0.1)
+        XCTAssertEqual(runner.startCount, 1)
+    }
+
+    func testUnavailablePlaylistEntriesAreNeverQueued() throws {
+        let runner = DownloadDrainRunner(started: [], cancelled: XCTestExpectation(description: "Unused cancellation"))
+        let (manager, _) = makeManager(runner: runner)
+        let items = try XCTUnwrap(manager.videoItems)
+        let before = items.wrappedValue.count
+        let ids = manager.startPlaylistDownload(
+            entries: [YTDLPPlaylistEntry(
+                url: "https://example.com/private", title: "[Private video]", duration: nil,
+                thumbnailURL: nil, unavailability: .privateVideo
+            )],
+            items: items, outputFolder: FileManager.default.temporaryDirectory
+        )
+        XCTAssertTrue(ids.isEmpty)
+        XCTAssertEqual(items.wrappedValue.count, before)
     }
 
     func testPlaylistCancellationBeforeChildStartsClearsDownloadingState() async throws {
@@ -453,25 +519,33 @@ final class DownloadRetryDrainTests: XCTestCase {
         let runner = DownloadDrainRunner(started: [unexpected], cancelled: XCTestExpectation(description: "Unused cancellation"))
         let (manager, _) = makeManager(runner: runner)
         var items: [VideoItem] = []
-        var playlist: Task<[UUID], Never>?
+        var cancelledBatch = false
         let binding = Binding<[VideoItem]>(get: { items }, set: {
             items = $0
             // Cancel precisely after the playlist marks its first row downloading,
             // before the tracked child and its cancellation handler begin running.
-            if items.contains(where: { $0.isDownloading }) { playlist?.cancel() }
+            if !cancelledBatch, let batchID = items.first(where: { $0.isDownloading })?.playlistDownloadBatchID {
+                cancelledBatch = true
+                manager.cancelPlaylistBatch(batchID)
+            }
         })
-        playlist = Task {
-            await manager.startPlaylistDownload(
-                url: "https://example.com/playlist", items: binding,
-                outputFolder: FileManager.default.temporaryDirectory
-            )
-        }
-        let ids = await playlist?.value
+        let ids = manager.startPlaylistDownload(
+            entries: Self.playlistEntries, items: binding,
+            outputFolder: FileManager.default.temporaryDirectory
+        )
+        let batchID = try XCTUnwrap(items.first?.playlistDownloadBatchID)
+        await manager.waitForPlaylistBatch(batchID)
         await fulfillment(of: [unexpected], timeout: 0.05)
-        XCTAssertEqual(ids?.count, 2)
+        XCTAssertEqual(ids.count, 2)
+        XCTAssertTrue(cancelledBatch)
         XCTAssertEqual(runner.startCount, 0)
-        XCTAssertTrue(items.allSatisfy { $0.status == .cancelled && !$0.isDownloading })
+        XCTAssertTrue(items.allSatisfy { $0.status == .cancelled && !$0.isDownloading && !$0.isQueuedForDownload })
     }
+
+    private static let playlistEntries = [
+        YTDLPPlaylistEntry(url: "https://example.com/one", title: "One", duration: nil, thumbnailURL: nil),
+        YTDLPPlaylistEntry(url: "https://example.com/two", title: "Two", duration: nil, thumbnailURL: nil),
+    ]
 
     private func checkDrain(forceOverwrite: Bool, explicitCancel: Bool, rapidRetry: Bool) async throws {
         let started = expectation(description: "Original process started")

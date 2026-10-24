@@ -834,6 +834,13 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var sourceURL: String? = nil
     /// Scheduled time for download (nil = download immediately or already started)
     var scheduledDownloadTime: Date? = nil
+    /// Playlist entry waiting for its turn to download. The row's `url` is a
+    /// placeholder until the download finishes, so it must not be encoded,
+    /// previewed, merged or probed in the meantime.
+    var isQueuedForDownload: Bool = false
+    /// Groups rows spawned by one "Download all" playlist submission so the
+    /// remaining entries can be cancelled together.
+    var playlistDownloadBatchID: UUID? = nil
     /// Whether to automatically start encoding after download completes
     var autoEncodeAfterDownload: Bool = false
     /// Whether to start the live stream download from the beginning
@@ -931,14 +938,20 @@ struct VideoItem: Identifiable, Equatable, Sendable {
         scheduledDownloadTime != nil && !isDownloading
     }
 
-    /// Whether this item can be encoded (not downloading, no error, not scheduled)
+    /// Whether the row's source file doesn't exist yet: downloading, waiting in a
+    /// playlist batch, or scheduled for later.
+    var hasPendingDownload: Bool {
+        isDownloading || isQueuedForDownload || scheduledDownloadTime != nil
+    }
+
+    /// Whether this item can be encoded (not downloading, no error, not scheduled or queued for download)
     var isEncodable: Bool {
-        !isDownloading && downloadError == nil && scheduledDownloadTime == nil
+        !hasPendingDownload && downloadError == nil
     }
 
     /// Whether this item can be played/previewed (file is available, not downloading or recording)
     var isPlayable: Bool {
-        !isDownloading && !isLiveStreamRecording && scheduledDownloadTime == nil
+        !hasPendingDownload && !isLiveStreamRecording
     }
 
     /// Resets conversion-related state so the item can be re-encoded.

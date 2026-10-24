@@ -541,9 +541,10 @@ struct PlaybackAudioMeterPanel: View {
             if controller.useMPV {
                 Picker("Meter", selection: $playbackMode) {
                     Text("Source").tag(false)
-                    Text("Playback").tag(true)
+                    Text("Playback β").tag(true)
                 }
                 .pickerStyle(.segmented)
+                .help("Playback metering is experimental: readings can run several seconds ahead of the audio you hear.")
                 .accessibilityIdentifier("preview.audioMeter.mode")
             }
 #if DEBUG
@@ -583,7 +584,7 @@ struct PlaybackAudioMeterPanel: View {
             loudnessRow("Short-term", value: currentSample?.shortTermLUFS, identifier: "preview.audioMeter.shortTerm")
             Text("LUFS · 0.4 s / 3 s").font(.system(size: 9)).foregroundStyle(.secondary)
             if playbackMode {
-                Text(liveUnavailable ? "Playback meter unavailable" : "Decoded active track; may lead sound")
+                Text(liveUnavailable ? "Playback meter unavailable" : "Experimental · may run ahead of sound")
                     .font(.caption2).foregroundStyle(.secondary)
             } else if failed {
                 Text("Meter unavailable").font(.caption2)
@@ -611,7 +612,7 @@ struct PlaybackAudioMeterPanel: View {
         .padding(8)
         .frame(width: max(164, CGFloat(labels.count) * 30))
         .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 6))
-        .help(playbackMode ? "Decoded active-track levels before playback volume and mute. Channel layout may differ from the source. Readings may lead audible playback, and polling can miss brief peaks. Loudness history resets after pause, seek or track changes. Use Source for playhead-aligned inspection and Audio Analysis for whole-program loudness." : "Source levels before playback volume, mute and speaker downmixing. White marks show sample peaks; filled bars show RMS. LUFS measures the selected track over the preceding 0.4 and 3 seconds of source audio. Use Audio Analysis for whole-program integrated loudness and true peak.")
+        .help(playbackMode ? "Experimental. Decoded active-track levels before playback volume and mute. Channel layout may differ from the source. Readings may lead audible playback, and polling can miss brief peaks. Loudness history resets after pause, seek or track changes. Use Source for playhead-aligned inspection and Audio Analysis for whole-program loudness." : "Source levels before playback volume, mute and speaker downmixing. White marks show sample peaks; filled bars show RMS. LUFS measures the selected track over the preceding 0.4 and 3 seconds of source audio. Use Audio Analysis for whole-program integrated loudness and true peak.")
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("preview.audioMeter")
         .onChange(of: playbackMode) { _, enabled in

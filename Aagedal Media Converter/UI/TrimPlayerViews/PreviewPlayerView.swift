@@ -92,8 +92,8 @@ struct PreviewPlayerView: View {
                 controller.isCropEnabled = true
             }
 
-            // Skip preview loading for scheduled downloads or items being downloaded
-            guard !item.isDownloading && item.scheduledDownloadTime == nil else {
+            // Skip preview loading for scheduled, queued or in-progress downloads
+            guard !item.hasPendingDownload else {
                 return
             }
 

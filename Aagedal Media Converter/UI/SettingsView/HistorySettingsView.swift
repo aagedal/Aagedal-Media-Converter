@@ -45,7 +45,7 @@ struct HistorySettingsView: View {
                             .monospacedDigit()
                             .foregroundStyle(.secondary)
                         Button("Clear History…") { showClearConfirmation = true }
-                            .disabled(store.records.isEmpty)
+                            .disabled(!store.hasClearableData)
                     }
                 }
             }
@@ -65,7 +65,7 @@ struct HistorySettingsView: View {
         .confirmationDialog("Clear encode history?", isPresented: $showClearConfirmation) {
             Button("Clear History", role: .destructive) { store.clearAll() }
         } message: {
-            Text("This removes all \(store.records.count) recorded encodes. Encoded files are not affected.")
+            Text("This removes all \(store.records.count) recorded encodes and resets the statistics. Encoded files are not affected.")
         }
     }
 }

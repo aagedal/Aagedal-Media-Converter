@@ -40,6 +40,9 @@ class DownloadManager {
     /// stop whichever yt-dlp process happened to register most recently.
     private var downloadControls: [UUID: YTDLPDownloadControl] = [:]
 
+    /// Sequential "Download all" playlist runs keyed by `VideoItem.playlistDownloadBatchID`.
+    private var playlistBatchTasks: [UUID: Task<Void, Never>] = [:]
+
     /// Live recording stat update tasks keyed by VideoItem ID
     private var liveRecordingStatTasks: [UUID: Task<Void, Never>] = [:]
     private let thumbnailTasks = DownloadAuxiliaryTaskStore()
@@ -490,45 +493,11 @@ class DownloadManager {
         return itemID
     }
 
-    /// Probes a playlist/channel URL and adds one queue item per entry, then
-    /// downloads each sequentially. Single-video URLs work too — the probe
-    /// returns one entry and you get the same result as `startDownload`.
-    /// - Returns: IDs of every queue item that was created (in playlist order).
-    @discardableResult
-    func startPlaylistDownload(
-        url urlString: String,
-        items: Binding<[VideoItem]>,
-        outputFolder: URL,
-        audioOnly: Bool = false
-    ) async -> [UUID] {
-        guard await isYTDLPConfigured() else {
-            logger.error("yt-dlp not configured. Please configure in Settings > General > Video Downloads.")
-            return []
-        }
-
-        self.videoItems = items
-        self.outputFolder = outputFolder
-
-        // Probe the playlist before touching the queue. If this fails we don't
-        // want to leave a stray placeholder behind.
-        let entries: [YTDLPPlaylistEntry]
-        do {
-            entries = try await ytdlpService.fetchPlaylistEntries(url: urlString)
-        } catch {
-            logger.error("Failed to fetch playlist entries: \(error.localizedDescription)")
-            return []
-        }
-
-        guard !entries.isEmpty else {
-            logger.warning("Playlist probe returned no entries for: \(urlString)")
-            return []
-        }
-
-        return await startPlaylistDownload(entries: entries, items: items, outputFolder: outputFolder, audioOnly: audioOnly)
-    }
-
     /// Adds one queue item per already-probed playlist entry (e.g. the subset the
-    /// user picked in the URL overlay), then downloads each sequentially.
+    /// user picked in the URL overlay), then downloads them one after another in a
+    /// batch task owned by the manager. Unavailable entries are never queued.
+    /// Returns as soon as the rows exist; use `waitForPlaylistBatch(_:)` to await
+    /// the downloads.
     /// - Returns: IDs of every queue item that was created (in entry order).
     @discardableResult
     func startPlaylistDownload(
@@ -536,7 +505,8 @@ class DownloadManager {
         items: Binding<[VideoItem]>,
         outputFolder: URL,
         audioOnly: Bool = false
-    ) async -> [UUID] {
+    ) -> [UUID] {
+        let entries = entries.filter(\.isAvailable)
         guard !entries.isEmpty else { return [] }
         self.videoItems = items
         self.outputFolder = outputFolder
@@ -547,6 +517,7 @@ class DownloadManager {
         // value — toggling "Encode" mid-playlist shouldn't affect already-queued items.
         let autoEncode = UserDefaults.standard.bool(forKey: AppConstants.autoEncodeAfterDownloadKey)
         let uploadEnabled = UserDefaults.standard.bool(forKey: AppConstants.autoUploadAfterDownloadKey)
+        let batchID = UUID()
 
         var itemIDs: [UUID] = []
         for entry in entries {
@@ -568,6 +539,8 @@ class DownloadManager {
             item.autoEncodeAfterDownload = autoEncode
             item.uploadEnabled = uploadEnabled
             item.isDownloading = false
+            item.isQueuedForDownload = true
+            item.playlistDownloadBatchID = batchID
             item.downloadProgress = 0
             item.downloadHasProgress = false
 
@@ -575,17 +548,58 @@ class DownloadManager {
             itemIDs.append(item.id)
         }
 
-        // Run playlist downloads sequentially to avoid competing for bandwidth. Each item
-        // still gets its own cancellation control so cancelling it cannot affect a separate
-        // download that may already be running outside this playlist.
+        playlistBatchTasks[batchID] = Task { [weak self] in
+            await self?.runPlaylistBatch(batchID: batchID, itemIDs: itemIDs, outputFolder: outputFolder)
+        }
+        return itemIDs
+    }
+
+    /// Waits until a playlist batch has finished or been cancelled.
+    func waitForPlaylistBatch(_ batchID: UUID) async {
+        await playlistBatchTasks[batchID]?.value
+    }
+
+    /// Cancels the running download of a playlist batch and every entry still
+    /// queued behind it. Rows that already finished are left alone.
+    func cancelPlaylistBatch(_ batchID: UUID) {
+        logger.info("Cancel playlist batch requested: \(batchID)")
+        playlistBatchTasks[batchID]?.cancel()
+        let rows = videoItems?.wrappedValue.filter {
+            $0.playlistDownloadBatchID == batchID && ($0.isQueuedForDownload || $0.isDownloading)
+        } ?? []
+        for row in rows {
+            cancelDownload(itemID: row.id)
+        }
+    }
+
+    /// Cancels the playlist batch the given row belongs to; falls back to
+    /// cancelling just that row when it isn't part of a playlist.
+    func cancelPlaylistBatch(containing itemID: UUID) {
+        guard let batchID = findItem(itemID)?.playlistDownloadBatchID else {
+            cancelDownload(itemID: itemID)
+            return
+        }
+        cancelPlaylistBatch(batchID)
+    }
+
+    /// Runs playlist downloads sequentially to avoid competing for bandwidth. Each
+    /// item still gets its own cancellation control, so cancelling one row skips
+    /// only that row, and cannot affect an unrelated download running elsewhere.
+    /// Rows that were removed or cancelled while waiting are skipped.
+    private func runPlaylistBatch(batchID: UUID, itemIDs: [UUID], outputFolder: URL) async {
+        defer { playlistBatchTasks.removeValue(forKey: batchID) }
         for itemID in itemIDs {
+            guard let item = findItem(itemID), item.isQueuedForDownload,
+                  let sourceURL = item.sourceURL else { continue }
             guard !Task.isCancelled else {
                 cancelDownload(itemID: itemID)
                 continue
             }
-            guard let item = self.findItem(itemID), let sourceURL = item.sourceURL else { continue }
 
-            self.updateItem(itemID) { $0.isDownloading = true }
+            updateItem(itemID) {
+                $0.isQueuedForDownload = false
+                $0.isDownloading = true
+            }
 
             // performDownload kicks off its own thumbnail fetch — don't double-probe.
             let task = launchDownloadTask(
@@ -601,8 +615,6 @@ class DownloadManager {
                 task.cancel()
             }
         }
-
-        return itemIDs
     }
 
     /// Formats a duration in seconds for `VideoItem.duration` display ("h:mm:ss" or "m:ss").
@@ -951,6 +963,7 @@ class DownloadManager {
         // Update item state
         updateItem(itemID) { item in
             item.isDownloading = false
+            item.isQueuedForDownload = false
             item.isLiveStreamRecording = false
             item.downloadStopping = false
             item.liveRecordingFileSize = nil

@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		EA25C0011234567890000003 /* YTDLPCookieSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA25C0011234567890000004 /* YTDLPCookieSourceTests.swift */; };
+		7A3E5C1D2B4F6A8C9E0D1F01 /* PlaylistQueueAndAutoMuteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3E5C1D2B4F6A8C9E0D1F02 /* PlaylistQueueAndAutoMuteTests.swift */; };
 		EA25C0011234567890000001 /* YTDLPCookieSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA25C0011234567890000002 /* YTDLPCookieSource.swift */; };
 		F14AA070D0CA4AB1A0B157B1 /* AudioMeterBenchmarkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F14AA070D0CA4AB1A0B157B2 /* AudioMeterBenchmarkTests.swift */; };
 		3068888A137E42F3A0BD3EDC /* KeyboardShortcutSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64183E70C2B54C9D87A2C3AA /* KeyboardShortcutSettingsTests.swift */; };
@@ -344,13 +345,16 @@
 		ENCHIST0001BF0000000 /* EncodeHistoryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0001FR0000000 /* EncodeHistoryModels.swift */; };
 		ENCHIST0002BF0000000 /* EncodeHistoryTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0002FR0000000 /* EncodeHistoryTracker.swift */; };
 		ENCHIST0003BF0000000 /* EncodeHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0003FR0000000 /* EncodeHistoryStore.swift */; };
+		ENCHIST0020BF0000000 /* EncodeStatistics.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0020FR0000000 /* EncodeStatistics.swift */; };
 		ENCHIST0004BF0000000 /* LastSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0004FR0000000 /* LastSessionStore.swift */; };
 		ENCHIST0005BF0000000 /* QueueRestoreRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0005FR0000000 /* QueueRestoreRequest.swift */; };
 		ENCHIST0006BF0000000 /* HistoryOverlayComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0006FR0000000 /* HistoryOverlayComponents.swift */; };
 		ENCHIST0007BF0000000 /* LastSessionOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0007FR0000000 /* LastSessionOverlay.swift */; };
 		ENCHIST0008BF0000000 /* EncodeHistoryOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0008FR0000000 /* EncodeHistoryOverlay.swift */; };
 		ENCHIST0009BF0000000 /* HistorySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0009FR0000000 /* HistorySettingsView.swift */; };
+		ENCHIST0021BF0000000 /* StatisticsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0021FR0000000 /* StatisticsSettingsView.swift */; };
 		ENCHIST0010BF0000000 /* EncodeHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0010FR0000000 /* EncodeHistoryTests.swift */; };
+		ENCHIST0022BF0000000 /* EncodeStatisticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0022FR0000000 /* EncodeStatisticsTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -412,6 +416,7 @@
 
 /* Begin PBXFileReference section */
 		EA25C0011234567890000004 /* YTDLPCookieSourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YTDLPCookieSourceTests.swift; sourceTree = "<group>"; };
+		7A3E5C1D2B4F6A8C9E0D1F02 /* PlaylistQueueAndAutoMuteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistQueueAndAutoMuteTests.swift; sourceTree = "<group>"; };
 		EA25C0011234567890000002 /* YTDLPCookieSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = YTDLPCookieSource.swift; path = YTDLP/YTDLPCookieSource.swift; sourceTree = "<group>"; };
 		F14AA070D0CA4AB1A0B157B2 /* AudioMeterBenchmarkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMeterBenchmarkTests.swift; sourceTree = "<group>"; };
 		64183E70C2B54C9D87A2C3AA /* KeyboardShortcutSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutSettingsTests.swift; sourceTree = "<group>"; };
@@ -768,13 +773,16 @@
 		ENCHIST0001FR0000000 /* EncodeHistoryModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeHistoryModels.swift; sourceTree = "<group>"; };
 		ENCHIST0002FR0000000 /* EncodeHistoryTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeHistoryTracker.swift; sourceTree = "<group>"; };
 		ENCHIST0003FR0000000 /* EncodeHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeHistoryStore.swift; sourceTree = "<group>"; };
+		ENCHIST0020FR0000000 /* EncodeStatistics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeStatistics.swift; sourceTree = "<group>"; };
 		ENCHIST0004FR0000000 /* LastSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastSessionStore.swift; sourceTree = "<group>"; };
 		ENCHIST0005FR0000000 /* QueueRestoreRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueRestoreRequest.swift; sourceTree = "<group>"; };
 		ENCHIST0006FR0000000 /* HistoryOverlayComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryOverlayComponents.swift; sourceTree = "<group>"; };
 		ENCHIST0007FR0000000 /* LastSessionOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastSessionOverlay.swift; sourceTree = "<group>"; };
 		ENCHIST0008FR0000000 /* EncodeHistoryOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeHistoryOverlay.swift; sourceTree = "<group>"; };
 		ENCHIST0009FR0000000 /* HistorySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistorySettingsView.swift; sourceTree = "<group>"; };
+		ENCHIST0021FR0000000 /* StatisticsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatisticsSettingsView.swift; sourceTree = "<group>"; };
 		ENCHIST0010FR0000000 /* EncodeHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeHistoryTests.swift; sourceTree = "<group>"; };
+		ENCHIST0022FR0000000 /* EncodeStatisticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeStatisticsTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -1163,6 +1171,7 @@
 			isa = PBXGroup;
 			children = (
 				ENCHIST0010FR0000000 /* EncodeHistoryTests.swift */,
+				ENCHIST0022FR0000000 /* EncodeStatisticsTests.swift */,
 				A45000000000000000000002 /* ApplicationJobContractTests.swift */,
 				A45A99000000000000000002 /* AnonymousUsageIndicatorTests.swift */,
 				06E2B90D341C4818B814DED4 /* UploadLifecycleTests.swift */,
@@ -1204,6 +1213,7 @@
 				DA1CFA07927E49B1A1883FBD /* DownloadHistoryServiceTests.swift */,
 				993C771FF0CA4AD3BD29060C /* YTDLPWarmUpDrainTests.swift */,
 				EA25C0011234567890000004 /* YTDLPCookieSourceTests.swift */,
+				7A3E5C1D2B4F6A8C9E0D1F02 /* PlaylistQueueAndAutoMuteTests.swift */,
 				CDC94AC62B82453580FBD4E4 /* YTDLPUpdateOwnershipTests.swift */,
 				758CDC06BC9341C186C773BD /* DenoExtractionDrainTests.swift */,
 				7748A92962A74E189CB18CD7 /* AV2AACParserTests.swift */,
@@ -1335,6 +1345,7 @@
 			isa = PBXGroup;
 			children = (
 				ENCHIST0009FR0000000 /* HistorySettingsView.swift */,
+				ENCHIST0021FR0000000 /* StatisticsSettingsView.swift */,
 				A45200000000000000000001 /* AgentAccessSettingsView.swift */,
 				A95007ED7B0349E3B626F1BE /* ToolDiagnosticsSettingsView.swift */,
 				8EA25FE82F82A7BA0087B1F1 /* TesseractSettingsView.swift */,
@@ -1519,6 +1530,7 @@
 				ENCHIST0001FR0000000 /* EncodeHistoryModels.swift */,
 				ENCHIST0002FR0000000 /* EncodeHistoryTracker.swift */,
 				ENCHIST0003FR0000000 /* EncodeHistoryStore.swift */,
+				ENCHIST0020FR0000000 /* EncodeStatistics.swift */,
 				ENCHIST0004FR0000000 /* LastSessionStore.swift */,
 				ENCHIST0005FR0000000 /* QueueRestoreRequest.swift */,
 			);
@@ -1819,12 +1831,14 @@
 				ENCHIST0001BF0000000 /* EncodeHistoryModels.swift in Sources */,
 				ENCHIST0002BF0000000 /* EncodeHistoryTracker.swift in Sources */,
 				ENCHIST0003BF0000000 /* EncodeHistoryStore.swift in Sources */,
+				ENCHIST0020BF0000000 /* EncodeStatistics.swift in Sources */,
 				ENCHIST0004BF0000000 /* LastSessionStore.swift in Sources */,
 				ENCHIST0005BF0000000 /* QueueRestoreRequest.swift in Sources */,
 				ENCHIST0006BF0000000 /* HistoryOverlayComponents.swift in Sources */,
 				ENCHIST0007BF0000000 /* LastSessionOverlay.swift in Sources */,
 				ENCHIST0008BF0000000 /* EncodeHistoryOverlay.swift in Sources */,
 				ENCHIST0009BF0000000 /* HistorySettingsView.swift in Sources */,
+				ENCHIST0021BF0000000 /* StatisticsSettingsView.swift in Sources */,
 				7FFE54EBBEF744FBB7F6571B /* PackageMetadataSettings.swift in Sources */,
 				14303B1061214301B2A3C30F /* ConversionPreparationSettings.swift in Sources */,
 				BCDC7685DC8A43E4BC04CE65 /* ImageSequenceSettings.swift in Sources */,
@@ -2093,6 +2107,7 @@
 				C954573AF1D84E73A9596708 /* DownloadHistoryServiceTests.swift in Sources */,
 				7A33AB1A44DF44149B983E60 /* YTDLPWarmUpDrainTests.swift in Sources */,
 				EA25C0011234567890000003 /* YTDLPCookieSourceTests.swift in Sources */,
+				7A3E5C1D2B4F6A8C9E0D1F01 /* PlaylistQueueAndAutoMuteTests.swift in Sources */,
 				57105645EB2B47EE9B17F716 /* YTDLPUpdateOwnershipTests.swift in Sources */,
 				E1ACF6BCCBB0485C81D569A9 /* DenoExtractionDrainTests.swift in Sources */,
 				EC4CE91691E24FB19B6E1838 /* AV2AACParserTests.swift in Sources */,
@@ -2119,6 +2134,7 @@
 				3068888A137E42F3A0BD3EDC /* KeyboardShortcutSettingsTests.swift in Sources */,
 				68DB0573FE4F499AA72EF9AF /* ConversionQueueStateTests.swift in Sources */,
 				ENCHIST0010BF0000000 /* EncodeHistoryTests.swift in Sources */,
+				ENCHIST0022BF0000000 /* EncodeStatisticsTests.swift in Sources */,
 				3559AE0D84F84065A06C6888 /* ConversionUploadFollowUpTests.swift in Sources */,
 				7D163C3579E64EFABCEBCF29 /* AppIntentHandoffTests.swift in Sources */,
 				0DD876266C3F4454ABDC3895 /* MetadataScopeLifecycleTests.swift in Sources */,

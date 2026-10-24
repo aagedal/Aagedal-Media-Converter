@@ -83,6 +83,10 @@ struct VideoFileCellConfiguration: Equatable {
     let autoEncodeAfterDownload: Bool
     let isLiveStreamRecording: Bool
     let downloadStopping: Bool
+    /// Playlist entry waiting for its turn to download (placeholder source).
+    var isQueuedForDownload: Bool = false
+    /// Row belongs to a "Download all" playlist batch that can be cancelled as a whole.
+    var isPlaylistDownload: Bool = false
 
     // Upload state
     let uploadEnabled: Bool
@@ -316,6 +320,8 @@ enum CellAction {
 
     // Download management
     case cancelDownload
+    /// Cancels the running download and every queued entry of this row's playlist batch.
+    case cancelPlaylistDownloads
     case stopLiveRecording
     case retryDownload
     case forceRedownload

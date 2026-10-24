@@ -37,6 +37,9 @@ struct EncodeHistoryOverlay: View {
 
     var body: some View {
         HistoryOverlayPanel(isPresented: $isPresented, title: "Encode History", systemImage: "clock.arrow.circlepath", width: 720) {
+            if store.interruptedAtLaunchCount > 0 {
+                interruptedNotice(count: store.interruptedAtLaunchCount)
+            }
             if !store.records.isEmpty {
                 TextField("Search file names, presets, codecs…", text: $searchText)
                     .textFieldStyle(.roundedBorder)
@@ -61,6 +64,10 @@ struct EncodeHistoryOverlay: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
+                Button("Statistics…") {
+                    UserDefaults.standard.set("statistics", forKey: AppConstants.settingsTabToOpenKey)
+                    openSettings()
+                }
                 Button("History Settings…") {
                     UserDefaults.standard.set("history", forKey: AppConstants.settingsTabToOpenKey)
                     openSettings()
@@ -119,6 +126,24 @@ struct EncodeHistoryOverlay: View {
             ? String(localized: "kept for \(days) days", comment: "Encode history footer: retention period.")
             : String(localized: "kept indefinitely", comment: "Encode history footer: retention period.")
         return "\(encodes) · \(span)"
+    }
+
+    /// Shown once after a launch that found encodes left running by the
+    /// previous run (crash, force quit or power loss).
+    private func interruptedNotice(count: Int) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            Text("^[\(count) encode](inflect: true) didn’t finish because the app closed unexpectedly. They are marked Interrupted below and can be re-queued.",
+                 comment: "Encode history notice after a crash; count of encodes that were still running.")
+                .font(.callout)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Dismiss") { store.acknowledgeInterruptedAtLaunch() }
+                .buttonStyle(.link)
+                .font(.callout)
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Color.orange.opacity(0.12)))
     }
 
     private var emptyState: some View {

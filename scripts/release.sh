@@ -265,6 +265,7 @@ xcrun stapler validate "$VERIFY_DIR/$SCHEME.app"
 # -----------------------------------------------------------------------------
 
 RELEASE_PUBLISHED=false
+APPCAST_PR_FAILED=false
 if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
     if gh release view "$MARKETING_VERSION" --repo "$GITHUB_OWNER/$GITHUB_REPO" >/dev/null 2>&1; then
         echo "==> Using existing GitHub release $MARKETING_VERSION"
@@ -303,7 +304,9 @@ if [[ "$RELEASE_PUBLISHED" == true ]]; then
         echo "Retry without rebuilding or uploading the release:" >&2
         printf '    python3 scripts/publish-release-appcast.py --repo %q --item %q --archive %q --info-plist %q\n' \
             "$GITHUB_OWNER/$GITHUB_REPO" "$APPCAST_ITEM" "$RELEASE_ZIP" "$APP_PATH/Contents/Info.plist" >&2
-        exit 1
+        # The release is already public, so still update the Homebrew cask below
+        # and report the failure when the script finishes.
+        APPCAST_PR_FAILED=true
     fi
 else
     echo "==> Appcast prepared locally; the live update feed has NOT been deployed."
@@ -362,4 +365,9 @@ else
     #   sha256 "$SHA256"
     git commit -am "$TAP_CASK_NAME $MARKETING_VERSION" && git push
 EOF
+fi
+
+if [[ "$APPCAST_PR_FAILED" == true ]]; then
+    echo "ERROR: The appcast PR step failed (see above). Retry it before announcing the release." >&2
+    exit 1
 fi
