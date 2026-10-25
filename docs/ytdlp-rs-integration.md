@@ -1,7 +1,8 @@
 # yt-dlp-rs integration (site list + fallback)
 
 Audited against yt-dlp-rs `a812a8f` (README, `src/main.rs` clap options,
-`docs/COMPATIBILITY.md`) and the `v0.3.0-beta.1` aarch64 binary, 2026-10-24.
+`docs/COMPATIBILITY.md`) and the `v0.3.0-beta.1` aarch64 binary, 2026-10-24;
+clip options re-checked against `v0.4.0-beta.1`, 2026-10-25.
 Code: `Logic/YTDLP/YTDLPEngineRouter.swift` (routing, session failure memory,
 cleanup) and `YTDLPService.withEngineFallback`.
 
@@ -42,7 +43,9 @@ and every other site.
 | `--ffmpeg-location DIR` | supported (dir or binary); **required** for merges, `-x`, `--embed-metadata` (no PATH lookup) | download without ffmpeg → yt-dlp |
 | `-x --audio-format best` | supported, but **needs ffprobe** beside ffmpeg (no ffmpeg fallback); bundled ffmpeg has no ffprobe | audio-only without sibling ffprobe → yt-dlp |
 | `-f bestvideo+bestaudio/best`, `bestaudio/best` | supported | rs |
-| `--download-sections *S-E` (clip ranges) | supported via FFmpegFD, ffmpeg stats inherited | rs |
+| `--download-sections *S-E` (clip ranges) | supported; YouTube HTTPS formats fetch only the indexed segments, then cut locally (0.4.0), other formats stream through FFmpegFD; ffmpeg stats inherited | rs |
+| `--section-timecode` (clip timecode, rs extension) | 0.4.0; needs ffprobe, MP4/MOV result | rs only, when ffprobe sits beside ffmpeg |
+| `-j` `formats[].url`/`http_headers` (clip preview stream) | supported | rs (`YTDLPPreviewStream`, played by mpv) |
 | `--live-from-start --no-part` | hidden, YouTube native DASH generator (beta) | yt-dlp |
 | `--embed-metadata --no-embed-info-json --no-embed-chapters` | supported | rs |
 | `--windows-filenames`, `--restrict-filenames`, `--trim-filenames 200` | supported | rs |

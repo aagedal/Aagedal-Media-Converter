@@ -2267,6 +2267,11 @@ struct ContentView: View {
                 extraAudioMaps += ["-map", "\(index + 1):a:0"]
             }
         }
+        // Camera-card review needs a pixel format to call clips compatible, and
+        // the metadata reader reports none for MPEG-4 Part 2.
+        let videoCodec = ProcessInfo.processInfo.environment["AMC_UI_TEST_CAMERA_CARD"] == "1"
+            ? ["-c:v", "libx264", "-preset", "ultrafast"]
+            : ["-c:v", "mpeg4", "-q:v", "5"]
         let fixtureVideo = "testsrc2=size=320x180:rate=24:duration=\(fixtureDuration)"
             + (meterTiming ? ",drawbox=x=0:y=0:w=80:h=60:color=white:t=fill:enable='between(t,4,7)+gte(t,10)'" : "")
         let request = SubprocessRequest(
@@ -2278,7 +2283,8 @@ struct ContentView: View {
             ] + extraAudioInputs + [
                 "-map", "0:v:0", "-map", "1:a:0",
             ] + extraAudioMaps + [
-                "-c:v", "mpeg4", "-q:v", "5", "-g", "12", "-pix_fmt", "yuv420p",
+            ] + videoCodec + [
+                "-g", "12", "-pix_fmt", "yuv420p",
                 "-c:a", (groupedSilence || groupedPeaks || stereoPhase) ? "flac" : "aac", "-shortest",
             ] + metadataArguments + [fixtureURL.path],
             timeout: .seconds(30),

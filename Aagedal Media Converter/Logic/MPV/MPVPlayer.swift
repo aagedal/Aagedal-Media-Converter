@@ -320,6 +320,19 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     private var pendingURL: URL?
     private var pendingStartTime: Double = 0
     private var pendingAutostart: Bool = false
+    private var pendingSource = RemoteSource()
+
+    /// Extras for web streams: headers the host requires and a separate audio
+    /// stream for adaptive (video-only) formats.
+    struct RemoteSource: Equatable {
+        var externalAudioURL: URL?
+        var httpHeaders: [String: String] = [:]
+    }
+
+    /// Audio to add once the current file is open. Event-queue state.
+    private var externalAudioForLoad: String?
+    /// Whether custom HTTP headers are set and must be cleared for the next load.
+    private var hasCustomHTTPHeaders = false
     private(set) var loadGeneration: UInt64 = 0
     private static let loadCommandMask: UInt64 = 1 << 63
 
@@ -352,17 +365,22 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     // MARK: - Metal Layer Binding
 
     func attachDrawable(_ layer: MPVMetalLayer) {
-        metalLayer = layer
+        // mpv keeps a raw pointer to the layer it was created with. A later
+        // view's layer can't replace it, and releasing it would leave the
+        // video output thread with a dangling layer on the next load.
+        if mpv == nil { metalLayer = layer }
         setupMPV()
 
         // Process pending load if any
         if let url = pendingURL {
             let startTime = pendingStartTime
             let autostart = pendingAutostart
+            let source = pendingSource
             pendingURL = nil
             pendingStartTime = 0
             pendingAutostart = false
-            load(url: url, startTime: startTime, autostart: autostart)
+            pendingSource = RemoteSource()
+            load(url: url, startTime: startTime, autostart: autostart, source: source)
         }
     }
 
@@ -481,7 +499,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
 
     private var loadStartTime: CFAbsoluteTime = 0
 
-    func load(url: URL, startTime: Double = 0, autostart: Bool = false) {
+    func load(url: URL, startTime: Double = 0, autostart: Bool = false, source: RemoteSource = RemoteSource()) {
         loadGeneration = (loadGeneration &+ 1) & ~Self.loadCommandMask
         error = nil
         isFileLoaded = false
@@ -494,6 +512,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             pendingURL = url
             pendingStartTime = startTime
             pendingAutostart = autostart
+            pendingSource = source
             return
         }
 
@@ -501,7 +520,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             seekScheduler.reset()
             resetPlaybackMeterLocked()
             resetAudioPresentationLocked()
+            externalAudioForLoad = source.externalAudioURL?.absoluteString
         }
+        applyHTTPHeaders(source.httpHeaders)
         startPaused = !autostart
         pendingSeekAfterLoad = startTime
 
@@ -547,8 +568,10 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         pendingURL = nil
         pendingStartTime = 0
         pendingAutostart = false
+        pendingSource = RemoteSource()
         pendingSeekAfterLoad = 0
         queue.sync {
+            externalAudioForLoad = nil
             seekScheduler.reset()
             resetPlaybackMeterLocked()
             resetAudioPresentationLocked()
@@ -596,6 +619,8 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             guard let self, self.mpv != nil else { return }
             self.resetPlaybackMeterLocked()
             if self.meterUsesHistory { self.installPlaybackMeterFilterLocked() }
+            // The user's seek replaces the redraw target; never undo it.
+            self.audioPresentationRefresh?.target = nil
             if let submission = self.seekScheduler.request(.init(time: time, exact: exact)) {
                 self.submitSeekLocked(submission)
             }
@@ -619,6 +644,17 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                 submitSeekLocked(next)
             }
             completeAudioPresentationRefreshIfIdleLocked()
+        }
+    }
+
+    /// Tells mpv the layer's drawableSize changed. mpv's MoltenVK context
+    /// polls the size only while the video output runs; this resizes and
+    /// redraws a paused or idle player immediately.
+    func surfaceDidResize(to size: CGSize) {
+        let value = "\(Int(size.width))x\(Int(size.height))"
+        queue.async { [weak self] in
+            guard let mpv = self?.mpv else { return }
+            mpv_set_property_string(mpv, "moltenvk-surface-size", value)
         }
     }
 
@@ -746,7 +782,17 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     private var audioPresentationOwnsSelection = false // Event queue only.
-    private var audioPresentationRefresh: (id: UUID, generation: UInt64, continuation: CheckedContinuation<Bool, Never>, deadline: DispatchWorkItem)?
+    private var audioPresentationRefresh: AudioPresentationRefresh? // Event queue only.
+
+    private struct AudioPresentationRefresh {
+        let id: UUID
+        let generation: UInt64
+        let continuation: CheckedContinuation<Bool, Never>
+        let deadline: DispatchWorkItem
+        /// Where the redraw seek must land; nil once a user seek takes over.
+        var target: Double?
+        var retried = false
+    }
 
     private func finishAudioPresentationRefreshLocked(id: UUID? = nil, succeeded: Bool) {
         guard let refresh = audioPresentationRefresh, id == nil || id == refresh.id else { return }
@@ -758,6 +804,26 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     private func completeAudioPresentationRefreshIfIdleLocked() {
         guard seekScheduler.inFlight == nil, seekScheduler.pending == nil,
               let succeeded = seekScheduler.lastCompletionSucceeded else { return }
+        // Switching `aid` makes the demuxer re-read the new stream. An exact
+        // seek issued meanwhile can land on the next keyframe (seconds later
+        // with sparse GOPs); once the switch has settled, a repeat is exact.
+        if succeeded, var refresh = audioPresentationRefresh, let target = refresh.target,
+           !refresh.retried, let mpv {
+            var landed = target
+            var fps = 0.0
+            _ = mpv_get_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &landed)
+            _ = mpv_get_property(mpv, "container-fps", MPV_FORMAT_DOUBLE, &fps)
+            // Exact seeks show the first frame at or after the target.
+            let tolerance = fps > 0 ? max(0.05, 1.5 / fps) : 0.1
+            if abs(landed - target) > tolerance {
+                refresh.retried = true
+                audioPresentationRefresh = refresh
+                if let submission = seekScheduler.request(.init(time: target, exact: true)) {
+                    submitSeekLocked(submission)
+                }
+                return
+            }
+        }
         finishAudioPresentationRefreshLocked(succeeded: succeeded)
     }
 
@@ -875,7 +941,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                     let deadline = DispatchWorkItem { [weak self] in
                         self?.finishAudioPresentationRefreshLocked(id: cancellation.id, succeeded: false)
                     }
-                    self.audioPresentationRefresh = (cancellation.id, generation, continuation, deadline)
+                    self.audioPresentationRefresh = AudioPresentationRefresh(
+                        id: cancellation.id, generation: generation, continuation: continuation,
+                        deadline: deadline, target: target)
                     self.queue.asyncAfter(deadline: .now() + 15, execute: deadline)
                     // Audio graph changes can invalidate inter-frame decoder state.
                     // Readiness requires the exact refresh seek to decode a new frame,
@@ -1104,6 +1172,10 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                     }
 
                 case MPV_EVENT_FILE_LOADED:
+                    if let audio = self.externalAudioForLoad {
+                        self.externalAudioForLoad = nil
+                        self.commandAsync("audio-add", args: [audio, "select"])
+                    }
                     // Replacing a playing source emits END_FILE without changing
                     // pause. Refresh the flag even when no pause notification follows.
                     var paused: Int32 = 1
@@ -1184,6 +1256,22 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         let status = mpv_command_async(mpv, requestID, &cargs)
         checkError(status)
         return status >= 0
+    }
+
+    /// Options apply to the next `loadfile`. Header values containing commas
+    /// (Accept lists) would split mpv's comma-separated list and are left out;
+    /// hosts check User-Agent and Referer, not those.
+    private func applyHTTPHeaders(_ headers: [String: String]) {
+        guard let mpv, !headers.isEmpty || hasCustomHTTPHeaders else { return }
+        let userAgent = headers.first { $0.key.caseInsensitiveCompare("User-Agent") == .orderedSame }?.value
+        let fields = headers
+            .filter { $0.key.caseInsensitiveCompare("User-Agent") != .orderedSame && !$0.value.contains(",") }
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key): \($0.value)" }
+            .joined(separator: ",")
+        checkError(mpv_set_property_string(mpv, "user-agent", userAgent ?? "libmpv"))
+        checkError(mpv_set_property_string(mpv, "http-header-fields", fields))
+        hasCustomHTTPHeaders = !headers.isEmpty
     }
 
     private func setDouble(_ name: String, _ value: Double) {

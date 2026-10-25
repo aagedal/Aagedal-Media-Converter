@@ -497,7 +497,8 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
 
     @MainActor
     func testOpensSettingsAndMovesBetweenPanes() throws {
-        launchApp()
+        // The output folder row only shows when encodes don't go next to the source.
+        launchApp(additionalArguments: ["-saveNextToOriginal", "NO"])
         defer { app.terminate() }
 
         let settingsButton = element("toolbar.settings")
@@ -641,9 +642,9 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     @MainActor
     func testMainWindowAndEverySettingsPaneInBothLanguages() throws {
         executionTimeAllowance = 300
+        // Sidebar order, so the sidebar only ever scrolls down to the next row.
         let panes = [
             ("general", "General", "Generelt"),
-            ("agentAccess", "Agent Access", "Agenttilgang"),
             ("encoding", "Encoding Groups", "Kodingsgrupper"),
             ("fileNames", "File Names", "Filnavn"),
             ("metadata", "Metadata", "Metadata"),
@@ -660,6 +661,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
             ("sync", "Sync", "Synkronisering"),
             ("updates", "Updates", "Oppdateringer"),
             ("shortcuts", "Shortcuts", "Snarveier"),
+            ("agentAccess", "Agent Access", "Agenttilgang"),
             ("tools", "Tool Diagnostics", "Verktøydiagnostikk")
         ]
         for (language, locale) in [("en", "en_US"), ("nb", "nb_NO")] {
@@ -689,6 +691,13 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
                     "Missing localized sidebar name: \(expectedLabel). \(tab.debugDescription)"
                 )
                 let row = app.outlineRows.containing(.any, identifier: "settings.tab.\(identifier)").firstMatch
+                // XCUITest doesn't scroll the SwiftUI sidebar, and counts a row
+                // under the sidebar's bottom bar as hittable. Scroll it clear.
+                let window = app.windows.containing(.any, identifier: "settings.root").firstMatch
+                for _ in 0..<20 where row.frame.maxY > window.frame.maxY - 50 {
+                    window.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5))
+                        .scroll(byDeltaX: 0, deltaY: -40)
+                }
                 app.activate()
                 tab.click()
                 if !waitForSelection(of: row, timeout: 3) {
@@ -1032,8 +1041,14 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
             XCTAssertTrue(review.isEnabled)
             review.click()
             let proposal = element("cameraCard.review.proposal")
+            if !proposal.waitForExistence(timeout: 5) {
+                // An AutoFill popup over the focused name field can take the first click.
+                review.click()
+            }
             XCTAssertTrue(proposal.waitForExistence(timeout: 30), app.debugDescription)
-            XCTAssertTrue(proposal.label.contains("1"), proposal.label)
+            // Static text exposes its string as the accessibility value.
+            let proposalText = proposal.value as? String ?? proposal.label
+            XCTAssertTrue(proposalText.contains("1"), proposalText)
             attachWindowScreenshot(named: "Camera card review - \(language)")
             element("cameraCard.review.import").click()
             let edit = element("group.edit")
@@ -1420,7 +1435,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
                 element("trim.jumpToStart").click()
                 let mode = element("preview.audioMeter.mode")
                 XCTAssertTrue(mode.waitForExistence(timeout: 5))
-                mode.radioButtons["Playback"].click()
+                mode.radioButtons["Playback β"].click()
                 app.typeKey("l", modifierFlags: [])
                 let channelReading = element("preview.audioMeter.channel.0")
                 let playbackMeasured = XCTNSPredicateExpectation(
@@ -1454,6 +1469,11 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     /// actually pass its display gate, against independently authored AAC edges.
     @MainActor
     func testMPVPlaybackMeterHistoryTimingInNativePreview() throws {
+        // `amc-meter-history` exists only in the diagnostic libmpv build, not in
+        // the bundled MPVKit. Run with TEST_RUNNER_AMC_METER_HISTORY_LIBRARY=1
+        // after linking that library (docs/audio-playback-lifecycle-validation-2026-10-18.md).
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["AMC_METER_HISTORY_LIBRARY"] == "1",
+                          "Needs the history-capable diagnostic libmpv")
         for clock in ["time-pos", "audio-pts"] {
             launchApp(generatedFixture: true, realtimeInput: true,
                       extraLaunchEnvironment: ["AMC_UI_TEST_METER_TIMING": "1",
@@ -1470,7 +1490,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
             element("trim.audioMeter").click()
             let mode = element("preview.audioMeter.mode")
             XCTAssertTrue(mode.waitForExistence(timeout: 5))
-            mode.radioButtons["Playback"].click()
+            mode.radioButtons["Playback β"].click()
             let trace = element("preview.audioMeter.timingTrace")
             XCTAssertTrue(trace.waitForExistence(timeout: 5))
 

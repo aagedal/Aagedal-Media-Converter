@@ -605,24 +605,24 @@
     },
     {
       "component": "MPVKit 1.1.0 custom GPL build",
-      "path": "build/attribution/mpvkit/mpvkit-n9.0.2-sources.tar.gz",
-      "bytes": 25014386,
-      "sha256": "06ea1673ac95e435bde9e5bcb8f996c15a6c4cec5862bc4a7e8dfb7271da25a9",
-      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-audio.1/mpvkit-n9.0.2-sources.tar.gz"
+      "path": "build/attribution/mpvkit/mpvkit-n9.0.2-resize.1-sources.tar.gz",
+      "bytes": 26506689,
+      "sha256": "8c82737847482824982302a2a123c0b2e8517671a76f712abf26ca29fda9d50a",
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-resize.1/mpvkit-n9.0.2-resize.1-sources.tar.gz"
     },
     {
       "component": "MPVKit pinned wrapper and build sources",
-      "path": "build/attribution/mpvkit/MPVKit-1.1.0-pinned-source.tar.gz",
-      "bytes": 123220,
-      "sha256": "aa229dfc6d607949accd53512b1e9e9d5884501945563135697e38aa06f5e8bb",
-      "url": "https://github.com/aagedal/MPVKit/tree/68c8989362a0daedabcc1540b2b5f0e1fea4be1f"
+      "path": "build/attribution/mpvkit/MPVKit-1.1.0-resize.1-pinned-source.tar.gz",
+      "bytes": 122735,
+      "sha256": "86b2fa4573fe799adbfec9a54f05597feffd243d46f54590f88145c8fa7b5b3c",
+      "url": "https://github.com/aagedal/MPVKit/tree/f957f4830d449e80723554cdc05ddc4138c1806e"
     },
     {
       "component": "yt-dlp-rs MPL-2.0 crate sources",
       "path": "build/attribution/yt-dlp-rs-mpl-crate-sources.tar.gz",
       "bytes": 136266,
       "sha256": "3c5897760e283aef5c4e294e6fdc510a5193712454559fc54338b48d60cdfa16",
-      "url": "https://github.com/aagedal/yt-dlp-rs/blob/v0.3.0-beta.1/Cargo.lock"
+      "url": "https://github.com/aagedal/yt-dlp-rs/blob/v0.4.0-beta.1/Cargo.lock"
     }
   ]
 }

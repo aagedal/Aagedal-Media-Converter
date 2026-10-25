@@ -21,7 +21,9 @@ struct SilenceAnalysisView: View {
     @State private var configuration: AudioAnalysisConfiguration
     @State private var previewReady = false
     @State private var previewFailed = false
-    @State private var groupValidated = false
+    /// The presentation whose grouped timing passed validation. Keyed by id so
+    /// a reset that lands after a fast validation can't strand the preview.
+    @State private var validatedPresentationID: String?
     @State private var groupingError: String?
     @State private var threshold = -50.0
     @State private var minimumDuration = 1.0
@@ -46,6 +48,7 @@ struct SilenceAnalysisView: View {
     private var monoTracks: [AudioTrackInfo] { tracks.filter { $0.channels == 1 } }
     private var presentation: LoudnessPresentation { configuration.presentation }
     private var validPresentation: Bool { presentation.isValid(for: tracks) }
+    private var groupValidated: Bool { validatedPresentationID == presentation.id }
     private var isAnalyzing: Bool { analysisID != nil }
     private var timelineDuration: Double {
         max(0.1, player.duration.isFinite ? player.duration : 0, result?.intervals.last?.end ?? 0)
@@ -140,13 +143,13 @@ struct SilenceAnalysisView: View {
             player.load(url: file)
         }
         .task(id: presentation.id) {
-            groupValidated = false
+            let validating = presentation
             groupingError = nil
             guard validPresentation else { return }
             do {
-                try await SilenceAnalysisService.shared.validateGroupedTracks(file: file, presentation: presentation)
+                try await SilenceAnalysisService.shared.validateGroupedTracks(file: file, presentation: validating)
                 try Task.checkCancellation()
-                groupValidated = true
+                validatedPresentationID = validating.id
             } catch {
                 guard !Task.isCancelled else { return }
                 groupingError = error.localizedDescription
@@ -167,7 +170,6 @@ struct SilenceAnalysisView: View {
         .onChange(of: presentation) {
             clearResult()
             previewReady = false
-            groupValidated = false
             player.pause()
         }
         .onChange(of: threshold) { clearResult() }

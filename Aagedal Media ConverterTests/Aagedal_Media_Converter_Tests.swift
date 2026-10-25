@@ -14306,6 +14306,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             AppConstants.proResProfileKey: ProResProfile.standard.rawValue,
             AppConstants.proxyCodecKey: AppConstants.defaultProxyCodec,
             AppConstants.proxyResolutionLimitKey: AppConstants.defaultProxyResolutionLimit,
+            AppConstants.av2ResolutionLimitKey: AppConstants.defaultAV2ResolutionLimit,
             AppConstants.streamCopyContainerKey: AppConstants.defaultStreamCopyContainer,
             AppConstants.audioOnlyFormatKey: AppConstants.defaultAudioOnlyFormat,
             AppConstants.audioOnlyBitDepthKey: AppConstants.defaultAudioOnlyBitDepth,

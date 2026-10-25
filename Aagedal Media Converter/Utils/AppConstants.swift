@@ -737,7 +737,7 @@ enum AppConstants {
     /// Includes pre-releases: yt-dlp-rs is in beta.
     static let ytdlpRSGitHubReleasesURL = "https://api.github.com/repos/aagedal/yt-dlp-rs/releases?per_page=20"
     /// Version of `Binaries/yt-dlp-rs`; scripts/update-ytdlp-rs.sh keeps it in sync.
-    static let bundledYTDLPRSVersion = "0.3.0-beta.1"
+    static let bundledYTDLPRSVersion = "0.4.0-beta.1"
 
     // Managed tool versions (yt-dlp, deno, yt-dlp-rs). Auto-update keys default to true.
     static let ytdlpAutoUpdateKey = "ytdlpAutoUpdate"

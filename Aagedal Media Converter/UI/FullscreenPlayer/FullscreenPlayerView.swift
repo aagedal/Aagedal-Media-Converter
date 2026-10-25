@@ -51,10 +51,6 @@ struct FullscreenPlayerView: View {
 
     // Timeline scrubbing
     @State private var isNarrow = false
-    @State private var precisionWasActive = false
-    @State private var precisionAnchorFraction: Double = 0
-    @State private var precisionAnchorX: CGFloat = 0
-    @AppStorage("precisionScrubFactor") private var precisionScrubFactor: Double = 10.0
     @AppStorage("showCursorHideHint") private var showCursorHideHint: Bool = true
 
     private let rightEdgeWidth: CGFloat = 60
@@ -758,110 +754,22 @@ struct FullscreenPlayerView: View {
     }
 
     private var timelineSlider: some View {
-        GeometryReader { geo in
-            let duration = observedDuration
-            let progress = duration > 0 ? controller.currentPlaybackTime / duration : 0
-            let width = geo.size.width
-            let trimInFrac: CGFloat = duration > 0 ? CGFloat((itemState.trimStart ?? 0) / duration) : 0
-            let trimOutFrac: CGFloat = duration > 0 ? CGFloat((itemState.trimEnd ?? duration) / duration) : 1
-            let hasTrim = itemState.trimStart != nil || itemState.trimEnd != nil
-
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.white.opacity(0.3))
-                    .frame(height: 4)
-
-                if duration > 0 && hasTrim {
-                    Rectangle()
-                        .fill(Color.blue.opacity(0.25))
-                        .frame(width: max(0, (trimOutFrac - trimInFrac) * width), height: 6)
-                        .offset(x: trimInFrac * width)
-                }
-
-                if itemState.trimStart != nil {
-                    Rectangle()
-                        .fill(Color.blue.opacity(0.8))
-                        .frame(width: 2, height: 14)
-                        .offset(x: max(0, min(width - 2, trimInFrac * width - 1)))
-                }
-
-                if itemState.trimEnd != nil {
-                    Rectangle()
-                        .fill(Color.blue.opacity(0.8))
-                        .frame(width: 2, height: 14)
-                        .offset(x: max(0, min(width - 2, trimOutFrac * width - 1)))
-                }
-
-                Rectangle()
-                    .fill(Color(red: 1.0, green: 0.071, blue: 0.361)) // #FF125C
-                    .frame(width: 2, height: 14)
-                    .offset(x: max(0, min(width - 2, width * CGFloat(progress) - 1)))
-            }
-            .frame(height: 20)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        if !isDraggingTimeline {
-                            isDraggingTimeline = true
-                            controller.beginScrubbing()
-                            precisionWasActive = false
-                            let clickFraction = max(0, min(1, value.location.x / width))
-                            let target = Double(clickFraction) * duration
-                            controller.seekTo(target)
-                        }
-                        let isPrecision = NSEvent.modifierFlags.contains(.option)
-                        let targetFraction: Double
-                        if isPrecision {
-                            if !precisionWasActive {
-                                let currentFraction = duration > 0 ? controller.currentPlaybackTime / duration : 0
-                                precisionAnchorFraction = currentFraction
-                                precisionAnchorX = value.location.x
-                                precisionWasActive = true
-                            }
-                            let delta = (value.location.x - precisionAnchorX) / width
-                            targetFraction = max(0, min(1, precisionAnchorFraction + Double(delta) / precisionScrubFactor))
-                        } else {
-                            precisionWasActive = false
-                            targetFraction = max(0, min(1, Double(value.location.x / width)))
-                        }
-                        controller.seekTo(targetFraction * duration)
-                    }
-                    .onEnded { value in
-                        let targetFraction: Double
-                        if precisionWasActive {
-                            let delta = (value.location.x - precisionAnchorX) / width
-                            targetFraction = max(0, min(1, precisionAnchorFraction + Double(delta) / precisionScrubFactor))
-                        } else {
-                            targetFraction = max(0, min(1, Double(value.location.x / width)))
-                        }
-                        controller.seekTo(targetFraction * duration)
-                        controller.endScrubbing()
-                        isDraggingTimeline = false
-                        precisionWasActive = false
-                    }
-            )
-        }
-        .frame(height: 20)
-        .accessibilityRepresentation {
-            Slider(
-                value: Binding(
-                    get: { min(max(0, controller.currentPlaybackTime), max(0, observedDuration)) },
-                    set: { controller.seekTo($0) }
-                ),
-                in: 0...max(observedDuration, 0.001),
-                step: 1
-            ) {
-                Text("Playback position")
-            }
-            .disabled(observedDuration <= 0)
-            .accessibilityValue(TimecodeFormatter.formatTimeForDisplayWithMode(
+        PlayheadTrimTimeline(
+            duration: observedDuration,
+            playbackTime: controller.currentPlaybackTime,
+            trimStart: itemState.trimStart,
+            trimEnd: itemState.trimEnd,
+            isDragging: $isDraggingTimeline,
+            accessibilityValue: TimecodeFormatter.formatTimeForDisplayWithMode(
                 seconds: controller.currentPlaybackTime,
                 item: itemState,
                 mode: timecodeDisplayMode
-            ))
-            .accessibilityIdentifier("fullscreen.timeline")
-        }
+            ),
+            accessibilityIdentifier: "fullscreen.timeline",
+            onScrubBegan: { controller.beginScrubbing() },
+            onSeek: { controller.seekTo($0) },
+            onScrubEnded: { controller.endScrubbing() }
+        )
     }
 
     private func toggleQueueAutoAdvance() {

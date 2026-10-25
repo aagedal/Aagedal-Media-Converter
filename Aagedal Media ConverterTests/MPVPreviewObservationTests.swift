@@ -126,6 +126,61 @@ final class MPVPreviewObservationTests: XCTestCase {
         withExtendedLifetime(layer) {}
     }
 
+    /// Regrouping redraws the paused frame with an exact seek. With sparse
+    /// keyframes (every 10 s, x264's default at 25 fps) the playhead must stay
+    /// put rather than land on the next keyframe. 5 s is a frame boundary.
+    @MainActor
+    func testAudioRegroupingKeepsPausedPositionBetweenSparseKeyframes() async throws {
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-sparse-gop-\(UUID().uuidString).mkv")
+        defer { try? FileManager.default.removeItem(at: source) }
+        var arguments = ["-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+                         "-f", "lavfi", "-i", "testsrc2=s=320x180:r=25:d=30"]
+        var maps = ["-map", "0:v"]
+        for index in 0..<7 {
+            arguments += ["-f", "lavfi", "-i", "sine=frequency=\(440 + index * 100):sample_rate=48000:duration=30"]
+            maps += ["-map", "\(index + 1):a"]
+        }
+        let generated = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: try XCTUnwrap(BinaryPathResolver.ffmpegPath)),
+            arguments: arguments + maps + ["-c:v", "libx264", "-preset", "ultrafast", "-g", "250",
+                                           "-pix_fmt", "yuv420p", "-c:a", "flac", source.path],
+            timeout: .seconds(60)))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        let player = MPVPlayer()
+        let layer = MPVMetalLayer()
+        player.attachDrawable(layer)
+        player.isMuted = true
+        defer { player.stop() }
+        player.load(url: source)
+        try await waitForMeterCondition { player.isFileLoaded }
+
+        // The view opens on the first track; switching `aid` used to land on
+        // the next keyframe after readiness had already been reported.
+        func settledPosition() async throws -> Double {
+            try await Task.sleep(for: .milliseconds(500))
+            return player.timePos
+        }
+        let initial = await player.selectAudioPresentation(.track(1))
+        XCTAssertTrue(initial)
+        let opened = try await settledPosition()
+        XCTAssertEqual(opened, 0, accuracy: 0.05, "Opening must not move to the next keyframe")
+
+        player.seek(to: 5)
+        try await waitForMeterCondition { abs(player.timePos - 5) < 0.05 }
+        let presentations: [LoudnessPresentation] = [
+            .track(0), .stereo(left: 0, right: 1), .track(2), .surround51([0, 1, 2, 3, 4, 5]),
+            .track(1), .track(3),
+        ]
+        for (round, presentation) in (presentations + presentations).enumerated() {
+            let ready = await player.selectAudioPresentation(presentation)
+            XCTAssertTrue(ready, "Round \(round): \(presentation)")
+            XCTAssertFalse(player.isPlaying)
+            let position = try await settledPosition()
+            XCTAssertEqual(position, 5, accuracy: 0.05, "Round \(round): \(presentation)")
+        }
+        withExtendedLifetime(layer) {}
+    }
+
     @MainActor
     private func makeGroupedVideoFixture() async throws -> URL {
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-group-video-\(UUID().uuidString).mkv")

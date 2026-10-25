@@ -43,6 +43,7 @@ final class MPVViewController: NSViewController {
         // After MPV's Vulkan pipeline is up, defer all future drawableSize changes
         // to avoid racing with MoltenVK's in-flight render passes during resize.
         metalLayer.deferResizes = true
+        metalLayer.onDrawableResize = { [weak player] size in player?.surfaceDidResize(to: size) }
     }
 
     override func viewDidLayout() {

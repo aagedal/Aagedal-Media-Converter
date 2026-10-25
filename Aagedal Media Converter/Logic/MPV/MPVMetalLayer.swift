@@ -16,6 +16,10 @@ class MPVMetalLayer: CAMetalLayer {
     /// Set to true after MPV's Vulkan pipeline is initialized.
     var deferResizes = false
 
+    /// Called with the new size after a deferred drawable resize lands, so
+    /// mpv can resize its swapchain (it only polls the size while running).
+    var onDrawableResize: ((CGSize) -> Void)?
+
     private var pendingSize: CGSize = .zero
     private var hasPendingResize = false
 
@@ -85,5 +89,6 @@ class MPVMetalLayer: CAMetalLayer {
         hasPendingResize = false
         applyDrawableSize(pendingSize)
         setNeedsDisplay()
+        onDrawableResize?(pendingSize)
     }
 }
