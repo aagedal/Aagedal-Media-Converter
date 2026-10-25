@@ -1,23 +1,52 @@
+# v.4.6.0
+
+### Downloads
+
+- Download only part of a video with the new Clip option. Type start and end times, or pick them in an inline player: the video streams in the download sheet with the fullscreen player's timeline, and Set In/Set Out (or I and O) fill in the times. Space plays, ⌥I/⌥O clear a point and the arrow keys step through the video. The app downloads 5 seconds extra on each side and sets the exact in and out points as trim points in the queue. Clips also work with scheduled downloads and retries.
+- Playlist and channel links open a video picker with every video selected. Choose the ones you want; they download one after another as separate queue items. Waiting entries can be skipped, the rest of a playlist can be cancelled from the context menu or with Shift-Command-click on a cancel button, and private, deleted or members-only videos are shown but can't be selected.
+- Added yt-dlp-rs 0.4.0-beta.1, a native Rust port of yt-dlp included with the app. It downloads from YouTube, Instagram, TikTok, X/Twitter, Facebook, Reddit, Vimeo, Twitch, Bluesky, SoundCloud and Bandcamp, starts faster, and fetches only the segments a YouTube clip needs. If it fails, the download falls back to yt-dlp automatically; queue rows show which downloader was used and why. Turn it off in Settings → Downloads. With an `ffprobe` next to a custom FFmpeg, clips also carry the timecode they have in the full video.
+- yt-dlp and deno now update automatically by default and keep the three newest versions. Roll back to an earlier version (pinning pauses its updates) or turn automatic updates off. yt-dlp installs the faster-starting onedir build.
+- Added download cookies from Helium, Helium Neo and Zen, with Zen profile selection.
+
+### Queue and encoding
+
+- Added encode history. Every encode is recorded with its source, preset, settings and result, grouped by session and kept for 90 days by default. Open it from the queue's lower-left corner to search, view details, re-queue single items or whole sessions, and relink moved files. Settings → Statistics charts your encodes by month.
+- Last Session restores unfinished items with their settings after the app quits. Settings → History can ask before quitting while encoding.
+- Set a preset for a single queue item from its row. Consecutive items with the same preset encode together, and items with their own preset are no longer muted when the queue preset changes. The row's encode button now starts the item without holding Option.
+- Stream Copy now honours audio routing, so extra audio tracks can be removed or reordered while everything else is copied. Each output track has its own codec: the preset's, the original (copied), or AAC at 96–320 kbps. Downmixed tracks use AAC 192 kbps, since FFmpeg can't copy filtered audio. Select several tracks to change, move or remove them together.
+- Accelerated experimental AV2 encoding with the AVM encoder branch combined with all fixes from the October 12 reference build, including Apple Silicon optimizations and correctness fixes. Existing AV2 settings and container/audio support are unchanged.
+- AV2 encodes recover better: completed chunks are reused when retrying after cancellation or a failure, new workers pause under critical memory pressure, and Matroska output is written as it goes instead of held in memory.
+- Agent Access: a job that is still running no longer blocks later requests on the same connection, and more presets run through the shared queue.
+
+### Analysis
+
+- Added silence detection, with configurable thresholds and minimum durations, timeline markers and paused preview navigation for each interval.
+- Added source sample-peak intervals, estimated true-peak (4× oversampled dBTP) markers and per-channel RMS balance checks, with configurable thresholds and complete-track channel levels.
+- Added stereo phase/correlation analysis, mono fold-down checks and a mid/side phase display.
+- Silence, peak and phase analysis work on single tracks, custom mono pairs and 5.1 multi-mono groups, with grouped preview routing. Duplicate channels and unequal track start times are rejected.
+- Export complete JSON reports for silence, peaks, channel balance, phase and loudness, and PDF reports for loudness and video quality, with timelines, component scores and comparison warnings.
+- Video quality analysis supports AV2 and shows an interactive quality timeline beside the preview: jump to low-scoring sections and switch between source and encoded playback. Corrected video quality scores and their guidance.
+- Previews can show source peak/RMS and momentary/short-term LUFS at the playhead without screen-recording permission. MPV previews also offer an experimental Playback meter for the decoded track.
+
+### Playback
+
+- Previews no longer turn on macOS's automatically generated "Transcribed" captions, and AV1 files open in the MPV preview for smoother playback.
+- Updated MPVKit to 1.1.0 (mpv 0.41.0, FFmpeg 9.0.2). Long sessions keep less waveform data in memory.
+
+### Settings
+
+- Record your own keyboard shortcuts for nine main-window actions in Settings → Shortcuts, with conflict checks and per-shortcut reset. Main-window shortcuts no longer fire in Settings, players or sheets.
+- Settings panes share a consistent layout, and H.264/HEVC encoder choices are labelled Hardware and Software, with help explaining the speed/quality trade-off.
+
+### Fixes
+
+- File sizes use decimal units like Finder; a 25 GB file previously showed as 23.3 GB.
+- One outdated saved job could make every new encode fail with another file's settings error.
+- Metadata probes that time out are retried once. Fixed conformance encoding for FourCC codec names and 10-bit 4:2:2 H.264.
+- Updated SwiftMediaMetadata to 3.0.3. MXF metadata reads now skip media essence using partition indexes, and XAVC clips report their displayed 1080-line picture size.
+
 # v.4.5.6
 
-- Clip downloads are picked in an inline player: the video streams in the download sheet with the fullscreen player's timeline, and Set In/Set Out (or the I and O keys) fill in the start and end times. Space plays, ⌥I/⌥O clear a point and the arrow keys step through the video. The start and end fields remain editable. Videos without a playable stream keep the timeline without a picture.
-- Updated bundled yt-dlp-rs to 0.4.0-beta.1. YouTube clip downloads now fetch only the segments they need instead of streaming through FFmpeg in real time. With an `ffprobe` next to a custom FFmpeg, clips also carry the timecode they have in the full video.
-
-- Updated SwiftMediaMetadata to 3.0.3. MXF metadata reads now skip media essence using partition indexes, and XAVC clips report their displayed 1080-line picture size.
-- Retried metadata probes that time out once, and fixed conformance encoding for FourCC codec names and 10-bit 4:2:2 H.264.
-- Added source stereo phase/correlation analysis, mono fold-down checks, a mid/side phase display, paused window navigation and complete JSON export for stereo tracks and mono pairs.
-
-- Added estimated true-peak threshold markers (4× oversampled dBTP) to Peaks and Channel Balance, with paused navigation and complete JSON export for single tracks, mono pairs and 5.1. Source sample peaks and RMS remain separately available.
-
-- Added custom mono-pair and 5.1 multi-mono selections to silence analysis, with grouped preview routing and complete JSON reports. Duplicate channels and unequal track start times are rejected.
-
-- Added JSON export for complete source silence reports, including selected track, detection settings and every interval on the file timeline.
-
-- Added JSON export for complete source peak/channel-balance reports, including every interval, per-channel levels, selected track and measurement settings.
-- Added navigable source sample-peak intervals and per-channel RMS balance checks to Audio Analysis, with configurable thresholds and complete-track channel levels.
-
-- Added silence detection to Audio Analysis, with configurable sample thresholds and minimum durations, timeline markers, and paused preview navigation for each interval.
-- Accelerated experimental AV2 encoding with the AVM encoder branch combined with all fixes from the October 12 reference build, including Apple Silicon optimizations and correctness fixes. The paired encoder and decoder retain existing AV2 settings and container/audio support.
 - Added VMAF v1.0.16 models for standard, phone, and 4K viewing, including 50/60 fps variants. New installations use the standard v1 model by default; saved model selections are preserved, and v0 models remain available for comparison with earlier scores.
 - VMAF v1 analysis processes both inputs at 10-bit precision for banding and chroma assessment. Uses the models already included in the bundled FFmpeg; no bundled binaries or licenses changed.
 
