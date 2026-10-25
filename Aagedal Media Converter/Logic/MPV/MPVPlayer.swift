@@ -616,6 +616,8 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             guard let self, self.mpv != nil else { return }
             self.resetPlaybackMeterLocked()
             if self.meterUsesHistory { self.installPlaybackMeterFilterLocked() }
+            // The user's seek replaces the redraw target; never undo it.
+            self.audioPresentationRefresh?.target = nil
             if let submission = self.seekScheduler.request(.init(time: time, exact: exact)) {
                 self.submitSeekLocked(submission)
             }
@@ -766,7 +768,17 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     private var audioPresentationOwnsSelection = false // Event queue only.
-    private var audioPresentationRefresh: (id: UUID, generation: UInt64, continuation: CheckedContinuation<Bool, Never>, deadline: DispatchWorkItem)?
+    private var audioPresentationRefresh: AudioPresentationRefresh? // Event queue only.
+
+    private struct AudioPresentationRefresh {
+        let id: UUID
+        let generation: UInt64
+        let continuation: CheckedContinuation<Bool, Never>
+        let deadline: DispatchWorkItem
+        /// Where the redraw seek must land; nil once a user seek takes over.
+        var target: Double?
+        var retried = false
+    }
 
     private func finishAudioPresentationRefreshLocked(id: UUID? = nil, succeeded: Bool) {
         guard let refresh = audioPresentationRefresh, id == nil || id == refresh.id else { return }
@@ -778,6 +790,26 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     private func completeAudioPresentationRefreshIfIdleLocked() {
         guard seekScheduler.inFlight == nil, seekScheduler.pending == nil,
               let succeeded = seekScheduler.lastCompletionSucceeded else { return }
+        // Switching `aid` makes the demuxer re-read the new stream. An exact
+        // seek issued meanwhile can land on the next keyframe (seconds later
+        // with sparse GOPs); once the switch has settled, a repeat is exact.
+        if succeeded, var refresh = audioPresentationRefresh, let target = refresh.target,
+           !refresh.retried, let mpv {
+            var landed = target
+            var fps = 0.0
+            _ = mpv_get_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &landed)
+            _ = mpv_get_property(mpv, "container-fps", MPV_FORMAT_DOUBLE, &fps)
+            // Exact seeks show the first frame at or after the target.
+            let tolerance = fps > 0 ? max(0.05, 1.5 / fps) : 0.1
+            if abs(landed - target) > tolerance {
+                refresh.retried = true
+                audioPresentationRefresh = refresh
+                if let submission = seekScheduler.request(.init(time: target, exact: true)) {
+                    submitSeekLocked(submission)
+                }
+                return
+            }
+        }
         finishAudioPresentationRefreshLocked(succeeded: succeeded)
     }
 
@@ -895,7 +927,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                     let deadline = DispatchWorkItem { [weak self] in
                         self?.finishAudioPresentationRefreshLocked(id: cancellation.id, succeeded: false)
                     }
-                    self.audioPresentationRefresh = (cancellation.id, generation, continuation, deadline)
+                    self.audioPresentationRefresh = AudioPresentationRefresh(
+                        id: cancellation.id, generation: generation, continuation: continuation,
+                        deadline: deadline, target: target)
                     self.queue.asyncAfter(deadline: .now() + 15, execute: deadline)
                     // Audio graph changes can invalidate inter-frame decoder state.
                     // Readiness requires the exact refresh seek to decode a new frame,
