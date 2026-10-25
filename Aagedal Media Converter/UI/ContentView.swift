@@ -3570,8 +3570,13 @@ private struct GlobalKeyboardShortcutHandler: NSViewRepresentable {
                 let hasControl = event.modifierFlags.contains(.control)
                 
                 // Do not route main-window commands into Settings, players, or sheets.
-                guard let window = self.hostView?.window, event.window === window,
-                      window.isKeyWindow, window.attachedSheet == nil else { return event }
+                // Local event monitors are delivered on the main thread.
+                let eventWindowNumber = event.windowNumber
+                guard let hostView = self.hostView,
+                      MainActor.assumeIsolated({
+                          guard let window = hostView.window else { return false }
+                          return window.windowNumber == eventWindowNumber && window.isKeyWindow && window.attachedSheet == nil
+                      }) else { return event }
 
                 let settings = KeyboardShortcutSettings()
                 if let action = MainWindowShortcut.allCases.first(where: { settings.binding(for: $0).matches(event) }) {

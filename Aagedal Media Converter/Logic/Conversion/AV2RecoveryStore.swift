@@ -104,27 +104,20 @@ final class AV2RecoveryStore: @unchecked Sendable {
         let directory = root.appendingPathComponent(key, isDirectory: true)
         try privateDirectory(directory)
         guard let fd = acquireLock(directory) else { return nil }
-        var transferred = false
-        do {
-            let manifestURL = directory.appendingPathComponent("manifest.json")
-            var manifest = Manifest(version: 1, identity: key, completed: [:])
-            let lastUse = (try? directory.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            let expired = Date().timeIntervalSince(lastUse) > 7 * 24 * 3600
-            if !expired, regularFile(manifestURL), let size = try? manifestURL.resourceValues(forKeys: [.fileSizeKey]).fileSize,
-               size < 1024 * 1024, let data = try? Data(contentsOf: manifestURL),
-               let existing = try? JSONDecoder().decode(Manifest.self, from: data),
-               existing.version == 1, existing.identity == key { manifest = existing }
-            let store = AV2RecoveryStore(directory: directory, lockFD: fd, manifest: manifest, plan: plan, sourceStamp: stamp)
-            transferred = true
-            try store.saveManifest()
-            store.removeUncommittedFiles()
-            // Bound abandoned recovery work without touching any active conversion.
-            prune(root: root, excluding: directory)
-            return store
-        } catch {
-            if !transferred { Darwin.close(fd) }
-            throw error
-        }
+        let manifestURL = directory.appendingPathComponent("manifest.json")
+        var manifest = Manifest(version: 1, identity: key, completed: [:])
+        let lastUse = (try? directory.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+        let expired = Date().timeIntervalSince(lastUse) > 7 * 24 * 3600
+        if !expired, regularFile(manifestURL), let size = try? manifestURL.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+           size < 1024 * 1024, let data = try? Data(contentsOf: manifestURL),
+           let existing = try? JSONDecoder().decode(Manifest.self, from: data),
+           existing.version == 1, existing.identity == key { manifest = existing }
+        let store = AV2RecoveryStore(directory: directory, lockFD: fd, manifest: manifest, plan: plan, sourceStamp: stamp)
+        try store.saveManifest()
+        store.removeUncommittedFiles()
+        // Bound abandoned recovery work without touching any active conversion.
+        prune(root: root, excluding: directory)
+        return store
     }
 
     func validateSource() throws {
