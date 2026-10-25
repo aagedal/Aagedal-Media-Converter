@@ -114,7 +114,7 @@ struct ClipPreviewView: View {
                 // mpv binds to its first drawable, so this view stays mounted
                 // through failed loads and fallbacks, and the parent gives each
                 // URL a fresh view (and player) instead of swapping this one.
-                FullscreenMPVView(player: player)
+                FullscreenMPVView(player: player, fixedRenderAspect: videoAspectRatio)
                     .aspectRatio(videoAspectRatio, contentMode: .fit)
             }
             if hasPlayer {

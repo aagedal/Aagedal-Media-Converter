@@ -9,10 +9,19 @@ import AppKit
 
 final class MPVViewController: NSViewController {
     let player: MPVPlayer
+    /// Renders at a fixed size with this aspect ratio and scales the layer to
+    /// the view instead of resizing mpv's surface. mpv's MoltenVK context only
+    /// adopts a new surface size when the video is reconfigured, so a resized
+    /// view otherwise shows a paused frame at its old size in a corner.
+    let fixedRenderAspect: CGFloat?
     private var metalLayer: MPVMetalLayer!
 
-    init(player: MPVPlayer) {
+    /// Width in points of the fixed render surface; previews are ≤720p.
+    private static let fixedRenderWidth: CGFloat = 1280
+
+    init(player: MPVPlayer, fixedRenderAspect: CGFloat? = nil) {
         self.player = player
+        self.fixedRenderAspect = fixedRenderAspect.flatMap { $0 > 0 && $0.isFinite ? $0 : nil }
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -35,7 +44,20 @@ final class MPVViewController: NSViewController {
         metalLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
         metalLayer.framebufferOnly = true
         metalLayer.backgroundColor = NSColor.black.cgColor
-        view.layer = metalLayer
+        if let aspect = fixedRenderAspect {
+            let scale = metalLayer.contentsScale
+            // Even pixel dimensions, as in viewDidLayout.
+            let pixels = CGSize(width: floor(Self.fixedRenderWidth * scale / 2) * 2,
+                                height: floor(Self.fixedRenderWidth / aspect * scale / 2) * 2)
+            let host = CALayer()
+            host.backgroundColor = NSColor.black.cgColor
+            view.layer = host
+            metalLayer.bounds = CGRect(x: 0, y: 0, width: pixels.width / scale, height: pixels.height / scale)
+            metalLayer.drawableSize = pixels
+            host.addSublayer(metalLayer)
+        } else {
+            view.layer = metalLayer
+        }
 
         // Initialize MPV with the layer - this is where the demo calls setupMpv()
         player.attachDrawable(metalLayer)
@@ -47,6 +69,19 @@ final class MPVViewController: NSViewController {
 
     override func viewDidLayout() {
         super.viewDidLayout()
+
+        if fixedRenderAspect != nil {
+            // Scale the fixed surface to fit; mpv never sees a size change.
+            let bounds = view.bounds
+            let size = metalLayer.bounds.size
+            let fit = min(bounds.width / size.width, bounds.height / size.height)
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            metalLayer.position = CGPoint(x: bounds.midX, y: bounds.midY)
+            metalLayer.setAffineTransform(CGAffineTransform(scaleX: fit, y: fit))
+            CATransaction.commit()
+            return
+        }
 
         // Handle resize - matches demo's viewDidLayout
         guard let window = view.window else { return }
