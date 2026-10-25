@@ -168,6 +168,11 @@ struct YTDLPMetadata: Sendable {
     let thumbnailURL: URL?
     let uploader: String?
     let description: String?
+    /// Stream the clip picker can play, when a format is directly playable.
+    var previewStream: YTDLPPreviewStream? = nil
+    /// The downloader that answered the probe; downloads of the same URL
+    /// normally use it too.
+    var engine: YTDLPEngine = .ytdlp
 }
 
 /// Result of a successful download
@@ -872,7 +877,7 @@ actor YTDLPService {
 
         let cookies = try YTDLPCookieSource.configured()
         defer { cookies.cleanup() }
-        let json = try await withEngineFallback(url: url, operation: .metadata) { engine, ytdlpPath in
+        let probe = try await withEngineFallback(url: url, operation: .metadata) { engine, ytdlpPath in
             let json = try await probeMetadataJSON(
                 url: url, ytdlpPath: ytdlpPath,
                 arguments: await commonArguments(engine: engine) + cookies.arguments
@@ -882,7 +887,8 @@ actor YTDLPService {
                 throw YTDLPError.metadataFetchFailed("yt-dlp-rs returned no formats")
             }
             return json
-        }.value
+        }
+        let json = probe.value
         let title = json["title"] as? String ?? "Unknown Title"
         let duration = json["duration"] as? Double
         let thumbnailURLString = json["thumbnail"] as? String
@@ -898,7 +904,9 @@ actor YTDLPService {
             duration: duration,
             thumbnailURL: thumbnailURL,
             uploader: uploader,
-            description: description
+            description: description,
+            previewStream: YTDLPPreviewStream.select(fromMetadata: json),
+            engine: probe.engine
         )
     }
 
@@ -985,7 +993,8 @@ actor YTDLPService {
             try await runDownload(
                 engine: engine, executablePath: executablePath, url: url, outputFolder: outputFolder,
                 forceOverwrite: forceOverwrite, liveFromStart: liveFromStart, audioOnly: audioOnly,
-                section: section, control: control, progress: progress, titleUpdate: titleUpdate
+                section: section, hasFFprobe: ffprobeExists, control: control,
+                progress: progress, titleUpdate: titleUpdate
             )
         }
         var result = outcome.value
@@ -1003,6 +1012,7 @@ actor YTDLPService {
         liveFromStart: Bool,
         audioOnly: Bool,
         section: DownloadSection?,
+        hasFFprobe: Bool,
         control: YTDLPDownloadControl,
         progress: @escaping @Sendable (Double, String?, Bool) -> Void,
         titleUpdate: @escaping @Sendable (String) -> Void
@@ -1054,6 +1064,12 @@ actor YTDLPService {
             // ffmpeg with `-loglevel quiet`. Its stats lines are the only progress
             // for section downloads, so keep quiet mode off explicitly.
             args.append("--no-quiet")
+            // yt-dlp-rs extension: tag the clip with the timecode its first frame
+            // has in the whole video, so it lines up with full downloads. The frame
+            // rate comes from ffprobe; without one it would only print a warning.
+            if engine == .ytdlpRS, hasFFprobe {
+                args.append("--section-timecode")
+            }
             outputTemplate = outputTemplate.replacingOccurrences(
                 of: ".%(ext)s", with: " (\(section.fileNameLabel)).%(ext)s"
             )

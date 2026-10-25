@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C11P0000000000000000B004 /* YTDLPPreviewStreamTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C11P0000000000000000A004 /* YTDLPPreviewStreamTests.swift */; };
+		C11P0000000000000000B003 /* PlayheadTrimTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = C11P0000000000000000A003 /* PlayheadTrimTimeline.swift */; };
+		C11P0000000000000000B002 /* ClipPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C11P0000000000000000A002 /* ClipPreviewView.swift */; };
+		C11P0000000000000000B001 /* YTDLPPreviewStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = C11P0000000000000000A001 /* YTDLPPreviewStream.swift */; };
 		EA25C0011234567890000003 /* YTDLPCookieSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA25C0011234567890000004 /* YTDLPCookieSourceTests.swift */; };
 		7A3E5C1D2B4F6A8C9E0D1F01 /* PlaylistQueueAndAutoMuteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3E5C1D2B4F6A8C9E0D1F02 /* PlaylistQueueAndAutoMuteTests.swift */; };
 		EA25C0011234567890000001 /* YTDLPCookieSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA25C0011234567890000002 /* YTDLPCookieSource.swift */; };
@@ -173,7 +177,6 @@
 		8EE6EE9C2C31FC6B007B629D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EE6EE9B2C31FC6B007B629D /* ContentView.swift */; };
 		8EE6EEA02C31FC6F007B629D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8EE6EE9F2C31FC6F007B629D /* Assets.xcassets */; };
 		8EEE45182EBEA9F00049F017 /* PreviewPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EEE45172EBEA9F00049F017 /* PreviewPlayerView.swift */; };
-		8EEE451A2EBEBCB20049F017 /* RangeSlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EEE45192EBEBCB20049F017 /* RangeSlider.swift */; };
 		8EEE451C2EBF4BFD0049F017 /* PreviewAssetGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EEE451B2EBF4BFD0049F017 /* PreviewAssetGenerator.swift */; };
 		8EEE451E2EBF53550049F017 /* TrimTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EEE451D2EBF53550049F017 /* TrimTimelineView.swift */; };
 		8EEE45202EBF81FD0049F017 /* VideoMetadataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EEE451F2EBF81FD0049F017 /* VideoMetadataService.swift */; };
@@ -423,6 +426,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		C11P0000000000000000A004 /* YTDLPPreviewStreamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YTDLPPreviewStreamTests.swift; sourceTree = "<group>"; };
+		C11P0000000000000000A003 /* PlayheadTrimTimeline.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PlayheadTrimTimeline.swift; sourceTree = "<group>"; };
+		C11P0000000000000000A002 /* ClipPreviewView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ClipPreviewView.swift; sourceTree = "<group>"; };
+		C11P0000000000000000A001 /* YTDLPPreviewStream.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = YTDLPPreviewStream.swift; path = YTDLP/YTDLPPreviewStream.swift; sourceTree = "<group>"; };
 		EA25C0011234567890000004 /* YTDLPCookieSourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YTDLPCookieSourceTests.swift; sourceTree = "<group>"; };
 		7A3E5C1D2B4F6A8C9E0D1F02 /* PlaylistQueueAndAutoMuteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistQueueAndAutoMuteTests.swift; sourceTree = "<group>"; };
 		EA25C0011234567890000002 /* YTDLPCookieSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = YTDLPCookieSource.swift; path = YTDLP/YTDLPCookieSource.swift; sourceTree = "<group>"; };
@@ -593,7 +600,6 @@
 		8EE6EEA92C31FC6F007B629D /* Aagedal Media ConverterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Aagedal Media ConverterTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8EE6EEB32C31FC6F007B629D /* Aagedal Media ConverterUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Aagedal Media ConverterUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8EEE45172EBEA9F00049F017 /* PreviewPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewPlayerView.swift; sourceTree = "<group>"; };
-		8EEE45192EBEBCB20049F017 /* RangeSlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RangeSlider.swift; sourceTree = "<group>"; };
 		8EEE451B2EBF4BFD0049F017 /* PreviewAssetGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewAssetGenerator.swift; sourceTree = "<group>"; };
 		8EEE451D2EBF53550049F017 /* TrimTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrimTimelineView.swift; sourceTree = "<group>"; };
 		8EEE451F2EBF81FD0049F017 /* VideoMetadataService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoMetadataService.swift; sourceTree = "<group>"; };
@@ -856,6 +862,7 @@
 				FE5D4D8671AB2EB5948179AE /* YTDLPUpdateService.swift */,
 				A907D1D50000000000000403 /* ManagedToolUpdateScheduler.swift */,
 				A907D1D50000000000000402 /* ManagedToolStore.swift */,
+				C11P0000000000000000A001 /* YTDLPPreviewStream.swift */,
 				A907D1D50000000000000401 /* ManagedToolVersioning.swift */,
 			);
 			name = YTDLP;
@@ -1112,6 +1119,8 @@
 				8EC3DCDC2EF57F0600CD75BC /* RandomTips.swift */,
 				AA1D4C3E2F10B56789000001 /* TrackPickerSheet.swift */,
 				ACBB08166226F6F3A57F015C /* URLInputOverlay.swift */,
+				C11P0000000000000000A003 /* PlayheadTrimTimeline.swift */,
+				C11P0000000000000000A002 /* ClipPreviewView.swift */,
 				LQGLSTB00000002 /* LiquidGlassToolbarConfigurator.swift */,
 				CC01A1C0PY00010000000001 /* CopyableCommandRow.swift */,
 				RSEL000000000001000FREF1 /* RegionSelectionOverlayView.swift */,
@@ -1213,6 +1222,7 @@
 				3134DA738FF74AC8BA27ADE5 /* SubtitleExportSettingsTests.swift */,
 				FA9E57AC40EF429691668B6D /* DownloadDetailsLifecycleTests.swift */,
 				A7E1R0UTT00000000000002 /* YTDLPEngineRouterTests.swift */,
+				C11P0000000000000000A004 /* YTDLPPreviewStreamTests.swift */,
 				3171BC386A1446B89E470B2C /* MPVPreviewObservationTests.swift */,
 				04A0EDA5FFC64786A28DB95C /* MPVAudioMeterHistoryTests.swift */,
 				F14AA070D0CA4AB1A0B157B2 /* AudioMeterBenchmarkTests.swift */,
@@ -1333,7 +1343,6 @@
 			isa = PBXGroup;
 			children = (
 				8EEE45172EBEA9F00049F017 /* PreviewPlayerView.swift */,
-				8EEE45192EBEBCB20049F017 /* RangeSlider.swift */,
 				8EEE451D2EBF53550049F017 /* TrimTimelineView.swift */,
 				8EC9A6F52EC149010082C67F /* PreviewPlayerFooter.swift */,
 				8EC9A6F62EC149010082C67F /* PreviewTrimControls.swift */,
@@ -1906,7 +1915,6 @@
 				8E501D042EF2002000717373 /* FullscreenPlayerWindowController.swift in Sources */,
 				8E501D052EF2002000717373 /* FullscreenPlayerView.swift in Sources */,
 				8E545D852C33FD610088C274 /* DocumentPickerView.swift in Sources */,
-				8EEE451A2EBEBCB20049F017 /* RangeSlider.swift in Sources */,
 				8ECEBC162ED766B500F1F67C /* CropModels.swift in Sources */,
 				8ECEBC182ED766D200F1F67C /* CropService.swift in Sources */,
 				8ECEBC202ED8782800F1F67C /* MetadataSettingsView.swift in Sources */,
@@ -2024,8 +2032,11 @@
 				CCF14EFA815D8DCCB62749E1 /* YTDLPUpdateService.swift in Sources */,
 				A907D1D50000000000000303 /* ManagedToolUpdateScheduler.swift in Sources */,
 				A907D1D50000000000000302 /* ManagedToolStore.swift in Sources */,
+				C11P0000000000000000B001 /* YTDLPPreviewStream.swift in Sources */,
 				A907D1D50000000000000301 /* ManagedToolVersioning.swift in Sources */,
 				E69050ED114BBF6B493BE257 /* URLInputOverlay.swift in Sources */,
+				C11P0000000000000000B003 /* PlayheadTrimTimeline.swift in Sources */,
+				C11P0000000000000000B002 /* ClipPreviewView.swift in Sources */,
 				LQGLSTB00000001 /* LiquidGlassToolbarConfigurator.swift in Sources */,
 				B709DBE54F69E12A7484E1CE /* YTDLPSettingsView.swift in Sources */,
 				A907D1D50000000000000304 /* ManagedToolVersionControls.swift in Sources */,
@@ -2120,6 +2131,7 @@
 				6A8F1890F8004362BBE6461C /* SubtitleExportSettingsTests.swift in Sources */,
 				C4D287CF98164FE5AF3C20AB /* DownloadDetailsLifecycleTests.swift in Sources */,
 				A7E1R0UTT00000000000001 /* YTDLPEngineRouterTests.swift in Sources */,
+				C11P0000000000000000B004 /* YTDLPPreviewStreamTests.swift in Sources */,
 				7A7E2E5F4BA94EE6A50474C7 /* MPVPreviewObservationTests.swift in Sources */,
 				08AFA6848AC541E892F89336 /* MPVAudioMeterHistoryTests.swift in Sources */,
 				F14AA070D0CA4AB1A0B157B1 /* AudioMeterBenchmarkTests.swift in Sources */,

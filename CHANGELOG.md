@@ -1,5 +1,8 @@
 # v.4.5.6
 
+- Clip downloads are picked in an inline player: the video streams in the download sheet with the fullscreen player's timeline, and Set In/Set Out (or the I and O keys) fill in the start and end times. Space plays, ⌥I/⌥O clear a point and the arrow keys step through the video. The start and end fields remain editable. Videos without a playable stream keep the timeline without a picture.
+- Updated bundled yt-dlp-rs to 0.4.0-beta.1. YouTube clip downloads now fetch only the segments they need instead of streaming through FFmpeg in real time. With an `ffprobe` next to a custom FFmpeg, clips also carry the timecode they have in the full video.
+
 - Updated SwiftMediaMetadata to 3.0.3. MXF metadata reads now skip media essence using partition indexes, and XAVC clips report their displayed 1080-line picture size.
 - Retried metadata probes that time out once, and fixed conformance encoding for FourCC codec names and 10-bit 4:2:2 H.264.
 - Added source stereo phase/correlation analysis, mono fold-down checks, a mid/side phase display, paused window navigation and complete JSON export for stereo tracks and mono pairs.

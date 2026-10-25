@@ -11,7 +11,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-tag="${1:-v0.3.0-beta.1}"
+tag="${1:-v0.4.0-beta.1}"
 repository="aagedal/yt-dlp-rs"
 target="aarch64-apple-darwin"
 asset="yt-dlp-rs-${tag}-${target}.tar.gz"

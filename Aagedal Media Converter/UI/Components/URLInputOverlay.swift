@@ -45,23 +45,45 @@ struct URLInputOverlay: View {
     @State private var isClipEnabled = false
     @State private var clipStartText = ""
     @State private var clipEndText = ""
-    /// Source duration probed in the background so the clip range can be set
-    /// with a slider and kept within the video. Keyed by URL so typing a new
-    /// URL never shows the previous video's length.
+    /// Source duration and preview stream probed in the background so the clip
+    /// can be picked in a player and kept within the video. Keyed by URL so
+    /// typing a new URL never shows the previous video.
     @State private var clipDurationURL: String?
     @State private var clipSourceDuration: Double?
+    @State private var clipPreviewStream: YTDLPPreviewStream?
+    @State private var clipProbeEngine: YTDLPEngine?
     @State private var clipDurationIsLoading = false
+    /// Height available to the overlay, so the clip player fits the window.
+    @State private var overlayHeight: CGFloat = 900
 
-    /// Section downloads stream through ffmpeg at roughly 2× playback speed,
-    /// while full downloads use fast ranged requests. Below this length the
-    /// full download usually wins, as it does for clips covering most of the
-    /// video, so the clip row says so.
+    /// Panel height without the clip video, history included.
+    private static let clipPanelChromeHeight: CGFloat = 560
+    private var clipVideoHeight: CGFloat {
+        min(300, max(140, overlayHeight - Self.clipPanelChromeHeight))
+    }
+    /// Short windows drop the history list while a clip is picked.
+    private var showsHistory: Bool {
+        !(isClipActive && knownClipDuration != nil && overlayHeight < Self.clipPanelChromeHeight + 300)
+    }
+
+    /// Section downloads usually stream through ffmpeg at roughly 2× playback
+    /// speed, while full downloads use fast ranged requests. Below this length
+    /// the full download usually wins, as it does for clips covering most of
+    /// the video, so the clip row says so.
     private static let shortVideoClipHintThreshold: Double = 600
     /// Clips covering more than this share of the video also download faster whole.
     private static let largeClipShareHintThreshold: Double = 0.5
 
+    /// yt-dlp-rs fetches only the segments a YouTube section needs, so clips
+    /// there are fast. Audio-only downloads go to yt-dlp without ffprobe.
+    private var hasFastSectionDownload: Bool {
+        clipProbeEngine == .ytdlpRS && !downloadAudioOnly
+            && YTDLPEngineRouter.site(for: sanitizedURL)?.id == "youtube"
+    }
+
     /// Whether the current clip would likely finish sooner as a full download.
     private var isWholeDownloadLikelyFaster: Bool {
+        guard !hasFastSectionDownload else { return false }
         guard let duration = knownClipDuration, let section = clipSection else { return false }
         if duration < Self.shortVideoClipHintThreshold { return true }
         let clipLength = min(section.end ?? duration, duration) - section.start
@@ -234,6 +256,7 @@ struct URLInputOverlay: View {
             // Input panel
             inputPanel
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { overlayHeight = $0 }
         .task(id: "\(sanitizedURL)|\(isPlaylistContext)|\(postRetry)") {
             await loadPostVideos()
         }
@@ -286,7 +309,9 @@ struct URLInputOverlay: View {
             postPicker
             actionSection
             automationToggles
-            historySection
+            if showsHistory {
+                historySection
+            }
         }
         .padding(20)
         .frame(width: 620)
@@ -413,7 +438,7 @@ struct URLInputOverlay: View {
             .opacity(isClipAvailable ? 1.0 : 0.5)
 
             if isClipActive {
-                clipRangeSlider
+                clipPicker
                 if let clipError {
                     Label(clipError, systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
@@ -452,65 +477,38 @@ struct URLInputOverlay: View {
         }
     }
 
-    /// In/out slider over the probed source duration. The time fields stay the
-    /// source of truth; the slider reads and writes them.
+    /// Player and timeline over the probed video. The time fields stay the
+    /// source of truth; the picker reads and writes them.
     @ViewBuilder
-    private var clipRangeSlider: some View {
+    private var clipPicker: some View {
         if let duration = knownClipDuration {
-            let range = currentClipRange(duration: duration)
-            VStack(spacing: 2) {
-                RangeSlider(
-                    lowerValue: Binding(
-                        get: { range.lower },
-                        set: { clipStartText = $0 <= 0 ? "" : DownloadSection.formatTime($0) }
-                    ),
-                    upperValue: Binding(
-                        get: { range.upper },
-                        // The end of the video is the same as no end time.
-                        set: { clipEndText = $0 >= duration ? "" : DownloadSection.formatTime($0) }
-                    ),
-                    bounds: 0...duration,
-                    step: clipSliderStep(duration: duration),
-                    handleSize: 14,
-                    trackHeight: 4
-                )
-                .padding(.horizontal, 7)
-                .accessibilityIdentifier("downloadClipRangeSlider")
-                .accessibilityLabel("Clip range")
-                HStack {
-                    Text(verbatim: "0:00")
-                    Spacer()
-                    Text(verbatim: DownloadSection.formatTime(duration))
-                }
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-            }
+            ClipPreviewView(
+                stream: clipPreviewStream,
+                duration: duration,
+                inPoint: Binding(
+                    get: { DownloadSection.parseTime(clipStartText).flatMap { $0 > 0 ? min($0, duration) : nil } },
+                    set: { clipStartText = $0.map(DownloadSection.formatTime) ?? "" }
+                ),
+                outPoint: Binding(
+                    get: { DownloadSection.parseTime(clipEndText).flatMap { $0 < duration ? $0 : nil } },
+                    // The end of the video is the same as no end time.
+                    set: { clipEndText = $0.map(DownloadSection.formatTime) ?? "" }
+                ),
+                videoHeight: clipVideoHeight
+            )
+            // mpv stays bound to its first view; each video gets a fresh player.
+            .id(clipDurationURL)
         } else if clipDurationIsLoading {
             HStack(spacing: 6) {
                 ProgressView().controlSize(.small)
-                Text("Loading video length…")
+                Text("Loading video…")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
     }
 
-    /// Slider positions for the typed times, clamped to the video. Invalid or
-    /// empty fields fall back to the start and end of the video.
-    private func currentClipRange(duration: Double) -> (lower: Double, upper: Double) {
-        let step = clipSliderStep(duration: duration)
-        let start = DownloadSection.parseTime(clipStartText).map { min(max(0, $0), duration) } ?? 0
-        let end = DownloadSection.parseTime(clipEndText).map { min(max(0, $0), duration) } ?? duration
-        let lower = min(start, max(0, duration - step))
-        return (lower, max(end, min(duration, lower + step)))
-    }
-
-    /// Whole seconds keep the fields readable; very short clips get finer steps.
-    private func clipSliderStep(duration: Double) -> Double {
-        duration < 10 ? 0.1 : 1
-    }
-
-    /// Probes the video's length for the clip slider. Runs for single-video URLs
+    /// Probes the video's length and preview stream for the clip picker. Runs for single-video URLs
     /// that allow clips, debounced like the post picker, and only once per URL.
     @MainActor
     private func loadClipDuration() async {
@@ -528,6 +526,8 @@ struct URLInputOverlay: View {
             guard sanitizedURL == url else { return }
             clipDurationURL = url
             clipSourceDuration = metadata.duration
+            clipPreviewStream = metadata.previewStream
+            clipProbeEngine = metadata.engine
         } catch is CancellationError {
             return
         } catch {
@@ -535,6 +535,8 @@ struct URLInputOverlay: View {
             guard !Task.isCancelled, sanitizedURL == url else { return }
             clipDurationURL = url
             clipSourceDuration = nil
+            clipPreviewStream = nil
+            clipProbeEngine = nil
         }
         clipDurationIsLoading = false
     }
@@ -931,7 +933,7 @@ struct URLInputOverlay: View {
                     }
                 }
             }
-            .frame(maxHeight: needsPicker ? 100 : 220)
+            .frame(maxHeight: needsPicker || isClipActive ? 100 : 220)
             .onChange(of: historyIndex) { _, newValue in
                 // Keep the arrow-key selection inside the visible scroll area.
                 guard newValue >= 0 else { return }

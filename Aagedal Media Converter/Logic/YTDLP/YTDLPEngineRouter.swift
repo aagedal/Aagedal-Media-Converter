@@ -57,7 +57,7 @@ enum YTDLPEngineRouter {
         let supportsListing: Bool
     }
 
-    /// yt-dlp-rs 0.3.0 sites ported against upstream without caveats the app relies on.
+    /// yt-dlp-rs 0.3.0+ sites ported against upstream without caveats the app relies on.
     /// Dailymotion is excluded: it needs browser impersonation, which yt-dlp-rs lacks.
     static let supportedSites: [Site] = [
         Site(id: "youtube", hosts: ["youtu.be"],

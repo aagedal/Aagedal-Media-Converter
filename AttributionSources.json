@@ -622,7 +622,7 @@
       "path": "build/attribution/yt-dlp-rs-mpl-crate-sources.tar.gz",
       "bytes": 136266,
       "sha256": "3c5897760e283aef5c4e294e6fdc510a5193712454559fc54338b48d60cdfa16",
-      "url": "https://github.com/aagedal/yt-dlp-rs/blob/v0.3.0-beta.1/Cargo.lock"
+      "url": "https://github.com/aagedal/yt-dlp-rs/blob/v0.4.0-beta.1/Cargo.lock"
     }
   ]
 }

@@ -320,6 +320,19 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     private var pendingURL: URL?
     private var pendingStartTime: Double = 0
     private var pendingAutostart: Bool = false
+    private var pendingSource = RemoteSource()
+
+    /// Extras for web streams: headers the host requires and a separate audio
+    /// stream for adaptive (video-only) formats.
+    struct RemoteSource: Equatable {
+        var externalAudioURL: URL?
+        var httpHeaders: [String: String] = [:]
+    }
+
+    /// Audio to add once the current file is open. Event-queue state.
+    private var externalAudioForLoad: String?
+    /// Whether custom HTTP headers are set and must be cleared for the next load.
+    private var hasCustomHTTPHeaders = false
     private(set) var loadGeneration: UInt64 = 0
     private static let loadCommandMask: UInt64 = 1 << 63
 
@@ -359,10 +372,12 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         if let url = pendingURL {
             let startTime = pendingStartTime
             let autostart = pendingAutostart
+            let source = pendingSource
             pendingURL = nil
             pendingStartTime = 0
             pendingAutostart = false
-            load(url: url, startTime: startTime, autostart: autostart)
+            pendingSource = RemoteSource()
+            load(url: url, startTime: startTime, autostart: autostart, source: source)
         }
     }
 
@@ -481,7 +496,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
 
     private var loadStartTime: CFAbsoluteTime = 0
 
-    func load(url: URL, startTime: Double = 0, autostart: Bool = false) {
+    func load(url: URL, startTime: Double = 0, autostart: Bool = false, source: RemoteSource = RemoteSource()) {
         loadGeneration = (loadGeneration &+ 1) & ~Self.loadCommandMask
         error = nil
         isFileLoaded = false
@@ -494,6 +509,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             pendingURL = url
             pendingStartTime = startTime
             pendingAutostart = autostart
+            pendingSource = source
             return
         }
 
@@ -501,7 +517,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             seekScheduler.reset()
             resetPlaybackMeterLocked()
             resetAudioPresentationLocked()
+            externalAudioForLoad = source.externalAudioURL?.absoluteString
         }
+        applyHTTPHeaders(source.httpHeaders)
         startPaused = !autostart
         pendingSeekAfterLoad = startTime
 
@@ -547,8 +565,10 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         pendingURL = nil
         pendingStartTime = 0
         pendingAutostart = false
+        pendingSource = RemoteSource()
         pendingSeekAfterLoad = 0
         queue.sync {
+            externalAudioForLoad = nil
             seekScheduler.reset()
             resetPlaybackMeterLocked()
             resetAudioPresentationLocked()
@@ -1104,6 +1124,10 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                     }
 
                 case MPV_EVENT_FILE_LOADED:
+                    if let audio = self.externalAudioForLoad {
+                        self.externalAudioForLoad = nil
+                        self.commandAsync("audio-add", args: [audio, "select"])
+                    }
                     // Replacing a playing source emits END_FILE without changing
                     // pause. Refresh the flag even when no pause notification follows.
                     var paused: Int32 = 1
@@ -1184,6 +1208,22 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         let status = mpv_command_async(mpv, requestID, &cargs)
         checkError(status)
         return status >= 0
+    }
+
+    /// Options apply to the next `loadfile`. Header values containing commas
+    /// (Accept lists) would split mpv's comma-separated list and are left out;
+    /// hosts check User-Agent and Referer, not those.
+    private func applyHTTPHeaders(_ headers: [String: String]) {
+        guard let mpv, !headers.isEmpty || hasCustomHTTPHeaders else { return }
+        let userAgent = headers.first { $0.key.caseInsensitiveCompare("User-Agent") == .orderedSame }?.value
+        let fields = headers
+            .filter { $0.key.caseInsensitiveCompare("User-Agent") != .orderedSame && !$0.value.contains(",") }
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key): \($0.value)" }
+            .joined(separator: ",")
+        checkError(mpv_set_property_string(mpv, "user-agent", userAgent ?? "libmpv"))
+        checkError(mpv_set_property_string(mpv, "http-header-fields", fields))
+        hasCustomHTTPHeaders = !headers.isEmpty
     }
 
     private func setDouble(_ name: String, _ value: Double) {

@@ -158,6 +158,18 @@
     ]
   },
   {
+    "name": "block-buffer",
+    "version": "0.12.1",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/RustCrypto/utils",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
     "name": "block-padding",
     "version": "0.4.2",
     "license": "MIT OR Apache-2.0",
@@ -356,6 +368,18 @@
     ]
   },
   {
+    "name": "const-oid",
+    "version": "0.10.2",
+    "license": "Apache-2.0 OR MIT",
+    "repository": "https://github.com/RustCrypto/formats",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
     "name": "cookie",
     "version": "0.18.2",
     "license": "MIT OR Apache-2.0",
@@ -460,6 +484,21 @@
     ]
   },
   {
+    "name": "data-encoding",
+    "version": "2.11.1",
+    "license": "MIT",
+    "repository": "https://github.com/ia0/data-encoding",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [
+      "alloc",
+      "default",
+      "std"
+    ],
+    "notice_files": [
+      "LICENSE"
+    ]
+  },
+  {
     "name": "deranged",
     "version": "0.5.9",
     "license": "MIT OR Apache-2.0",
@@ -502,6 +541,23 @@
     ],
     "notice_files": [
       "LICENSE"
+    ]
+  },
+  {
+    "name": "digest",
+    "version": "0.11.3",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/RustCrypto/traits",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [
+      "alloc",
+      "block-api",
+      "default",
+      "oid"
+    ],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
     ]
   },
   {
@@ -2143,6 +2199,22 @@
     ]
   },
   {
+    "name": "sha1",
+    "version": "0.11.0",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/RustCrypto/hashes",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [
+      "alloc",
+      "default",
+      "oid"
+    ],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
     "name": "shlex",
     "version": "2.0.1",
     "license": "MIT OR Apache-2.0",
@@ -2646,6 +2718,29 @@
     ]
   },
   {
+    "name": "tungstenite",
+    "version": "0.30.0",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/snapview/tungstenite-rs",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [
+      "__rustls-tls",
+      "data-encoding",
+      "handshake",
+      "http",
+      "httparse",
+      "rustls",
+      "rustls-pki-types",
+      "rustls-tls-webpki-roots",
+      "sha1",
+      "webpki-roots"
+    ],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
     "name": "typenum",
     "version": "1.20.1",
     "license": "MIT OR Apache-2.0",
@@ -2785,6 +2880,17 @@
     "notice_files": [
       "LICENSE-APACHE",
       "LICENSE-MIT"
+    ]
+  },
+  {
+    "name": "webpki-roots",
+    "version": "0.26.11",
+    "license": "CDLA-Permissive-2.0",
+    "repository": "https://github.com/rustls/webpki-roots",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [],
+    "notice_files": [
+      "LICENSE"
     ]
   },
   {
