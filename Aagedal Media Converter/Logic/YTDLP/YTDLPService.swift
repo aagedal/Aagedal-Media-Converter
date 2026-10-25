@@ -168,8 +168,9 @@ struct YTDLPMetadata: Sendable {
     let thumbnailURL: URL?
     let uploader: String?
     let description: String?
-    /// Stream the clip picker can play, when a format is directly playable.
-    var previewStream: YTDLPPreviewStream? = nil
+    /// Streams the clip picker can play, best first; later entries are
+    /// fallbacks if a format URL won't load. Empty when none is playable.
+    var previewStreams: [YTDLPPreviewStream] = []
     /// The downloader that answered the probe; downloads of the same URL
     /// normally use it too.
     var engine: YTDLPEngine = .ytdlp
@@ -905,7 +906,7 @@ actor YTDLPService {
             thumbnailURL: thumbnailURL,
             uploader: uploader,
             description: description,
-            previewStream: YTDLPPreviewStream.select(fromMetadata: json),
+            previewStreams: YTDLPPreviewStream.candidates(fromMetadata: json),
             engine: probe.engine
         )
     }

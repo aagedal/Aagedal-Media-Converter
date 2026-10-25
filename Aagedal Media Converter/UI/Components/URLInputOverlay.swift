@@ -50,7 +50,7 @@ struct URLInputOverlay: View {
     /// typing a new URL never shows the previous video.
     @State private var clipDurationURL: String?
     @State private var clipSourceDuration: Double?
-    @State private var clipPreviewStream: YTDLPPreviewStream?
+    @State private var clipPreviewStreams: [YTDLPPreviewStream] = []
     @State private var clipProbeEngine: YTDLPEngine?
     @State private var clipDurationIsLoading = false
     /// Height available to the overlay, so the clip player fits the window.
@@ -483,7 +483,7 @@ struct URLInputOverlay: View {
     private var clipPicker: some View {
         if let duration = knownClipDuration {
             ClipPreviewView(
-                stream: clipPreviewStream,
+                streams: clipPreviewStreams,
                 duration: duration,
                 inPoint: Binding(
                     get: { DownloadSection.parseTime(clipStartText).flatMap { $0 > 0 ? min($0, duration) : nil } },
@@ -494,7 +494,8 @@ struct URLInputOverlay: View {
                     // The end of the video is the same as no end time.
                     set: { clipEndText = $0.map(DownloadSection.formatTime) ?? "" }
                 ),
-                videoHeight: clipVideoHeight
+                videoHeight: clipVideoHeight,
+                onReleaseTextFocus: { isTextFieldFocused = false }
             )
             // mpv stays bound to its first view; each video gets a fresh player.
             .id(clipDurationURL)
@@ -524,9 +525,18 @@ struct URLInputOverlay: View {
             let metadata = try await postService.fetchMetadata(url: url)
             try Task.checkCancellation()
             guard sanitizedURL == url else { return }
+            // Times typed for another video don't carry over; ones typed
+            // for this video stay unless they fall outside it.
+            if clipDurationURL != nil {
+                clipStartText = ""
+                clipEndText = ""
+            } else if let duration = metadata.duration {
+                if DownloadSection.parseTime(clipStartText).map({ $0 >= duration }) == true { clipStartText = "" }
+                if DownloadSection.parseTime(clipEndText).map({ $0 > duration }) == true { clipEndText = "" }
+            }
             clipDurationURL = url
             clipSourceDuration = metadata.duration
-            clipPreviewStream = metadata.previewStream
+            clipPreviewStreams = metadata.previewStreams
             clipProbeEngine = metadata.engine
         } catch is CancellationError {
             return
@@ -535,7 +545,7 @@ struct URLInputOverlay: View {
             guard !Task.isCancelled, sanitizedURL == url else { return }
             clipDurationURL = url
             clipSourceDuration = nil
-            clipPreviewStream = nil
+            clipPreviewStreams = []
             clipProbeEngine = nil
         }
         clipDurationIsLoading = false

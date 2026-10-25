@@ -40,6 +40,23 @@ final class YTDLPPreviewStreamTests: XCTestCase {
         XCTAssertEqual(stream.httpHeaders, headers)
     }
 
+    /// YouTube can refuse every H.264 URL of a probe while VP9 and HLS play,
+    /// so fallbacks cover other codecs and protocols before near-duplicates.
+    func testCandidatesFallBackAcrossCodecAndProtocolFamilies() {
+        let json: [String: Any] = ["formats": [
+            format("140", vcodec: "none", acodec: "mp4a.40.2", tbr: 129),
+            format("18", vcodec: "avc1.42001E", acodec: "mp4a.40.2", height: 360),
+            format("136", vcodec: "avc1.4D401F", acodec: "none", height: 720, tbr: 1100),
+            format("298", vcodec: "avc1.4D4020", acodec: "none", height: 720, tbr: 1500),
+            format("247", vcodec: "vp9", acodec: "none", height: 720, tbr: 709),
+            format("311", protocol: "m3u8_native", vcodec: "avc1.4D4020", acodec: "none", height: 720),
+        ]]
+        let candidates = YTDLPPreviewStream.candidates(fromMetadata: json)
+        XCTAssertEqual(candidates.map(\.videoURL.lastPathComponent), ["136", "311", "247", "298"])
+        XCTAssertTrue(candidates.allSatisfy { $0.audioURL?.lastPathComponent == "140" })
+        XCTAssertEqual(YTDLPPreviewStream.select(fromMetadata: json)?.videoURL.lastPathComponent, "136")
+    }
+
     func testMuxedStreamWinsWhenAtLeastAsTall() throws {
         let json: [String: Any] = ["formats": [
             format("hls-720", protocol: "m3u8_native", vcodec: "avc1", acodec: "mp4a", height: 720),

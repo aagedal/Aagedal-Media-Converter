@@ -10,10 +10,12 @@ import SwiftUI
 /// fullscreen player's timeline. Without a playable stream the timeline still
 /// moves a playhead, so points can be set by position alone.
 ///
-/// Keys (while no text field has focus): Space play/pause, I/O set in/out,
-/// ⌥I/⌥O clear, ⇧I/⇧O jump to the point, ←/→ step 1 s (⇧ 10 s).
+/// Keys (while no text field has focus, or during a timeline drag): Space
+/// play/pause, I/O set in/out, ⌥I/⌥O clear, ⇧I/⇧O jump to the point,
+/// ←/→ step 1 s (⇧ 10 s). The in and out handles can also be dragged.
 struct ClipPreviewView: View {
-    let stream: YTDLPPreviewStream?
+    /// Best stream first; the next is tried when one fails to load.
+    let streams: [YTDLPPreviewStream]
     let duration: Double
     /// In-point in source seconds; nil is the start of the video.
     @Binding var inPoint: Double?
@@ -21,8 +23,12 @@ struct ClipPreviewView: View {
     @Binding var outPoint: Double?
     /// Height of the video box; the parent shrinks it in short windows.
     var videoHeight: CGFloat = 300
+    /// Lets the parent clear its own text-field focus state, which would
+    /// otherwise take keyboard focus back from the picker.
+    var onReleaseTextFocus: () -> Void = {}
 
     @StateObject private var player = MPVPlayer()
+    @State private var streamIndex = 0
     /// Playhead while scrubbing, without a stream, or until a seek lands.
     @State private var localTime: Double = 0
     @State private var isDraggingTimeline = false
@@ -31,6 +37,10 @@ struct ClipPreviewView: View {
 
     /// Points this close to either end of the video mean "no point".
     private static let edgeTolerance = 0.05
+    /// Shortest clip the handles allow.
+    private static let minimumClipLength = 0.1
+
+    private var stream: YTDLPPreviewStream? { streams.indices.contains(streamIndex) ? streams[streamIndex] : nil }
 
     private var hasPlayer: Bool { stream != nil && player.error == nil }
 
@@ -66,12 +76,26 @@ struct ClipPreviewView: View {
                     localTime = time
                     if hasPlayer { player.seekForScrubbing(to: time) }
                 },
-                onScrubEnded: { seek(to: localTime) }
+                onScrubEnded: { seek(to: localTime) },
+                onTrimStartDrag: { time in
+                    let latest = (outPoint ?? duration) - Self.minimumClipLength
+                    let clamped = min(max(0, time), latest)
+                    inPoint = clamped <= Self.edgeTolerance ? nil : clamped
+                },
+                onTrimEndDrag: { time in
+                    let earliest = (inPoint ?? 0) + Self.minimumClipLength
+                    let clamped = max(min(duration, time), earliest)
+                    outPoint = clamped >= duration - Self.edgeTolerance ? nil : clamped
+                }
             )
             transportRow
         }
         .background(ClipPreviewKeyMonitor(handler: handleKey))
-        .task(id: stream) { loadStream() }
+        .task(id: streamIndex) { loadStream() }
+        .onChange(of: player.error) { _, error in
+            // A refused format URL (HTTP 403) often has a working sibling.
+            if error != nil, streamIndex + 1 < streams.count { streamIndex += 1 }
+        }
         .onChange(of: player.timePos) { _, time in
             if let target = settlingTarget, abs(time - target) < 0.5 { settlingTarget = nil }
         }
@@ -86,11 +110,14 @@ struct ClipPreviewView: View {
     private var videoArea: some View {
         ZStack {
             Color.black
-            if stream != nil, player.error == nil {
-                // mpv binds to its first drawable, so the parent gives each URL
-                // a fresh view (and player) instead of swapping this one.
+            if stream != nil {
+                // mpv binds to its first drawable, so this view stays mounted
+                // through failed loads and fallbacks, and the parent gives each
+                // URL a fresh view (and player) instead of swapping this one.
                 FullscreenMPVView(player: player)
                     .aspectRatio(videoAspectRatio, contentMode: .fit)
+            }
+            if hasPlayer {
                 if !player.isFileLoaded || player.isBusy {
                     ProgressView().controlSize(.small).tint(.white)
                 }
@@ -105,6 +132,8 @@ struct ClipPreviewView: View {
                 }
                 .foregroundStyle(.white.opacity(0.7))
                 .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.black)
             }
         }
         // The representable has no intrinsic size; a fixed box keeps the
@@ -217,12 +246,15 @@ struct ClipPreviewView: View {
 
     /// Keys reach the player only once the URL and time fields give up focus.
     private func releaseTextFocus() {
+        onReleaseTextFocus()
         if let window = NSApp.keyWindow, window.firstResponder is NSText {
             window.makeFirstResponder(nil)
         }
     }
 
-    private func handleKey(_ event: ClipPreviewKeyPress) -> Bool {
+    private func handleKey(_ event: ClipPreviewKeyPress, editingText: Bool) -> Bool {
+        // Text fields keep their keys, except while the timeline is dragged.
+        guard !editingText || isDraggingTimeline else { return false }
         let modifiers = event.modifiers.intersection([.command, .control, .option, .shift])
         if let arrow = event.arrow {
             guard modifiers.isSubset(of: .shift) else { return false }
@@ -265,7 +297,7 @@ private struct ClipPreviewKeyPress: Sendable {
 /// Routes key presses in the hosting window to the clip preview while no text
 /// field is being edited.
 private struct ClipPreviewKeyMonitor: NSViewRepresentable {
-    let handler: (ClipPreviewKeyPress) -> Bool
+    let handler: (ClipPreviewKeyPress, _ editingText: Bool) -> Bool
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
@@ -284,11 +316,11 @@ private struct ClipPreviewKeyMonitor: NSViewRepresentable {
     }
 
     final class Coordinator: NSObject, @unchecked Sendable {
-        var handler: (ClipPreviewKeyPress) -> Bool
+        var handler: (ClipPreviewKeyPress, Bool) -> Bool
         weak var view: NSView?
         private var monitor: Any?
 
-        init(handler: @escaping (ClipPreviewKeyPress) -> Bool) {
+        init(handler: @escaping (ClipPreviewKeyPress, Bool) -> Bool) {
             self.handler = handler
             super.init()
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -302,8 +334,8 @@ private struct ClipPreviewKeyMonitor: NSViewRepresentable {
                 // Local monitors run on the main thread.
                 let handled = MainActor.assumeIsolated { () -> Bool in
                     guard let window = self.view?.window, window.windowNumber == windowNumber, window.isKeyWindow,
-                          window.attachedSheet == nil, !(window.firstResponder is NSText) else { return false }
-                    return self.handler(press)
+                          window.attachedSheet == nil else { return false }
+                    return self.handler(press, window.firstResponder is NSText)
                 }
                 return handled ? nil : event
             }

@@ -365,7 +365,10 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     // MARK: - Metal Layer Binding
 
     func attachDrawable(_ layer: MPVMetalLayer) {
-        metalLayer = layer
+        // mpv keeps a raw pointer to the layer it was created with. A later
+        // view's layer can't replace it, and releasing it would leave the
+        // video output thread with a dangling layer on the next load.
+        if mpv == nil { metalLayer = layer }
         setupMPV()
 
         // Process pending load if any

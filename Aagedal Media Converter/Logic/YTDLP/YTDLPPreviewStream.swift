@@ -26,44 +26,62 @@ struct YTDLPPreviewStream: Sendable, Equatable {
     /// Picks the preview stream from a `-j` metadata object, or nil when no
     /// format can be played directly (storyboards, DASH segment lists, RTMP …).
     static func select(fromMetadata json: [String: Any]) -> YTDLPPreviewStream? {
+        candidates(fromMetadata: json, limit: 1).first
+    }
+
+    /// The best preview stream followed by fallbacks of other codecs and
+    /// protocols. YouTube refuses some format URLs from an otherwise good
+    /// probe (HTTP 403 on H.264 while VP9 and HLS play), so the player tries
+    /// the next candidate instead of probing again.
+    static func candidates(fromMetadata json: [String: Any], limit: Int = 4) -> [YTDLPPreviewStream] {
         var formats = (json["formats"] as? [[String: Any]] ?? []).compactMap(Format.init)
         // Single-format extractors put the URL on the info dict itself.
         if formats.isEmpty, let single = Format(json) { formats = [single] }
         let playable = formats.filter { playableProtocols.contains($0.protocolName) }
 
-        let muxed = playable.filter { $0.hasVideo && $0.hasAudio }.max(by: Format.videoOrder)
-        let videoOnly = playable.filter { $0.hasVideo && !$0.hasAudio }.max(by: Format.videoOrder)
+        let muxedFormats = playable.filter { $0.hasVideo && $0.hasAudio }.sorted { Format.videoOrder($1, $0) }
+        let videoOnlyFormats = playable.filter { $0.hasVideo && !$0.hasAudio }.sorted { Format.videoOrder($1, $0) }
         let audioOnly = playable.filter { !$0.hasVideo && $0.hasAudio }.max(by: Format.audioOrder)
+        // Adaptive video is only usable with separate audio.
+        let adaptive = audioOnly == nil ? [] : videoOnlyFormats
 
-        let chosenVideo: Format
-        var chosenAudio: Format?
-        switch (muxed, videoOnly) {
+        let first: Format
+        switch (muxedFormats.first, adaptive.first) {
         case let (muxed?, video?):
             // One stream is simpler; take it unless the adaptive pair looks clearly better.
-            if audioOnly != nil, Format.videoOrder(muxed, video), video.height ?? 0 > muxed.height ?? 0 {
-                chosenVideo = video
-                chosenAudio = audioOnly
-            } else {
-                chosenVideo = muxed
-            }
+            let adaptiveIsBetter = Format.videoOrder(muxed, video) && video.height ?? 0 > muxed.height ?? 0
+            first = adaptiveIsBetter ? video : muxed
         case let (muxed?, nil):
-            chosenVideo = muxed
+            first = muxed
         case let (nil, video?):
-            chosenVideo = video
-            chosenAudio = audioOnly
+            first = video
         case (nil, nil):
-            return nil
+            guard let silent = videoOnlyFormats.first else { return [] }
+            first = silent
+        }
+
+        // Fallbacks: one per codec and protocol family first, then by preference.
+        let remaining = (muxedFormats + adaptive).filter { $0.url != first.url }.sorted { Format.videoOrder($1, $0) }
+        var chosen = [first]
+        var families: Set<String> = [first.family]
+        for format in remaining where chosen.count < limit && families.insert(format.family).inserted {
+            chosen.append(format)
+        }
+        for format in remaining where chosen.count < limit && !chosen.contains(where: { $0.url == format.url }) {
+            chosen.append(format)
         }
 
         let fallbackRate = (json["fps"] as? NSNumber)?.doubleValue
-        return YTDLPPreviewStream(
-            videoURL: chosenVideo.url,
-            audioURL: chosenAudio?.url,
-            httpHeaders: chosenVideo.headers,
-            width: chosenVideo.width,
-            height: chosenVideo.height,
-            frameRate: chosenVideo.fps ?? fallbackRate
-        )
+        return chosen.prefix(limit).map { video in
+            YTDLPPreviewStream(
+                videoURL: video.url,
+                audioURL: video.hasAudio ? nil : audioOnly?.url,
+                httpHeaders: video.headers,
+                width: video.width,
+                height: video.height,
+                frameRate: video.fps ?? fallbackRate
+            )
+        }
     }
 
     private struct Format {
@@ -112,6 +130,9 @@ struct YTDLPPreviewStream: Sendable, Equatable {
             if videoCodec.hasPrefix("vp9") || videoCodec.hasPrefix("vp09") { return 1 }
             return 0
         }
+
+        /// Codec and protocol; formats in one family tend to fail together.
+        var family: String { "\(codecRank)-\(protocolRank)" }
 
         /// Plain HTTP seeks with range requests; HLS needs a playlist round trip.
         private var protocolRank: Int { protocolName.hasPrefix("http") ? 1 : 0 }
