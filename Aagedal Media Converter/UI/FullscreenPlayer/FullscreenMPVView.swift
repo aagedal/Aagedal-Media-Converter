@@ -6,12 +6,10 @@ import SwiftUI
 
 struct FullscreenMPVView: NSViewControllerRepresentable {
     let player: MPVPlayer
-    /// See `MPVViewController.fixedRenderAspect`.
-    var fixedRenderAspect: CGFloat? = nil
 
     func makeNSViewController(context: Context) -> MPVViewController {
         // Reuse the MPVViewController from MPVVideoView
-        let viewController = MPVViewController(player: player, fixedRenderAspect: fixedRenderAspect)
+        let viewController = MPVViewController(player: player)
         return viewController
     }
 

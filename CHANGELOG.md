@@ -32,6 +32,7 @@
 
 - Previews no longer turn on macOS's automatically generated "Transcribed" captions, and AV1 files open in the MPV preview for smoother playback.
 - Updated MPVKit to 1.1.0 (mpv 0.41.0, FFmpeg 9.0.2). Long sessions keep less waveform data in memory.
+- MPV video follows its view when a window is resized, including while paused; previously the frame could stay at its old size in a corner.
 
 ### Settings
 

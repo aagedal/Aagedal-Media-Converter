@@ -5,7 +5,7 @@
       "identity": "mpvkit",
       "path": "SwiftPackages/mpvkit",
       "sourceURL": "https://github.com/aagedal/MPVKit.git",
-      "revision": "68c8989362a0daedabcc1540b2b5f0e1fea4be1f",
+      "revision": "f957f4830d449e80723554cdc05ddc4138c1806e",
       "license": "GPL-3.0-or-later",
       "licenseFile": "Licenses/mpvkit-LICENSE.txt",
       "requiredSourceComponents": [

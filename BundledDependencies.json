@@ -6,7 +6,7 @@
       "identity": "mpvkit",
       "path": "SwiftPackages/mpvkit",
       "sourceURL": "https://github.com/aagedal/MPVKit.git",
-      "revision": "68c8989362a0daedabcc1540b2b5f0e1fea4be1f",
+      "revision": "f957f4830d449e80723554cdc05ddc4138c1806e",
       "license": "GPL-3.0-or-later",
       "licenseFile": "Licenses/mpvkit-LICENSE.txt",
       "requiredSourceComponents": [
@@ -719,17 +719,17 @@
     },
     {
       "component": "MPVKit 1.1.0 custom GPL build",
-      "path": "build/attribution/mpvkit/mpvkit-n9.0.2-sources.tar.gz",
-      "bytes": 25014386,
-      "sha256": "06ea1673ac95e435bde9e5bcb8f996c15a6c4cec5862bc4a7e8dfb7271da25a9",
-      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-audio.1/mpvkit-n9.0.2-sources.tar.gz"
+      "path": "build/attribution/mpvkit/mpvkit-n9.0.2-resize.1-sources.tar.gz",
+      "bytes": 26506689,
+      "sha256": "8c82737847482824982302a2a123c0b2e8517671a76f712abf26ca29fda9d50a",
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-resize.1/mpvkit-n9.0.2-resize.1-sources.tar.gz"
     },
     {
       "component": "MPVKit pinned wrapper and build sources",
-      "path": "build/attribution/mpvkit/MPVKit-1.1.0-pinned-source.tar.gz",
-      "bytes": 123220,
-      "sha256": "aa229dfc6d607949accd53512b1e9e9d5884501945563135697e38aa06f5e8bb",
-      "url": "https://github.com/aagedal/MPVKit/tree/68c8989362a0daedabcc1540b2b5f0e1fea4be1f"
+      "path": "build/attribution/mpvkit/MPVKit-1.1.0-resize.1-pinned-source.tar.gz",
+      "bytes": 122735,
+      "sha256": "86b2fa4573fe799adbfec9a54f05597feffd243d46f54590f88145c8fa7b5b3c",
+      "url": "https://github.com/aagedal/MPVKit/tree/f957f4830d449e80723554cdc05ddc4138c1806e"
     },
     {
       "component": "yt-dlp-rs MPL-2.0 crate sources",
@@ -1323,7 +1323,7 @@
     {
       "path": "Licenses/mpvkit-LICENSE.txt",
       "bytes": 2916645,
-      "sha256": "b32d4dcb1b772ad51a60da332513aa8a6ce0a5c13d93cc95be68c0b5d9757929"
+      "sha256": "9dd9d038d152a59d0d8fc582e3b3f304bfceadf7c6720502bc8f73da5ca6f320"
     },
     {
       "path": "Licenses/nemo-speech-LICENSE.txt",

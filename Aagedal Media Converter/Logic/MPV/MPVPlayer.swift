@@ -647,6 +647,17 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
 
+    /// Tells mpv the layer's drawableSize changed. mpv's MoltenVK context
+    /// polls the size only while the video output runs; this resizes and
+    /// redraws a paused or idle player immediately.
+    func surfaceDidResize(to size: CGSize) {
+        let value = "\(Int(size.width))x\(Int(size.height))"
+        queue.async { [weak self] in
+            guard let mpv = self?.mpv else { return }
+            mpv_set_property_string(mpv, "moltenvk-surface-size", value)
+        }
+    }
+
     func seekRelative(_ time: TimeInterval) {
         commandAsync("seek", args: [String(time), "relative"])
     }
