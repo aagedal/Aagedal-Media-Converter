@@ -53,17 +53,28 @@ struct URLInputOverlay: View {
     @State private var clipPreviewStreams: [YTDLPPreviewStream] = []
     @State private var clipProbeEngine: YTDLPEngine?
     @State private var clipDurationIsLoading = false
-    /// Height available to the overlay, so the clip player fits the window.
-    @State private var overlayHeight: CGFloat = 900
+    /// Space available to the overlay, so the clip player fits the window.
+    @State private var overlaySize = CGSize(width: 1200, height: 900)
+    private var overlayHeight: CGFloat { overlaySize.height }
 
     /// Panel height without the clip video, history included.
     private static let clipPanelChromeHeight: CGFloat = 560
+    private static let panelWidth: CGFloat = 620
+    private static let panelPadding: CGFloat = 20
+    private var isPickingClip: Bool { isClipActive && knownClipDuration != nil }
+    /// The panel widens with the window while a clip is picked, so the
+    /// preview isn't left tiny in a large window.
+    private var currentPanelWidth: CGFloat {
+        guard isPickingClip else { return Self.panelWidth }
+        return min(1200, max(Self.panelWidth, overlaySize.width - 80))
+    }
     private var clipVideoHeight: CGFloat {
-        min(300, max(140, overlayHeight - Self.clipPanelChromeHeight))
+        let fitsWidth = (currentPanelWidth - 2 * Self.panelPadding) * 9 / 16
+        return min(fitsWidth, max(140, overlayHeight - Self.clipPanelChromeHeight))
     }
     /// Short windows drop the history list while a clip is picked.
     private var showsHistory: Bool {
-        !(isClipActive && knownClipDuration != nil && overlayHeight < Self.clipPanelChromeHeight + 300)
+        !(isPickingClip && overlayHeight < Self.clipPanelChromeHeight + 300)
     }
 
     /// Section downloads usually stream through ffmpeg at roughly 2× playback
@@ -256,7 +267,7 @@ struct URLInputOverlay: View {
             // Input panel
             inputPanel
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { overlayHeight = $0 }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { overlaySize = $0 }
         .task(id: "\(sanitizedURL)|\(isPlaylistContext)|\(postRetry)") {
             await loadPostVideos()
         }
@@ -313,8 +324,8 @@ struct URLInputOverlay: View {
                 historySection
             }
         }
-        .padding(20)
-        .frame(width: 620)
+        .padding(Self.panelPadding)
+        .frame(width: currentPanelWidth)
         .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(radius: 20)

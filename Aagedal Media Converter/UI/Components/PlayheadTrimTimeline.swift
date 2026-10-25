@@ -2,6 +2,7 @@
 // Copyright © 2025 Truls Aagedal
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import AppKit
 import SwiftUI
 
 /// Thin playhead scrubber with in/out markers and the trim region, in the style
@@ -73,27 +74,28 @@ struct PlayheadTrimTimeline: View {
                     .offset(x: max(0, min(width - 2, width * CGFloat(progress) - 1)))
             }
             .frame(height: 20)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        if !isDragging {
-                            isDragging = true
-                            precisionWasActive = false
-                            dragTarget = target(at: value.startLocation.x, inX: trimInFrac * width,
-                                                outX: trimOutFrac * width)
-                            onScrubBegan()
-                        }
-                        drag(to: targetFraction(for: value.location.x, width: width, tracking: true) * duration)
-                    }
-                    .onEnded { value in
-                        drag(to: targetFraction(for: value.location.x, width: width, tracking: false) * duration)
-                        onScrubEnded()
-                        isDragging = false
-                        precisionWasActive = false
-                        dragTarget = nil
-                    }
-            )
+            // AppKit mouse handling rather than a SwiftUI DragGesture: each
+            // drag event is dispatched on its own, so key presses (I/O)
+            // arrive while the mouse button is held.
+            .overlay(TimelineMouseTracker(
+                began: { x in
+                    isDragging = true
+                    precisionWasActive = false
+                    dragTarget = target(at: x, inX: trimInFrac * width, outX: trimOutFrac * width)
+                    onScrubBegan()
+                    drag(to: targetFraction(for: x, width: width, tracking: true) * duration)
+                },
+                moved: { x in
+                    drag(to: targetFraction(for: x, width: width, tracking: true) * duration)
+                },
+                ended: { x in
+                    drag(to: targetFraction(for: x, width: width, tracking: false) * duration)
+                    onScrubEnded()
+                    isDragging = false
+                    precisionWasActive = false
+                    dragTarget = nil
+                }
+            ))
         }
         .frame(height: 20)
         .accessibilityRepresentation {
@@ -164,5 +166,34 @@ struct PlayheadTrimTimeline: View {
         guard precisionWasActive else { return max(0, min(1, Double(x / width))) }
         let delta = (x - precisionAnchorX) / width
         return max(0, min(1, precisionAnchorFraction + Double(delta) / precisionScrubFactor))
+    }
+}
+
+/// Reports mouse-down, drag and mouse-up x positions in its own coordinates.
+private struct TimelineMouseTracker: NSViewRepresentable {
+    let began: (CGFloat) -> Void
+    let moved: (CGFloat) -> Void
+    let ended: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> TrackingView { TrackingView() }
+
+    func updateNSView(_ view: TrackingView, context: Context) {
+        view.began = began
+        view.moved = moved
+        view.ended = ended
+    }
+
+    final class TrackingView: NSView {
+        var began: (CGFloat) -> Void = { _ in }
+        var moved: (CGFloat) -> Void = { _ in }
+        var ended: (CGFloat) -> Void = { _ in }
+
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+        private func x(of event: NSEvent) -> CGFloat { convert(event.locationInWindow, from: nil).x }
+
+        override func mouseDown(with event: NSEvent) { began(x(of: event)) }
+        override func mouseDragged(with event: NSEvent) { moved(x(of: event)) }
+        override func mouseUp(with event: NSEvent) { ended(x(of: event)) }
     }
 }
