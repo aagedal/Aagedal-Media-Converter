@@ -160,6 +160,44 @@ struct YTDLPProgressParser: Sendable {
         return h * 3600 + m * 60 + s
     }
 
+    /// Recorded duration and output size from an ffmpeg stats line
+    /// (`frame= 1499 fps= 42 q=-1.0 size=    5632KiB time=00:00:49.99 bitrate=… speed=1.39x`).
+    static func parseFFmpegStats(_ line: String) -> (time: Double?, bytes: Int64?)? {
+        guard line.contains("speed=") else { return nil }
+        let time = parseFFmpegTime(line)
+        var bytes: Int64?
+        if let match = line.range(of: #"L?size=\s*\d+(\.\d+)?\s*[A-Za-z]*B"#, options: .regularExpression) {
+            let value = line[match].drop { $0 != "=" }.dropFirst().trimmingCharacters(in: .whitespaces)
+            let digits = value.prefix { $0.isNumber || $0 == "." }
+            let unit = value.dropFirst(digits.count).trimmingCharacters(in: .whitespaces).lowercased()
+            let multiplier: Double? = switch unit {
+            case "b": 1
+            case "kib", "kb": 1024
+            case "mib", "mb": 1024 * 1024
+            case "gib", "gb": 1024 * 1024 * 1024
+            default: nil
+            }
+            if let number = Double(digits), let multiplier {
+                bytes = Int64(number * multiplier)
+            }
+        }
+        guard time != nil || bytes != nil else { return nil }
+        return (time, bytes)
+    }
+
+    /// Whether a yt-dlp error means the stream exists but has not started (a scheduled
+    /// live event or premiere, or a channel that is not live yet), so the download can
+    /// wait for it with `--wait-for-video`.
+    static func isStreamNotStartedError(_ message: String) -> Bool {
+        let lowered = message.lowercased()
+        return [
+            "live event will begin",
+            "premieres in",
+            "premiere will begin",
+            "is not currently live",
+        ].contains { lowered.contains($0) }
+    }
+
     /// Parses the marker emitted by yt-dlp's `before_dl` print template.
     /// A recording is live only while yt-dlp reports `is_live`; archived and
     /// post-live videos are finite VOD downloads.

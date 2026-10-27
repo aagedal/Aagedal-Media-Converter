@@ -129,9 +129,13 @@ class DownloadManager {
 
                 // Read only the destination reported by this download.
                 if let partialFile = control.partialFile(in: outputFolder) {
-                    // Update file size
-                    if let attrs = try? FileManager.default.attributesOfItem(atPath: partialFile.path),
-                       let fileSize = attrs[.size] as? Int64 {
+                    // Update file size. `--live-from-start` records each format to
+                    // its own file until they are merged, so add them up.
+                    let fileSizes = control.reportedFiles(in: outputFolder).compactMap {
+                        (try? FileManager.default.attributesOfItem(atPath: $0.path))?[.size] as? Int64
+                    }
+                    if !fileSizes.isEmpty {
+                        let fileSize = fileSizes.reduce(0, +)
                         // Log every 10 updates
                         if updateCount % 10 == 1 {
                             logger.info("[LiveStats] Update #\(updateCount): file size = \(fileSize) bytes")
@@ -661,23 +665,34 @@ class DownloadManager {
                 self.cancelDownload(itemID: itemID)
                 return
             }
-            if forceOverwrite {
-                await self.performForceDownload(
-                    itemID: itemID, urlString: urlString, outputFolder: outputFolder,
-                    liveFromStart: liveFromStart, audioOnly: audioOnly, section: section, control: control
-                )
-            } else {
-                await self.performDownload(
-                    itemID: itemID, urlString: urlString, outputFolder: outputFolder,
-                    liveFromStart: liveFromStart, audioOnly: audioOnly, section: section, control: control
-                )
-            }
+            // Keep App Nap from throttling output parsing and the stall watchdog, and
+            // idle sleep from cutting off long downloads and live recordings.
+            let activity = ProcessInfo.processInfo.beginActivity(
+                options: .userInitiated, reason: "Downloading a video"
+            )
+            defer { ProcessInfo.processInfo.endActivity(activity) }
+            await self.performDownload(
+                itemID: itemID, urlString: urlString, outputFolder: outputFolder,
+                liveFromStart: liveFromStart, audioOnly: audioOnly, section: section,
+                forceOverwrite: forceOverwrite, waitForStream: false, control: control
+            )
         }
         downloadTasks[itemID] = (control, task)
         return task
     }
 
-    /// Performs the actual download
+    /// Clears every live-stream state of a row whose download has ended.
+    private static func clearLiveState(_ item: inout VideoItem) {
+        item.isLiveStreamRecording = false
+        item.downloadStopping = false
+        item.liveRecordingFileSize = nil
+        item.liveRecordingDuration = nil
+        item.waitingForLiveStream = false
+        item.liveStreamStartsAt = nil
+    }
+
+    /// Performs the actual download. `waitForStream` is set when a previous attempt
+    /// found a scheduled stream that hasn't started; yt-dlp then waits for it.
     private func performDownload(
         itemID: UUID,
         urlString: String,
@@ -685,6 +700,8 @@ class DownloadManager {
         liveFromStart: Bool,
         audioOnly: Bool,
         section: DownloadSection?,
+        forceOverwrite: Bool,
+        waitForStream: Bool,
         control: YTDLPDownloadControl
     ) async {
         let downloadStartTime = Date()
@@ -696,12 +713,17 @@ class DownloadManager {
         let folderAccess = SecurityScopedBookmarkManager.shared.startAccessing(url: outputFolder)
         defer { SecurityScopedBookmarkManager.shared.stopAccessing(folderAccess) }
 
-        // Add to download history immediately (for easy retry of failed downloads)
-        let initialTitle = URL(string: urlString)?.host ?? "Download"
-        DownloadHistoryService.addEntry(url: urlString, title: initialTitle)
+        if !waitForStream {
+            // Add to download history immediately (for easy retry of failed downloads)
+            let initialTitle = URL(string: urlString)?.host ?? "Download"
+            DownloadHistoryService.addEntry(url: urlString, title: initialTitle)
+        }
 
-        // Fetch thumbnail in parallel (doesn't block download)
-        fetchThumbnailInBackground(itemID: itemID, urlString: urlString)
+        // Fetch thumbnail in parallel (doesn't block download). A forced re-download
+        // keeps the row's thumbnail, and a stream wait fetches its own.
+        if !forceOverwrite && !waitForStream {
+            fetchThumbnailInBackground(itemID: itemID, urlString: urlString)
+        }
 
         // Start the actual download immediately (don't wait for metadata)
         do {
@@ -711,10 +733,11 @@ class DownloadManager {
             let result = try await ytdlpService.download(
                 url: urlString,
                 outputFolder: outputFolder,
-                forceOverwrite: false,
+                forceOverwrite: forceOverwrite,
                 liveFromStart: liveFromStart,
                 audioOnly: audioOnly,
                 section: section,
+                waitForStream: waitForStream,
                 control: control,
                 progress: { [weak self] progress, speed, isLiveStream in
                     Task { @MainActor in
@@ -728,6 +751,7 @@ class DownloadManager {
                             // For live streams, mark as live recording
                             if isLiveStream {
                                 item.isLiveStreamRecording = true
+                                item.waitingForLiveStream = false
                             }
                             // Also update the main progress for the progress bar
                             item.progress = progress
@@ -759,6 +783,13 @@ class DownloadManager {
                             item.downloadEngineFallbackReason = fallbackReason
                         }
                     }
+                },
+                liveUpdate: { [weak self] update in
+                    Task { @MainActor in
+                        guard let self,
+                              self.downloadControls[itemID] === control else { return }
+                        self.applyLiveUpdate(update, itemID: itemID)
+                    }
                 }
             )
 
@@ -775,7 +806,8 @@ class DownloadManager {
                 return
             }
 
-            // Download complete - update item
+            // Download complete - update item. A live recording stopped by the user
+            // ends here too: yt-dlp finalizes it like a stream that ended.
             let downloadElapsed = Date().timeIntervalSince(actualDownloadStartTime)
             let totalElapsed = Date().timeIntervalSince(downloadStartTime)
             logger.info("[TIMING] Download complete: \(result.outputURL.path)")
@@ -804,9 +836,7 @@ class DownloadManager {
                 item.downloadEngineFallbackReason = result.engineFallbackReason
                 item.name = result.outputURL.lastPathComponent
                 item.isDownloading = false
-                item.isLiveStreamRecording = false
-                item.liveRecordingFileSize = nil
-                item.liveRecordingDuration = nil
+                Self.clearLiveState(&item)
                 item.downloadProgress = 1.0
                 item.downloadSpeed = nil
                 item.progress = 0  // Reset for encoding
@@ -816,8 +846,8 @@ class DownloadManager {
                 // Get file size
                 if let attrs = try? FileManager.default.attributesOfItem(atPath: result.outputURL.path),
                    let size = attrs[.size] as? Int64 {
-                item.size = size
-            }
+                    item.size = size
+                }
             }
 
             // Trigger details and metadata loading for the downloaded file
@@ -835,6 +865,20 @@ class DownloadManager {
             stopLiveRecordingStatUpdates(itemID: itemID)
 
             switch error {
+            case .streamNotStarted(let message) where !waitForStream && !Task.isCancelled:
+                logger.info("Stream has not started yet, waiting for it: \(message, privacy: .public)")
+                updateItem(itemID) { item in
+                    item.waitingForLiveStream = true
+                    item.downloadHasProgress = false
+                    item.downloadProgress = 0
+                    item.downloadSpeed = nil
+                }
+                fetchUpcomingStreamInfo(itemID: itemID, urlString: urlString)
+                await performDownload(
+                    itemID: itemID, urlString: urlString, outputFolder: outputFolder,
+                    liveFromStart: liveFromStart, audioOnly: audioOnly, section: section,
+                    forceOverwrite: forceOverwrite, waitForStream: true, control: control
+                )
             case .fileAlreadyExists(let path, let title):
                 logger.warning("File already exists: \(path)")
                 updateItem(itemID) { item in
@@ -843,10 +887,11 @@ class DownloadManager {
                     item.fileAlreadyExistsPath = path
                     item.status = .failed
                     item.name = title
-                    item.liveRecordingFileSize = nil
-                    item.liveRecordingDuration = nil
+                    Self.clearLiveState(&item)
                 }
             case .liveRecordingStopped:
+                // yt-dlp could not finalize the stopped recording (or was forced to
+                // stop); keep whatever it wrote.
                 logger.info("Download stopped for item: \(itemID), searching for partial file...")
 
                 // Recover only a destination emitted by this download; another
@@ -858,8 +903,13 @@ class DownloadManager {
                     var finalFile = partialFile
                     let filename = partialFile.lastPathComponent
                     if filename.hasSuffix(".part") {
-                        let newFilename = String(filename.dropLast(5)) // Remove ".part"
-                        let newURL = partialFile.deletingLastPathComponent().appendingPathComponent(newFilename)
+                        var newURL = partialFile.deletingPathExtension() // Remove ".part"
+                        // A live HLS recording cut off before yt-dlp's fixup is still
+                        // MPEG-TS, whatever extension it was given.
+                        if newURL.pathExtension.lowercased() != "ts", Self.isMPEGTransportStream(partialFile) {
+                            newURL = newURL.deletingPathExtension().appendingPathExtension("ts")
+                        }
+                        let newFilename = newURL.lastPathComponent
                         do {
                             try FileManager.default.moveItem(at: partialFile, to: newURL)
                             finalFile = newURL
@@ -874,10 +924,7 @@ class DownloadManager {
                         item.url = finalFile
                         item.name = finalFile.lastPathComponent
                         item.isDownloading = false
-                        item.isLiveStreamRecording = false
-                        item.downloadStopping = false
-                        item.liveRecordingFileSize = nil
-                        item.liveRecordingDuration = nil
+                        Self.clearLiveState(&item)
                         item.downloadError = nil
                         item.downloadProgress = 1.0
                         item.downloadSpeed = nil
@@ -906,10 +953,7 @@ class DownloadManager {
                     logger.warning("Could not find partial file for stopped download")
                     updateItem(itemID) { item in
                         item.isDownloading = false
-                        item.isLiveStreamRecording = false
-                        item.downloadStopping = false
-                        item.liveRecordingFileSize = nil
-                        item.liveRecordingDuration = nil
+                        Self.clearLiveState(&item)
                         item.downloadError = "Stopped - partial file not found"
                         item.status = .failed
                     }
@@ -918,10 +962,7 @@ class DownloadManager {
                 logger.info("Download cancelled for item: \(itemID)")
                 updateItem(itemID) { item in
                     item.isDownloading = false
-                    item.isLiveStreamRecording = false
-                    item.downloadStopping = false
-                    item.liveRecordingFileSize = nil
-                    item.liveRecordingDuration = nil
+                    Self.clearLiveState(&item)
                     item.downloadSpeed = nil
                     item.downloadError = "Cancelled"
                     item.status = .cancelled
@@ -932,9 +973,7 @@ class DownloadManager {
                     item.isDownloading = false
                     item.downloadError = error.localizedDescription
                     item.status = .failed
-                    item.isLiveStreamRecording = false
-                    item.liveRecordingFileSize = nil
-                    item.liveRecordingDuration = nil
+                    Self.clearLiveState(&item)
                     item.downloadSpeed = nil
                 }
             }
@@ -949,13 +988,70 @@ class DownloadManager {
                 item.isDownloading = false
                 item.downloadError = error.localizedDescription
                 item.status = .failed
-                item.isLiveStreamRecording = false
-                item.liveRecordingFileSize = nil
-                item.liveRecordingDuration = nil
+                Self.clearLiveState(&item)
                 item.downloadSpeed = nil
             }
         }
 
+    }
+
+    /// MPEG-TS packets are 188 bytes, each starting with the 0x47 sync byte.
+    nonisolated static func isMPEGTransportStream(_ url: URL) -> Bool {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? handle.close() }
+        guard let data = try? handle.read(upToCount: 188 * 3), data.count == 188 * 3 else { return false }
+        return [0, 188, 376].allSatisfy { data[data.startIndex + $0] == 0x47 }
+    }
+
+    private func applyLiveUpdate(_ update: YTDLPLiveUpdate, itemID: UUID) {
+        switch update {
+        case .streamAvailable:
+            logger.info("[LiveStream] Awaited stream is available")
+            updateItem(itemID) { $0.waitingForLiveStream = false }
+        case .recording(let duration, let bytes):
+            // ffmpeg reports what it has written, which also covers yt-dlp-rs's
+            // private working directory; stop probing the growing file.
+            stopLiveRecordingStatUpdates(itemID: itemID)
+            updateItem(itemID) { item in
+                if let duration { item.liveRecordingDuration = duration }
+                if let bytes { item.liveRecordingFileSize = bytes }
+            }
+        }
+    }
+
+    /// Title, thumbnail and announced start time for a row waiting for its stream.
+    private func fetchUpcomingStreamInfo(itemID: UUID, urlString: String) {
+        let service = ytdlpService
+        thumbnailTasks.start(itemID: itemID, timeout: .seconds(60)) {
+            let info = try await service.fetchUpcomingStreamInfo(url: urlString)
+            try Task.checkCancellation()
+            var thumbnailData: Data?
+            if let thumbnailURL = info.thumbnailURL,
+               let (data, response) = try? await URLSession.shared.data(from: thumbnailURL),
+               (response as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty {
+                thumbnailData = data
+            }
+            return UpcomingStreamThumbnail(info: info, data: thumbnailData)
+        } completion: { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let upcoming):
+                let info = upcoming.info
+                let thumbnailData = upcoming.data
+                self.updateItem(itemID) { item in
+                    guard item.waitingForLiveStream else { return }
+                    item.liveStreamStartsAt = info.startsAt
+                    if let title = info.title, item.name == "Fetching info..." || item.name.isEmpty {
+                        item.name = title
+                    }
+                    if let thumbnailData, item.thumbnailData == nil {
+                        item.thumbnailData = thumbnailData
+                    }
+                }
+            case .failure(let error):
+                self.logger.info("Could not fetch upcoming stream info: \(error.localizedDescription)")
+            }
+        }
     }
 
     /// Cancels a download
@@ -979,10 +1075,7 @@ class DownloadManager {
         updateItem(itemID) { item in
             item.isDownloading = false
             item.isQueuedForDownload = false
-            item.isLiveStreamRecording = false
-            item.downloadStopping = false
-            item.liveRecordingFileSize = nil
-            item.liveRecordingDuration = nil
+            Self.clearLiveState(&item)
             item.downloadSpeed = nil
             item.downloadError = "Cancelled"
             item.status = .cancelled
@@ -992,6 +1085,13 @@ class DownloadManager {
     func stopLiveDownload(itemID: UUID) {
         logger.info("Stop live download requested for item: \(itemID)")
 
+        // Nothing has been recorded while waiting for a stream to start, and SIGINT
+        // would only make yt-dlp check again right away.
+        if findItem(itemID)?.waitingForLiveStream == true {
+            cancelDownload(itemID: itemID)
+            return
+        }
+
         // Immediately update UI to show stopping state (provides instant feedback)
         updateItem(itemID) { item in
             item.downloadStopping = true
@@ -1000,11 +1100,10 @@ class DownloadManager {
         // Stop live recording stat updates immediately to prevent further polling
         stopLiveRecordingStatUpdates(itemID: itemID)
 
-        // Stop this item's process immediately while leaving its orchestration task alive
-        // so it can recover and finalize the partial recording.
+        // The first stop asks yt-dlp to finish the recording (merge, metadata) and exit;
+        // a second one forces it. The orchestration task stays alive either way and
+        // finalizes the row: as a completed download, or by recovering the partial file.
         _ = downloadControls[itemID]?.stopLiveRecording()
-
-        // Note: The item state will be updated by performDownload when it catches liveRecordingStopped
     }
 
     /// Retries a failed download
@@ -1070,152 +1169,6 @@ class DownloadManager {
             section: item.downloadSection,
             forceOverwrite: true
         )
-    }
-
-    /// Performs a forced download (overwrites existing files)
-    private func performForceDownload(
-        itemID: UUID,
-        urlString: String,
-        outputFolder: URL,
-        liveFromStart: Bool,
-        audioOnly: Bool,
-        section: DownloadSection?,
-        control: YTDLPDownloadControl
-    ) async {
-        let folderAccess = SecurityScopedBookmarkManager.shared.startAccessing(url: outputFolder)
-        defer { SecurityScopedBookmarkManager.shared.stopAccessing(folderAccess) }
-
-        // Record a history entry upfront so the URL stays retry-able even if this
-        // forced run is cancelled or fails before completion. Mirrors performDownload.
-        let initialTitle = URL(string: urlString)?.host ?? "Download"
-        DownloadHistoryService.addEntry(url: urlString, title: initialTitle)
-
-        do {
-            // Start the actual download with force overwrite
-            logger.info("Starting forced download for: \(urlString)")
-
-            let result = try await ytdlpService.download(
-                url: urlString,
-                outputFolder: outputFolder,
-                forceOverwrite: true,
-                liveFromStart: liveFromStart,
-                audioOnly: audioOnly,
-                section: section,
-                control: control,
-                progress: { [weak self] progress, speed, isLiveStream in
-                    Task { @MainActor in
-                        guard let self,
-                              self.downloadControls[itemID] === control else { return }
-                        self.updateItem(itemID) { item in
-                            item.downloadProgress = progress
-                            item.downloadHasProgress = true
-                            item.downloadSpeed = speed
-                            if isLiveStream {
-                                item.isLiveStreamRecording = true
-                            }
-                            item.progress = progress
-                        }
-                    }
-                },
-                titleUpdate: { [weak self] title in
-                    Task { @MainActor in
-                        guard let self,
-                              self.downloadControls[itemID] === control else { return }
-                        self.updateItem(itemID) { item in
-                            item.name = title
-                        }
-                    }
-                },
-                engineUpdate: { [weak self] engine, fallbackReason in
-                    Task { @MainActor in
-                        guard let self,
-                              self.downloadControls[itemID] === control else { return }
-                        self.updateItem(itemID) { item in
-                            item.downloadEngine = engine
-                            item.downloadEngineFallbackReason = fallbackReason
-                        }
-                    }
-                }
-            )
-
-            guard downloadControls[itemID] === control else {
-                logger.info("Ignoring completion from a cancelled or superseded forced download: \(itemID)")
-                return
-            }
-            guard !Task.isCancelled else {
-                updateItem(itemID) { item in
-                    item.isDownloading = false
-                    item.downloadError = "Cancelled"
-                    item.status = .cancelled
-                }
-                return
-            }
-
-            // Download complete - update item
-            logger.info("Force download complete: \(result.outputURL.path)")
-
-            // Save to download history
-            DownloadHistoryService.addEntry(
-                url: urlString,
-                title: result.title.isEmpty
-                    ? result.outputURL.deletingPathExtension().lastPathComponent
-                    : result.title,
-                outputFileName: result.outputURL.lastPathComponent
-            )
-
-            updateItem(itemID) { item in
-                item.url = result.outputURL
-                item.downloadEngine = result.engine
-                item.downloadEngineFallbackReason = result.engineFallbackReason
-                item.name = result.outputURL.lastPathComponent
-                item.isDownloading = false
-                item.downloadProgress = 1.0
-                item.downloadSpeed = nil
-                item.progress = 0  // Reset for encoding
-                item.status = .waiting
-                item.detailsLoaded = false
-
-                // Get file size
-                if let attrs = try? FileManager.default.attributesOfItem(atPath: result.outputURL.path),
-                   let size = attrs[.size] as? Int64 {
-                    item.size = size
-                }
-            }
-
-            // Trigger details and metadata loading for the downloaded file
-            if let item = findItem(itemID) {
-                let shouldAutoEncode = item.autoEncodeAfterDownload
-                loadDownloadedFileDetails(
-                    itemID: itemID, fileURL: result.outputURL, autoEncode: shouldAutoEncode,
-                    section: section, sourceDuration: result.sourceDuration
-                )
-            }
-
-        } catch YTDLPError.cancelled {
-            guard downloadControls[itemID] === control else { return }
-            logger.info("Force download cancelled for item: \(itemID)")
-            updateItem(itemID) { item in
-                item.isDownloading = false
-                item.isLiveStreamRecording = false
-                item.downloadStopping = false
-                item.liveRecordingFileSize = nil
-                item.liveRecordingDuration = nil
-                item.downloadSpeed = nil
-                item.downloadError = "Cancelled"
-                item.status = .cancelled
-            }
-        } catch {
-            guard downloadControls[itemID] === control else { return }
-            logger.error("Force download failed: \(error.localizedDescription)")
-
-            updateItem(itemID) { item in
-                item.isDownloading = false
-                item.downloadError = error.localizedDescription
-                item.status = .failed
-                item.downloadSpeed = nil
-            }
-        }
-
     }
 
     /// Removes a download from the queue
@@ -1391,6 +1344,11 @@ class DownloadManager {
 
 private struct DownloadThumbnailResult: Sendable {
     let title: String
+    let data: Data?
+}
+
+private struct UpcomingStreamThumbnail: Sendable {
+    let info: YTDLPUpcomingStreamInfo
     let data: Data?
 }
 

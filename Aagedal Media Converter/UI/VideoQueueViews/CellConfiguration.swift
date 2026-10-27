@@ -83,6 +83,12 @@ struct VideoFileCellConfiguration: Equatable {
     let autoEncodeAfterDownload: Bool
     let isLiveStreamRecording: Bool
     let downloadStopping: Bool
+    /// Recorded duration and size of a live recording in progress.
+    var liveRecordingDuration: Double? = nil
+    var liveRecordingFileSize: Int64? = nil
+    /// Waiting for a scheduled live stream to start, and its announced start.
+    var waitingForLiveStream: Bool = false
+    var liveStreamStartsAt: Date? = nil
     /// Playlist entry waiting for its turn to download (placeholder source).
     var isQueuedForDownload: Bool = false
     /// Row belongs to a "Download all" playlist batch that can be cancelled as a whole.

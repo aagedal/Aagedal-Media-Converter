@@ -46,6 +46,29 @@ enum SubprocessTermination: Sendable, Equatable {
     case uncaughtSignal
 }
 
+/// Sends signals to a running subprocess's process group without cancelling the run, e.g.
+/// SIGINT so a tool can finish and finalize its output the way it would after Ctrl-C.
+final class SubprocessSignalHandle: @unchecked Sendable {
+    private let lock = NSLock()
+    private var sender: (@Sendable (Int32) -> Bool)?
+
+    /// Returns false when no process is currently running.
+    @discardableResult
+    func send(_ signal: Int32) -> Bool {
+        let sender = lock.withLock { self.sender }
+        return sender?(signal) ?? false
+    }
+
+    /// Called by runners when the process starts; test runners can attach a fake.
+    func attach(_ sender: @escaping @Sendable (Int32) -> Bool) {
+        lock.withLock { self.sender = sender }
+    }
+
+    func detach() {
+        lock.withLock { sender = nil }
+    }
+}
+
 struct SubprocessResult: Sendable, Equatable {
     let terminationStatus: Int32
     let termination: SubprocessTermination
@@ -104,6 +127,8 @@ struct SubprocessRequest: Sendable {
     let sensitiveArgumentNames: Set<String>
     let sensitiveValues: Set<String>
     let redactURLs: Bool
+    /// Attached while the process runs; see `SubprocessSignalHandle`.
+    let signalHandle: SubprocessSignalHandle?
 
     init(
         executableURL: URL,
@@ -117,7 +142,8 @@ struct SubprocessRequest: Sendable {
         standardErrorCaptureLimit: Int = SubprocessRequest.defaultCaptureLimit,
         sensitiveArgumentNames: Set<String> = [],
         sensitiveValues: Set<String> = [],
-        redactURLs: Bool = true
+        redactURLs: Bool = true,
+        signalHandle: SubprocessSignalHandle? = nil
     ) {
         self.executableURL = executableURL
         self.arguments = arguments
@@ -131,6 +157,7 @@ struct SubprocessRequest: Sendable {
         self.sensitiveArgumentNames = sensitiveArgumentNames
         self.sensitiveValues = sensitiveValues
         self.redactURLs = redactURLs
+        self.signalHandle = signalHandle
     }
 
     /// A log-safe command representation. Callers can add tool-specific option names whose
@@ -586,6 +613,10 @@ private final class SubprocessExecution: @unchecked Sendable {
             return true
         }
 
+        request.signalHandle?.attach { [weak self] signal in
+            self?.signal(signal) ?? false
+        }
+
         if let input = request.standardInput, let stdinPipe {
             DispatchQueue.global(qos: .utility).async {
                 try? stdinPipe.fileHandleForWriting.write(contentsOf: input)
@@ -768,7 +799,16 @@ private final class SubprocessExecution: @unchecked Sendable {
         try? handle.close()
     }
 
+    /// Signals the process group of a running child that is not already being terminated.
+    private func signal(_ signal: Int32) -> Bool {
+        let canSignal = lock.withLock { hasStarted && !hasExited && !terminationStarted }
+        guard canSignal, process.isRunning else { return false }
+        process.terminateProcessGroup(with: signal)
+        return true
+    }
+
     private func didExit() {
+        request.signalHandle?.detach()
         let continuations = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
             guard !hasExited else { return [] }
             hasExited = true
@@ -855,11 +895,19 @@ private final class IsolatedProcess: @unchecked Sendable {
         var signalMask = sigset_t()
         sigemptyset(&signalMask)
         try Self.check(posix_spawnattr_setsigmask(&attributes, &signalMask))
+        // Children start with default SIGINT/SIGTERM handling even when this process was
+        // launched with them ignored, so `SubprocessSignalHandle` interrupts reach them.
+        var defaultSignals = sigset_t()
+        sigemptyset(&defaultSignals)
+        sigaddset(&defaultSignals, SIGINT)
+        sigaddset(&defaultSignals, SIGTERM)
+        try Self.check(posix_spawnattr_setsigdefault(&attributes, &defaultSignals))
         try Self.check(
             posix_spawnattr_setflags(
                 &attributes,
                 Int16(
                     POSIX_SPAWN_SETPGROUP
+                        | POSIX_SPAWN_SETSIGDEF
                         | POSIX_SPAWN_SETSIGMASK
                         | POSIX_SPAWN_CLOEXEC_DEFAULT
                 )

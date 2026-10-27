@@ -1177,7 +1177,11 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         }
 
         // Action buttons — only when status changes
-        if isFirstConfigure || prev?.status != config.status || prev?.isDownloading != config.isDownloading || prev?.scheduledDownloadTime != config.scheduledDownloadTime || prev?.isQueuedForDownload != config.isQueuedForDownload || prev?.downloadError != config.downloadError || prev?.fileAlreadyExistsPath != config.fileAlreadyExistsPath || prev?.subtitleStatus != config.subtitleStatus || prev?.analyticsStatus != config.analyticsStatus {
+        if isFirstConfigure || prev?.status != config.status || prev?.isDownloading != config.isDownloading
+            || prev?.isLiveStreamRecording != config.isLiveStreamRecording
+            || prev?.downloadStopping != config.downloadStopping
+            || prev?.waitingForLiveStream != config.waitingForLiveStream
+            || prev?.scheduledDownloadTime != config.scheduledDownloadTime || prev?.isQueuedForDownload != config.isQueuedForDownload || prev?.downloadError != config.downloadError || prev?.fileAlreadyExistsPath != config.fileAlreadyExistsPath || prev?.subtitleStatus != config.subtitleStatus || prev?.analyticsStatus != config.analyticsStatus {
             updateActionButtons(config: config)
         }
 
@@ -1200,6 +1204,10 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
             || prev?.downloadEngineFallbackReason != config.downloadEngineFallbackReason
             || prev?.downloadStopping != config.downloadStopping
             || prev?.isLiveStreamRecording != config.isLiveStreamRecording
+            || prev?.liveRecordingDuration != config.liveRecordingDuration
+            || prev?.liveRecordingFileSize != config.liveRecordingFileSize
+            || prev?.waitingForLiveStream != config.waitingForLiveStream
+            || prev?.liveStreamStartsAt != config.liveStreamStartsAt
             || prev?.fileAlreadyExistsPath != config.fileAlreadyExistsPath
             || prev?.uploadStatus != config.uploadStatus
             || prev?.uploadProgress != config.uploadProgress
@@ -1221,6 +1229,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
             || prev?.status != config.status
             || prev?.isDownloading != config.isDownloading
             || prev?.isLiveStreamRecording != config.isLiveStreamRecording
+            || prev?.waitingForLiveStream != config.waitingForLiveStream
             || prev?.isQueuedForDownload != config.isQueuedForDownload
             || prev?.uploadStatus != config.uploadStatus
             || prev?.subtitleStatus != config.subtitleStatus
