@@ -85,6 +85,7 @@ final class YTDLPEngineRouterTests: XCTestCase {
         let noFallback: [Error] = [
             YTDLPError.cancelled, YTDLPError.liveRecordingStopped,
             YTDLPError.fileAlreadyExists(path: "/a", title: "a"),
+            YTDLPError.streamNotStarted("This live event will begin in 44 hours."),
             CancellationError(), CookieError.message("bad profile"),
         ]
         for error in noFallback {

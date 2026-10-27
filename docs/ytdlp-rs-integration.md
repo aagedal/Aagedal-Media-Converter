@@ -47,6 +47,9 @@ and every other site.
 | `--section-timecode` (clip timecode, rs extension) | 0.4.0; needs ffprobe, MP4/MOV result | rs only, when ffprobe sits beside ffmpeg |
 | `-j` `formats[].url`/`http_headers` (clip preview stream) | supported | rs (`YTDLPPreviewStream`, played by mpv) |
 | `--live-from-start --no-part` | hidden, YouTube native DASH generator (beta) | yt-dlp |
+| Live HLS recording (no `--live-from-start`), stopped with SIGINT to the process group | 0.4.0: SIGINT stops ffmpeg, then fixup, metadata and move run as after Ctrl-C (exit 0). SIGTERM loses the recording (it lives in a private `.yt-dlp-rs-process-*` directory) | rs |
+| `--wait-for-video 30-600` (only after a "live event will begin" / "not currently live" error) | 0.4.0, same `[wait]` lines | rs |
+| `--downloader-args "ffmpeg:-loglevel error -stats"` (ffmpeg stats for live recordings and clips) | supported | rs |
 | `--embed-metadata --no-embed-info-json --no-embed-chapters` | supported | rs |
 | `--windows-filenames`, `--restrict-filenames`, `--trim-filenames 200` | supported | rs |
 | `--no-overwrites`/`--force-overwrites`, "has already been downloaded" | supported, same message | rs |
@@ -56,6 +59,7 @@ and every other site.
 | `-o` templates (`%(title)s [%(id)s].%(ext)s`, clip label) | supported | rs |
 | `-j --no-download`, `-J --flat-playlist` | supported; fields used (`title`, `duration`, `thumbnail(s)`, `uploader`, `description`, `entries[].url/title/duration/availability`) present | rs (listings only where ported) |
 | `--ignore-no-formats-error` (post probes) | hidden, **no effect**; a photo slide makes `-J` fail | Instagram `/p/` posts (all operations) → yt-dlp; Twitter posts stay on rs |
+| `-j --ignore-no-formats-error` for an upcoming stream's title and `release_timestamp` | fails (no effect) | yt-dlp only (`fetchUpcomingStreamInfo`) |
 | `--playlist-items N`, `--no-playlist` | supported | rs |
 | `--cookies FILE` (Helium export) | supported (file is rewritten, like yt-dlp) | rs |
 | `--cookies-from-browser` safari/chrome/chromium/edge/brave/firefox/opera/vivaldi/whale, `firefox:PATH` (Zen) | all accepted and read natively | rs (first use may raise a separate Keychain prompt for yt-dlp-rs) |
@@ -64,7 +68,7 @@ and every other site.
 ## Fallback
 
 When yt-dlp-rs was chosen and the operation throws anything except a user stop
-(`cancelled`, `liveRecordingStopped`), `fileAlreadyExists`, `CancellationError`
+(`cancelled`, `liveRecordingStopped`), `fileAlreadyExists`, `streamNotStarted`, `CancellationError`
 or a cookie configuration error, the same operation runs once with yt-dlp. yt-dlp-rs
 results are also treated as failures when `-j` has no formats or a listing has no
 entries. Before a download retry, files created during the yt-dlp-rs attempt

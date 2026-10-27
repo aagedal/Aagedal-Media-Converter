@@ -133,7 +133,7 @@ enum YTDLPEngineRouter {
         if error is CancellationError || error is CookieError { return false }
         guard let error = error as? YTDLPError else { return true }
         switch error {
-        case .cancelled, .liveRecordingStopped, .fileAlreadyExists:
+        case .cancelled, .liveRecordingStopped, .fileAlreadyExists, .streamNotStarted:
             return false
         case .binaryNotFound, .metadataFetchFailed, .downloadFailed, .outputNotFound, .stalled:
             return true

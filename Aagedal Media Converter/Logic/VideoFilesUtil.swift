@@ -862,6 +862,10 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var liveRecordingFileSize: Int64? = nil
     /// Estimated duration during live recording (updated periodically)
     var liveRecordingDuration: Double? = nil
+    /// Waiting for a scheduled live stream or premiere to start
+    var waitingForLiveStream: Bool = false
+    /// Announced start of the stream being waited for, when known
+    var liveStreamStartsAt: Date? = nil
 
     // MARK: - Upload State
     /// Whether upload is enabled for this item

@@ -11,6 +11,15 @@ private let scheduledTimeFormatter: DateFormatter = {
     return formatter
 }()
 
+/// Start of a stream that is not today: "29 Oct 2026 at 16:45".
+private let streamStartFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .short
+    formatter.doesRelativeDateFormatting = true
+    return formatter
+}()
+
 extension VideoFileCellView {
 
     // MARK: - Toggle Buttons Update
@@ -167,8 +176,15 @@ extension VideoFileCellView {
         cancelAnalyticsButton.isHidden = true
 
         if config.isDownloading {
-            stopDownloadButton.isHidden = false
-            stopDownloadButton.toolTip = "Stop download and keep partial file"
+            // Nothing is recorded while waiting for a stream; cancel covers it.
+            stopDownloadButton.isHidden = config.waitingForLiveStream
+            stopDownloadButton.toolTip = if config.downloadStopping {
+                String(localized: "Stop immediately without finishing the file", comment: "Tooltip on the stop button of a download that is already finishing after a stop.")
+            } else if config.isLiveStreamRecording {
+                String(localized: "Stop recording and keep the file", comment: "Tooltip on the stop button of a live stream recording.")
+            } else {
+                "Stop download and keep partial file"
+            }
             cancelDownloadButton.isHidden = false
             cancelDownloadButton.toolTip = config.isPlaylistDownload
                 ? String(localized: "Cancel and discard download. Shift-Command-click to cancel the rest of the playlist.", comment: "Tooltip on the cancel button of a downloading playlist row.")
@@ -213,6 +229,7 @@ extension VideoFileCellView {
             if config.downloadError != nil { return ("ERROR", "exclamationmark.circle", .systemRed) }
             if config.isDownloading {
                 if config.isLiveStreamRecording { return ("LIVE", "bolt.fill", .systemPurple) }
+                if config.waitingForLiveStream { return ("UPCOMING", "clock", .systemOrange) }
                 return ("DOWNLOADING", "arrow.down.circle", .systemPurple)
             }
             if config.isQueuedForDownload { return ("QUEUED", "arrow.down.circle", .secondaryLabelColor) }
@@ -294,6 +311,37 @@ extension VideoFileCellView {
         }
     }
 
+    // MARK: - Live Streams
+
+    /// "Recording 1:02:03 · 1.2 GB"; parts that are not known yet are left out.
+    func liveRecordingText(config: VideoFileCellConfiguration) -> String {
+        var parts: [String] = []
+        if let duration = config.liveRecordingDuration, duration.isFinite, duration >= 0 {
+            let total = Int(duration)
+            parts.append(total >= 3600
+                ? String(format: "%d:%02d:%02d", total / 3600, total / 60 % 60, total % 60)
+                : String(format: "%d:%02d", total / 60, total % 60))
+        }
+        if let bytes = config.liveRecordingFileSize, bytes > 0 {
+            parts.append(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file))
+        }
+        guard !parts.isEmpty else {
+            return String(localized: "Recording…", comment: "Status of a live stream recording before its duration and size are known.")
+        }
+        let details = parts.joined(separator: " · ")
+        return String(localized: "Recording \(details)", comment: "Status of a live stream recording. The argument is the recorded duration and/or file size, e.g. \"1:02:03 · 1.2 GB\".")
+    }
+
+    func waitingForStreamText(config: VideoFileCellConfiguration) -> String {
+        guard let start = config.liveStreamStartsAt, start > Date() else {
+            return String(localized: "Waiting for the stream to start", comment: "Status of a download waiting for a scheduled live stream or premiere whose start time is unknown or has passed.")
+        }
+        let time = Calendar.current.isDateInToday(start)
+            ? scheduledTimeFormatter.string(from: start)
+            : streamStartFormatter.string(from: start)
+        return String(localized: "Stream starts \(time)", comment: "Status of a download waiting for a scheduled live stream. The argument is the announced start time.")
+    }
+
     // MARK: - Progress Text
 
     func progressText(config: VideoFileCellConfiguration) -> String {
@@ -308,8 +356,13 @@ extension VideoFileCellView {
 
         // Downloading — show percentage and speed (capsule shows DOWNLOADING)
         if config.isDownloading {
-            if config.downloadStopping { return "Stopping..." }
-            if config.isLiveStreamRecording { return "" }
+            if config.downloadStopping {
+                return config.isLiveStreamRecording
+                    ? String(localized: "Finishing recording…", comment: "Status of a stopped live stream recording while the downloader merges and finalizes the file.")
+                    : "Stopping..."
+            }
+            if config.isLiveStreamRecording { return liveRecordingText(config: config) }
+            if config.waitingForLiveStream { return waitingForStreamText(config: config) }
             // Tool name as a subtle suffix (not localized: it's a program name)
             let engineSuffix = config.downloadEngine.map { " · \($0.rawValue)" } ?? ""
             if !config.downloadHasProgress { return "Preparing...\(engineSuffix)" }

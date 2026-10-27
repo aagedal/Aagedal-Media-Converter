@@ -7805,6 +7805,197 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertEqual(YTDLPProgressParser.parseLiveStatus("unrelated output"), nil)
     }
 
+    func testYTDLPFFmpegStatsCarryLiveRecordingDurationAndSize() throws {
+        let stats = try XCTUnwrap(YTDLPProgressParser.parseFFmpegStats(
+            "frame= 1499 fps= 42 q=-1.0 size=    5632KiB time=00:00:49.99 bitrate= 922.9kbits/s speed=1.39x elapsed=0:00:36.03"
+        ))
+        XCTAssertEqual(try XCTUnwrap(stats.time), 49.99, accuracy: 0.001)
+        XCTAssertEqual(stats.bytes, 5632 * 1024)
+
+        let final = try XCTUnwrap(YTDLPProgressParser.parseFFmpegStats(
+            "frame= 9000 fps= 30 q=-1.0 Lsize=    1.5GiB time=01:02:03.00 bitrate=1182.8kbits/s speed=1.0x"
+        ))
+        XCTAssertEqual(try XCTUnwrap(final.time), 3723, accuracy: 0.001)
+        XCTAssertEqual(final.bytes, Int64(1.5 * 1024 * 1024 * 1024))
+
+        let unknownSize = try XCTUnwrap(YTDLPProgressParser.parseFFmpegStats(
+            "size=N/A time=00:00:01.00 bitrate=N/A speed=2x"
+        ))
+        XCTAssertNil(unknownSize.bytes)
+        XCTAssertNil(YTDLPProgressParser.parseFFmpegStats("[download]  45.2% of 1.23GiB at 5.67MiB/s"))
+    }
+
+    func testYTDLPRecognizesStreamsThatHaveNotStarted() {
+        XCTAssertTrue(YTDLPProgressParser.isStreamNotStartedError("[youtube] hv867HnY4j4: This live event will begin in 44 hours."))
+        XCTAssertTrue(YTDLPProgressParser.isStreamNotStartedError("[youtube] abc: This live event will begin in a few moments."))
+        XCTAssertTrue(YTDLPProgressParser.isStreamNotStartedError("[youtube] abc: Premieres in 3 hours"))
+        XCTAssertTrue(YTDLPProgressParser.isStreamNotStartedError("[youtube:tab] @channel: The channel is not currently live"))
+        XCTAssertFalse(YTDLPProgressParser.isStreamNotStartedError("[youtube] abc: This live stream recording is not available."))
+        XCTAssertFalse(YTDLPProgressParser.isStreamNotStartedError("[youtube] abc: Join this channel to get access to members-only content"))
+    }
+
+    func testSubprocessSignalHandleInterruptsRunningProcessGracefully() async throws {
+        let handle = SubprocessSignalHandle()
+        XCTAssertFalse(handle.send(SIGINT), "No process is running yet")
+        let run = Task {
+            try await SubprocessRunner().run(SubprocessRequest(
+                executableURL: URL(fileURLWithPath: "/bin/sh"),
+                arguments: ["-c", "trap 'echo finalized; exit 0' INT; echo ready; while :; do sleep 0.05; done"],
+                timeout: .seconds(20),
+                signalHandle: handle
+            ))
+        }
+        let deadline = Date().addingTimeInterval(10)
+        while !handle.send(0), Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        // Give the shell time to install its trap.
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertTrue(handle.send(SIGINT))
+        let result = try await run.value
+        XCTAssertTrue(result.succeeded, result.standardErrorText)
+        XCTAssertTrue(result.standardOutputText.contains("finalized"), result.standardOutputText)
+        XCTAssertFalse(handle.send(SIGINT), "The handle detaches when the process exits")
+    }
+
+    func testYTDLPLiveRecordingStopFinalizesLikeAnEndedStream() async throws {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ytdlp-live-stop-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let output = folder.appendingPathComponent("Live.mkv")
+        try Data("merged".utf8).write(to: output)
+
+        let runner = LiveRecordingSubprocessRunner(finalPath: output.path, exitStatusAfterInterrupt: 0)
+        let service = YTDLPService(
+            updateService: StubYTDLPUpdateService(path: "/bin/sh"),
+            subprocessRunner: runner
+        )
+        let control = YTDLPDownloadControl()
+        let updates = LockedValues<YTDLPLiveUpdate>()
+        let download = Task {
+            try await service.download(
+                url: "https://example.com/live", outputFolder: folder, control: control,
+                progress: { _, _, _ in }, liveUpdate: { updates.append($0) }
+            )
+        }
+        await runner.waitUntilRecording()
+        // The service installs its stop actions right after launching the runner.
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertTrue(control.stopLiveRecording())
+        let result = try await download.value
+        XCTAssertEqual(result.outputURL.standardizedFileURL.path, output.standardizedFileURL.path)
+        XCTAssertEqual(runner.receivedSignals, [SIGINT])
+        XCTAssertTrue(updates.values.contains(.recording(duration: 12.5, bytes: 2048)), "\(updates.values)")
+        XCTAssertTrue(runner.arguments.contains("--downloader-args"))
+        XCTAssertFalse(runner.arguments.contains("--wait-for-video"))
+    }
+
+    func testYTDLPLiveRecordingStopThatFailsToFinalizeIsRecovered() async throws {
+        let runner = LiveRecordingSubprocessRunner(finalPath: nil, exitStatusAfterInterrupt: 1)
+        let service = YTDLPService(
+            updateService: StubYTDLPUpdateService(path: "/bin/sh"),
+            subprocessRunner: runner
+        )
+        let control = YTDLPDownloadControl()
+        let download = Task {
+            try await service.download(
+                url: "https://example.com/live", outputFolder: FileManager.default.temporaryDirectory,
+                control: control, progress: { _, _, _ in }
+            )
+        }
+        await runner.waitUntilRecording()
+        // The service installs its stop actions right after launching the runner.
+        try await Task.sleep(for: .milliseconds(100))
+        control.stopLiveRecording()
+        do {
+            _ = try await download.value
+            XCTFail("Expected a stopped recording")
+        } catch YTDLPError.liveRecordingStopped {}
+    }
+
+    func testYTDLPSecondLiveRecordingStopForcesTermination() async throws {
+        let runner = LiveRecordingSubprocessRunner(finalPath: nil, exitStatusAfterInterrupt: 0, ignoresInterrupt: true)
+        let service = YTDLPService(
+            updateService: StubYTDLPUpdateService(path: "/bin/sh"),
+            subprocessRunner: runner
+        )
+        let control = YTDLPDownloadControl()
+        let download = Task {
+            try await service.download(
+                url: "https://example.com/live", outputFolder: FileManager.default.temporaryDirectory,
+                control: control, progress: { _, _, _ in }
+            )
+        }
+        await runner.waitUntilRecording()
+        // The service installs its stop actions right after launching the runner.
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertTrue(control.stopLiveRecording())
+        XCTAssertTrue(control.stopLiveRecording())
+        do {
+            _ = try await download.value
+            XCTFail("Expected a stopped recording")
+        } catch YTDLPError.liveRecordingStopped {}
+        XCTAssertEqual(runner.receivedSignals, [SIGINT])
+    }
+
+    func testYTDLPReportsStreamsThatHaveNotStartedAndWaitsWhenAsked() async throws {
+        let message = "ERROR: [youtube] abc: This live event will begin in 44 hours.\n"
+        let runner = FailingSubprocessRunner(standardError: message)
+        let service = YTDLPService(
+            updateService: StubYTDLPUpdateService(path: "/bin/sh"),
+            subprocessRunner: runner
+        )
+        do {
+            _ = try await service.download(
+                url: "https://example.com/upcoming", outputFolder: FileManager.default.temporaryDirectory,
+                progress: { _, _, _ in }
+            )
+            XCTFail("Expected streamNotStarted")
+        } catch YTDLPError.streamNotStarted(let reason) {
+            XCTAssertTrue(reason.contains("will begin in 44 hours"), reason)
+        }
+        XCTAssertFalse(runner.arguments.contains("--wait-for-video"))
+
+        do {
+            _ = try await service.download(
+                url: "https://example.com/upcoming", outputFolder: FileManager.default.temporaryDirectory,
+                waitForStream: true, progress: { _, _, _ in }
+            )
+            XCTFail("Expected a failure")
+        } catch YTDLPError.downloadFailed {}
+        XCTAssertTrue(runner.arguments.contains("--wait-for-video"))
+    }
+
+    func testRecoveredLiveRecordingIsRecognizedAsTransportStream() throws {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ts-detect-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        var packets = Data(repeating: 0xFF, count: 188 * 4)
+        for offset in stride(from: 0, to: packets.count, by: 188) { packets[offset] = 0x47 }
+        let ts = folder.appendingPathComponent("Live.mp4.part")
+        try packets.write(to: ts)
+        XCTAssertTrue(DownloadManager.isMPEGTransportStream(ts))
+
+        let mp4 = folder.appendingPathComponent("Clip.mp4.part")
+        try Data([0, 0, 0, 0x20] + Array("ftypisom".utf8) + Array(repeating: 0, count: 600)).write(to: mp4)
+        XCTAssertFalse(DownloadManager.isMPEGTransportStream(mp4))
+        XCTAssertFalse(DownloadManager.isMPEGTransportStream(folder.appendingPathComponent("missing")))
+    }
+
+    func testYTDLPUpcomingStreamInfoReadsAnnouncedStart() {
+        let info = YTDLPUpcomingStreamInfo(json: [
+            "title": "U.S. Spacewalk 100",
+            "release_timestamp": 1793270700,
+            "thumbnail": "https://i.ytimg.com/vi/x/maxresdefault.jpg",
+        ])
+        XCTAssertEqual(info.title, "U.S. Spacewalk 100")
+        XCTAssertEqual(info.startsAt, Date(timeIntervalSince1970: 1793270700))
+        XCTAssertEqual(info.thumbnailURL?.host, "i.ytimg.com")
+        XCTAssertNil(YTDLPUpcomingStreamInfo(json: [:]).startsAt)
+    }
+
     func testYTDLPDownloadControlMapsUserCancellation() async throws {
         let runner = BlockingSubprocessRunner()
         let service = YTDLPService(
@@ -15143,6 +15334,123 @@ private actor SelfCancellingFFmpegRunner: SubprocessRunning {
         cancellation = nil
         await operation?()
         throw CancellationError()
+    }
+}
+
+private final class LockedValues<Value: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [Value] = []
+    func append(_ value: Value) { lock.withLock { storage.append(value) } }
+    var values: [Value] { lock.withLock { storage } }
+}
+
+/// Plays a live recording: reports `is_live` and ffmpeg stats, then waits for SIGINT
+/// (through the request's signal handle) and finishes like yt-dlp after Ctrl-C.
+private final class LiveRecordingSubprocessRunner: SubprocessRunning, @unchecked Sendable {
+    private let finalPath: String?
+    private let exitStatusAfterInterrupt: Int32
+    private let ignoresInterrupt: Bool
+    private let lock = NSLock()
+    private var signals: [Int32] = []
+    private var recording = false
+    private var recordingWaiters: [CheckedContinuation<Void, Never>] = []
+    private var interruptWaiter: CheckedContinuation<Void, Never>?
+    private var interruptedBeforeWait = false
+    private var lastArguments: [String] = []
+
+    init(finalPath: String?, exitStatusAfterInterrupt: Int32, ignoresInterrupt: Bool = false) {
+        self.finalPath = finalPath
+        self.exitStatusAfterInterrupt = exitStatusAfterInterrupt
+        self.ignoresInterrupt = ignoresInterrupt
+    }
+
+    var receivedSignals: [Int32] { lock.withLock { signals } }
+    var arguments: [String] { lock.withLock { lastArguments } }
+
+    func run(
+        _ request: SubprocessRequest,
+        outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?
+    ) async throws -> SubprocessResult {
+        lock.withLock { lastArguments = request.arguments }
+        request.signalHandle?.attach { [weak self] signal in
+            guard let self else { return false }
+            let waiter = self.lock.withLock { () -> CheckedContinuation<Void, Never>? in
+                self.signals.append(signal)
+                guard !self.ignoresInterrupt else { return nil }
+                defer { self.interruptWaiter = nil }
+                if self.interruptWaiter == nil { self.interruptedBeforeWait = true }
+                return self.interruptWaiter
+            }
+            waiter?.resume()
+            return true
+        }
+        defer { request.signalHandle?.detach() }
+
+        func emit(_ text: String, _ stream: SubprocessOutputStream = .standardOutput) {
+            outputHandler?(SubprocessOutputChunk(stream: stream, data: Data(text.utf8)))
+        }
+        emit("\(YTDLPProgressParser.liveStatusPrefix)is_live\n")
+        emit("frame=  375 fps= 30 q=-1.0 size=       2KiB time=00:00:12.50 bitrate= 1.3kbits/s speed=1.0x\r", .standardError)
+        let waiters = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
+            recording = true
+            defer { recordingWaiters.removeAll() }
+            return recordingWaiters
+        }
+        waiters.forEach { $0.resume() }
+
+        if ignoresInterrupt {
+            try await Task.sleep(for: .seconds(30))
+        } else {
+            await withCheckedContinuation { continuation in
+                let resume = lock.withLock { () -> Bool in
+                    if interruptedBeforeWait { return true }
+                    interruptWaiter = continuation
+                    return false
+                }
+                if resume { continuation.resume() }
+            }
+        }
+        if let finalPath { emit("\(finalPath)\n") }
+        return SubprocessResult(
+            terminationStatus: exitStatusAfterInterrupt, termination: .exited,
+            standardOutput: Data(), standardError: Data(),
+            discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0, duration: .seconds(1)
+        )
+    }
+
+    func waitUntilRecording() async {
+        await withCheckedContinuation { continuation in
+            let resume = lock.withLock { () -> Bool in
+                if recording { return true }
+                recordingWaiters.append(continuation)
+                return false
+            }
+            if resume { continuation.resume() }
+        }
+    }
+}
+
+/// Exits with status 1 after printing the given standard error.
+private final class FailingSubprocessRunner: SubprocessRunning, @unchecked Sendable {
+    private let standardError: String
+    private let lock = NSLock()
+    private var lastArguments: [String] = []
+
+    init(standardError: String) { self.standardError = standardError }
+
+    var arguments: [String] { lock.withLock { lastArguments } }
+
+    func run(
+        _ request: SubprocessRequest,
+        outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?
+    ) async throws -> SubprocessResult {
+        lock.withLock { lastArguments = request.arguments }
+        outputHandler?(SubprocessOutputChunk(stream: .standardError, data: Data(standardError.utf8)))
+        return SubprocessResult(
+            terminationStatus: 1, termination: .exited,
+            standardOutput: Data(), standardError: Data(standardError.utf8),
+            discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0, duration: .seconds(1)
+        )
     }
 }
 

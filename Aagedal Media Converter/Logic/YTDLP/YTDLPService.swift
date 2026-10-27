@@ -27,6 +27,10 @@ final class YTDLPDownloadControl: @unchecked Sendable {
     private let lock = NSLock()
     private var executionID: UUID?
     private var cancelAction: (@Sendable () -> Void)?
+    /// Sends SIGINT to the running downloader; false when no process is running.
+    private var interruptAction: (@Sendable () -> Bool)?
+    /// A graceful stop (SIGINT) was sent to the current execution.
+    private var interrupted = false
     private var stopReason: StopReason?
     private var outputPath: String?
     private var initialOutputSignature: OutputSignature?
@@ -111,15 +115,59 @@ final class YTDLPDownloadControl: @unchecked Sendable {
         }
     }
 
-    @discardableResult
-    func stopLiveRecording() -> Bool {
-        terminate(reason: .liveRecordingStop)
+    /// Existing files among the destinations reported by this attempt, including the
+    /// per-format files of a `--live-from-start` recording before they are merged.
+    func reportedFiles(in folder: URL) -> [URL] {
+        let paths = lock.withLock { reportedPaths }
+        let resolvedFolder = folder.standardizedFileURL.resolvingSymlinksInPath().path
+        var seen = Set<String>()
+        return paths.flatMap { path -> [URL] in
+            let url = path.hasPrefix("/") ? URL(fileURLWithPath: path) : folder.appendingPathComponent(path)
+            return path.hasSuffix(".part") ? [url] : [url, url.appendingPathExtension("part")]
+        }.filter { url in
+            guard url.deletingLastPathComponent().standardizedFileURL.resolvingSymlinksInPath().path
+                    == resolvedFolder,
+                  seen.insert(url.path).inserted,
+                  let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+            else { return false }
+            return values.isRegularFile == true && values.isSymbolicLink != true
+        }
     }
 
-    fileprivate func install(id: UUID, cancel: @escaping @Sendable () -> Void) {
+    /// Stops a recording. The first call asks the downloader to finish the way Ctrl-C
+    /// does (SIGINT): yt-dlp then stops ffmpeg cleanly, merges `--live-from-start`
+    /// formats, embeds metadata and exits successfully with a playable file. A second
+    /// call, or one before the process is running, terminates it immediately.
+    @discardableResult
+    func stopLiveRecording() -> Bool {
+        // Mark before signalling so a downloader that exits at once is still seen as stopped.
+        let interrupt = lock.withLock { () -> (@Sendable () -> Bool)? in
+            guard stopReason == nil, !interrupted, let interruptAction else { return nil }
+            interrupted = true
+            return interruptAction
+        }
+        if let interrupt {
+            if interrupt() { return true }
+            lock.withLock { interrupted = false }
+        }
+        return terminate(reason: .liveRecordingStop)
+    }
+
+    /// Whether a graceful stop was requested for the given execution.
+    fileprivate func wasInterrupted(id: UUID) -> Bool {
+        lock.withLock { executionID == id && interrupted }
+    }
+
+    fileprivate func install(
+        id: UUID,
+        cancel: @escaping @Sendable () -> Void,
+        interrupt: (@Sendable () -> Bool)? = nil
+    ) {
         lock.lock()
         executionID = id
         cancelAction = cancel
+        interruptAction = interrupt
+        interrupted = false
         let shouldCancelImmediately = stopReason != nil
         lock.unlock()
         if shouldCancelImmediately {
@@ -128,7 +176,9 @@ final class YTDLPDownloadControl: @unchecked Sendable {
     }
 
     fileprivate func markStalled() -> Bool {
-        terminate(reason: .stalled)
+        // A downloader that hangs while finishing a stopped recording still leaves
+        // a partial recording worth recovering.
+        terminate(reason: lock.withLock { interrupted } ? .liveRecordingStop : .stalled)
     }
 
     fileprivate func finish(id: UUID) -> StopReason? {
@@ -138,6 +188,8 @@ final class YTDLPDownloadControl: @unchecked Sendable {
         let reason = stopReason
         executionID = nil
         cancelAction = nil
+        interruptAction = nil
+        interrupted = false
         stopReason = nil
         return reason
     }
@@ -161,6 +213,14 @@ final class YTDLPDownloadControl: @unchecked Sendable {
     }
 }
 
+/// Live-stream events reported while a download runs.
+enum YTDLPLiveUpdate: Sendable, Equatable {
+    /// The scheduled stream being waited for can now be downloaded.
+    case streamAvailable
+    /// Recorded media duration (seconds) and size so far, from ffmpeg's stats line.
+    case recording(duration: Double?, bytes: Int64?)
+}
+
 /// Metadata fetched from yt-dlp for a video URL
 struct YTDLPMetadata: Sendable {
     let title: String
@@ -174,6 +234,28 @@ struct YTDLPMetadata: Sendable {
     /// The downloader that answered the probe; downloads of the same URL
     /// normally use it too.
     var engine: YTDLPEngine = .ytdlp
+}
+
+/// What yt-dlp knows about a scheduled stream before it starts.
+struct YTDLPUpcomingStreamInfo: Sendable, Equatable {
+    var title: String?
+    var thumbnailURL: URL?
+    /// Announced start time, when the site publishes one.
+    var startsAt: Date?
+
+    init(title: String? = nil, thumbnailURL: URL? = nil, startsAt: Date? = nil) {
+        self.title = title
+        self.thumbnailURL = thumbnailURL
+        self.startsAt = startsAt
+    }
+
+    init(json: [String: Any]) {
+        title = (json["title"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        thumbnailURL = (json["thumbnail"] as? String).flatMap { URL(string: $0) }
+        startsAt = (json["release_timestamp"] as? NSNumber).map {
+            Date(timeIntervalSince1970: $0.doubleValue)
+        }
+    }
 }
 
 /// Result of a successful download
@@ -911,6 +993,27 @@ actor YTDLPService {
         )
     }
 
+    /// Title, thumbnail and announced start of a scheduled stream or premiere. Always
+    /// uses yt-dlp: yt-dlp-rs ignores `--ignore-no-formats-error` and would only fail.
+    func fetchUpcomingStreamInfo(url: String) async throws -> YTDLPUpcomingStreamInfo {
+        guard let ytdlpPath = await updateService.resolveYTDLPPath() else {
+            throw YTDLPError.binaryNotFound
+        }
+        let cookies = try YTDLPCookieSource.configured()
+        defer { cookies.cleanup() }
+        let probe = try await runProbe(
+            ytdlpPath: ytdlpPath,
+            arguments: await commonArguments(engine: .ytdlp) + cookies.arguments
+                + ["-j", "--no-download", "--no-warnings", "--ignore-no-formats-error", "--no-playlist", "--", url]
+        )
+        guard probe.subprocess.succeeded,
+              let json = try? JSONSerialization.jsonObject(with: probe.subprocess.standardOutput) as? [String: Any]
+        else {
+            throw YTDLPError.metadataFetchFailed(probe.safeStandardError.isEmpty ? "Unknown error" : probe.safeStandardError)
+        }
+        return YTDLPUpcomingStreamInfo(json: json)
+    }
+
     /// Probes a URL with `--flat-playlist -J` and returns its entries. Works for
     /// playlists, channels, and single-video URLs (the latter returns a single entry).
     func fetchPlaylistEntries(url: String) async throws -> [YTDLPPlaylistEntry] {
@@ -954,10 +1057,15 @@ actor YTDLPService {
     ///   - liveFromStart: Whether to rewind live streams to the beginning
     ///   - audioOnly: Whether to download only the audio track (no video)
     ///   - section: Optional time range to download instead of the whole video
+    ///   - waitForStream: Wait for a scheduled live stream or premiere to start instead
+    ///     of failing with `YTDLPError.streamNotStarted`. Only pass this after that error:
+    ///     yt-dlp also "waits" for videos without formats (members-only, DRM) forever.
     ///   - progress: Callback for progress updates (progress 0-1, speed string, isLiveStream)
     ///   - titleUpdate: Callback when video title is discovered
     ///   - engineUpdate: Callback with the downloader about to run (and, after a yt-dlp-rs
     ///     failure, the fallback reason)
+    ///   - liveUpdate: Live-stream state: the awaited stream became available, and
+    ///     recording statistics while a live stream is recorded through ffmpeg
     /// - Returns: The path to the downloaded file
     func download(
         url: String,
@@ -966,10 +1074,12 @@ actor YTDLPService {
         liveFromStart: Bool = false,
         audioOnly: Bool = false,
         section: DownloadSection? = nil,
+        waitForStream: Bool = false,
         control: YTDLPDownloadControl = YTDLPDownloadControl(),
         progress: @escaping @Sendable (Double, String?, Bool) -> Void,
         titleUpdate: @escaping @Sendable (String) -> Void = { _ in },
-        engineUpdate: @escaping @Sendable (YTDLPEngine, String?) -> Void = { _, _ in }
+        engineUpdate: @escaping @Sendable (YTDLPEngine, String?) -> Void = { _, _ in },
+        liveUpdate: @escaping @Sendable (YTDLPLiveUpdate) -> Void = { _ in }
     ) async throws -> YTDLPDownloadResult {
         let ffmpegPath = BinaryPathResolver.ffmpegPath
         let ffprobeExists = ffmpegPath.map {
@@ -994,8 +1104,8 @@ actor YTDLPService {
             try await runDownload(
                 engine: engine, executablePath: executablePath, url: url, outputFolder: outputFolder,
                 forceOverwrite: forceOverwrite, liveFromStart: liveFromStart, audioOnly: audioOnly,
-                section: section, hasFFprobe: ffprobeExists, control: control,
-                progress: progress, titleUpdate: titleUpdate
+                section: section, waitForStream: waitForStream, hasFFprobe: ffprobeExists, control: control,
+                progress: progress, titleUpdate: titleUpdate, liveUpdate: liveUpdate
             )
         }
         var result = outcome.value
@@ -1013,10 +1123,12 @@ actor YTDLPService {
         liveFromStart: Bool,
         audioOnly: Bool,
         section: DownloadSection?,
+        waitForStream: Bool,
         hasFFprobe: Bool,
         control: YTDLPDownloadControl,
         progress: @escaping @Sendable (Double, String?, Bool) -> Void,
-        titleUpdate: @escaping @Sendable (String) -> Void
+        titleUpdate: @escaping @Sendable (String) -> Void,
+        liveUpdate: @escaping @Sendable (YTDLPLiveUpdate) -> Void
     ) async throws -> YTDLPDownloadResult {
         let downloadStartTime = Date()
         logger.info("[TIMING] download() started with \(engine.rawValue, privacy: .public)")
@@ -1082,6 +1194,19 @@ actor YTDLPService {
             logger.info("[YTDLPService] Downloading live stream from start (no-part)")
         }
 
+        if waitForStream {
+            // Re-check at most every 10 minutes before the scheduled start (yt-dlp waits
+            // until the announced time when it is sooner), then every 30s until it is live.
+            args.append(contentsOf: ["--wait-for-video", "30-600"])
+            logger.info("[YTDLPService] Waiting for the stream to start")
+        }
+
+        // `--print` implies `--quiet`, which runs ffmpeg with `-loglevel quiet`, and
+        // `--verbose` would flood the log at `-loglevel verbose`. Keep only ffmpeg's
+        // stats line: live HLS recordings and section downloads go through ffmpeg and
+        // would otherwise be silent for hours, tripping the stall watchdog.
+        args.append(contentsOf: ["--downloader-args", "ffmpeg:-loglevel error -stats"])
+
         switch YTDLPFilenameRestrictionMode.current {
         case .off:
             break
@@ -1134,12 +1259,14 @@ actor YTDLPService {
             scriptPath: ytdlpPath,
             arguments: args
         )
+        let signalHandle = SubprocessSignalHandle()
         let request = SubprocessRequest(
             executableURL: configuration.executableURL,
             arguments: configuration.arguments,
             environment: configuration.environment,
             currentDirectoryURL: outputFolder,
-            sensitiveArgumentNames: ["--cookies", "--cookies-from-browser"]
+            sensitiveArgumentNames: ["--cookies", "--cookies-from-browser"],
+            signalHandle: signalHandle
         )
 
         // Use a class to hold mutable state for thread-safe access from the handler
@@ -1150,6 +1277,11 @@ actor YTDLPService {
             var fileAlreadyExists: Bool = false
             var existingFilePath: String?
             var sourceDuration: Double?
+            /// Waiting for a scheduled stream: yt-dlp is silent between re-checks.
+            var waitingForStream: Bool = false
+            /// The extractor reported the source as currently live.
+            var isLive: Bool = false
+            var lastLiveStatsReport: Date = .distantPast
             var firstStdoutLogged: Bool = false
             var firstStderrLogged: Bool = false
             var firstProgressLogged: Bool = false
@@ -1202,6 +1334,7 @@ actor YTDLPService {
             }
         }
         let parsedState = ParsedState()
+        parsedState.waitingForStream = waitForStream
         let lineAccumulator = LineAccumulator()
         let processStartBox = DateBox(value: Date())
 
@@ -1233,8 +1366,36 @@ actor YTDLPService {
             // Use extractor metadata as the source of truth. Fragmented HLS/DASH
             // and ffmpeg-backed VOD downloads otherwise look deceptively live in
             // yt-dlp's human-readable progress output.
-            if YTDLPProgressParser.parseLiveStatus(trimmed) == true {
-                progress(0.1, nil, true)
+            if let isLive = YTDLPProgressParser.parseLiveStatus(trimmed) {
+                let wasWaiting = parsedState.read { state in
+                    defer {
+                        state.waitingForStream = false
+                        state.isLive = isLive
+                    }
+                    return state.waitingForStream
+                }
+                if wasWaiting {
+                    logger.info("Awaited stream is available (live: \(isLive))")
+                    liveUpdate(.streamAvailable)
+                }
+                if isLive {
+                    progress(0.1, nil, true)
+                }
+            }
+
+            // Live HLS recordings run through ffmpeg; its stats line carries the
+            // recorded duration and size. Report them about once a second.
+            if section == nil, let stats = YTDLPProgressParser.parseFFmpegStats(trimmed) {
+                let shouldReport = parsedState.read { state -> Bool in
+                    guard state.isLive, Date().timeIntervalSince(state.lastLiveStatsReport) >= 1 else {
+                        return false
+                    }
+                    state.lastLiveStatsReport = Date()
+                    return true
+                }
+                if shouldReport {
+                    liveUpdate(.recording(duration: stats.time, bytes: stats.bytes))
+                }
             }
 
             if let duration = YTDLPProgressParser.parseSourceDuration(trimmed) {
@@ -1345,9 +1506,11 @@ actor YTDLPService {
                 }
             }
         }
-        control.install(id: executionID) {
+        control.install(id: executionID, cancel: {
             subprocessTask.cancel()
-        }
+        }, interrupt: {
+            signalHandle.send(SIGINT)
+        })
         defer { _ = control.finish(id: executionID) }
 
         // Stall watchdog: if yt-dlp produces no output for `stallThresholdSeconds`,
@@ -1363,9 +1526,10 @@ actor YTDLPService {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: stallCheckInterval)
                 if Task.isCancelled { break }
-                let last = watchdogState.read { $0.lastActivity }
+                let (last, waiting) = watchdogState.read { ($0.lastActivity, $0.waitingForStream) }
                 let elapsed = Date().timeIntervalSince(last)
-                if elapsed > stallThreshold {
+                // yt-dlp prints nothing between re-checks of a stream that hasn't started.
+                if elapsed > stallThreshold, !waiting {
                     watchdogLogger.warning("yt-dlp appears stalled (no output for \(Int(elapsed))s) — terminating")
                     _ = watchdogControl.markStalled()
                     break
@@ -1441,8 +1605,19 @@ actor YTDLPService {
             throw YTDLPError.fileAlreadyExists(path: existingPath, title: videoTitle)
         }
 
+        // A stopped recording that yt-dlp could not finalize still leaves a partial
+        // file; the caller recovers it.
+        let wasInterrupted = control.wasInterrupted(id: executionID)
+        if wasInterrupted, terminationStatus != 0 {
+            logger.warning("Live stream recording stopped without finalizing (exit \(terminationStatus))")
+            throw YTDLPError.liveRecordingStopped
+        }
+
         // Check exit status
         guard terminationStatus == 0 else {
+            if !waitForStream, let firstError, YTDLPProgressParser.isStreamNotStartedError(firstError) {
+                throw YTDLPError.streamNotStarted(firstError)
+            }
             let diagnostic = request.redactedDiagnostic(subprocessResult.standardErrorText)
             let errorMessage = firstError
                 ?? (diagnostic.isEmpty ? "Download failed with exit code \(terminationStatus)" : diagnostic)
@@ -1455,6 +1630,7 @@ actor YTDLPService {
 
         // Verify output file exists
         guard let finalPath = outputPath else {
+            if wasInterrupted { throw YTDLPError.liveRecordingStopped }
             throw YTDLPError.outputNotFound
         }
 
@@ -1504,6 +1680,8 @@ enum YTDLPError: Error, LocalizedError {
     case liveRecordingStopped
     case fileAlreadyExists(path: String, title: String)
     case stalled
+    /// A scheduled live stream or premiere that has not started yet.
+    case streamNotStarted(String)
 
     var errorDescription: String? {
         switch self {
@@ -1523,6 +1701,8 @@ enum YTDLPError: Error, LocalizedError {
             return "File already exists: \(path)"
         case .stalled:
             return "Download stalled — no activity for several minutes"
+        case .streamNotStarted(let message):
+            return message
         }
     }
 }
