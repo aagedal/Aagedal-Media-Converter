@@ -1,8 +1,8 @@
 yt-dlp-rs web-video downloader and dependencies
 
-yt-dlp-rs 0.4.0-beta.1, aarch64-apple-darwin, built by upstream CI with rustc 1.99.1 (58cf8f9c3 2026-10-13).
+yt-dlp-rs 0.6.0-beta.1, aarch64-apple-darwin, built by upstream CI with rustc 1.99.1 (58cf8f9c3 2026-10-13).
 Upstream: https://github.com/aagedal/yt-dlp-rs
-Release: https://github.com/aagedal/yt-dlp-rs/releases/tag/v0.4.0-beta.1
+Release: https://github.com/aagedal/yt-dlp-rs/releases/tag/v0.6.0-beta.1
 yt-dlp-rs is released into the public domain (Unlicense).
 Normal and build dependency notices are retained below. Sources of the
 MPL-2.0 crates are included in the release source companion and are
@@ -11,7 +11,7 @@ The app remains GPL-3.0-or-later; upstream terms remain intact.
 
 
 ========================================================================
-yt-dlp-rs 0.4.0-beta.1
+yt-dlp-rs 0.6.0-beta.1
 https://github.com/aagedal/yt-dlp-rs
 License: Unlicense
 ========================================================================

@@ -74,11 +74,65 @@ final class YTDLPEngineRouterTests: XCTestCase {
 
         XCTAssertEqual(engine(youtube, .download(.init())), .ytdlpRS)
         XCTAssertEqual(engine(youtube, .download(.init(section: true))), .ytdlpRS)
-        XCTAssertEqual(engine(youtube, .download(.init(liveFromStart: true))), .ytdlp)
+        XCTAssertEqual(engine(youtube, .download(.init(liveFromStart: true))), .ytdlpRS)
         XCTAssertEqual(engine(youtube, .download(.init(hasFFmpeg: false))), .ytdlp)
         XCTAssertEqual(engine(youtube, .download(.init(audioOnly: true, hasFFprobe: false))), .ytdlp)
         XCTAssertEqual(engine(youtube, .download(.init(audioOnly: true, hasFFprobe: true))), .ytdlpRS)
         XCTAssertEqual(engine(youtube, .download(.init(audioOnly: false, hasFFprobe: false))), .ytdlpRS)
+    }
+
+    func testLiveFromStartNeedsLiveRecordingVersion() {
+        func engine(version: String?) -> YTDLPEngine {
+            YTDLPEngineRouter.decide(url: "https://www.youtube.com/watch?v=abc",
+                                     operation: .download(.init(liveFromStart: true)),
+                                     rsAvailable: true, rsVersion: version).engine
+        }
+        XCTAssertEqual(engine(version: "0.6.0-beta.1"), .ytdlpRS)
+        XCTAssertEqual(engine(version: "0.6.1"), .ytdlpRS)
+        XCTAssertEqual(engine(version: "0.5.0-beta.1"), .ytdlp)
+        XCTAssertEqual(engine(version: "0.6.0-alpha.1"), .ytdlp)
+        XCTAssertEqual(engine(version: nil), .ytdlp)
+        XCTAssertEqual(engine(version: "garbage"), .ytdlp)
+        XCTAssertTrue(YTDLPEngineRouter.supportsLiveRecording(version: AppConstants.bundledYTDLPRSVersion))
+        // Other downloads still use an older yt-dlp-rs.
+        XCTAssertEqual(YTDLPEngineRouter.decide(url: "https://www.youtube.com/watch?v=abc",
+                                                operation: .download(.init()), rsAvailable: true,
+                                                rsVersion: "0.4.0-beta.1").engine, .ytdlpRS)
+    }
+
+    func testGrowingFileProgressParsing() throws {
+        let line = "[download]   24.79MiB at  122.26KiB/s (00:03:27), recorded 00:03:40"
+        let parsed = try XCTUnwrap(YTDLPProgressParser.parseGrowingFileProgress(line))
+        XCTAssertEqual(parsed.time, 220)
+        XCTAssertEqual(parsed.bytes, Int64(24.79 * 1024 * 1024))
+        XCTAssertEqual(YTDLPProgressParser.parseGrowingFileProgress(
+            "[download]  696.52KiB at  436.85KiB/s (00:00:01), recorded 01:00:05")?.time, 3605)
+        XCTAssertNil(YTDLPProgressParser.parseGrowingFileProgress("[download]    1.63MiB at  999.04KiB/s (00:00:01)"))
+        XCTAssertNil(YTDLPProgressParser.parseGrowingFileProgress("[download] Destination: recorded 00:00:01"))
+        // The line still counts as download activity.
+        XCTAssertNotNil(YTDLPProgressParser.parse(line))
+    }
+
+    func testGrowingRecordingTagSetsClearsAndSweeps() throws {
+        let folder = try makeTemporaryFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appendingPathComponent("Live.mov")
+        try Data("mov".utf8).write(to: file)
+        let saved = UserDefaults.standard.stringArray(forKey: AppConstants.pendingGrowingRecordingPathsKey)
+        defer { UserDefaults.standard.set(saved, forKey: AppConstants.pendingGrowingRecordingPathsKey) }
+        UserDefaults.standard.removeObject(forKey: AppConstants.pendingGrowingRecordingPathsKey)
+
+        XCTAssertNil(GrowingRecordingTag.set(at: file.path))
+        XCTAssertTrue(GrowingRecordingTag.isSet(at: file.path))
+        XCTAssertEqual(UserDefaults.standard.stringArray(forKey: AppConstants.pendingGrowingRecordingPathsKey), [file.path])
+        GrowingRecordingTag.sweepStale()
+        XCTAssertFalse(GrowingRecordingTag.isSet(at: file.path))
+        XCTAssertNil(UserDefaults.standard.stringArray(forKey: AppConstants.pendingGrowingRecordingPathsKey))
+
+        GrowingRecordingTag.set(at: file.path)
+        XCTAssertNil(GrowingRecordingTag.clear(at: file.path))
+        XCTAssertNil(GrowingRecordingTag.clear(at: file.path), "An untagged or missing file is not an error")
+        XCTAssertFalse(GrowingRecordingTag.isSet(at: file.path))
     }
 
     func testFallbackSkipsUserStopsAndConfigurationErrors() {
@@ -265,6 +319,100 @@ final class YTDLPEngineRouterTests: XCTestCase {
         XCTAssertEqual(runner.executables, [EngineStubUpdater.rsPath])
     }
 
+    // MARK: - Growing files
+
+    func testGrowingFileIsPassedOnlyToCapableRSForWholeVideoDownloads() async throws {
+        func arguments(rsVersion: String? = AppConstants.bundledYTDLPRSVersion,
+                       audioOnly: Bool = false, section: DownloadSection? = nil,
+                       url: String = "https://www.youtube.com/watch?v=x") async throws -> [String] {
+            let folder = try makeTemporaryFolder()
+            defer { try? FileManager.default.removeItem(at: folder) }
+            let runner = EngineScriptedRunner { _, output in
+                let final = folder.appendingPathComponent("Clip.mp4")
+                try Data("video".utf8).write(to: final)
+                output?(SubprocessOutputChunk(stream: .standardOutput, data: Data("\(final.path)\n".utf8)))
+                return .result()
+            }
+            let service = YTDLPService(updateService: EngineStubUpdater(rsVersion: rsVersion), subprocessRunner: runner,
+                                       engineFailures: YTDLPEngineFailureMemory())
+            _ = try await service.download(url: url, outputFolder: folder, growingFile: true,
+                                           audioOnly: audioOnly, section: section, progress: { _, _, _ in })
+            return try XCTUnwrap(runner.requests.last?.arguments)
+        }
+        let growing = try await arguments()
+        XCTAssertTrue(growing.contains("--growing-file"))
+        XCTAssertTrue(growing.contains("--embed-metadata"))
+        let oldRS = try await arguments(rsVersion: "0.5.0-beta.1")
+        XCTAssertFalse(oldRS.contains("--growing-file"))
+        let audio = try await arguments(audioOnly: true)
+        XCTAssertFalse(audio.contains("--growing-file"))
+        let clip = try await arguments(section: DownloadSection(start: 1, end: 5))
+        XCTAssertFalse(clip.contains("--growing-file"))
+        let ytdlp = try await arguments(url: "https://www.dailymotion.com/video/x1")
+        XCTAssertFalse(ytdlp.contains("--growing-file"))
+    }
+
+    /// Output captured 2026-10-28 from v0.6.0-beta.1 recording a YouTube live stream with
+    /// `--growing-file` and stopped with SIGINT (trimmed).
+    func testGrowingRecordingReportsFileAndRecordedTime() async throws {
+        let folder = try makeTemporaryFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appendingPathComponent("Live 2026-10-28 23_16.mov")
+        let runner = EngineScriptedRunner { _, output in
+            func out(_ text: String) { output?(SubprocessOutputChunk(stream: .standardOutput, data: Data((text + "\n").utf8))) }
+            func err(_ text: String) { output?(SubprocessOutputChunk(stream: .standardError, data: Data((text + "\n").utf8))) }
+            out("\(YTDLPProgressParser.liveStatusPrefix)is_live")
+            out("\(YTDLPProgressParser.sourceDurationPrefix)NA")
+            err("[download] Destination: \(file.lastPathComponent)")
+            try Data("growing".utf8).write(to: file)
+            out("[download]    1.52MiB at  834.25KiB/s (00:00:01), recorded 00:00:15")
+            err("frame=  450 fps= 32 q=-1.0 size=    1556KiB time=00:00:15.00 bitrate= 850.1kbits/s speed=1.06x")
+            err("[ffmpeg] Interrupted by user")
+            out("[download] 100% of    4.29MiB in 00:00:31 at 141.20KiB/s")
+            err("[Metadata] Adding metadata to \"\(file.lastPathComponent)\"")
+            out(file.path)
+            return .result()
+        }
+        let service = YTDLPService(updateService: EngineStubUpdater(), subprocessRunner: runner,
+                                   engineFailures: YTDLPEngineFailureMemory())
+        let updates = LockedUpdates()
+        let result = try await service.download(
+            url: "https://www.youtube.com/watch?v=x", outputFolder: folder, growingFile: true,
+            progress: { _, _, _ in }, liveUpdate: { updates.append($0) }
+        )
+        XCTAssertEqual(result.outputURL.lastPathComponent, file.lastPathComponent)
+        XCTAssertEqual(result.engine, .ytdlpRS)
+        XCTAssertEqual(updates.values, [
+            .growingFile(file), .recording(duration: 15, bytes: Int64(1.52 * 1024 * 1024)),
+        ])
+    }
+
+    func testFailedGrowingRecordingKeepsItsFileWithoutFallingBack() async throws {
+        let folder = try makeTemporaryFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appendingPathComponent("Live.mov")
+        let runner = EngineScriptedRunner { _, output in
+            func line(_ text: String) { output?(SubprocessOutputChunk(stream: .standardError, data: Data((text + "\n").utf8))) }
+            line("[download] Destination: Live.mov")
+            try Data("growing".utf8).write(to: file)
+            GrowingRecordingTag.set(at: file.path)
+            line("[download]    1.52MiB at  834.25KiB/s (00:00:01), recorded 00:00:15")
+            line("ERROR: ffmpeg exited with code 1")
+            return .result(status: 1)
+        }
+        let service = YTDLPService(updateService: EngineStubUpdater(), subprocessRunner: runner,
+                                   engineFailures: YTDLPEngineFailureMemory())
+        do {
+            _ = try await service.download(url: "https://www.youtube.com/watch?v=x", outputFolder: folder,
+                                           growingFile: true, progress: { _, _, _ in })
+            XCTFail("Expected liveRecordingStopped")
+        } catch YTDLPError.liveRecordingStopped {
+        }
+        XCTAssertEqual(runner.executables, [EngineStubUpdater.rsPath])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
+        XCTAssertFalse(GrowingRecordingTag.isSet(at: file.path), "The left-behind recording tag is removed")
+    }
+
     // MARK: - Live yt-dlp-rs output (captured 2026-10-24 with v0.3.0-beta.1, trimmed)
 
     func testAppDecodesCapturedRSMetadataAndListings() async throws {
@@ -310,10 +458,19 @@ final class YTDLPEngineRouterTests: XCTestCase {
 private struct EngineStubUpdater: YTDLPUpdating {
     static let rsPath = "/fixture/yt-dlp-rs"
     static let ytdlpPath = "/fixture/yt-dlp"
+    var rsVersion: String? = AppConstants.bundledYTDLPRSVersion
 
     func resolveYTDLPPath() async -> String? { Self.ytdlpPath }
     func resolveYTDLPRSPath() async -> String? { Self.rsPath }
+    func getCurrentYTDLPRSVersion() async -> String? { rsVersion }
     func ensureDenoInstalled() async -> String? { nil }
+}
+
+private final class LockedUpdates: @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [YTDLPLiveUpdate] = []
+    var values: [YTDLPLiveUpdate] { lock.withLock { recorded } }
+    func append(_ update: YTDLPLiveUpdate) { lock.withLock { recorded.append(update) } }
 }
 
 private final class EngineScriptedRunner: SubprocessRunning, @unchecked Sendable {

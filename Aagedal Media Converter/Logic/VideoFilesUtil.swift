@@ -862,6 +862,9 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var liveRecordingFileSize: Int64? = nil
     /// Estimated duration during live recording (updated periodically)
     var liveRecordingDuration: Double? = nil
+    /// The growing `.mov` a yt-dlp-rs `--growing-file` recording writes; editors can
+    /// import it while the recording runs
+    var growingRecordingURL: URL? = nil
     /// Waiting for a scheduled live stream or premiere to start
     var waitingForLiveStream: Bool = false
     /// Announced start of the stream being waited for, when known

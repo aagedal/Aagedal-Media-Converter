@@ -167,22 +167,41 @@ struct YTDLPProgressParser: Sendable {
         let time = parseFFmpegTime(line)
         var bytes: Int64?
         if let match = line.range(of: #"L?size=\s*\d+(\.\d+)?\s*[A-Za-z]*B"#, options: .regularExpression) {
-            let value = line[match].drop { $0 != "=" }.dropFirst().trimmingCharacters(in: .whitespaces)
-            let digits = value.prefix { $0.isNumber || $0 == "." }
-            let unit = value.dropFirst(digits.count).trimmingCharacters(in: .whitespaces).lowercased()
-            let multiplier: Double? = switch unit {
-            case "b": 1
-            case "kib", "kb": 1024
-            case "mib", "mb": 1024 * 1024
-            case "gib", "gb": 1024 * 1024 * 1024
-            default: nil
-            }
-            if let number = Double(digits), let multiplier {
-                bytes = Int64(number * multiplier)
-            }
+            bytes = byteCount(line[match].drop { $0 != "=" }.dropFirst())
         }
         guard time != nil || bytes != nil else { return nil }
         return (time, bytes)
+    }
+
+    /// Recorded duration and downloaded size from a yt-dlp-rs `--growing-file`
+    /// progress line (`[download]   24.79MiB at  122.26KiB/s (00:03:27), recorded 00:03:40`).
+    static func parseGrowingFileProgress(_ line: String) -> (time: Double, bytes: Int64?)? {
+        guard line.hasPrefix("[download]"),
+              let match = line.range(of: #", recorded \d+:\d{2}:\d{2}$"#, options: .regularExpression)
+        else { return nil }
+        let parts = line[match].dropFirst(", recorded ".count).split(separator: ":")
+        guard parts.count == 3,
+              let h = Double(parts[0]), let m = Double(parts[1]), let s = Double(parts[2])
+        else { return nil }
+        let size = line.range(of: #"^\[download\]\s+[\d.]+\s*[KMG]?i?B\b"#, options: .regularExpression)
+            .map { line[$0].dropFirst("[download]".count) }
+        return (h * 3600 + m * 60 + s, size.flatMap(byteCount))
+    }
+
+    /// "5632KiB", "24.79 MiB", "512B" → bytes.
+    private static func byteCount(_ text: Substring) -> Int64? {
+        let value = text.trimmingCharacters(in: .whitespaces)
+        let digits = value.prefix { $0.isNumber || $0 == "." }
+        let unit = value.dropFirst(digits.count).trimmingCharacters(in: .whitespaces).lowercased()
+        let multiplier: Double? = switch unit {
+        case "b": 1
+        case "kib", "kb": 1024
+        case "mib", "mb": 1024 * 1024
+        case "gib", "gb": 1024 * 1024 * 1024
+        default: nil
+        }
+        guard let number = Double(digits), let multiplier else { return nil }
+        return Int64(number * multiplier)
     }
 
     /// Whether a yt-dlp error means the stream exists but has not started (a scheduled

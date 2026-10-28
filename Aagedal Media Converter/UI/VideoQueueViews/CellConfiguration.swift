@@ -86,6 +86,8 @@ struct VideoFileCellConfiguration: Equatable {
     /// Recorded duration and size of a live recording in progress.
     var liveRecordingDuration: Double? = nil
     var liveRecordingFileSize: Int64? = nil
+    /// The growing `.mov` being recorded (yt-dlp-rs `--growing-file`).
+    var growingRecordingURL: URL? = nil
     /// Waiting for a scheduled live stream to start, and its announced start.
     var waitingForLiveStream: Bool = false
     var liveStreamStartsAt: Date? = nil

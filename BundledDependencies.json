@@ -736,7 +736,7 @@
       "path": "build/attribution/yt-dlp-rs-mpl-crate-sources.tar.gz",
       "bytes": 136266,
       "sha256": "3c5897760e283aef5c4e294e6fdc510a5193712454559fc54338b48d60cdfa16",
-      "url": "https://github.com/aagedal/yt-dlp-rs/blob/v0.4.0-beta.1/Cargo.lock"
+      "url": "https://github.com/aagedal/yt-dlp-rs/blob/v0.6.0-beta.1/Cargo.lock"
     }
   ],
   "tools": [
@@ -1015,8 +1015,8 @@
     },
     {
       "path": "Aagedal Media Converter/Binaries/yt-dlp-rs",
-      "bytes": 22826000,
-      "sha256": "3c688e42864fdae89940102d4feabe979abf664635cf873847f85766e9608991",
+      "bytes": 27408240,
+      "sha256": "761a3908a4124abbee9d6d25b6957eaa2680775e6d920177c7195ccc1e16c486",
       "mode": "0755",
       "architectures": [
         "arm64"
@@ -1026,7 +1026,7 @@
         "/usr/lib/libiconv.2.dylib"
       ],
       "component": "yt-dlp-rs",
-      "version": "0.4.0-beta.1",
+      "version": "0.6.0-beta.1",
       "license": "Unlicense AND MIT AND Apache-2.0 AND MPL-2.0 AND ISC AND BSD-3-Clause AND Unicode-3.0 AND Zlib AND CDLA-Permissive-2.0",
       "licenseFile": "Licenses/yt-dlp-rs-LICENSE.txt",
       "requiredSourceComponents": [
@@ -1358,13 +1358,13 @@
     {
       "path": "Licenses/yt-dlp-rs-LICENSE.txt",
       "bytes": 3407230,
-      "sha256": "e4c12a21b1976631df8ae63456a35896f0f6d3c8b24c6410862587e058a44c6e"
+      "sha256": "500c1d6def1a26c0bf7eb219f0eddfa3473c09a87f7141200e4a5eb68aa07aed"
     }
   ],
   "summary": {
     "toolCount": 13,
     "libraryCount": 12,
-    "totalBytes": 182710080,
+    "totalBytes": 187292320,
     "entriesMissingLocalLicenseFile": []
   }
 }

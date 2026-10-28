@@ -2,7 +2,9 @@
 
 Audited against yt-dlp-rs `a812a8f` (README, `src/main.rs` clap options,
 `docs/COMPATIBILITY.md`) and the `v0.3.0-beta.1` aarch64 binary, 2026-10-24;
-clip options re-checked against `v0.4.0-beta.1`, 2026-10-25.
+clip options re-checked against `v0.4.0-beta.1`, 2026-10-25; live recording
+(`--live-from-start`, `--growing-file`, SIGINT/SIGTERM stops, upcoming-stream
+probes) checked against `v0.6.0-beta.1` on YouTube live streams, 2026-10-28.
 Code: `Logic/YTDLP/YTDLPEngineRouter.swift` (routing, session failure memory,
 cleanup) and `YTDLPService.withEngineFallback`.
 
@@ -11,6 +13,8 @@ cleanup) and `YTDLPService.withEngineFallback`.
 yt-dlp-rs is used only when `YTDLPUpdateService.resolveYTDLPRSPath()` returns a
 binary, the URL's host is on the site list, the site has not failed
 `sessionFailureLimit` (2) times this session, and no option below forces yt-dlp.
+Live-recording features need yt-dlp-rs `AppConstants.ytdlpRSLiveRecordingMinimumVersion`
+(0.6.0-beta.1); a pinned older update keeps them on yt-dlp (`YTDLPEngineRouter.supportsLiveRecording`).
 
 Site list (host suffix match on label boundaries, so `www.`, `m.`, `music.`,
 `vm.`, `old.` … match; `notyoutube.com` does not):
@@ -46,7 +50,8 @@ and every other site.
 | `--download-sections *S-E` (clip ranges) | supported; YouTube HTTPS formats fetch only the indexed segments, then cut locally (0.4.0), other formats stream through FFmpegFD; ffmpeg stats inherited | rs |
 | `--section-timecode` (clip timecode, rs extension) | 0.4.0; needs ffprobe, MP4/MOV result | rs only, when ffprobe sits beside ffmpeg |
 | `-j` `formats[].url`/`http_headers` (clip preview stream) | supported | rs (`YTDLPPreviewStream`, played by mpv) |
-| `--live-from-start --no-part` | hidden, YouTube native DASH generator (beta) | yt-dlp |
+| `--live-from-start --no-part` | 0.6: native DASH generator; per-format `Title.fNNN.mp4` files reported as destinations, SIGINT ends the fragment lists and merges (exit 0) | rs (0.6+), else yt-dlp |
+| `--growing-file` (rs extension, Settings → Downloads → "Record live streams as growing files") | 0.6: a live stream is written by ffmpeg as one fragmented `.mov` at its final name, tagged `com.blackmagicdesign.metadata:recording` while it grows, time-of-day timecode (stream start with `--live-from-start`), H.264/AAC preferred; progress lines end in `, recorded HH:MM:SS`; SIGINT and SIGTERM finish the file and remove the tag; `--embed-metadata` still runs afterwards. VOD downloads are unaffected | rs only (0.6+), never with clips or audio-only. The row offers the file (Finder, copy path, drag) while it records. A failed or stalled recording that already wrote the file throws `liveRecordingStopped` (kept, no fallback). The app removes a tag left by a killed process when the download ends, and remembers tagged paths for the launch sweep (`GrowingRecordingTag`) |
 | Live HLS recording (no `--live-from-start`), stopped with SIGINT to the process group | 0.4.0: SIGINT stops ffmpeg, then fixup, metadata and move run as after Ctrl-C (exit 0). SIGTERM loses the recording (it lives in a private `.yt-dlp-rs-process-*` directory) | rs |
 | `--wait-for-video 30-600` (only after a "live event will begin" / "not currently live" error) | 0.4.0, same `[wait]` lines | rs |
 | `--downloader-args "ffmpeg:-loglevel error -stats"` (ffmpeg stats for live recordings and clips) | supported | rs |
@@ -59,7 +64,7 @@ and every other site.
 | `-o` templates (`%(title)s [%(id)s].%(ext)s`, clip label) | supported | rs |
 | `-j --no-download`, `-J --flat-playlist` | supported; fields used (`title`, `duration`, `thumbnail(s)`, `uploader`, `description`, `entries[].url/title/duration/availability`) present | rs (listings only where ported) |
 | `--ignore-no-formats-error` (post probes) | hidden, **no effect**; a photo slide makes `-J` fail | Instagram `/p/` posts (all operations) → yt-dlp; Twitter posts stay on rs |
-| `-j --ignore-no-formats-error` for an upcoming stream's title and `release_timestamp` | fails (no effect) | yt-dlp only (`fetchUpcomingStreamInfo`) |
+| `-j --ignore-no-formats-error` for an upcoming stream's title and `release_timestamp` | still fails in 0.6 (`This live event will begin in …`) | yt-dlp only (`fetchUpcomingStreamInfo`) |
 | `--playlist-items N`, `--no-playlist` | supported | rs |
 | `--cookies FILE` (Helium export) | supported (file is rewritten, like yt-dlp) | rs |
 | `--cookies-from-browser` safari/chrome/chromium/edge/brave/firefox/opera/vivaldi/whale, `firefox:PATH` (Zen) | all accepted and read natively | rs (first use may raise a separate Keychain prompt for yt-dlp-rs) |

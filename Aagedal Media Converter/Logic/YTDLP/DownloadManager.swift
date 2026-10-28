@@ -687,6 +687,7 @@ class DownloadManager {
         item.downloadStopping = false
         item.liveRecordingFileSize = nil
         item.liveRecordingDuration = nil
+        item.growingRecordingURL = nil
         item.waitingForLiveStream = false
         item.liveStreamStartsAt = nil
     }
@@ -735,6 +736,7 @@ class DownloadManager {
                 outputFolder: outputFolder,
                 forceOverwrite: forceOverwrite,
                 liveFromStart: liveFromStart,
+                growingFile: UserDefaults.standard.bool(forKey: AppConstants.ytdlpGrowingFileKey),
                 audioOnly: audioOnly,
                 section: section,
                 waitForStream: waitForStream,
@@ -1016,6 +1018,9 @@ class DownloadManager {
                 if let duration { item.liveRecordingDuration = duration }
                 if let bytes { item.liveRecordingFileSize = bytes }
             }
+        case .growingFile(let url):
+            logger.info("[LiveStream] Recording growing file \(url.lastPathComponent, privacy: .public)")
+            updateItem(itemID) { $0.growingRecordingURL = url }
         }
     }
 

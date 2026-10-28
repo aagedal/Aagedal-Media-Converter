@@ -103,6 +103,7 @@
 		8E08B2842EAA3BFD000148A8 /* WatchFolderDurationUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E08B2832EAA3BFD000148A8 /* WatchFolderDurationUnit.swift */; };
 		8E09F7422EC27EDA00E129CD /* PreviewCacheCleanupPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E09F7412EC27EDA00E129CD /* PreviewCacheCleanupPolicy.swift */; };
 		8E09F7442EC762C200E129CD /* AudioWaveformPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E09F7432EC762C200E129CD /* AudioWaveformPreferences.swift */; };
+		AA6E0F1B2F11C0DE00A1B2C3 /* GrowingRecordingTag.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA6E0F1A2F11C0DE00A1B2C3 /* GrowingRecordingTag.swift */; };
 		8E0C32CB2E09EC3B00F22B21 /* AddToEncodeQueueIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E0C32C92E09EC3B00F22B21 /* AddToEncodeQueueIntent.swift */; };
 		8E0C32CD2E09EF1C00F22B21 /* ConvertImmediatelyIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E0C32CC2E09EF1C00F22B21 /* ConvertImmediatelyIntent.swift */; };
 		8E0C32CF2E09EF1C00F22B21 /* ConvertWithPresetIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E0C32CE2E09EF1C00F22B21 /* ConvertWithPresetIntents.swift */; };
@@ -516,6 +517,7 @@
 		8E08B2832EAA3BFD000148A8 /* WatchFolderDurationUnit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchFolderDurationUnit.swift; sourceTree = "<group>"; };
 		8E09F7412EC27EDA00E129CD /* PreviewCacheCleanupPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewCacheCleanupPolicy.swift; sourceTree = "<group>"; };
 		8E09F7432EC762C200E129CD /* AudioWaveformPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioWaveformPreferences.swift; sourceTree = "<group>"; };
+		AA6E0F1A2F11C0DE00A1B2C3 /* GrowingRecordingTag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrowingRecordingTag.swift; sourceTree = "<group>"; };
 		8E0C32C72E09E58F00F22B21 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		8E0C32C92E09EC3B00F22B21 /* AddToEncodeQueueIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddToEncodeQueueIntent.swift; sourceTree = "<group>"; };
 		8E0C32CC2E09EF1C00F22B21 /* ConvertImmediatelyIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConvertImmediatelyIntent.swift; sourceTree = "<group>"; };
@@ -1045,6 +1047,7 @@
 				8E2C6BBE2E084BC200A9379F /* SecurityScopedBookmarkManager.swift */,
 				8E2C6BAD2E059AFC00A9379F /* AppConstants.swift */,
 				8E09F7432EC762C200E129CD /* AudioWaveformPreferences.swift */,
+				AA6E0F1A2F11C0DE00A1B2C3 /* GrowingRecordingTag.swift */,
 				8E9DBF1E2EE4781B00F352A1 /* TimecodeFormatter.swift */,
 				F317F243C3CAA85CE1E5E929 /* FileSafetyUtils.swift */,
 				AE61AEDA33E74EFF880B1E5C /* PowerAssertion.swift */,
@@ -2005,6 +2008,7 @@
 				SCRNSHOTSETV0000000000B1 /* ScreenshotSettingsView.swift in Sources */,
 				8EE6EE9A2C31FC6B007B629D /* Aagedal_Media_Converter_App.swift in Sources */,
 				8E09F7442EC762C200E129CD /* AudioWaveformPreferences.swift in Sources */,
+				AA6E0F1B2F11C0DE00A1B2C3 /* GrowingRecordingTag.swift in Sources */,
 				8E545D8B2C3404040088C274 /* FFMPEGConverter.swift in Sources */,
 				3094266907AA46E2AD89E2EB /* ConversionDependencyPreflight.swift in Sources */,
 				67BAE582711E2F5E020591AA /* ConversionRequest.swift in Sources */,

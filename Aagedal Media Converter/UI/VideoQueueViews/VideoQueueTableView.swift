@@ -1079,6 +1079,7 @@ struct VideoQueueTableView: NSViewRepresentable {
                 downloadStopping: item.downloadStopping,
                 liveRecordingDuration: item.liveRecordingDuration,
                 liveRecordingFileSize: item.liveRecordingFileSize,
+                growingRecordingURL: item.growingRecordingURL,
                 waitingForLiveStream: item.waitingForLiveStream,
                 liveStreamStartsAt: item.liveStreamStartsAt,
                 isQueuedForDownload: item.isQueuedForDownload,
@@ -1599,7 +1600,7 @@ struct VideoQueueTableView: NSViewRepresentable {
                 }
             case .showDownloadedInFinder:
                 if let item = findItem(by: itemID) {
-                    NSWorkspace.shared.activateFileViewerSelecting([item.url])
+                    NSWorkspace.shared.activateFileViewerSelecting([item.growingRecordingURL ?? item.url])
                 }
             case .attachSubtitleFile:
                 promptAttachSubtitleFile(itemID: itemID, source: .ungrouped)
