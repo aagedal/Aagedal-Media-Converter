@@ -56,6 +56,7 @@ struct DCPSettings: Codable, Equatable, Sendable {
             "-c:v", "libopenjpeg",
             "-profile", resolution.openjpegProfile,
             "-cinema_mode", plan.cinemaMode,
+            "-max_cs_size", String(plan.maxFrameBytes),
             "-numresolution", String(resolution.openjpegNumResolution),
             "-pix_fmt", "gbrp12le",
             "-r", frameRate.ffmpegValue,

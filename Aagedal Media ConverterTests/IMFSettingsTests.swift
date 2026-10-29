@@ -126,7 +126,10 @@ final class IMFSettingsTests: XCTestCase {
             XCTAssertTrue(try value(after: "-vf").contains("crop=3840:2160"))
             if preset == .imfJ2K {
                 XCTAssertEqual(try value(after: "-c:v"), "libopenjpeg")
-                XCTAssertEqual(try value(after: "-b:v"), "250M")
+                XCTAssertFalse(command.arguments.contains("-b:v"), "libopenjpeg ignores -b:v")
+                XCTAssertEqual(try value(after: "-profile:v"), "imf_4k")
+                // floor(250 Mbit/s × 1001 / (8 × 24000))
+                XCTAssertEqual(try value(after: "-max_cs_size"), "1303385")
                 XCTAssertFalse(command.arguments.contains("-cinema_mode"))
             } else {
                 XCTAssertEqual(try value(after: "-c:v"), "prores_ks")
@@ -144,5 +147,39 @@ final class IMFSettingsTests: XCTestCase {
         XCTAssertEqual(next.resolution, .hd1080)
         XCTAssertEqual(next.frameRate, .fps24)
         XCTAssertFalse(next.keepIntermediates)
+    }
+
+    /// Encodes one frame with the app's App 2e arguments through the bundled ffmpeg and checks
+    /// that the codestream declares an IMF profile, is lossy, and respects the byte cap.
+    func testApp2eArgumentsProduceCappedIMFProfileCodestream() throws {
+        guard let ffmpeg = BinaryPathResolver.ffmpegPath else { throw XCTSkip("Bundled ffmpeg not available") }
+        let suite = "IMFSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(IMFResolution.hd1080.rawValue, forKey: AppConstants.imfResolutionKey)
+        defaults.set(IMFFrameRate.fps24.rawValue, forKey: AppConstants.imfFrameRateKey)
+        defaults.set(DCPBitrate.medium.rawValue, forKey: AppConstants.imfJ2KBitrateKey)
+        let settings = IMFSettings(defaults: defaults)
+        XCTAssertEqual(settings.maxJ2KFrameBytes, 781_250)
+
+        let output = FileManager.default.temporaryDirectory.appendingPathComponent("imf-\(UUID().uuidString).j2c")
+        defer { try? FileManager.default.removeItem(at: output) }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: ffmpeg)
+        process.arguments = ["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=1920x1080:r=24,noise=alls=100:allf=t",
+                             "-frames:v", "1"] + settings.ffmpegArguments(application: .app2e) + ["-format", "j2k", output.path]
+        let errors = Pipe()
+        process.standardError = errors
+        try process.run()
+        let stderr = errors.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        XCTAssertEqual(process.terminationStatus, 0, String(decoding: stderr, as: UTF8.self))
+
+        let data = try Data(contentsOf: output)
+        let info = try XCTUnwrap(J2KCodestreamInfo.parse(data))
+        XCTAssertLessThanOrEqual(data.count, 781_250)
+        XCTAssertEqual(info.rsiz & 0xFF00, 0x0400, "Rsiz should declare the IMF 2K profile")
+        XCTAssertEqual(info.width, 1920)
+        XCTAssertEqual(info.bitDepth, 10)
     }
 }

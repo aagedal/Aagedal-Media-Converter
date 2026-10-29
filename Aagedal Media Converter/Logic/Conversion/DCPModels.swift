@@ -167,44 +167,28 @@ enum DCPFrameRate: String, CaseIterable, Identifiable, Codable, Sendable {
 
 // MARK: - JPEG 2000 Rate Control
 
-/// FFmpeg's libopenjpeg wrapper ignores `-b:v`. Its only rate control is the DCI
-/// `cinema_mode`, which caps every codestream at a fixed byte size. This plan picks
-/// the cap that best honours the requested bitrate without exceeding the 250 Mbps
-/// DCI ceiling at the chosen frame rate.
+/// FFmpeg's libopenjpeg wrapper ignores `-b:v`. The bundled ffmpeg carries a patch
+/// (ffmpeg-apple-silicon `scripts/ffmpeg/libopenjpegenc-max-size.patch`) adding
+/// `-max_cs_size`, which caps every codestream at an exact byte size, so the requested
+/// bitrate is enforced per frame, never above the 250 Mbps DCI ceiling.
 struct DCPJ2KRatePlan: Equatable, Sendable {
-    /// OPJ_CINEMA_24_CS and OPJ_CINEMA_48_CS from openjpeg.h.
-    static let largeFrameCap = 1_302_083
-    static let smallFrameCap = 651_041
-    static let dciMaxBitsPerSecond = 250_000_000.0
+    static let dciMaxMegabitsPerSecond = 250
 
+    /// Kept alongside `-max_cs_size`: without a cinema_mode, OpenJPEG disables the
+    /// multiple-component transform for 3-component input.
     let cinemaMode: String
     let maxFrameBytes: Int
     let frameRate: DCPFrameRate
 
     init(resolution: DCPResolution, frameRate: DCPFrameRate, bitrate: DCPBitrate) {
         self.frameRate = frameRate
-        let fps = Double(frameRate.editRateNumerator)
-        if resolution.isFourK {
-            // 2k_48 conflicts with the cinema4k profile, so 4K has a single cap.
-            cinemaMode = "4k_24"
-            maxFrameBytes = Self.largeFrameCap
-        } else if bitrate.megabitsPerSecond >= 200,
-                  Double(Self.largeFrameCap) * 8 * fps <= Self.dciMaxBitsPerSecond + 1 {
-            cinemaMode = "2k_24"
-            maxFrameBytes = Self.largeFrameCap
-        } else {
-            cinemaMode = "2k_48"
-            maxFrameBytes = Self.smallFrameCap
-        }
+        cinemaMode = resolution.isFourK ? "4k_24" : "2k_24"
+        let megabits = min(bitrate.megabitsPerSecond, Self.dciMaxMegabitsPerSecond)
+        maxFrameBytes = megabits * 1_000_000 / 8 / frameRate.editRateNumerator * frameRate.editRateDenominator
     }
 
     var peakMegabitsPerSecond: Int {
-        Int((Double(maxFrameBytes) * 8 * Double(frameRate.editRateNumerator) / 1_000_000).rounded())
-    }
-
-    /// True when the cap allows frames above the DCI 250 Mbps limit (4K at 25/30 fps).
-    var mayExceedDCILimit: Bool {
-        Double(maxFrameBytes) * 8 * Double(frameRate.editRateNumerator) > Self.dciMaxBitsPerSecond + 1
+        Int((Double(maxFrameBytes) * 8 * Double(frameRate.editRateNumerator) / Double(frameRate.editRateDenominator) / 1_000_000).rounded())
     }
 }
 

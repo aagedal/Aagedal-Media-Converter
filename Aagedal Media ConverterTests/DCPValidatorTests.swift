@@ -28,21 +28,30 @@ final class DCPValidatorTests: XCTestCase {
 
     // MARK: - Rate control
 
-    func testRatePlanStaysWithinDCILimit() {
+    func testRatePlanHonoursBitrateWithinDCILimit() throws {
         let twoK24 = DCPJ2KRatePlan(resolution: .twoKFlat, frameRate: .fps24, bitrate: .max)
         XCTAssertEqual(twoK24.cinemaMode, "2k_24")
+        XCTAssertEqual(twoK24.maxFrameBytes, 1_302_083)
         XCTAssertEqual(twoK24.peakMegabitsPerSecond, 250)
 
         let twoK25 = DCPJ2KRatePlan(resolution: .twoKFlat, frameRate: .fps25, bitrate: .max)
-        XCTAssertEqual(twoK25.cinemaMode, "2k_48", "the 24 fps cap would be 260 Mbit/s at 25 fps")
-        XCTAssertFalse(twoK25.mayExceedDCILimit)
+        XCTAssertEqual(twoK25.maxFrameBytes, 1_250_000, "250 Mbit/s at 25 fps, not the 24 fps cap")
 
-        let lowBitrate = DCPJ2KRatePlan(resolution: .twoKScope, frameRate: .fps24, bitrate: .medium)
-        XCTAssertEqual(lowBitrate.peakMegabitsPerSecond, 125)
+        let medium = DCPJ2KRatePlan(resolution: .twoKScope, frameRate: .fps24, bitrate: .medium)
+        XCTAssertEqual(medium.peakMegabitsPerSecond, 150)
 
-        let fourK30 = DCPJ2KRatePlan(resolution: .fourKFlat, frameRate: .fps30, bitrate: .low)
+        let fourK30 = DCPJ2KRatePlan(resolution: .fourKFlat, frameRate: .fps30, bitrate: .max)
         XCTAssertEqual(fourK30.cinemaMode, "4k_24")
-        XCTAssertTrue(fourK30.mayExceedDCILimit)
+        XCTAssertEqual(fourK30.maxFrameBytes, 1_041_666)
+
+        let suite = "DCPValidatorTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(DCPFrameRate.fps25.rawValue, forKey: AppConstants.dcpFrameRateKey)
+        defaults.set(DCPBitrate.max.rawValue, forKey: AppConstants.dcpBitrateKey)
+        let arguments = DCPSettings(defaults: defaults).ffmpegArguments
+        let index = try XCTUnwrap(arguments.firstIndex(of: "-max_cs_size"))
+        XCTAssertEqual(arguments[index + 1], "1250000")
     }
 
     func testFourKHighFrameRateIsRejected() throws {

@@ -51,12 +51,8 @@ struct PresetsSettingsView: View {
             Label("4K DCPs are limited to 24, 25 or 30 fps. Choose 2K for 48 fps.", systemImage: "xmark.octagon.fill")
                 .font(.caption)
                 .foregroundStyle(.red)
-        } else if plan.mayExceedDCILimit {
-            Label("Peak \(plan.peakMegabitsPerSecond) Mbps: complex 4K frames at \(frameRate.ffmpegValue) fps can exceed the 250 Mbps DCI limit. Use 24 fps, or validate the result.", systemImage: "exclamationmark.triangle.fill")
-                .font(.caption)
-                .foregroundStyle(.orange)
         } else {
-            Text("Effective peak bitrate: \(plan.peakMegabitsPerSecond) Mbps")
+            Text("Peak bitrate: \(plan.peakMegabitsPerSecond) Mbps per frame (\(plan.maxFrameBytes.formatted()) bytes)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -482,7 +478,7 @@ struct PresetsSettingsView: View {
                         .pickerStyle(.menu)
                         .fixedSize()
                         .labelsHidden()
-                        .help("Target JPEG 2000 bitrate. FFmpeg's encoder only offers two DCI rate caps, so the effective peak bitrate is shown below.")
+                        .help("Maximum JPEG 2000 bitrate, enforced on every frame. 250 Mbps is the DCI maximum.")
                     }
 
                     dcpRateCaption
@@ -576,7 +572,7 @@ struct PresetsSettingsView: View {
                         .pickerStyle(.menu)
                         .fixedSize()
                         .labelsHidden()
-                        .help("JPEG 2000 video bitrate. Higher bitrates yield better quality at the cost of file size.")
+                        .help("Maximum JPEG 2000 bitrate, enforced on every frame. Higher bitrates yield better quality at the cost of file size.")
                     }
 
                     HStack {
