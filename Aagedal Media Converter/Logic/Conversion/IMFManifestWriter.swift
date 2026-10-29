@@ -35,6 +35,8 @@ actor IMFManifestWriter {
     ///   - editRateNumerator/editRateDenominator: Edit rate for the composition (e.g. 24/1, 30000/1001).
     ///   - frameCount: Total intrinsic duration in edit-rate units.
     ///   - itemMetadata: Per-item user metadata (ContentKind, AnnotationText, AudioLanguage).
+    ///   - audioLabels: MCA labels written into the audio MXF; supplies the soundfield-group
+    ///     title and content kinds that mxf2raw does not report back.
     ///   - progress: Progress callback (0.0 → 1.0).
     /// - Returns: true on success.
     func assembleIMP(
@@ -48,6 +50,7 @@ actor IMFManifestWriter {
         frameCount: Int,
         color: IMFColorEncoding = .rec709,
         itemMetadata: IMFItemMetadata? = nil,
+        audioLabels: IMFAudioLabels? = nil,
         progress: @escaping @Sendable (Double) -> Void
     ) async -> Bool {
         logger.info("Assembling IMP: \(title) (\(application.displayName), \(frameCount) frames @ \(editRateNumerator)/\(editRateDenominator))")
@@ -66,6 +69,22 @@ actor IMFManifestWriter {
             audioMetadata = inspected
         } else {
             audioMetadata = nil
+        }
+
+        // Every sequence in a segment must last as long as the composition. Audio track files
+        // use a 48 kHz edit rate, so express the picture duration in samples and only play that
+        // much of the audio, rejecting track files that are too short to cover the picture.
+        var audioSourceDuration: Int?
+        if let audioMetadata {
+            guard let required = Self.resourceDuration(
+                compositionFrames: frameCount,
+                compositionEditRate: (editRateNumerator, editRateDenominator),
+                resourceEditRate: audioMetadata.editRate
+            ), audioMetadata.duration >= required else {
+                logger.error("IMF audio MXF is shorter than the picture (\(audioMetadata.duration) samples)")
+                return false
+            }
+            audioSourceDuration = required
         }
 
         // Generate all manifest-only UUIDs upfront so cross-references are stable.
@@ -158,6 +177,8 @@ actor IMFManifestWriter {
             audioResourceUUID: audioResourceUUID,
             audioTrackFileUUID: audioUUID,
             audioLanguage: audioLanguage,
+            audioSourceDuration: audioSourceDuration,
+            audioLabels: audioLabels,
             applicationLabel: application.displayName,
             application: application,
             color: color,
@@ -238,6 +259,21 @@ actor IMFManifestWriter {
         return true
     }
 
+    /// Converts a composition duration into a resource's edit units, rounding up so the
+    /// resource never ends before the picture. Rates are "num/den" strings as reported by bmx.
+    static func resourceDuration(
+        compositionFrames: Int,
+        compositionEditRate: (numerator: Int, denominator: Int),
+        resourceEditRate: String
+    ) -> Int? {
+        let parts = resourceEditRate.split(separator: "/").compactMap { Int($0) }
+        guard parts.count == 2, parts[0] > 0, parts[1] > 0,
+              compositionEditRate.numerator > 0, compositionEditRate.denominator > 0 else { return nil }
+        let numerator = compositionFrames * compositionEditRate.denominator * parts[0]
+        let denominator = compositionEditRate.numerator * parts[1]
+        return (numerator + denominator - 1) / denominator
+    }
+
     // MARK: - Folder naming
 
     /// Generates a conventional IMF folder name. IMF doesn't have a single mandated naming
@@ -286,6 +322,8 @@ actor IMFManifestWriter {
         audioResourceUUID: String?,
         audioTrackFileUUID: String?,
         audioLanguage: String,
+        audioSourceDuration: Int?,
+        audioLabels: IMFAudioLabels?,
         applicationLabel: String,
         application: IMFApplication,
         color: IMFColorEncoding,
@@ -311,7 +349,7 @@ actor IMFManifestWriter {
                         <Resource xsi:type="TrackFileResourceType">
                           <Id>\(videoResourceUUID)</Id>
                           <EditRate>\(videoMetadata.editRate.replacingOccurrences(of: "/", with: " "))</EditRate>
-                          <IntrinsicDuration>\(frameCount)</IntrinsicDuration>
+                          <IntrinsicDuration>\(videoMetadata.duration)</IntrinsicDuration>
                           <EntryPoint>0</EntryPoint>
                           <SourceDuration>\(frameCount)</SourceDuration>
                           <RepeatCount>1</RepeatCount>
@@ -327,8 +365,7 @@ actor IMFManifestWriter {
         if let audioSeqUUID = audioSequenceUUID,
            let audioResUUID = audioResourceUUID,
            let audioTfUUID = audioTrackFileUUID,
-           let audioMetadata, let audioHash {
-            let audioDuration = audioMetadata.duration
+           let audioMetadata, let audioHash, let audioSourceDuration {
             sequences += """
 
                     <cc:MainAudioSequence>
@@ -338,9 +375,9 @@ actor IMFManifestWriter {
                         <Resource xsi:type="TrackFileResourceType">
                           <Id>\(audioResUUID)</Id>
                           <EditRate>\(audioMetadata.editRate.replacingOccurrences(of: "/", with: " "))</EditRate>
-                          <IntrinsicDuration>\(audioDuration)</IntrinsicDuration>
+                          <IntrinsicDuration>\(audioMetadata.duration)</IntrinsicDuration>
                           <EntryPoint>0</EntryPoint>
-                          <SourceDuration>\(audioDuration)</SourceDuration>
+                          <SourceDuration>\(audioSourceDuration)</SourceDuration>
                           <RepeatCount>1</RepeatCount>
                           <TrackFileId>\(audioTfUUID)</TrackFileId>
                           <SourceEncoding>\(audioMetadata.descriptorID)</SourceEncoding>
@@ -378,8 +415,8 @@ actor IMFManifestWriter {
             </ContentVersion>
           </ContentVersionList>
           <EssenceDescriptorList>
-        \(videoMetadata.descriptorXML(color: color))
-        \(audioMetadata?.descriptorXML(color: color) ?? "")
+        \(videoMetadata.descriptorXML(color: color, audioLabels: nil))
+        \(audioMetadata?.descriptorXML(color: color, audioLabels: audioLabels) ?? "")
           </EssenceDescriptorList>
           <CompositionTimecode>
             <TimecodeDropFrame>false</TimecodeDropFrame>
@@ -387,9 +424,6 @@ actor IMFManifestWriter {
             <TimecodeStartAddress>00:00:00:00</TimecodeStartAddress>
           </CompositionTimecode>
           <EditRate>\(editRate)</EditRate>
-          <ExtensionProperties>
-            <cc:ApplicationIdentification>\(application == .app2e ? "http://www.smpte-ra.org/ns/2067-21/2021" : "tag:apple.com,2017:imf:rdd45:2017")</cc:ApplicationIdentification>
-          </ExtensionProperties>
           <LocaleList>
             <Locale>
               <LanguageList>
@@ -397,6 +431,9 @@ actor IMFManifestWriter {
               </LanguageList>
             </Locale>
           </LocaleList>
+          <ExtensionProperties>
+            <cc:ApplicationIdentification>\(application == .app2e ? "http://www.smpte-ra.org/ns/2067-21/2021" : "tag:apple.com,2017:imf:rdd45:2017")</cc:ApplicationIdentification>
+          </ExtensionProperties>
           <SegmentList>
             <Segment>
               <Id>\(segmentUUID)</Id>
@@ -591,7 +628,27 @@ private struct IMFMXFMetadata {
     let audioChannels: Int?
     let audioBits: Int?
     let audioBlockAlign: Int?
+    let channelLabels: [ChannelLabel]
+    let soundfieldGroups: [SoundfieldGroup]
     let linkedTrackID: Int
+
+    /// MCA labels as written in the MXF header (ST 377-4), read back through mxf2raw.
+    struct ChannelLabel {
+        let channelID: Int
+        let linkID: String
+        let dictionaryID: String
+        let symbol: String
+        let name: String
+        let soundfieldGroupLinkID: String?
+    }
+
+    struct SoundfieldGroup {
+        let linkID: String
+        let dictionaryID: String
+        let symbol: String
+        let name: String
+        let language: String?
+    }
 
     static func read(_ url: URL, expectedKind: String) async -> Self? {
         guard let data = await BMXService.shared.getMXFXMLInfo(url: url),
@@ -633,15 +690,104 @@ private struct IMFMXFMetadata {
             audioChannels: sound.flatMap { value("channel_count", in: $0) }.flatMap(Int.init),
             audioBits: sound.flatMap { value("bits_per_sample", in: $0) }.flatMap(Int.init),
             audioBlockAlign: sound.flatMap { value("block_align", in: $0) }.flatMap(Int.init),
+            channelLabels: sound.map(channelLabels(in:)) ?? [],
+            soundfieldGroups: sound.map(soundfieldGroups(in:)) ?? [],
             linkedTrackID: linkedTrackID
         )
+    }
+
+    private static func channelLabels(in sound: XMLNode) -> [ChannelLabel] {
+        let channels = (try? sound.nodes(forXPath:
+            "./*[local-name()='mca_labels']/*[local-name()='channels']/*[local-name()='channel']")) ?? []
+        return channels.flatMap { channel -> [ChannelLabel] in
+            guard let channelID = value("id", in: channel).flatMap(Int.init) else { return [] }
+            let labels = (try? channel.nodes(forXPath:
+                "./*[local-name()='labels']/*[local-name()='channel_label']")) ?? []
+            return labels.compactMap { label in
+                guard let linkID = value("link_id", in: label),
+                      let dictionaryID = value("dict_id", in: label),
+                      let symbol = value("tag_symbol", in: label) else { return nil }
+                return ChannelLabel(
+                    channelID: channelID, linkID: linkID, dictionaryID: dictionaryID,
+                    symbol: symbol, name: value("tag_name", in: label) ?? symbol,
+                    soundfieldGroupLinkID: value("sg_link_id", in: label)
+                )
+            }
+        }
+    }
+
+    private static func soundfieldGroups(in sound: XMLNode) -> [SoundfieldGroup] {
+        let groups = (try? sound.nodes(forXPath:
+            "./*[local-name()='mca_labels']/*[local-name()='soundfield_groups']/*[local-name()='soundfield_group']")) ?? []
+        return groups.compactMap { group in
+            guard let linkID = value("link_id", in: group),
+                  let dictionaryID = value("dict_id", in: group),
+                  let symbol = value("tag_symbol", in: group) else { return nil }
+            return SoundfieldGroup(
+                linkID: linkID, dictionaryID: dictionaryID, symbol: symbol,
+                name: value("tag_name", in: group) ?? symbol,
+                language: value("language", in: group)
+            )
+        }
+    }
+
+    /// Mirrors the track file's MCA labels so the CPL descriptor matches the MXF header.
+    /// Title and content kinds come from the labels we asked bmx to write, because mxf2raw
+    /// does not report them; they are only attached to the soundfield group they describe.
+    private func mcaSubDescriptorsXML(audioLabels: IMFAudioLabels?) -> String {
+        guard !channelLabels.isEmpty || !soundfieldGroups.isEmpty else { return "" }
+        let escape = SMPTEPackageUtils.xmlEscape
+        var entries: [String] = channelLabels.map { label in
+            var lines = [
+                "<aaf:AudioChannelLabelSubDescriptor>",
+                "  <reg:InstanceID>\(SMPTEPackageUtils.urnUUID())</reg:InstanceID>",
+                "  <reg:MCALabelDictionaryID>\(escape(label.dictionaryID))</reg:MCALabelDictionaryID>",
+                "  <reg:MCALinkID>\(escape(label.linkID))</reg:MCALinkID>",
+                "  <reg:MCATagSymbol>\(escape(label.symbol))</reg:MCATagSymbol>",
+                "  <reg:MCATagName>\(escape(label.name))</reg:MCATagName>",
+                "  <reg:MCAChannelID>\(label.channelID)</reg:MCAChannelID>",
+            ]
+            if let groupLinkID = label.soundfieldGroupLinkID {
+                lines.append("  <reg:SoundfieldGroupLinkID>\(escape(groupLinkID))</reg:SoundfieldGroupLinkID>")
+            }
+            lines.append("</aaf:AudioChannelLabelSubDescriptor>")
+            return lines.joined(separator: "\n")
+        }
+        entries += soundfieldGroups.map { group in
+            var lines = [
+                "<aaf:SoundfieldGroupLabelSubDescriptor>",
+                "  <reg:InstanceID>\(SMPTEPackageUtils.urnUUID())</reg:InstanceID>",
+                "  <reg:MCALabelDictionaryID>\(escape(group.dictionaryID))</reg:MCALabelDictionaryID>",
+                "  <reg:MCALinkID>\(escape(group.linkID))</reg:MCALinkID>",
+                "  <reg:MCATagSymbol>\(escape(group.symbol))</reg:MCATagSymbol>",
+                "  <reg:MCATagName>\(escape(group.name))</reg:MCATagName>",
+            ]
+            if let language = group.language {
+                lines.append("  <reg:RFC5646SpokenLanguage>\(escape(language))</reg:RFC5646SpokenLanguage>")
+            }
+            if let audioLabels, audioLabels.soundfieldSymbol == group.symbol {
+                lines += [
+                    "  <reg:MCATitle>\(escape(audioLabels.title))</reg:MCATitle>",
+                    "  <reg:MCATitleVersion>\(escape(audioLabels.titleVersion))</reg:MCATitleVersion>",
+                    "  <reg:MCAAudioContentKind>\(escape(audioLabels.contentKind))</reg:MCAAudioContentKind>",
+                    "  <reg:MCAAudioElementKind>\(escape(audioLabels.elementKind))</reg:MCAAudioElementKind>",
+                ]
+            }
+            lines.append("</aaf:SoundfieldGroupLabelSubDescriptor>")
+            return lines.joined(separator: "\n")
+        }
+        let body = entries.joined(separator: "\n")
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { "      " + $0 }
+            .joined(separator: "\n")
+        return "<reg:SubDescriptors>\n\(body)\n    </reg:SubDescriptors>"
     }
 
     private static func value(_ name: String, in node: XMLNode, scope: String = "./*") -> String? {
         try? node.nodes(forXPath: "\(scope)[local-name()='\(name)']").first?.stringValue
     }
 
-    func descriptorXML(color: IMFColorEncoding) -> String {
+    func descriptorXML(color: IMFColorEncoding, audioLabels: IMFAudioLabels?) -> String {
         if kind == "Sound" {
             let channels = audioChannels ?? 0
             let bits = audioBits ?? 0
@@ -663,6 +809,7 @@ private struct IMFMXFMetadata {
                     <reg:ContainerFormat>\(containerUL)</reg:ContainerFormat>
                     <reg:ChannelAssignment>urn:smpte:ul:060e2b34.0401010d.04020210.04010000</reg:ChannelAssignment>
                     <reg:EssenceLength>\(duration)</reg:EssenceLength>
+                    \(mcaSubDescriptorsXML(audioLabels: audioLabels))
                   </aaf:WAVEPCMDescriptor>
                 </EssenceDescriptor>
                 """
