@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DCPV01TESTS00000000001 /* DCPValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCPV01TESTS00000000002 /* DCPValidatorTests.swift */; };
+		DCPV01VVIEW00000000001 /* DCPValidatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCPV01VVIEW00000000002 /* DCPValidatorView.swift */; };
+		DCPV01VALID00000000001 /* DCPValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCPV01VALID00000000002 /* DCPValidator.swift */; };
+		DCPV01ESSNC00000000001 /* DCPEssenceInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCPV01ESSNC00000000002 /* DCPEssenceInspector.swift */; };
+		DCPV01COLOR00000000001 /* DCPColorConversion.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCPV01COLOR00000000002 /* DCPColorConversion.swift */; };
 		C11P0000000000000000B004 /* YTDLPPreviewStreamTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C11P0000000000000000A004 /* YTDLPPreviewStreamTests.swift */; };
 		C11P0000000000000000B003 /* PlayheadTrimTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = C11P0000000000000000A003 /* PlayheadTrimTimeline.swift */; };
 		C11P0000000000000000B002 /* ClipPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C11P0000000000000000A002 /* ClipPreviewView.swift */; };
@@ -427,6 +432,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		DCPV01TESTS00000000002 /* DCPValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DCPValidatorTests.swift; sourceTree = "<group>"; };
+		DCPV01VVIEW00000000002 /* DCPValidatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DCPValidatorView.swift; sourceTree = "<group>"; };
+		DCPV01VALID00000000002 /* DCPValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DCPValidator.swift; sourceTree = "<group>"; };
+		DCPV01ESSNC00000000002 /* DCPEssenceInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DCPEssenceInspector.swift; sourceTree = "<group>"; };
+		DCPV01COLOR00000000002 /* DCPColorConversion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DCPColorConversion.swift; sourceTree = "<group>"; };
 		C11P0000000000000000A004 /* YTDLPPreviewStreamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YTDLPPreviewStreamTests.swift; sourceTree = "<group>"; };
 		C11P0000000000000000A003 /* PlayheadTrimTimeline.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PlayheadTrimTimeline.swift; sourceTree = "<group>"; };
 		C11P0000000000000000A002 /* ClipPreviewView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ClipPreviewView.swift; sourceTree = "<group>"; };
@@ -1117,6 +1127,7 @@
 				8E9B52562ED6516C006E6A10 /* AudioRoutingView.swift */,
 				8ECEBC1D2ED7CEC800F1F67C /* TimecodeView.swift */,
 				DC0001A1DCP0000100000006 /* DCPMetadataView.swift */,
+				DCPV01VVIEW00000000002 /* DCPValidatorView.swift */,
 				IMFEXP0000UIV0002 /* IMFMetadataView.swift */,
 				DC0001A1CFM0000100000001 /* ConformanceMergeDialog.swift */,
 				8EC3DCDC2EF57F0600CD75BC /* RandomTips.swift */,
@@ -1218,6 +1229,7 @@
 				E94293E832254BE798177757 /* FileNameSettingsMigrationTests.swift */,
 				4BCAA3452B974DD38E9213D5 /* AV2AudioSettingsTests.swift */,
 				4AE2280B3F4048F896DD2FEB /* DCPSettingsTests.swift */,
+				DCPV01TESTS00000000002 /* DCPValidatorTests.swift */,
 				720956098A7241CCB04DCEAD /* IMFSettingsTests.swift */,
 				50C1AEBD980A485FBE74B23A /* AudioOnlySettingsTests.swift */,
 				5A88601F8E6F4305B5C042CC /* SecurityScopedBookmarkManagerTests.swift */,
@@ -1326,6 +1338,9 @@
 				IMFEXP0000MDL0002 /* IMFModels.swift */,
 				IMFEXP0000MFW0002 /* IMFManifestWriter.swift */,
 				DC0001A1DCP0000100000002 /* DCPModels.swift */,
+				DCPV01VALID00000000002 /* DCPValidator.swift */,
+				DCPV01ESSNC00000000002 /* DCPEssenceInspector.swift */,
+				DCPV01COLOR00000000002 /* DCPColorConversion.swift */,
 				DC0001A1DCP0000100000004 /* DCPService.swift */,
 				E3DE2A8F5AA781549E2BC186 /* MetadataSidecarGenerator.swift */,
 			);
@@ -1938,6 +1953,7 @@
 				8E2C6BAF2E059AFC00A9379F /* AppConstants.swift in Sources */,
 				8ECEBC1E2ED7CEC800F1F67C /* TimecodeView.swift in Sources */,
 				DC0001A1DCP0000100000005 /* DCPMetadataView.swift in Sources */,
+				DCPV01VVIEW00000000001 /* DCPValidatorView.swift in Sources */,
 				IMFEXP0000UIV0001 /* IMFMetadataView.swift in Sources */,
 				DC0001A1CFM0000100000002 /* ConformanceMergeDialog.swift in Sources */,
 				8EEE45182EBEA9F00049F017 /* PreviewPlayerView.swift in Sources */,
@@ -2069,6 +2085,9 @@
 				IMFEXP0000MDL0001 /* IMFModels.swift in Sources */,
 				IMFEXP0000MFW0001 /* IMFManifestWriter.swift in Sources */,
 				DC0001A1DCP0000100000001 /* DCPModels.swift in Sources */,
+				DCPV01VALID00000000001 /* DCPValidator.swift in Sources */,
+				DCPV01ESSNC00000000001 /* DCPEssenceInspector.swift in Sources */,
+				DCPV01COLOR00000000001 /* DCPColorConversion.swift in Sources */,
 				DC0001A1DCP0000100000003 /* DCPService.swift in Sources */,
 				F3720F14FE01EFDA351E853C /* MetadataSidecarGenerator.swift in Sources */,
 				SE01XIF00SVC000000000001 /* SwiftExifMetadataService.swift in Sources */,
@@ -2128,6 +2147,7 @@
 				11B12108DB154EA6A2A1F082 /* FileNameSettingsMigrationTests.swift in Sources */,
 				53DB501004114DEC9837976B /* AV2AudioSettingsTests.swift in Sources */,
 				174D1BDBC6CC4B9D8034BF23 /* DCPSettingsTests.swift in Sources */,
+				DCPV01TESTS00000000001 /* DCPValidatorTests.swift in Sources */,
 				F6B2206867F846E0A14C20B1 /* IMFSettingsTests.swift in Sources */,
 				70E58F2C131E4EBFB095D626 /* AudioOnlySettingsTests.swift in Sources */,
 				DEC6FD831DDD41368CAD7C46 /* SecurityScopedBookmarkManagerTests.swift in Sources */,

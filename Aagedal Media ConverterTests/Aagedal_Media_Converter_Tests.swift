@@ -10960,13 +10960,16 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
 
             XCTAssertTrue(arguments.containsAdjacent("-profile", "cinema4k"))
             XCTAssertTrue(arguments.containsAdjacent("-cinema_mode", "4k_24"))
-            XCTAssertTrue(arguments.containsAdjacent("-pix_fmt", "xyz12le"))
-            XCTAssertTrue(arguments.containsAdjacent("-b:v", "250M"))
+            // X′Y′Z′ comes from DCPColorConversion's LUT, carried as gbrp12le.
+            XCTAssertTrue(arguments.containsAdjacent("-pix_fmt", "gbrp12le"))
+            XCTAssertTrue(arguments.containsAdjacent("-numresolution", "7"))
+            XCTAssertFalse(arguments.contains("-b:v"))
             XCTAssertTrue(arguments.containsAdjacent("-r", "24"))
-            XCTAssertTrue(arguments.containsAdjacent(
-                "-vf",
-                "scale=iw*sar:ih,setsar=1,scale=4096:2160:force_original_aspect_ratio=decrease,pad=4096:2160:-1:-1:color=black"
+            let filter = try XCTUnwrap(arguments.firstIndex(of: "-vf").map { arguments[$0 + 1] })
+            XCTAssertTrue(filter.hasPrefix(
+                "scale=iw*sar:ih,setsar=1,scale=4096:2160:force_original_aspect_ratio=decrease,pad=4096:2160:-1:-1:color=black,"
             ))
+            XCTAssertTrue(filter.contains("lut3d="))
         }
     }
 
@@ -11004,7 +11007,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
 
         let outputURL: URL
         switch result {
-        case .extracted(let url):
+        case .extracted(let url, _):
             outputURL = url
         case .noAudioInSource:
             return XCTFail("Concat source was incorrectly treated as silent")
@@ -11049,7 +11052,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
 
         let outputURL: URL
         switch result {
-        case .extracted(let url):
+        case .extracted(let url, _):
             outputURL = url
         case .noAudioInSource:
             return XCTFail("Image-sequence companion audio was incorrectly treated as missing")
@@ -11587,7 +11590,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             subprocessRunner: runner
         )
 
-        guard case .extracted(let outputURL) = result else {
+        guard case .extracted(let outputURL, _) = result else {
             return XCTFail("Expected the fake runner output to be accepted")
         }
         XCTAssertEqual(try Data(contentsOf: outputURL), Data("pcm fixture".utf8))
@@ -12105,9 +12108,12 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         try videoData.write(to: videoSource)
         try audioData.write(to: audioSource)
 
+        let videoAssetID = SMPTEPackageUtils.urnUUID()
         let assembled = await DCPService.shared.assembleDCP(
             videoMXFURL: videoSource,
+            videoAssetID: videoAssetID,
             audioMXFURL: audioSource,
+            audioAssetID: SMPTEPackageUtils.urnUUID(),
             outputDirectoryURL: packageDirectory,
             title: "Feature & <Trailer>",
             resolution: .twoKFlat,
@@ -12151,7 +12157,9 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertEqual(try xmlTexts(named: "AnnotationText", at: cplURL).first, "QC & mastering <approved>")
         XCTAssertEqual(try xmlTexts(named: "ContentKind", at: cplURL), [DCPContentKind.trailer.rawValue])
         XCTAssertEqual(try xmlTexts(named: "Language", at: cplURL), ["nb"])
-        XCTAssertEqual(try xmlTexts(named: "IntrinsicDuration", at: cplURL), ["48", "48", "48"])
+        // Markers, picture, sound and the ST 429-16 composition metadata.
+        XCTAssertEqual(try xmlTexts(named: "IntrinsicDuration", at: cplURL), ["48", "48", "48", "48"])
+        XCTAssertTrue(videoURL.lastPathComponent.contains(SMPTEPackageUtils.uuidString(from: videoAssetID)))
         XCTAssertTrue(try xmlTexts(named: "EditRate", at: cplURL).allSatisfy { $0 == "24 1" })
         XCTAssertEqual(try xmlTexts(named: "AnnotationText", at: pklURL).first, "QC & mastering <approved>")
     }
@@ -12253,7 +12261,9 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
 
         let dcpAssembled = await DCPService.shared.assembleDCP(
             videoMXFURL: dcpVideoSource,
+            videoAssetID: SMPTEPackageUtils.urnUUID(),
             audioMXFURL: nil,
+            audioAssetID: nil,
             outputDirectoryURL: dcpDirectory,
             title: "Silent DCP",
             resolution: .twoKFlat,

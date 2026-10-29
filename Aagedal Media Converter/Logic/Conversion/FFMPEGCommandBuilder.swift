@@ -382,6 +382,13 @@ enum FFMPEGCommandBuilder {
         let capturedImageSequenceSettings = preset == .imageSequence ? (imageSequenceSettings ?? ImageSequenceSettings()) : nil
         let capturedCodecSettings = codecSettings ?? CodecExportSettings(preset: preset)
         let capturedCommentSettings = commentSettings ?? CommentSettings()
+        if let dcpError = capturedDCPSettings?.configurationError {
+            return FFMPEGCommand(
+                arguments: [], normalizedTrimStart: normalizedTrimStart,
+                normalizedTrimEnd: normalizedTrimEnd, effectiveDuration: nil,
+                preparationError: dcpError
+            )
+        }
         let capturedSubtitleSettings = subtitleSettings ?? SubtitleExportSettings()
         var arguments = ["-y", "-nostdin", "-progress", "pipe:2"]
 
@@ -461,6 +468,9 @@ enum FFMPEGCommandBuilder {
                 removeArgumentPair("-map", value: "[audout]", from: &arguments)
             }
             arguments.append(contentsOf: ffmpegArgs)
+            if capturedDCPSettings != nil {
+                applyDCPColorConversion(to: &arguments)
+            }
 
             if let additionalOutputArguments {
                 arguments.append(contentsOf: additionalOutputArguments)
@@ -551,6 +561,9 @@ enum FFMPEGCommandBuilder {
 
 
             arguments.append(contentsOf: ffmpegArgs)
+            if capturedDCPSettings != nil {
+                applyDCPColorConversion(to: &arguments)
+            }
 
             if let additionalOutputArguments {
                 arguments.append(contentsOf: additionalOutputArguments)
@@ -1080,6 +1093,13 @@ extension FFMPEGCommandBuilder {
         let capturedImageSequenceSettings = preset == .imageSequence ? (imageSequenceSettings ?? ImageSequenceSettings()) : nil
         let capturedCodecSettings = codecSettings ?? CodecExportSettings(preset: preset)
         let capturedCommentSettings = commentSettings ?? CommentSettings()
+        if let dcpError = capturedDCPSettings?.configurationError {
+            return FFMPEGCommand(
+                arguments: [], normalizedTrimStart: normalizedTrimStart,
+                normalizedTrimEnd: normalizedTrimEnd, effectiveDuration: nil,
+                preparationError: dcpError
+            )
+        }
         let commentPlan: CommentMetadataPlan = preset == .imageSequence ? .unchanged : CommentMetadataPlan(
             comment: comment, includeDateTag: includeDateTag, settings: capturedCommentSettings, writeEmptyComment: writeEmptyComment
         )
@@ -1124,6 +1144,10 @@ extension FFMPEGCommandBuilder {
             ?? preset.ffmpegArguments
         await adjustArgumentsForInput(preset: preset, audioOnlySettings: capturedAudioOnlySettings, codecSettings: capturedCodecSettings, inputURL: audioInputURL, ffmpegArgs: &ffmpegArgs, trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
         sanitizeArgumentsForCustomVideoPipeline(&ffmpegArgs)
+        if capturedDCPSettings != nil {
+            // The piped frames are already container-sized; only the X′Y′Z′ conversion remains.
+            ffmpegArgs += ["-vf", DCPColorConversion.filterChain]
+        }
 
         // Audio routing uses input index 1 (the audio file)
         if !isMuted, let audioRoutingConfig, preset.outputsAudioTrack,
@@ -1984,6 +2008,22 @@ extension FFMPEGCommandBuilder {
         }
         mapArgs.append(contentsOf: ["-map", "0:s?"])
         ffmpegArgs.append(contentsOf: mapArgs)
+    }
+
+    /// Generated-video pipelines replace the preset's -vf with their own filter_complex, so
+    /// the DCP X′Y′Z′ conversion is appended to that graph and the video map redirected to it.
+    private static func applyDCPColorConversion(to arguments: inout [String]) {
+        guard let graphIndex = arguments.firstIndex(of: "-filter_complex"),
+              graphIndex + 1 < arguments.count else { return }
+        let graph = arguments[graphIndex + 1]
+        let generatedVideoLabels: Set<String> = ["[outv]", "[synth_v]"]
+        guard let mapIndex = arguments.indices.first(where: { index in
+            index > graphIndex && index + 1 < arguments.count && arguments[index] == "-map"
+                && generatedVideoLabels.contains(arguments[index + 1])
+        }) else { return }
+        let videoLabel = arguments[mapIndex + 1]
+        arguments[graphIndex + 1] = graph + ";\(videoLabel)\(DCPColorConversion.filterChain)[dcp_xyz]"
+        arguments[mapIndex + 1] = "[dcp_xyz]"
     }
 
     private static func sanitizeArgumentsForCustomVideoPipeline(_ ffmpegArgs: inout [String]) {
