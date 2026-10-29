@@ -540,7 +540,7 @@ actor BMXService {
               FileManager.default.fileExists(atPath: url.path) else { return nil }
         let request = mxf2rawRequest(
             executablePath: path,
-            arguments: ["--info", "--info-format", "xml", url.path],
+            arguments: ["--info", "--info-format", "xml", "--mca-detail", url.path],
             sourceURL: url,
             outputCaptureLimit: Self.infoCaptureLimit
         )
