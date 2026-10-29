@@ -9,7 +9,13 @@ protocol YTDLPUpdating: Sendable {
     func resolveYTDLPPath() async -> String?
     /// The yt-dlp-rs binary, or nil when it is disabled or unavailable.
     func resolveYTDLPRSPath() async -> String?
+    /// Version of the binary `resolveYTDLPRSPath()` returns.
+    func getCurrentYTDLPRSVersion() async -> String?
     func ensureDenoInstalled() async -> String?
+}
+
+extension YTDLPUpdating {
+    func getCurrentYTDLPRSVersion() async -> String? { AppConstants.bundledYTDLPRSVersion }
 }
 
 extension YTDLPUpdateService: YTDLPUpdating {}
@@ -217,8 +223,12 @@ final class YTDLPDownloadControl: @unchecked Sendable {
 enum YTDLPLiveUpdate: Sendable, Equatable {
     /// The scheduled stream being waited for can now be downloaded.
     case streamAvailable
-    /// Recorded media duration (seconds) and size so far, from ffmpeg's stats line.
+    /// Recorded media duration (seconds) and size so far, from ffmpeg's stats line
+    /// (or yt-dlp-rs's `recorded` progress for a growing file).
     case recording(duration: Double?, bytes: Int64?)
+    /// yt-dlp-rs records the live stream into this growing `.mov`, which editors can
+    /// import while it is written.
+    case growingFile(URL)
 }
 
 /// Metadata fetched from yt-dlp for a video URL
@@ -713,8 +723,10 @@ actor YTDLPService {
         _ body: (YTDLPEngine, String) async throws -> T
     ) async throws -> (value: T, engine: YTDLPEngine, fallbackReason: String?) {
         let rsPath = await updateService.resolveYTDLPRSPath()
+        let rsVersion = rsPath == nil ? nil : await updateService.getCurrentYTDLPRSVersion()
         let decision = YTDLPEngineRouter.decide(
             url: url, operation: operation, rsAvailable: rsPath != nil,
+            rsVersion: rsVersion,
             rsSkippedForSite: await engineFailures.isSkipped(url: url)
         )
         logger.info("[Engine] \(decision.engine.rawValue, privacy: .public) for \(String(describing: operation), privacy: .public): \(decision.reason, privacy: .public)")
@@ -1055,6 +1067,8 @@ actor YTDLPService {
     ///   - outputFolder: The folder to save the downloaded video
     ///   - forceOverwrite: If true, overwrites existing files instead of skipping
     ///   - liveFromStart: Whether to rewind live streams to the beginning
+    ///   - growingFile: Record live streams into one growing `.mov` (yt-dlp-rs 0.6+;
+    ///     a yt-dlp download records normally)
     ///   - audioOnly: Whether to download only the audio track (no video)
     ///   - section: Optional time range to download instead of the whole video
     ///   - waitForStream: Wait for a scheduled live stream or premiere to start instead
@@ -1072,6 +1086,7 @@ actor YTDLPService {
         outputFolder: URL,
         forceOverwrite: Bool = false,
         liveFromStart: Bool = false,
+        growingFile: Bool = false,
         audioOnly: Bool = false,
         section: DownloadSection? = nil,
         waitForStream: Bool = false,
@@ -1091,6 +1106,10 @@ actor YTDLPService {
             section: section != nil, audioOnly: audioOnly, liveFromStart: liveFromStart,
             hasFFmpeg: ffmpegPath != nil, hasFFprobe: ffprobeExists
         ))
+        // A clip or audio extraction is never a growing recording.
+        let rsVersion = await updateService.getCurrentYTDLPRSVersion()
+        let growingFile = growingFile && section == nil && !audioOnly
+            && YTDLPEngineRouter.supportsLiveRecording(version: rsVersion)
         // Files present before the yt-dlp-rs attempt are never removed by its cleanup.
         let preexisting = YTDLPAttemptCleanup.snapshot(of: outputFolder)
         let outcome = try await withEngineFallback(url: url, operation: operation, beforeFallback: { [logger] in
@@ -1103,7 +1122,8 @@ actor YTDLPService {
         }, onAttempt: engineUpdate) { engine, executablePath in
             try await runDownload(
                 engine: engine, executablePath: executablePath, url: url, outputFolder: outputFolder,
-                forceOverwrite: forceOverwrite, liveFromStart: liveFromStart, audioOnly: audioOnly,
+                forceOverwrite: forceOverwrite, liveFromStart: liveFromStart,
+                growingFile: growingFile && engine == .ytdlpRS, audioOnly: audioOnly,
                 section: section, waitForStream: waitForStream, hasFFprobe: ffprobeExists, control: control,
                 progress: progress, titleUpdate: titleUpdate, liveUpdate: liveUpdate
             )
@@ -1121,6 +1141,7 @@ actor YTDLPService {
         outputFolder: URL,
         forceOverwrite: Bool,
         liveFromStart: Bool,
+        growingFile: Bool,
         audioOnly: Bool,
         section: DownloadSection?,
         waitForStream: Bool,
@@ -1192,6 +1213,14 @@ actor YTDLPService {
         if liveFromStart {
             args.append(contentsOf: ["--live-from-start", "--no-part"])
             logger.info("[YTDLPService] Downloading live stream from start (no-part)")
+        }
+
+        if growingFile {
+            // yt-dlp-rs extension: a live stream is written by ffmpeg as one fragmented
+            // QuickTime file at its final name, tagged for DaVinci Resolve while it grows,
+            // with a time-of-day timecode. Ordinary videos download as usual.
+            args.append("--growing-file")
+            logger.info("[YTDLPService] Recording live streams as growing files")
         }
 
         if waitForStream {
@@ -1282,6 +1311,8 @@ actor YTDLPService {
             /// The extractor reported the source as currently live.
             var isLive: Bool = false
             var lastLiveStatsReport: Date = .distantPast
+            /// The `--growing-file` recording, once yt-dlp-rs reports recorded time.
+            var growingFileURL: URL?
             var firstStdoutLogged: Bool = false
             var firstStderrLogged: Bool = false
             var firstProgressLogged: Bool = false
@@ -1383,11 +1414,39 @@ actor YTDLPService {
                 }
             }
 
+            // A growing file's progress line carries the recorded time; the line only
+            // appears for --growing-file recordings, at the reported destination.
+            if growingFile, let recorded = YTDLPProgressParser.parseGrowingFileProgress(trimmed) {
+                let (newFile, shouldReport) = parsedState.read { state -> (URL?, Bool) in
+                    var newFile: URL?
+                    if state.growingFileURL == nil, let path = state.outputPath {
+                        let url = path.hasPrefix("/")
+                            ? URL(fileURLWithPath: path) : outputFolder.appendingPathComponent(path)
+                        state.growingFileURL = url
+                        newFile = url
+                    }
+                    guard Date().timeIntervalSince(state.lastLiveStatsReport) >= 1 else { return (newFile, false) }
+                    state.lastLiveStatsReport = Date()
+                    return (newFile, true)
+                }
+                if let newFile {
+                    logger.info("Recording growing file: \(newFile.lastPathComponent, privacy: .public)")
+                    // yt-dlp-rs removes its recording tag when it ends, but not if it is
+                    // killed; remember the file for the launch sweep.
+                    GrowingRecordingTag.register(newFile.path)
+                    liveUpdate(.growingFile(newFile))
+                }
+                if shouldReport {
+                    liveUpdate(.recording(duration: recorded.time, bytes: recorded.bytes))
+                }
+            }
+
             // Live HLS recordings run through ffmpeg; its stats line carries the
             // recorded duration and size. Report them about once a second.
             if section == nil, let stats = YTDLPProgressParser.parseFFmpegStats(trimmed) {
                 let shouldReport = parsedState.read { state -> Bool in
-                    guard state.isLive, Date().timeIntervalSince(state.lastLiveStatsReport) >= 1 else {
+                    guard state.isLive, state.growingFileURL == nil,
+                          Date().timeIntervalSince(state.lastLiveStatsReport) >= 1 else {
                         return false
                     }
                     state.lastLiveStatsReport = Date()
@@ -1512,6 +1571,16 @@ actor YTDLPService {
             signalHandle.send(SIGINT)
         })
         defer { _ = control.finish(id: executionID) }
+        // The process has exited whenever this returns or throws, so a growing file that
+        // still carries the recording tag (yt-dlp-rs was killed) is no longer recording.
+        defer {
+            if let growingFile = parsedState.read({ $0.growingFileURL }) {
+                if GrowingRecordingTag.isSet(at: growingFile.path) {
+                    logger.warning("Removing the recording tag yt-dlp-rs left on \(growingFile.lastPathComponent, privacy: .public)")
+                }
+                GrowingRecordingTag.clear(at: growingFile.path)
+            }
+        }
 
         // Stall watchdog: if yt-dlp produces no output for `stallThresholdSeconds`,
         // terminate it so the UI isn't stuck forever on a dead connection. Fragment
@@ -1548,6 +1617,11 @@ actor YTDLPService {
                 throw YTDLPError.liveRecordingStopped
             case .stalled:
                 logger.warning("Download terminated due to stall")
+                // Keep a growing file rather than retrying over it with yt-dlp.
+                if let growingFile = parsedState.read({ $0.growingFileURL }),
+                   FileManager.default.fileExists(atPath: growingFile.path) {
+                    throw YTDLPError.liveRecordingStopped
+                }
                 throw YTDLPError.stalled
             }
         }
@@ -1610,6 +1684,14 @@ actor YTDLPService {
         let wasInterrupted = control.wasInterrupted(id: executionID)
         if wasInterrupted, terminationStatus != 0 {
             logger.warning("Live stream recording stopped without finalizing (exit \(terminationStatus))")
+            throw YTDLPError.liveRecordingStopped
+        }
+
+        // A growing file may already be in an editor's timeline: keep what was recorded
+        // instead of removing it and starting over with yt-dlp.
+        if terminationStatus != 0, let growingFile = parsedState.read({ $0.growingFileURL }),
+           FileManager.default.fileExists(atPath: growingFile.path) {
+            logger.warning("Growing-file recording ended with exit \(terminationStatus); keeping the recorded file")
             throw YTDLPError.liveRecordingStopped
         }
 

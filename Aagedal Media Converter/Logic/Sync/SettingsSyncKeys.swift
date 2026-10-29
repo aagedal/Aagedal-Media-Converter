@@ -273,6 +273,7 @@ enum SettingsSyncKeys {
         AppConstants.ytdlpHeliumNeoProfileKey,
         AppConstants.ytdlpZenProfileKey,
         AppConstants.ytdlpLiveFromStartKey,
+        AppConstants.ytdlpGrowingFileKey,
         AppConstants.ytdlpAudioOnlyKey,
         AppConstants.ytdlpDownloadPlaylistKey,
         AppConstants.ytdlpFilenameRestrictionModeKey,

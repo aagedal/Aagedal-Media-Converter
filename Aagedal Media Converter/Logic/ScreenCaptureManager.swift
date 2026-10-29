@@ -335,13 +335,6 @@ enum CaptureDynamicRangeOption: String, CaseIterable, Identifiable {
 final class ScreenCaptureManager: NSObject, ObservableObject {
     static let shared = ScreenCaptureManager()
 
-    /// Strips the Blackmagic "recording" xattr from any growing-file recording left
-    /// tagged by a crash or quit that never reached `finish()`. Call once at launch so
-    /// DaVinci Resolve doesn't keep showing a phantom red REC overlay on a dead file.
-    nonisolated static func sweepStaleGrowingRecordings() {
-        ScreenCaptureWriter.sweepStalePendingGrowingFiles()
-    }
-
     enum CaptureError: LocalizedError {
         case unavailableDisplay
         case accessDenied
@@ -2533,62 +2526,16 @@ final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendable {
     // MARK: - Growing-file xattr (DaVinci Resolve trigger)
 
     private func setRecordingXattr() {
-        let uuid = UUID().uuidString.replacingOccurrences(of: "-", with: "").uppercased()
-        let json = "{\"r\":1, \"uuid\":\"\(uuid)\"}"
-        let bytes = Array(json.utf8)
-        let result = bytes.withUnsafeBytes { raw in
-            setxattr(outputURL.path, Self.recordingXattrName, raw.baseAddress, bytes.count, 0, 0)
-        }
-        if result != 0 {
-            logger.warning("Failed to set growing-file xattr (errno \(errno, privacy: .public)).")
-        } else {
-            // Remember the tagged file so a crash/quit before finish() can be swept on next launch.
-            Self.registerPendingGrowingPath(outputURL.path)
+        // The tagged file is remembered so a crash/quit before finish() can be swept on next launch.
+        if let error = GrowingRecordingTag.set(at: outputURL.path) {
+            logger.warning("Failed to set growing-file xattr (errno \(error, privacy: .public)).")
         }
     }
 
     private func clearRecordingXattr() {
-        let result = removexattr(outputURL.path, Self.recordingXattrName, 0)
-        if result != 0 && errno != ENOATTR {
-            logger.warning("Failed to clear growing-file xattr (errno \(errno, privacy: .public)).")
+        if let error = GrowingRecordingTag.clear(at: outputURL.path) {
+            logger.warning("Failed to clear growing-file xattr (errno \(error, privacy: .public)).")
         }
-        Self.unregisterPendingGrowingPath(outputURL.path)
-    }
-
-    // MARK: - Growing-file xattr bookkeeping (crash/quit recovery)
-
-    fileprivate static let recordingXattrName = "com.blackmagicdesign.metadata:recording"
-
-    private static func registerPendingGrowingPath(_ path: String) {
-        let defaults = UserDefaults.standard
-        var paths = defaults.stringArray(forKey: AppConstants.pendingGrowingRecordingPathsKey) ?? []
-        guard !paths.contains(path) else { return }
-        paths.append(path)
-        defaults.set(paths, forKey: AppConstants.pendingGrowingRecordingPathsKey)
-    }
-
-    private static func unregisterPendingGrowingPath(_ path: String) {
-        let defaults = UserDefaults.standard
-        guard var paths = defaults.stringArray(forKey: AppConstants.pendingGrowingRecordingPathsKey),
-              paths.contains(path) else { return }
-        paths.removeAll { $0 == path }
-        if paths.isEmpty {
-            defaults.removeObject(forKey: AppConstants.pendingGrowingRecordingPathsKey)
-        } else {
-            defaults.set(paths, forKey: AppConstants.pendingGrowingRecordingPathsKey)
-        }
-    }
-
-    /// Strips the Blackmagic "recording" xattr from any growing file left tagged by a
-    /// recording that never reached `finish()` (app crash or quit). Call once at launch.
-    static func sweepStalePendingGrowingFiles() {
-        let defaults = UserDefaults.standard
-        guard let paths = defaults.stringArray(forKey: AppConstants.pendingGrowingRecordingPathsKey),
-              !paths.isEmpty else { return }
-        for path in paths {
-            removexattr(path, recordingXattrName, 0)
-        }
-        defaults.removeObject(forKey: AppConstants.pendingGrowingRecordingPathsKey)
     }
 
     private func recordError(_ error: Error) {

@@ -329,6 +329,9 @@ extension VideoFileCellView {
             return String(localized: "Recording…", comment: "Status of a live stream recording before its duration and size are known.")
         }
         let details = parts.joined(separator: " · ")
+        if config.growingRecordingURL != nil {
+            return String(localized: "Recording growing file \(details)", comment: "Status of a live stream recorded as a growing file that editors can import while it is written. The argument is the recorded duration and/or file size, e.g. \"1:02:03 · 1.2 GB\".")
+        }
         return String(localized: "Recording \(details)", comment: "Status of a live stream recording. The argument is the recorded duration and/or file size, e.g. \"1:02:03 · 1.2 GB\".")
     }
 

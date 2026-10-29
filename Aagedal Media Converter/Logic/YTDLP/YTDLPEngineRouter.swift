@@ -91,6 +91,7 @@ enum YTDLPEngineRouter {
         url: String,
         operation: YTDLPEngineOperation,
         rsAvailable: Bool,
+        rsVersion: String? = AppConstants.bundledYTDLPRSVersion,
         rsSkippedForSite: Bool = false
     ) -> YTDLPEngineDecision {
         func ytdlp(_ reason: String) -> YTDLPEngineDecision { .init(engine: .ytdlp, reason: reason) }
@@ -112,7 +113,11 @@ enum YTDLPEngineRouter {
         case .postListing:
             guard site.id == "twitter" else { return ytdlp("post listing is not ported for \(site.id)") }
         case .download(let options):
-            if options.liveFromStart { return ytdlp("--live-from-start recordings use yt-dlp") }
+            // 0.6 finishes a stopped --live-from-start recording (merge and metadata)
+            // like yt-dlp; earlier versions only had a hidden beta generator.
+            if options.liveFromStart, !supportsLiveRecording(version: rsVersion) {
+                return ytdlp("--live-from-start needs yt-dlp-rs \(AppConstants.ytdlpRSLiveRecordingMinimumVersion)+")
+            }
             // yt-dlp-rs never looks up ffmpeg itself; merging, -x and --embed-metadata
             // all need --ffmpeg-location.
             if !options.hasFFmpeg { return ytdlp("no ffmpeg for merging and metadata") }
@@ -120,6 +125,13 @@ enum YTDLPEngineRouter {
             if options.audioOnly, !options.hasFFprobe { return ytdlp("audio extraction needs ffprobe") }
         }
         return .init(engine: .ytdlpRS, reason: "\(site.id) is supported by yt-dlp-rs")
+    }
+
+    /// Whether a yt-dlp-rs version records `--live-from-start` and supports
+    /// `--growing-file`. An unknown version does not.
+    static func supportsLiveRecording(version: String?) -> Bool {
+        guard let version, ManagedToolVersion(version) != nil else { return false }
+        return !ManagedToolPolicy.isNewer(AppConstants.ytdlpRSLiveRecordingMinimumVersion, than: version)
     }
 
     private static func isInstagramPost(_ url: String) -> Bool {

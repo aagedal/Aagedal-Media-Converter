@@ -49,6 +49,7 @@ struct YTDLPSettingsView: View {
     @State private var denoDownloadInfo: String?
 
     @AppStorage(AppConstants.ytdlpRSEnabledKey) private var ytdlpRSEnabled = true
+    @AppStorage(AppConstants.ytdlpGrowingFileKey) private var growingFileRecording = false
     @State private var ytdlpRSSnapshot: ManagedToolSnapshot?
     @State private var isDownloadingYTDLPRS = false
     @State private var ytdlpRSDownloadProgress: Double = 0.0
@@ -575,6 +576,24 @@ struct YTDLPSettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+
+                Toggle("Record live streams as growing files", isOn: $growingFileRecording)
+                    .toggleStyle(SwitchToggleStyle())
+                    .disabled(!ytdlpRSEnabled)
+                    .accessibilityIdentifier("ytdlpGrowingFileToggle")
+
+                Text("Live streams from supported sites are recorded into one QuickTime .mov file that DaVinci Resolve and Premiere Pro can import while it is still being written. The file gets a time-of-day timecode (the stream’s start time with Record from start), and H.264/AAC formats are preferred. Resolve shows it as a recording clip until the recording stops. Other downloads are not affected.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if growingFileRecording, ytdlpRSEnabled, let version = ytdlpRSSnapshot?.activeVersion,
+                   !YTDLPEngineRouter.supportsLiveRecording(version: version) {
+                    Label("Growing files need yt-dlp-rs \(AppConstants.ytdlpRSLiveRecordingMinimumVersion) or later; the selected version records normally.", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 HStack {
                     if let snapshot = ytdlpRSSnapshot, let version = snapshot.activeVersion {

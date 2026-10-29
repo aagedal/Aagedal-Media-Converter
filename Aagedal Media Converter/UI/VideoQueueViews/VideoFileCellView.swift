@@ -1077,13 +1077,26 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
             outputNameLabel.textColor = (config.status == .waiting && config.outputFileExists) ? .systemOrange : .labelColor
         }
 
-        // Downloaded source file Finder + copy-path + drag buttons (for yt-dlp items)
-        if isFirstConfigure || prev?.sourceURL != config.sourceURL || prev?.isDownloading != config.isDownloading || prev?.status != config.status || prev?.url != config.url {
-            let showDownloadedButton = config.sourceURL != nil && !config.isDownloading && config.downloadError == nil
+        // Downloaded source file Finder + copy-path + drag buttons (for yt-dlp items).
+        // A growing-file recording offers its file while it is still being written,
+        // so it can be dragged into an editor right away.
+        if isFirstConfigure || prev?.sourceURL != config.sourceURL || prev?.isDownloading != config.isDownloading || prev?.status != config.status || prev?.url != config.url
+            || prev?.growingRecordingURL != config.growingRecordingURL {
+            let downloadedFile = config.isDownloading ? config.growingRecordingURL : config.url
+            let showDownloadedButton = config.sourceURL != nil && downloadedFile != nil && config.downloadError == nil
             downloadedFinderButton.isHidden = !showDownloadedButton
             downloadedCopyPathButton.isHidden = !showDownloadedButton
             downloadedDragButton.isHidden = !showDownloadedButton
-            downloadedDragButton.fileURL = showDownloadedButton ? config.url : nil
+            downloadedDragButton.fileURL = showDownloadedButton ? downloadedFile : nil
+            if config.isDownloading, config.growingRecordingURL != nil {
+                downloadedFinderButton.toolTip = String(localized: "Show the growing recording in Finder", comment: "Tooltip on the Finder button of a live stream being recorded as a growing file.")
+                downloadedCopyPathButton.toolTip = String(localized: "Copy the growing recording’s path", comment: "Tooltip on the copy-path button of a live stream being recorded as a growing file.")
+                downloadedDragButton.toolTip = String(localized: "Drag the growing recording into an editor such as DaVinci Resolve or Premiere Pro while it is being recorded.", comment: "Tooltip on the drag handle of a live stream being recorded as a growing file.")
+            } else {
+                downloadedFinderButton.toolTip = "Show downloaded source file in Finder"
+                downloadedCopyPathButton.toolTip = "Copy downloaded source file path"
+                downloadedDragButton.toolTip = "Drag this icon to share the downloaded source file with other apps."
+            }
         }
 
         // Merge
@@ -1206,6 +1219,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
             || prev?.isLiveStreamRecording != config.isLiveStreamRecording
             || prev?.liveRecordingDuration != config.liveRecordingDuration
             || prev?.liveRecordingFileSize != config.liveRecordingFileSize
+            || prev?.growingRecordingURL != config.growingRecordingURL
             || prev?.waitingForLiveStream != config.waitingForLiveStream
             || prev?.liveStreamStartsAt != config.liveStreamStartsAt
             || prev?.fileAlreadyExistsPath != config.fileAlreadyExistsPath
@@ -1675,7 +1689,8 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         guard let config = currentConfig else { return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(config.url.path, forType: .string)
+        let file = config.isDownloading ? config.growingRecordingURL ?? config.url : config.url
+        pasteboard.setString(file.path, forType: .string)
     }
 
     /// Shift+Cmd is used instead of plain Shift because NSTableView reserves

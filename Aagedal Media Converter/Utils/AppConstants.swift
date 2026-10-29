@@ -737,7 +737,10 @@ enum AppConstants {
     /// Includes pre-releases: yt-dlp-rs is in beta.
     static let ytdlpRSGitHubReleasesURL = "https://api.github.com/repos/aagedal/yt-dlp-rs/releases?per_page=20"
     /// Version of `Binaries/yt-dlp-rs`; scripts/update-ytdlp-rs.sh keeps it in sync.
-    static let bundledYTDLPRSVersion = "0.4.0-beta.1"
+    static let bundledYTDLPRSVersion = "0.6.0-beta.1"
+    /// Oldest yt-dlp-rs that records `--live-from-start` (stopped with SIGINT) and
+    /// supports `--growing-file`. A pinned older update keeps those on yt-dlp.
+    static let ytdlpRSLiveRecordingMinimumVersion = "0.6.0-beta.1"
 
     // Managed tool versions (yt-dlp, deno, yt-dlp-rs). Auto-update keys default to true.
     static let ytdlpAutoUpdateKey = "ytdlpAutoUpdate"
@@ -773,6 +776,9 @@ enum AppConstants {
     static let ytdlpHeliumNeoProfileKey = "ytdlpHeliumNeoProfile"
     static let ytdlpZenProfileKey = "ytdlpZenProfile"
     static let ytdlpLiveFromStartKey = "ytdlpLiveFromStart"
+    /// Record live streams with yt-dlp-rs `--growing-file` (one `.mov` editors can
+    /// import while it is written). Off by default.
+    static let ytdlpGrowingFileKey = "ytdlpGrowingFile"
     static let ytdlpAudioOnlyKey = "ytdlpAudioOnly"
     static let ytdlpDownloadPlaylistKey = "ytdlpDownloadPlaylist"
 
