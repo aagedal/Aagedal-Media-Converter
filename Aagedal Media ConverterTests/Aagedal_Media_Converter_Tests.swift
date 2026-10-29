@@ -618,8 +618,9 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             )
         }
 
+        // The shell creates the file before printf writes the PID, so wait for the contents.
         let pidDeadline = ContinuousClock.now.advanced(by: .seconds(2))
-        while !FileManager.default.fileExists(atPath: producerPIDURL.path),
+        while (try? String(contentsOf: producerPIDURL, encoding: .utf8)).flatMap({ pid_t($0) }) == nil,
               ContinuousClock.now < pidDeadline {
             try await Task.sleep(for: .milliseconds(10))
         }

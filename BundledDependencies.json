@@ -872,8 +872,8 @@
     },
     {
       "path": "Aagedal Media Converter/Binaries/ffmpeg",
-      "bytes": 60144480,
-      "sha256": "ec3d81944809bf5d0173edb77b8dbf8eaeabf2388289812ce87b3f90fbe410c6",
+      "bytes": 60144496,
+      "sha256": "c4cd2362fd3147a9f0b30d42f2c894337bc947ad95ad4e33f72c024e1d6661a0",
       "mode": "0755",
       "architectures": [
         "arm64"
@@ -1364,7 +1364,7 @@
   "summary": {
     "toolCount": 13,
     "libraryCount": 12,
-    "totalBytes": 187292320,
+    "totalBytes": 187292336,
     "entriesMissingLocalLicenseFile": []
   }
 }
