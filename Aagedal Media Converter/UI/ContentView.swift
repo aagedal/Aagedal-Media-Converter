@@ -199,6 +199,44 @@ struct ContentView: View {
             encodingGroups.contains(where: { $0.items.contains(where: { $0.id == id }) })
     }
 
+    /// Opens the fullscreen player with the item's own list as the navigation queue:
+    /// the ungrouped queue, or the encoding group the item belongs to.
+    private func openFullscreenPlayer(for itemID: UUID) {
+        guard !FullscreenPlayerWindowController.shared.isCurrentlyPlaying(itemID: itemID) else { return }
+        let queue: [VideoItem]
+        if droppedFiles.contains(where: { $0.id == itemID }) {
+            queue = droppedFiles
+        } else if let group = encodingGroups.first(where: { $0.items.contains(where: { $0.id == itemID }) }) {
+            queue = group.items
+        } else {
+            return
+        }
+        guard let item = queue.first(where: { $0.id == itemID }) else { return }
+        FullscreenPlayerWindowController.shared.openFullscreenPlayer(
+            for: item,
+            in: queue,
+            onItemTrimChanged: { [self] changedID, trimStart, trimEnd in
+                applyTrim(itemID: changedID, trimStart: trimStart, trimEnd: trimEnd)
+            }
+        )
+    }
+
+    /// Writes trim points back to the item wherever it lives (ungrouped queue or a group).
+    private func applyTrim(itemID: UUID, trimStart: Double?, trimEnd: Double?) {
+        if let idx = droppedFiles.firstIndex(where: { $0.id == itemID }) {
+            droppedFiles[idx].trimStart = trimStart
+            droppedFiles[idx].trimEnd = trimEnd
+            return
+        }
+        for groupIndex in encodingGroups.indices {
+            if let idx = encodingGroups[groupIndex].items.firstIndex(where: { $0.id == itemID }) {
+                encodingGroups[groupIndex].items[idx].trimStart = trimStart
+                encodingGroups[groupIndex].items[idx].trimEnd = trimEnd
+                return
+            }
+        }
+    }
+
     /// Brings the main app window to the front so a SwiftUI `.sheet` attached to
     /// ContentView is actually visible when triggered from a secondary window
     /// (e.g. the Group Editor). The Group Editor uses `setFrameAutosaveName`
@@ -499,22 +537,7 @@ struct ContentView: View {
                 droppedFiles[index].includeDateTag.toggle()
             },
             onPlayFullscreen: { [self] id in
-                let allItems = droppedFiles + encodingGroups.flatMap { $0.items }
-                if let selectedItem = allItems.first(where: { $0.id == id }) {
-                    if FullscreenPlayerWindowController.shared.isCurrentlyPlaying(itemID: selectedItem.id) {
-                        return
-                    }
-                    FullscreenPlayerWindowController.shared.openFullscreenPlayer(
-                        for: selectedItem,
-                        in: droppedFiles,
-                        onItemTrimChanged: { [self] itemID, trimStart, trimEnd in
-                            if let idx = droppedFiles.firstIndex(where: { $0.id == itemID }) {
-                                droppedFiles[idx].trimStart = trimStart
-                                droppedFiles[idx].trimEnd = trimEnd
-                            }
-                        }
-                    )
-                }
+                openFullscreenPlayer(for: id)
             },
             onURLDrop: { urlString in
                 handleURLDownload(urlString, liveFromStart: false, audioOnly: false)
@@ -608,21 +631,7 @@ struct ContentView: View {
                         trimSheetItemID = itemID
                     },
                     onPlayFullscreen: { itemID in
-                        let allItems = droppedFiles + encodingGroups.flatMap { $0.items }
-                        guard let selected = allItems.first(where: { $0.id == itemID }) else { return }
-                        if FullscreenPlayerWindowController.shared.isCurrentlyPlaying(itemID: selected.id) {
-                            return
-                        }
-                        FullscreenPlayerWindowController.shared.openFullscreenPlayer(
-                            for: selected,
-                            in: droppedFiles,
-                            onItemTrimChanged: { changedID, trimStart, trimEnd in
-                                if let idx = droppedFiles.firstIndex(where: { $0.id == changedID }) {
-                                    droppedFiles[idx].trimStart = trimStart
-                                    droppedFiles[idx].trimEnd = trimEnd
-                                }
-                            }
-                        )
+                        openFullscreenPlayer(for: itemID)
                     },
                     onOpenMetadata: { ids in
                         let allItems = droppedFiles + encodingGroups.flatMap { $0.items }

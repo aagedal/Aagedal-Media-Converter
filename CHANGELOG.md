@@ -16,6 +16,15 @@
 - Shift-dragging the range keeps its length exactly, and Option-dragging a handle stays centered when one side reaches the start or end of the file.
 - Dragging trim handles sends fewer seeks to the player, which keeps MPV previews responsive. The drag mode (scrub, ⌘ range select, ⇧ slide) is chosen when you press the mouse button and no longer changes if you press or release a key mid-drag; ⇧-dragging outside the range now scrubs.
 
+### Fullscreen player
+
+- Keyboard shortcuts only apply while the fullscreen player is the active window. Switching back to the main window no longer sends Space, J/K/L, arrows, digits or Esc to the hidden player, and the queue's own shortcuts work again while it is open.
+- Typing a timecode works properly: Space, arrows and Return go to the field, and Esc cancels the edit instead of closing the player.
+- The cursor hides along with the controls during playback. Controls hide after 3 seconds only while playing, come back when you pause, and stay up while an audio or subtitle menu is open or Tab moves through them.
+- The right-edge cursor-hide zone no longer leaves the cursor hidden after switching items, leaving fullscreen or switching apps.
+- Trim points set in fullscreen stay with the item when you move back and forth through the queue, and items inside encoding groups keep their trims and navigate within their group.
+- Auto Next no longer risks skipping an item when the end of a clip is reported twice.
+
 # v.4.6.0
 
 ### Downloads
