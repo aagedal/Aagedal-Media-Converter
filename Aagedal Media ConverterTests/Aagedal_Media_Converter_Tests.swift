@@ -314,6 +314,32 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertEqual(result.discardedStandardErrorBytes, 0)
     }
 
+    func testSubprocessRunnerDoesNotSpinAfterOutputPipesClose() async throws {
+        func processCPUSeconds() -> Double {
+            var usage = rusage()
+            getrusage(RUSAGE_SELF, &usage)
+            func seconds(_ time: timeval) -> Double { Double(time.tv_sec) + Double(time.tv_usec) / 1_000_000 }
+            return seconds(usage.ru_utime) + seconds(usage.ru_stime)
+        }
+
+        // The child closes both pipes but keeps running, so the runner sees end-of-file long
+        // before it can collect the exit status. Left installed, the readability handlers would
+        // spin two threads at full CPU for that whole second.
+        let cpuBefore = processCPUSeconds()
+        let result = try await SubprocessRunner().run(
+            SubprocessRequest(
+                executableURL: URL(fileURLWithPath: "/bin/sh"),
+                arguments: ["-c", "printf 'out'; printf 'err' >&2; exec 1>&- 2>&-; sleep 1"]
+            )
+        )
+        let cpuUsed = processCPUSeconds() - cpuBefore
+
+        XCTAssertTrue(result.succeeded)
+        XCTAssertEqual(result.standardOutputText, "out")
+        XCTAssertEqual(result.standardErrorText, "err")
+        XCTAssertLessThan(cpuUsed, 0.5, "Readability handlers kept running after end-of-file")
+    }
+
     func testSubprocessRunnerReturnsNonzeroExitAsResult() async throws {
         let result = try await SubprocessRunner().run(
             SubprocessRequest(
