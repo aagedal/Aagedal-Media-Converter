@@ -23,6 +23,8 @@
 		3068888A137E42F3A0BD3EDC /* KeyboardShortcutSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64183E70C2B54C9D87A2C3AA /* KeyboardShortcutSettingsTests.swift */; };
 		3E3AFCB991AB43B29AD7B9CE /* KeyboardShortcutSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6DECDFA138A4F6AA59674EA /* KeyboardShortcutSettings.swift */; };
 		00B3F16A9264F886CA667DAC /* NativeWaveformVideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E03D85E11E51D07B7265C81 /* NativeWaveformVideoRenderer.swift */; };
+		C74ED10E65DCC0EF69F11847 /* WaveformAnimationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E0CBEC23A29C1580128E20E /* WaveformAnimationState.swift */; };
+		9C8ABCF0773A19D493FC2B6C /* NativeWaveformVideoRenderer+AdvancedStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9F84AE256167D3A6CCD4B3C /* NativeWaveformVideoRenderer+AdvancedStyles.swift */; };
 		010A25E4BFF94166AD0C8126 /* AV2AudioTimingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3675B15B144940809F827E09 /* AV2AudioTimingTests.swift */; };
 		042DE77076B347F3863AE8A9 /* MergeCompatibilityPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0148C0DED554F1ABE4B7DB0 /* MergeCompatibilityPolicyTests.swift */; };
 		C80F1A2B3C4D5E6F70819203 /* CropEditorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C80F1A2B3C4D5E6F70819204 /* CropEditorTests.swift */; };
@@ -638,6 +640,8 @@
 		993C771FF0CA4AD3BD29060C /* YTDLPWarmUpDrainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YTDLPWarmUpDrainTests.swift; sourceTree = "<group>"; };
 		9D34ECA0E63C471788FE1831 /* WatchFolderSelectionServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchFolderSelectionServiceTests.swift; sourceTree = "<group>"; };
 		9E03D85E11E51D07B7265C81 /* NativeWaveformVideoRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeWaveformVideoRenderer.swift; sourceTree = "<group>"; };
+		9E0CBEC23A29C1580128E20E /* WaveformAnimationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveformAnimationState.swift; sourceTree = "<group>"; };
+		C9F84AE256167D3A6CCD4B3C /* NativeWaveformVideoRenderer+AdvancedStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NativeWaveformVideoRenderer+AdvancedStyles.swift"; sourceTree = "<group>"; };
 		A15F59A5246B4BA880E781B3 /* AV2ScratchDirectoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2ScratchDirectoryTests.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5D /* CaptureModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureModeView.swift; sourceTree = "<group>"; };
 		A1B4BB0C06D28560C6D47EC0 /* VideoFileCellView+Comment.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "VideoFileCellView+Comment.swift"; sourceTree = "<group>"; };
@@ -1338,6 +1342,8 @@
 				67BAE582711E2F5E020591A9 /* ConversionRequest.swift */,
 				9609862A8EC6964A0A45885F /* WaveformPCMDecoder.swift */,
 				9E03D85E11E51D07B7265C81 /* NativeWaveformVideoRenderer.swift */,
+				9E0CBEC23A29C1580128E20E /* WaveformAnimationState.swift */,
+				C9F84AE256167D3A6CCD4B3C /* NativeWaveformVideoRenderer+AdvancedStyles.swift */,
 				B1F6F70AFCCF6F2348370C3A /* WaveformFramePipeWriter.swift */,
 				8E9B52582ED65199006E6A10 /* AudioRoutingService.swift */,
 				8ECEBC172ED766D200F1F67C /* CropService.swift */,
@@ -2040,6 +2046,8 @@
 				67BAE582711E2F5E020591AA /* ConversionRequest.swift in Sources */,
 				978C1F6A9DF43EE4E1E9FDD4 /* WaveformPCMDecoder.swift in Sources */,
 				00B3F16A9264F886CA667DAC /* NativeWaveformVideoRenderer.swift in Sources */,
+				C74ED10E65DCC0EF69F11847 /* WaveformAnimationState.swift in Sources */,
+				9C8ABCF0773A19D493FC2B6C /* NativeWaveformVideoRenderer+AdvancedStyles.swift in Sources */,
 				DCAB5042D7F99ED919EF7D29 /* WaveformFramePipeWriter.swift in Sources */,
 				8EEE451C2EBF4BFD0049F017 /* PreviewAssetGenerator.swift in Sources */,
 				896FB28C461E44B297193476 /* SourceAudioMeter.swift in Sources */,

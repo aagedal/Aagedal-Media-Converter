@@ -55,6 +55,8 @@ struct ConversionRequest: Sendable {
     var waveformRequest: WaveformVideoRequest? = nil
     var synthesizedVideoRequest: SynthesizedVideoRequest? = nil
     var waveformBackgroundImageURL: URL? = nil
+    /// Write a `_matte` sidecar when alpha would otherwise be lost (captured preset setting).
+    var exportsMatteSidecar: Bool = false
 
     /// A representative visual input used for geometry inspection when `inputURL`
     /// is a virtual source such as an image-sequence directory.

@@ -37,6 +37,14 @@ enum SwiftWaveformStyle: String, CaseIterable, Identifiable {
     case bars
     /// Smooth curved line connecting band peaks with filled area.
     case wire
+    /// Radial spokes around a ring that pulses with the bass.
+    case halo
+    /// Smooth closed blob breathing around a slowly rotating circle.
+    case orb
+    /// Stacked ridge lines of recent spectra scrolling into the distance.
+    case ridgeline
+    /// Segmented LED meter columns with falling peak-hold caps.
+    case led
 
     var id: String { rawValue }
 
@@ -45,6 +53,10 @@ enum SwiftWaveformStyle: String, CaseIterable, Identifiable {
         case .capsules: return "Capsules"
         case .bars: return "Bars"
         case .wire: return "Wire"
+        case .halo: return "Halo"
+        case .orb: return "Orb"
+        case .ridgeline: return "Ridgeline"
+        case .led: return "LED Meter"
         }
     }
 }
@@ -113,6 +125,8 @@ struct AudioWaveformPreferences {
         let backgroundGradientEnabled: Bool
         let backgroundGradientEndHex: String
         let waveformOpacity: Double
+        /// Transparent background (Swift engine; only honoured by alpha-capable formats).
+        var transparentBackground: Bool = false
 
         var resolutionString: String {
             "\(width)x\(height)"
@@ -192,7 +206,8 @@ struct AudioWaveformPreferences {
             foregroundGradientEndHex: fgGradientEnd,
             backgroundGradientEnabled: bgGradientEnabled,
             backgroundGradientEndHex: bgGradientEnd,
-            waveformOpacity: opacity
+            waveformOpacity: opacity,
+            transparentBackground: defaults.bool(forKey: AppConstants.audioWaveformTransparentBackgroundKey)
         )
     }
 
@@ -277,7 +292,8 @@ struct GeneratedVideoSettings: Sendable {
             foregroundGradientEndHex: config.foregroundGradientEndHex,
             backgroundGradientEnabled: config.backgroundGradientEnabled,
             backgroundGradientEndHex: config.backgroundGradientEndHex,
-            waveformOpacity: config.waveformOpacity
+            waveformOpacity: config.waveformOpacity,
+            transparentBackground: config.transparentBackground
         )
         synthesized = SynthesizedVideoRequest(
             width: Int(resolution.width), height: Int(resolution.height),

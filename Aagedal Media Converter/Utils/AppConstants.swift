@@ -192,6 +192,8 @@ enum AppConstants {
     static let audioWaveformBackgroundGradientEnabledKey = "audioWaveformBackgroundGradientEnabled"
     static let audioWaveformBackgroundGradientEndColorKey = "audioWaveformBackgroundGradientEndColor"
     static let audioWaveformOpacityKey = "audioWaveformOpacity"
+    /// Render the Swift waveform over a transparent background when the export format supports alpha.
+    static let audioWaveformTransparentBackgroundKey = "audioWaveformTransparentBackground"
 
     // Maximum thumbnail dimensions
     static let maxThumbnailSize = CGSize(width: 320, height: 320)
@@ -199,6 +201,11 @@ enum AppConstants {
     static let preserveMetadataPreferenceKey = "preserveMetadataByDefault"
     static func preserveMetadataPreferenceKey(for preset: ExportPreset) -> String {
         "preserveMetadata.\(preset.rawValue)"
+    }
+    /// Per-preset: write a black-and-white matte sidecar when the source (or a transparent
+    /// waveform) has alpha but the preset's format cannot keep it. Off by default.
+    static func matteSidecarPreferenceKey(for preset: ExportPreset) -> String {
+        "matteSidecar.\(preset.rawValue)"
     }
 
     static let commentPrefixKey = "commentPrefix"

@@ -980,8 +980,17 @@ actor FFMPEGConverter {
         let completionGate = ConversionCompletionGate()
         let cleanupOutputURL = outputFileURL
         let isOrdinaryFileExport = !isImageSequenceExport && !isDCPExport && !isIMFExport
+        let matteSidecar = MatteSidecarBox()
         let finish: @Sendable (Bool, String?) -> Void = { success, errorReason in
             completionGate.run {
+                if let matteURL = matteSidecar.url {
+                    let ownsMatte = Self.outputReservations.release(matteURL, owner: conversionID)
+                    if success && matteSidecar.isWritten && ownsMatte {
+                        FileSafetyUtils.markCompletedOutput(matteURL)
+                    } else if ownsMatte {
+                        Self.cleanupFailedOutput(at: matteURL)
+                    }
+                }
                 let ownsOutput = !isOrdinaryFileExport || Self.outputReservations.release(
                     cleanupOutputURL,
                     owner: conversionID
@@ -1077,6 +1086,7 @@ actor FFMPEGConverter {
                 tempMXFURL: tempMXFURL,
                 outputFileURL: outputFileURL,
                 waveformBackgroundImageURL: request.waveformBackgroundImageURL,
+                matteSidecar: request.exportsMatteSidecar && preset.supportsMatteSidecar ? matteSidecar : nil,
                 progressUpdate: progressUpdate,
                 completion: finish
             )
@@ -1307,6 +1317,24 @@ actor FFMPEGConverter {
         if av2MatroskaAudioFromInput1 {
             finalArguments = Self.redirectAudioSubtitleMapsToSecondInput(finalArguments)
         }
+
+        // Matte sidecar for sources with alpha whose output format drops it. Runs as a
+        // second FFmpeg pass after the main encode, reusing its inputs, trim and filters.
+        var matteArguments: [String]? = nil
+        if request.exportsMatteSidecar, preset.supportsMatteSidecar, isOrdinaryFileExport,
+           request.waveformRequest == nil, request.synthesizedVideoRequest == nil,
+           request.visualSourceURL == nil, av2DecodeRequest == nil,
+           request.sourceMetadata?.videoStreams.first?.hasAlpha == true,
+           !FFMPEGCommandBuilder.outputKeepsAlpha(finalArguments) {
+            let matteURL = matteSidecar.reserve(for: outputFileURL, notOverwriting: inputURL, owner: conversionID)
+            matteArguments = FFMPEGCommandBuilder.sourceMatteArguments(
+                fromMainArguments: finalArguments, matteOutputURL: matteURL
+            )
+            if matteArguments == nil {
+                Self.logger.warning("Matte sidecar skipped: the video is built by a complex filter graph")
+                matteSidecar.cancelReservation(owner: conversionID)
+            }
+        }
         let explicitPrivatePaths = [
             request.visualSourceURL?.path,
             request.waveformBackgroundImageURL?.path,
@@ -1391,6 +1419,7 @@ actor FFMPEGConverter {
         let capturedIMFSubfolderURL = imfSubfolderURL
         let capturedInputURL = inputURL
         let capturedFfmpegPath = ffmpegPath
+        let capturedMatteArguments = matteArguments
 
         let handleFFmpegTermination: @Sendable (Int32, Data, String?) -> Void = { [weak self] exitStatus, stderrData, forcedErrorReason in
             Task { [weak self] in
@@ -1427,6 +1456,27 @@ actor FFMPEGConverter {
                         Self.logger.error("Output validation failed: \(validationError, privacy: .public)")
                         errorReason = validationError
                         success = false
+                    }
+                }
+
+                // Matte sidecar pass. A failed matte is logged but does not fail the main export.
+                if success, let matteArguments = capturedMatteArguments, let matteURL = matteSidecar.url {
+                    progressUpdate(1.0, "Writing matte…")
+                    let matteResult = await self?.runTrackedPackageWrapper(
+                        conversionID: conversionID,
+                        executablePath: capturedFfmpegPath,
+                        arguments: matteArguments,
+                        outputURL: matteURL
+                    )
+                    switch matteResult {
+                    case .success?:
+                        matteSidecar.markWritten()
+                        Self.logger.info("Wrote matte sidecar: \(matteURL.lastPathComponent, privacy: .public)")
+                    case .failed(_, let reason, let diagnostic)?:
+                        Self.logger.warning("Matte sidecar failed (\(reason, privacy: .public)):\n\(diagnostic, privacy: .public)")
+                    case .cancelled?, nil:
+                        success = false
+                        errorReason = "Conversion cancelled"
                     }
                 }
 
@@ -3786,6 +3836,7 @@ actor FFMPEGConverter {
         tempMXFURL: URL?,
         outputFileURL: URL,
         waveformBackgroundImageURL: URL? = nil,
+        matteSidecar: MatteSidecarBox? = nil,
         progressUpdate: @escaping @Sendable (Double, String?) -> Void,
         completion: @escaping @Sendable (Bool, String?) -> Void
     ) async {
@@ -3879,6 +3930,15 @@ actor FFMPEGConverter {
 
         gatedProgressUpdate(0.10, "Rendering waveform…")
 
+        // A transparent waveform without a background image has alpha; when the format
+        // cannot keep it, the command can split it into a matte sidecar instead.
+        let matteOutputURL: URL? = if let matteSidecar, waveformRequest.transparentBackground,
+                                      waveformBackgroundImageURL == nil {
+            matteSidecar.reserve(for: outputFileURL, notOverwriting: inputURL, owner: conversionID)
+        } else {
+            nil
+        }
+
         // Phase 2: Build FFmpeg encoding command with rawvideo pipe input
         let command = await FFMPEGCommandBuilder.nativeWaveformEncodingCommand(
             audioInputURL: inputURL,
@@ -3900,8 +3960,16 @@ actor FFMPEGConverter {
             comment: comment,
             writeEmptyComment: writeEmptyComment,
             includeDateTag: includeDateTag,
-            additionalOutputArguments: additionalOutputArguments
+            additionalOutputArguments: additionalOutputArguments,
+            transparentBackground: waveformRequest.transparentBackground,
+            matteOutputURL: matteOutputURL
         )
+        if matteOutputURL != nil && command.matteOutputURL == nil {
+            // The format keeps alpha (or cannot take a matte): no sidecar needed.
+            matteSidecar?.cancelReservation(owner: conversionID)
+        }
+        // Fill + matte: the fill keeps straight colors with black where fully transparent.
+        let rendersTransparent = command.preservesAlpha || command.matteOutputURL != nil
         guard activeConversionID == conversionID else {
             await complete(false, "Conversion cancelled")
             return
@@ -3971,6 +4039,7 @@ actor FFMPEGConverter {
                             backgroundGradientEndHex: waveformRequest.backgroundGradientEndHex,
                             backgroundImage: backgroundCGImage,
                             waveformOpacity: waveformRequest.waveformOpacity,
+                            transparentBackground: rendersTransparent,
                             progressUpdate: { renderProgress in
                                 Self.$runningSubprocessID.withValue(encodingID) {
                                     let overall = 0.10 + renderProgress * 0.85
@@ -4103,6 +4172,15 @@ actor FFMPEGConverter {
                     Self.cleanupTempFile(at: mcaLabelsFile, label: "MCA labels")
                 }
                 Self.cleanupTempFile(at: tempMXF, label: "waveform BMX rewrap temp MXF")
+            }
+
+            if success, let writtenMatte = command.matteOutputURL {
+                if let matteError = Self.validateOutputFile(at: writtenMatte) {
+                    Self.logger.warning("Waveform matte sidecar missing or empty: \(matteError, privacy: .public)")
+                } else {
+                    matteSidecar?.markWritten()
+                    Self.logger.info("Wrote waveform matte sidecar: \(writtenMatte.lastPathComponent, privacy: .public)")
+                }
             }
 
             Self.cleanupWaveformTemporaryMXFIfPresent(capturedTempMXFURL)
@@ -4951,6 +5029,38 @@ actor FFMPEGConverter {
 
     private func isActiveConversion(_ conversionID: UUID) -> Bool {
         activeConversionID == conversionID
+    }
+
+    /// Tracks the optional matte sidecar so `finish` can release, keep or remove it.
+    private final class MatteSidecarBox: Sendable {
+        private let state = OSAllocatedUnfairLock(initialState: (url: URL?.none, isWritten: false))
+
+        var url: URL? { state.withLock { $0.url } }
+        var isWritten: Bool { state.withLock { $0.isWritten } }
+
+        /// Reserves a unique `_matte` path next to the main output and registers it as app-created.
+        func reserve(for outputURL: URL, notOverwriting inputURL: URL, owner: UUID) -> URL {
+            let matteURL = FFMPEGConverter.outputReservations.reserveUnique(
+                FFMPEGCommandBuilder.matteSidecarURL(for: outputURL),
+                notOverwriting: inputURL,
+                owner: owner
+            )
+            FileSafetyUtils.registerCreatedFile(matteURL)
+            state.withLock { $0.url = matteURL }
+            return matteURL
+        }
+
+        /// Gives the reservation back when the command will not write a matte after all.
+        func cancelReservation(owner: UUID) {
+            guard let matteURL = state.withLock({ state -> URL? in
+                defer { state.url = nil }
+                return state.url
+            }) else { return }
+            _ = FFMPEGConverter.outputReservations.release(matteURL, owner: owner)
+            FileSafetyUtils.unregisterCreatedFile(matteURL)
+        }
+
+        func markWritten() { state.withLock { $0.isWritten = true } }
     }
 
     private final class DurationBox: Sendable {

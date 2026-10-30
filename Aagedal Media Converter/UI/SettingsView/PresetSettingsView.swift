@@ -174,6 +174,10 @@ struct PresetsSettingsView: View {
                         PresetMetadataPreservationView(preset: selectedPreset)
                             .id(selectedPreset)
                     }
+                    if selectedPreset.supportsMatteSidecar {
+                        PresetMatteSidecarView(preset: selectedPreset)
+                            .id(selectedPreset)
+                    }
                     if selectedPreset.isCustom {
                         customPresetSection
                     }
@@ -2025,6 +2029,37 @@ struct PresetsSettingsView: View {
     }
 
 
+}
+
+/// Per-preset opt-in for a black-and-white matte next to the main file.
+private struct PresetMatteSidecarView: View {
+    let preset: ExportPreset
+    @AppStorage private var exportsMatte: Bool
+
+    init(preset: ExportPreset) {
+        self.preset = preset
+        _exportsMatte = AppStorage(wrappedValue: false, AppConstants.matteSidecarPreferenceKey(for: preset))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle("Export matte sidecar when alpha would be lost", isOn: $exportsMatte)
+                .toggleStyle(.switch)
+                .accessibilityIdentifier("preset.matteSidecar")
+            Text("When a source video has an alpha channel, or a waveform uses a transparent background, and this format cannot store alpha, a black-and-white “_matte” file is written next to the export with the same codec and settings. White is opaque, black is transparent.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("The main file keeps the original colors with the alpha removed, ready to combine with the matte as a track or luma matte in an editor.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.4))
+        .cornerRadius(10)
+    }
 }
 
 /// Each preset has its own stored choice; the old global value supplies the
