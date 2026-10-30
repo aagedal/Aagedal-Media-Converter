@@ -202,26 +202,32 @@ final class CropEditorTests: XCTestCase {
     }
 
     func testAV2KeepsPortraitDimensionsForRotatedSources() async throws {
+        // Isolated defaults: the user's saved AV2 resolution limit must not affect the result.
+        let suite = "CropEditorTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(CodecResolutionLimit.unlimited.rawValue, forKey: AppConstants.av2ResolutionLimitKey)
+        let settings = AV2Settings(defaults: defaults)
+
         let portrait = metadata(stream: stream(width: 1920, height: 1080, par: (1, 1), dar: (9, 16), rotation: -90))
         let uncropped = await AV2CommandBuilder.build(
             inputURL: URL(fileURLWithPath: "/unused/portrait.mov"),
             outputURL: URL(fileURLWithPath: "/unused/output.ivf"), trimStart: nil, trimEnd: nil,
-            cropConfig: nil, metadataSource: .resolved(portrait)
+            cropConfig: nil, metadataSource: .resolved(portrait), settings: settings
         )
-        // AV2's default resolution limit caps the short edge at 720.
         let full = try XCTUnwrap(uncropped)
-        XCTAssertEqual(full.outputWidth, 720)
-        XCTAssertEqual(full.outputHeight, 1280)
+        XCTAssertEqual(full.outputWidth, 1080)
+        XCTAssertEqual(full.outputHeight, 1920)
 
         let cropped = await AV2CommandBuilder.build(
             inputURL: URL(fileURLWithPath: "/unused/portrait.mov"),
             outputURL: URL(fileURLWithPath: "/unused/output.ivf"), trimStart: nil, trimEnd: nil,
             cropConfig: CropConfig(normalizedRect: CropRect(x: 0, y: 0.25, width: 1, height: 0.5)),
-            metadataSource: .resolved(portrait)
+            metadataSource: .resolved(portrait), settings: settings
         )
         let landscape = try XCTUnwrap(cropped)
-        XCTAssertEqual(landscape.outputWidth, 810)
-        XCTAssertEqual(landscape.outputHeight, 720)
+        XCTAssertEqual(landscape.outputWidth, 1080)
+        XCTAssertEqual(landscape.outputHeight, 960)
     }
 
     // MARK: - Hit testing
