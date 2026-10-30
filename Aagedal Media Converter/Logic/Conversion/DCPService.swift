@@ -20,7 +20,9 @@ actor DCPService {
     /// Assembles a DCP directory from video and audio MXF files
     /// - Parameters:
     ///   - videoMXFURL: The JPEG 2000 video MXF file
+    ///   - videoAssetID: urn:uuid of the picture asset; must equal the AssetUUID inside the MXF
     ///   - audioMXFURL: The PCM audio MXF file (nil if source has no audio)
+    ///   - audioAssetID: urn:uuid of the sound asset; must equal the AssetUUID inside the MXF
     ///   - outputDirectoryURL: The DCP output directory
     ///   - title: The DCP title (used in CPL)
     ///   - resolution: DCP resolution setting
@@ -30,7 +32,9 @@ actor DCPService {
     /// - Returns: true if successful
     func assembleDCP(
         videoMXFURL: URL,
+        videoAssetID: String,
         audioMXFURL: URL?,
+        audioAssetID: String?,
         outputDirectoryURL: URL,
         title: String,
         resolution: DCPResolution,
@@ -45,8 +49,8 @@ actor DCPService {
         let cplUUID = dcpUUID()
         let pklUUID = dcpUUID()
         let assetMapUUID = dcpUUID()
-        let videoUUID = dcpUUID()
-        let audioUUID = audioMXFURL != nil ? dcpUUID() : nil
+        let videoUUID = videoAssetID
+        let audioUUID = audioMXFURL != nil ? (audioAssetID ?? dcpUUID()) : nil
 
         // Rename MXF files with DCP-standard names (j2c_ for JPEG 2000, pcm_ for PCM audio)
         let videoFileName = "j2c_\(uuidString(from: videoUUID)).mxf"
@@ -115,7 +119,9 @@ actor DCPService {
         // CPL
         let cplFileName = "cpl_\(uuidString(from: cplUUID)).xml"
         let contentKind = itemMetadata?.contentKind ?? .feature
-        let annotationText = itemMetadata?.annotationText ?? ""
+        // Bv2.1 expects CPL AnnotationText (and the PKL's) to equal ContentTitleText, so the
+        // title is the default rather than the ISDCF folder name.
+        let annotationText = itemMetadata?.annotationText.isEmpty == false ? itemMetadata!.annotationText : title
         let ratingLabel = itemMetadata?.ratingLabel ?? ""
         let audioLanguage = itemMetadata?.audioLanguage ?? "en"
 
@@ -232,23 +238,42 @@ actor DCPService {
 
     // MARK: - ISDCF Folder Name
 
-    /// Generates an ISDCF-style DCP folder name
-    /// Format: ContentTitle_ContentType-ReelCount-FrameRate_AspectRatio_Language_Territory_AudioChannels_Resolution_Date_Standard_PackageType
+    /// Generates an ISDCF Digital Cinema Naming Convention folder name, e.g.
+    /// `MyFilm_FTR-1_F_EN-XX_51_2K_20261029_SMPTE_OV`. Optional fields (territory/rating,
+    /// studio, facility) are omitted, as DCP-o-matic does when they are unset.
     func isdcfFolderName(
         title: String,
         contentKind: DCPContentKind,
         frameRate: DCPFrameRate,
         resolution: DCPResolution,
-        audioLanguage: String
+        audioLanguage: String,
+        audioCode: String = "20",
+        date: Date = Date()
     ) -> String {
-        // Sanitize title: uppercase, replace spaces with hyphens, remove special chars
-        let sanitizedTitle = title
-            .unicodeScalars.filter { scalar in
-                CharacterSet.alphanumerics.contains(scalar) || scalar == " " || scalar == "-"
-            }.map { String($0) }.joined()
-            .replacingOccurrences(of: " ", with: "-")
+        Self.isdcfName(title: title, contentKind: contentKind, frameRate: frameRate, resolution: resolution,
+                       audioLanguage: audioLanguage, audioCode: audioCode, date: date)
+    }
 
-        // Content type abbreviation
+    nonisolated static func isdcfName(
+        title: String,
+        contentKind: DCPContentKind,
+        frameRate: DCPFrameRate,
+        resolution: DCPResolution,
+        audioLanguage: String,
+        audioCode: String,
+        date: Date
+    ) -> String {
+        // ASCII only: some servers mishandle non-ASCII folder names. Fold diacritics first;
+        // letters without a decomposition (æ, ø, ß…) need explicit spellings.
+        let spelled = ["æ": "ae", "Æ": "AE", "ø": "o", "Ø": "O", "œ": "oe", "Œ": "OE", "ß": "ss", "ð": "d", "þ": "th", "ł": "l"]
+            .reduce(title) { $0.replacingOccurrences(of: $1.key, with: $1.value) }
+        let folded = spelled.applyingTransform(.toLatin, reverse: false)?
+            .applyingTransform(.stripDiacritics, reverse: false) ?? spelled
+        let sanitizedTitle = folded.unicodeScalars
+            .filter { $0.isASCII && (CharacterSet.alphanumerics.contains($0) || $0 == " " || $0 == "-") }
+            .map(String.init).joined()
+            .split(separator: " ").joined(separator: "-")
+
         let contentType: String
         switch contentKind {
         case .feature: contentType = "FTR"
@@ -262,8 +287,12 @@ actor DCPService {
         case .publicService: contentType = "PSA"
         case .transitional: contentType = "XSN"
         }
+        // Version 1; frame rate is only appended when it differs from 24.
+        var typeField = "\(contentType)-1"
+        if frameRate != .fps24 {
+            typeField += "-\(frameRate.ffmpegValue)"
+        }
 
-        // Aspect ratio code
         let aspectRatio: String
         switch resolution {
         case .twoKFlat, .fourKFlat: aspectRatio = "F"
@@ -271,27 +300,28 @@ actor DCPService {
         case .twoKFull, .fourKFull: aspectRatio = "C"
         }
 
-        // Calculate aspect ratio number (width/height * 100, rounded)
-        let arNumber = Int(round(Double(resolution.width) / Double(resolution.height) * 100))
+        let langCode = isdcfLanguageCode(audioLanguage)
+        let resTier = resolution.isFourK ? "4K" : "2K"
 
-        // Language code (uppercase, max 2 chars)
-        let langCode = String(audioLanguage.prefix(2)).uppercased()
-
-        // Resolution tier
-        let resTier: String
-        switch resolution {
-        case .twoKFlat, .twoKScope, .twoKFull: resTier = "2K"
-        case .fourKFlat, .fourKScope, .fourKFull: resTier = "4K"
-        }
-
-        // Date (YYYYMMDD)
         let dateFormatter = DateFormatter()
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
         dateFormatter.dateFormat = "yyyyMMdd"
-        let dateStr = dateFormatter.string(from: Date())
+        let dateStr = dateFormatter.string(from: date)
 
-        // Build ISDCF name
-        // Format: Title_Type-Reels-FPS_Aspect-ARNum_Lang-Territory_AudioConfig_ResTier_Date_Standard_Package
-        return "\(sanitizedTitle)_\(contentType)-1-\(frameRate.ffmpegValue)_\(aspectRatio)-\(arNumber)_\(langCode)-XX_20_\(resTier)_\(dateStr)_SMPTE_OV"
+        let name = [sanitizedTitle.isEmpty ? "Untitled" : sanitizedTitle, typeField, aspectRatio,
+                    "\(langCode)-XX", audioCode, resTier, dateStr, "SMPTE", "OV"]
+        return name.joined(separator: "_")
+    }
+
+    /// ISDCF language codes are mostly the first two letters of the RFC 5646 primary subtag,
+    /// with a few established exceptions.
+    nonisolated static func isdcfLanguageCode(_ language: String) -> String {
+        let primary = language.split(separator: "-").first.map(String.init)?.lowercased() ?? ""
+        switch primary {
+        case "": return "XX"
+        case "nb", "nn", "no": return "NO"
+        default: return String(primary.prefix(2)).uppercased()
+        }
     }
 
     // MARK: - UUID Helpers (delegate to SMPTEPackageUtils)
@@ -325,7 +355,7 @@ actor DCPService {
         audioHash: String? = nil
     ) -> String {
         let escapedTitle = xmlEscape(title.isEmpty ? dcpFolderName : title)
-        let escapedAnnotation = xmlEscape(annotationText.isEmpty ? dcpFolderName : annotationText)
+        let escapedAnnotation = xmlEscape(annotationText.isEmpty ? (title.isEmpty ? dcpFolderName : title) : annotationText)
         let escapedAudioLanguage = xmlEscape(audioLanguage.isEmpty ? "en" : audioLanguage)
         let now = iso8601Now()
         let contentVersionUUID = dcpUUID()
@@ -374,6 +404,40 @@ actor DCPService {
                   </MainSound>
             """
         }
+
+        // SMPTE ST 429-16 composition metadata, required by the Bv2.1 constraints profile.
+        let soundConfiguration = audioUUID != nil
+            ? "\n        <meta:MainSoundConfiguration>\(DCPAudioCarrier.mainSoundConfiguration)</meta:MainSoundConfiguration>\n        <meta:MainSoundSampleRate>48000 1</meta:MainSoundSampleRate>"
+            : ""
+        reelAssets += """
+
+              <meta:CompositionMetadataAsset xmlns:meta="http://www.smpte-ra.org/schemas/429-16/2014/CPL-Metadata">
+                <Id>\(dcpUUID())</Id>
+                <EditRate>\(editRate)</EditRate>
+                <IntrinsicDuration>\(frameCount)</IntrinsicDuration>
+                <meta:FullContentTitleText language="\(escapedAudioLanguage)">\(escapedTitle)</meta:FullContentTitleText>
+                <meta:VersionNumber status="final">1</meta:VersionNumber>\(soundConfiguration)
+                <meta:MainPictureStoredArea>
+                  <meta:Width>\(resolution.width)</meta:Width>
+                  <meta:Height>\(resolution.height)</meta:Height>
+                </meta:MainPictureStoredArea>
+                <meta:MainPictureActiveArea>
+                  <meta:Width>\(resolution.width)</meta:Width>
+                  <meta:Height>\(resolution.height)</meta:Height>
+                </meta:MainPictureActiveArea>
+                <meta:ExtensionMetadataList>
+                  <meta:ExtensionMetadata scope="http://isdcf.com/ns/cplmd/app">
+                    <meta:Name>Application</meta:Name>
+                    <meta:PropertyList>
+                      <meta:Property>
+                        <meta:Name>DCP Constraints Profile</meta:Name>
+                        <meta:Value>SMPTE-RDD-52:2020-Bv2.1</meta:Value>
+                      </meta:Property>
+                    </meta:PropertyList>
+                  </meta:ExtensionMetadata>
+                </meta:ExtensionMetadataList>
+              </meta:CompositionMetadataAsset>
+        """
 
         let ratingElement: String
         if !ratingLabel.isEmpty {

@@ -39,6 +39,24 @@ struct PresetsSettingsView: View {
     @AppStorage(AppConstants.dcpBitrateKey) private var dcpBitrate = AppConstants.defaultDCPBitrate
     @AppStorage(AppConstants.dcpScalingModeKey) private var dcpScalingMode = AppConstants.defaultDCPScalingMode
     @AppStorage(AppConstants.dcpKeepJP2ImagesKey) private var dcpKeepJP2Images = false
+
+    /// Effective JPEG 2000 rate for the chosen DCP settings, plus any blocking combination.
+    @ViewBuilder
+    private var dcpRateCaption: some View {
+        let resolution = DCPResolution(rawValue: dcpResolution) ?? .twoKFull
+        let frameRate = DCPFrameRate(rawValue: dcpFrameRate) ?? .fps24
+        let plan = DCPJ2KRatePlan(resolution: resolution, frameRate: frameRate,
+                                  bitrate: DCPBitrate(rawValue: dcpBitrate) ?? .high)
+        if !frameRate.isSupported(by: resolution) {
+            Label("4K DCPs are limited to 24, 25 or 30 fps. Choose 2K for 48 fps.", systemImage: "xmark.octagon.fill")
+                .font(.caption)
+                .foregroundStyle(.red)
+        } else {
+            Text("Peak bitrate: \(plan.peakMegabitsPerSecond) Mbps per frame (\(plan.maxFrameBytes.formatted()) bytes)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
     @AppStorage(AppConstants.imfResolutionKey) private var imfResolution = AppConstants.defaultIMFResolution
     @AppStorage(AppConstants.imfFrameRateKey) private var imfFrameRate = AppConstants.defaultIMFFrameRate
     @AppStorage(AppConstants.imfScalingModeKey) private var imfScalingMode = AppConstants.defaultIMFScalingMode
@@ -460,8 +478,10 @@ struct PresetsSettingsView: View {
                         .pickerStyle(.menu)
                         .fixedSize()
                         .labelsHidden()
-                        .help("JPEG 2000 video bitrate. 250 Mbps is the DCI maximum for 2K.")
+                        .help("Maximum JPEG 2000 bitrate, enforced on every frame. 250 Mbps is the DCI maximum.")
                     }
+
+                    dcpRateCaption
 
                     HStack {
                         Text("Scaling")
@@ -482,7 +502,7 @@ struct PresetsSettingsView: View {
                     }
                     .help("Retain the JPEG 2000 image files in the working folder after DCP creation. Useful for importing as an image sequence.")
 
-                    Text("JPEG 2000 video in MXF with 24-bit PCM audio. XYZ color space (DCI P3).")
+                    Text("SMPTE DCP (Bv2.1): JPEG 2000 in MXF, Rec. 709 converted to DCI X′Y′Z′, 24-bit 48 kHz PCM in a 5.1 carrier with MCA labels. Use File › Validate DCP… to check any DCP.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -552,7 +572,7 @@ struct PresetsSettingsView: View {
                         .pickerStyle(.menu)
                         .fixedSize()
                         .labelsHidden()
-                        .help("JPEG 2000 video bitrate. Higher bitrates yield better quality at the cost of file size.")
+                        .help("Maximum JPEG 2000 bitrate, enforced on every frame. Higher bitrates yield better quality at the cost of file size.")
                     }
 
                     HStack {

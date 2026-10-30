@@ -122,6 +122,11 @@ struct Aagedal_Media_Converter_App: App {
         }
         .defaultSize(width: 900, height: 600)
         .windowResizability(.contentMinSize)
+        Window("DCP Validator", id: "dcpValidator") {
+            DCPValidatorView()
+        }
+        .handlesExternalEvents(matching: ["dcpValidator"])
+        .defaultSize(width: 760, height: 560)
         Window("About Aagedal Media Converter", id: "about") {
             AboutView()
         }
@@ -163,6 +168,12 @@ struct MainAppCommands: Commands {
                 NotificationCenter.default.post(name: .showCameraCardImporter, object: nil)
             }
             .keyboardShortcut("i", modifiers: [.command, .shift])
+
+            Divider()
+
+            Button("Validate DCP…") {
+                openWindow(id: "dcpValidator")
+            }
 
             Divider()
 

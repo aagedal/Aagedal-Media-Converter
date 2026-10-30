@@ -30,6 +30,11 @@ struct IMFSettings: Codable, Equatable, Sendable {
         keepIntermediates = defaults.bool(forKey: AppConstants.imfKeepIntermediatesKey)
     }
 
+    /// Per-frame codestream cap for the chosen bitrate: floor(bits/s × den / (8 × num)).
+    var maxJ2KFrameBytes: Int {
+        bitrate.megabitsPerSecond * 1_000_000 * frameRate.editRateDenominator / (8 * frameRate.editRateNumerator)
+    }
+
     func ffmpegArguments(application: IMFApplication) -> [String] {
         let scaleFilter: String
         switch scalingMode {
@@ -41,16 +46,17 @@ struct IMFSettings: Codable, Equatable, Sendable {
 
         switch application {
         case .app2e:
-            // J2K image sequence: NOT cinema profile (that's DCP); IMF App #2e uses broadcast J2K profiles
-            // No -profile or -cinema_mode; libopenjpeg picks a profile suitable for the YCbCr essence.
-            // Note: deep HDR variants may need additional ffmpeg flags; rely on the JP2 → MXF wrap to flag any non-conformance.
+            // ST 2067-21 requires an IMF-profile codestream (lossy 9/7). The bundled ffmpeg's
+            // libopenjpegenc-imf.patch adds the IMF profiles; main/sub levels are derived from
+            // resolution, chroma format, frame rate and the per-frame cap. libopenjpeg ignores -b:v.
             return ["-hide_banner"] + [
                 "-c:v", "libopenjpeg",
                 "-pix_fmt", "yuv422p10le",
                 "-color_primaries", color.colorPrimaries,
                 "-color_trc", color.colorTRC,
                 "-colorspace", color.colorSpace,
-                "-b:v", bitrate.ffmpegValue,
+                "-profile:v", resolution == .uhd2160 ? "imf_4k" : "imf_2k",
+                "-max_cs_size", String(maxJ2KFrameBytes),
                 "-r", frameRate.ffmpegValue,
                 "-vf", scaleFilter,
                 "-map", "0:v:0",

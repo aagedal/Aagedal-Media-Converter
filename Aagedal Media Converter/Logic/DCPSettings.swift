@@ -24,32 +24,45 @@ struct DCPSettings: Codable, Equatable, Sendable {
         keepJP2Images = defaults.bool(forKey: AppConstants.dcpKeepJP2ImagesKey)
     }
 
-    var ffmpegArguments: [String] {
-        let scaleFilter: String
+    var ratePlan: DCPJ2KRatePlan {
+        DCPJ2KRatePlan(resolution: resolution, frameRate: frameRate, bitrate: bitrate)
+    }
+
+    /// Blocks combinations that cannot produce a DCI-compliant picture.
+    var configurationError: String? {
+        guard frameRate.isSupported(by: resolution) else {
+            return String(localized: "4K DCPs are limited to 24, 25 or 30 fps. Choose a 2K resolution for 48 fps.", comment: "Shown when the DCP export settings combine 4K with a high frame rate.")
+        }
+        return nil
+    }
+
+    /// Fits the source into the DCP container (in full-range RGB, so the LUT sees the whole range).
+    var scaleFilter: String {
         switch scalingMode {
         case .fill:
-            scaleFilter = "scale=iw*sar:ih,setsar=1,scale=\(resolution.width):\(resolution.height):force_original_aspect_ratio=increase,crop=\(resolution.width):\(resolution.height)"
+            return "scale=iw*sar:ih,setsar=1,scale=\(resolution.width):\(resolution.height):force_original_aspect_ratio=increase,crop=\(resolution.width):\(resolution.height)"
         case .fit:
-            scaleFilter = "scale=iw*sar:ih,setsar=1,scale=\(resolution.width):\(resolution.height):force_original_aspect_ratio=decrease,pad=\(resolution.width):\(resolution.height):-1:-1:color=black"
+            return "scale=iw*sar:ih,setsar=1,scale=\(resolution.width):\(resolution.height):force_original_aspect_ratio=decrease,pad=\(resolution.width):\(resolution.height):-1:-1:color=black"
         }
+    }
 
-        var args = ["-hide_banner"] + [
+    var ffmpegArguments: [String] {
+        let plan = ratePlan
+        // DCP outputs a JP2 image sequence (not MXF) — asdcp-wrap creates the final MXF.
+        // The output path pattern (frame_%06d.jp2) is set by FFMPEGConverter.
+        // gbrp12le carries X′Y′Z′ from DCPColorConversion; see that type for why we do not
+        // let FFmpeg convert to xyz12le itself.
+        return ["-hide_banner",
             "-c:v", "libopenjpeg",
             "-profile", resolution.openjpegProfile,
-        ]
-        if let cinemaMode = frameRate.cinemaModeFor(resolution: resolution) {
-            args += ["-cinema_mode", cinemaMode]
-        }
-        args += [
-            "-pix_fmt", "xyz12le",
-            "-b:v", bitrate.ffmpegValue,
+            "-cinema_mode", plan.cinemaMode,
+            "-max_cs_size", String(plan.maxFrameBytes),
+            "-numresolution", String(resolution.openjpegNumResolution),
+            "-pix_fmt", "gbrp12le",
             "-r", frameRate.ffmpegValue,
-            "-vf", scaleFilter,
+            "-vf", "\(scaleFilter),\(DCPColorConversion.filterChain)",
             "-map", "0:v:0",
             "-an",
         ]
-        // DCP outputs JP2 image sequence (not MXF) — asdcp-wrap creates the final MXF
-        // The output path pattern (frame_%06d.jp2) is set by FFMPEGConverter
-        return args
     }
 }

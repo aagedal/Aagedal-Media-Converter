@@ -1515,6 +1515,11 @@ actor FFMPEGConverter {
                     let fm = FileManager.default
                     let jp2Dir = capturedFinalOutputURL.deletingLastPathComponent()
                     var videoMXFURL: URL? = nil
+                    var pictureFrameCount = 0
+                    // The CPL/PKL/ASSETMAP ids must equal the AssetUUID asdcp-wrap stores in each
+                    // MXF, or servers report the asset as missing. Generate them up front.
+                    let videoAssetID = SMPTEPackageUtils.urnUUID()
+                    let audioAssetID = SMPTEPackageUtils.urnUUID()
 
                     if let asdcpWrapPath = BinaryPathResolver.asdcpWrapPath {
                         // Step 1: Convert JP2 frames to raw J2C codestreams and wrap with asdcp-wrap
@@ -1528,6 +1533,7 @@ actor FFMPEGConverter {
                             .filter { $0.hasSuffix(".jp2") }
                             .sorted() ?? []
 
+                        pictureFrameCount = jp2Files.count
                         if jp2Files.isEmpty {
                             Self.logger.error("No JP2 frames found in \(jp2Dir.path)")
                             errorReason = String(localized: "DCP video wrap failed: no JP2 frames produced", comment: "Shown when the JPEG 2000 frame export step produced no usable frames for DCP wrapping.")
@@ -1550,6 +1556,7 @@ actor FFMPEGConverter {
                                     "-v",                                // Verbose output
                                     "-p", frameRate.ffmpegValue,
                                     "-L",                                // SMPTE Universal Labels
+                                    "-a", SMPTEPackageUtils.uuidString(from: videoAssetID),
                                     j2cDir.path + "/",                   // Directory of J2C frames
                                     tmpVideoMXF.path
                                 ]
@@ -1606,6 +1613,7 @@ actor FFMPEGConverter {
                     }
 
                     var finalAudioMXF: URL? = nil
+                    var sourceAudioChannels: Int? = nil
                     defer {
                         if let videoMXFURL, fm.fileExists(atPath: videoMXFURL.path) {
                             Self.cleanupTempFile(at: videoMXFURL, label: "DCP video MXF")
@@ -1625,12 +1633,14 @@ actor FFMPEGConverter {
                             ffmpegPath: capturedFfmpegPath,
                             trimStart: capturedRequest.trimStart,
                             trimEnd: capturedRequest.trimEnd,
-                            audioRoutingConfig: capturedRequest.audioRoutingConfig
+                            audioRoutingConfig: capturedRequest.audioRoutingConfig,
+                            dcpCarrier: DCPAudioCarrier(frameCount: pictureFrameCount, frameRate: frameRate)
                         ) ?? .failed(reason: "Conversion cancelled")
                         let audioWavURL: URL?
                         switch audioExtractionResult {
-                        case .extracted(let url):
+                        case .extracted(let url, let sourceChannels):
                             audioWavURL = url
+                            sourceAudioChannels = sourceChannels
                         case .noAudioInSource:
                             audioWavURL = nil
                         case .failed(let reason):
@@ -1651,12 +1661,18 @@ actor FFMPEGConverter {
                             let audioMXFURL = FileManager.default.temporaryDirectory
                                 .appendingPathComponent("dcp_audio_\(UUID().uuidString).mxf")
 
-                            let audioWrapArgs: [String] = [
+                            let audioLanguage = capturedRequest.dcpMetadata?.audioLanguage ?? "en"
+                            var audioWrapArgs: [String] = [
                                 "-p", frameRate.ffmpegValue,
                                 "-L",                          // SMPTE Universal Labels
-                                wavURL.path,
-                                audioMXFURL.path
+                                "-a", SMPTEPackageUtils.uuidString(from: audioAssetID),
+                                "-d", String(pictureFrameCount), // Same edit-unit count as the picture
+                                "-m", DCPAudioCarrier.mcaExpression, // ST 377-4 MCA labels (Bv2.1)
                             ]
+                            if DCPValidator.isValidLanguageTag(audioLanguage) {
+                                audioWrapArgs += ["-g", audioLanguage]
+                            }
+                            audioWrapArgs += [wavURL.path, audioMXFURL.path]
 
                             Self.logger.info("Running asdcp-wrap for DCP audio")
                             let wrapResult = await self?.runTrackedPackageWrapper(
@@ -1692,8 +1708,9 @@ actor FFMPEGConverter {
                     if success, let videoMXF = videoMXFURL {
                         progressUpdate(0.91, "Generating DCP metadata...")
 
-                        let duration = effectiveDurationBox.value ?? totalDurationBox.value ?? 0
-                        let frameCount = Int(ceil(duration * Double(frameRate.editRateNumerator) / Double(frameRate.editRateDenominator)))
+                        // The CPL must state exactly the edit units asdcp-wrap wrote, so count
+                        // the encoded frames rather than estimating from the source duration.
+                        let frameCount = pictureFrameCount
 
                         let dcpTitle: String
                         if let metadataTitle = capturedRequest.dcpMetadata?.contentTitleText, !metadataTitle.isEmpty {
@@ -1710,7 +1727,8 @@ actor FFMPEGConverter {
                             contentKind: contentKind,
                             frameRate: frameRate,
                             resolution: resolution,
-                            audioLanguage: audioLanguage
+                            audioLanguage: audioLanguage,
+                            audioCode: finalAudioMXF == nil ? "MOS" : DCPAudioCarrier.isdcfAudioCode(sourceChannels: sourceAudioChannels)
                         )
                         let dcpOutputDir = dcpFolder.appendingPathComponent(
                             isdcfName,
@@ -1729,7 +1747,9 @@ actor FFMPEGConverter {
 
                             let dcpSuccess = await DCPService.shared.assembleDCP(
                                 videoMXFURL: videoMXF,
+                                videoAssetID: videoAssetID,
                                 audioMXFURL: finalAudioMXF,
+                                audioAssetID: audioAssetID,
                                 outputDirectoryURL: dcpOutputDir,
                                 title: dcpTitle,
                                 resolution: resolution,
@@ -1748,6 +1768,17 @@ actor FFMPEGConverter {
                                 Self.logger.error("DCP assembly failed")
                                 errorReason = String(localized: "DCP assembly failed", comment: "Shown when DCPService cannot assemble the final DCP package (CPL/PKL/ASSETMAP). Detailed cause is in the app log.")
                                 success = false
+                            } else {
+                                // Hashes were just computed during assembly; skip re-reading the essence.
+                                progressUpdate(0.99, "Validating DCP...")
+                                let report = await DCPValidator.validate(
+                                    directory: dcpOutputDir,
+                                    options: DCPValidator.Options(verifyHashes: false)
+                                )
+                                for issue in report.issues where issue.severity != .info {
+                                    Self.logger.warning("DCP validation \(issue.severity.label, privacy: .public) \(issue.code, privacy: .public): \(issue.message, privacy: .public)")
+                                }
+                                Self.logger.info("DCP validation: \(report.summaryLine, privacy: .public)")
                             }
                         }
 
@@ -1988,7 +2019,7 @@ actor FFMPEGConverter {
                         ) ?? .failed(reason: "Conversion cancelled")
                         let audioWavURL: URL?
                         switch audioExtractionResult {
-                        case .extracted(let url):
+                        case .extracted(let url, _):
                             audioWavURL = url
                         case .noAudioInSource:
                             audioWavURL = nil
@@ -4362,7 +4393,8 @@ actor FFMPEGConverter {
     /// callers can surface the failure case to the UI instead of silently producing a
     /// package with no audio.
     enum AudioExtractionResult: Sendable {
-        case extracted(URL)
+        /// `sourceChannels` is the channel count before any DCP carrier mapping (0 = generated silence).
+        case extracted(URL, sourceChannels: Int?)
         case noAudioInSource
         case failed(reason: String)
     }
@@ -4428,7 +4460,8 @@ actor FFMPEGConverter {
         ffmpegPath: String,
         trimStart: Double?,
         trimEnd: Double?,
-        audioRoutingConfig: AudioRoutingConfig?
+        audioRoutingConfig: AudioRoutingConfig?,
+        dcpCarrier: DCPAudioCarrier? = nil
     ) async -> AudioExtractionResult {
         guard postProcessingConversionID == conversionID else {
             return .failed(reason: "Conversion cancelled")
@@ -4446,6 +4479,7 @@ actor FFMPEGConverter {
                     trimStart: trimStart,
                     trimEnd: trimEnd,
                     audioRoutingConfig: audioRoutingConfig,
+                    dcpCarrier: dcpCarrier,
                     subprocessRunner: runner
                 )
             }
@@ -4461,7 +4495,7 @@ actor FFMPEGConverter {
         }
 
         guard postProcessingConversionID == conversionID else {
-            if case .extracted(let outputURL) = result,
+            if case .extracted(let outputURL, _) = result,
                FileManager.default.fileExists(atPath: outputURL.path) {
                 Self.cleanupTempFile(at: outputURL, label: "cancelled package audio WAV")
             }
@@ -4478,8 +4512,25 @@ actor FFMPEGConverter {
         trimStart: Double?,
         trimEnd: Double?,
         audioRoutingConfig: AudioRoutingConfig? = nil,
+        dcpCarrier: DCPAudioCarrier? = nil,
         subprocessRunner: any SubprocessRunning = SubprocessRunner()
     ) async -> AudioExtractionResult {
+        let audioWavURL = outputFolder.appendingPathComponent("audio_temp_\(UUID().uuidString).wav")
+
+        // DCP-o-matic always writes a sound track; a picture-only DCP trips up some servers.
+        func silentOrNoAudio() async -> AudioExtractionResult {
+            guard let dcpCarrier else { return .noAudioInSource }
+            logger.info("DCP audio: source has no audio, writing a silent 5.1 track")
+            let args = ["-y", "-nostdin",
+                        "-f", "lavfi", "-i", "anullsrc=r=48000:cl=5.1",
+                        "-t", FFMPEGCommandBuilder.ffmpegTimeString(from: dcpCarrier.duration),
+                        "-c:a", "pcm_s24le", audioWavURL.path]
+            return await runPCMWAVExtraction(
+                args: args, ffmpegPath: ffmpegPath, inputURL: inputURL, outputFolder: outputFolder,
+                audioWavURL: audioWavURL, sourceChannels: 0, subprocessRunner: subprocessRunner
+            )
+        }
+
         let audioInput = packageAudioInput(
             inputURL: inputURL,
             customInputArguments: customInputArguments
@@ -4488,7 +4539,7 @@ actor FFMPEGConverter {
         // A sequence without companion audio has no probe URL and is a legitimate silent input.
         guard let probeURL = audioInput.probeURL else {
             logger.debug("No audio streams in resolved source, skipping package audio extraction")
-            return .noAudioInSource
+            return await silentOrNoAudio()
         }
         let probedAudioStreams = await FFMPEGProbeService.fetchAudioStreams(for: probeURL) ?? []
         let audioStreams: [FFMPEGProbeService.AudioStreamInfo]
@@ -4506,10 +4557,8 @@ actor FFMPEGConverter {
             )]
         } else {
             logger.debug("No audio streams in resolved source, skipping package audio extraction")
-            return .noAudioInSource
+            return await silentOrNoAudio()
         }
-
-        let audioWavURL = outputFolder.appendingPathComponent("audio_temp_\(UUID().uuidString).wav")
 
         var args: [String] = ["-y", "-nostdin"]
 
@@ -4521,8 +4570,10 @@ actor FFMPEGConverter {
 
         args.append(contentsOf: audioInput.arguments)
 
-        // Apply trim duration
-        if let durationArgs = FFMPEGCommandBuilder.trimDurationArgument(start: normalizedStart, end: FFMPEGCommandBuilder.normalizedTrimPoint(trimEnd)) {
+        // Apply trim duration. DCP audio instead runs exactly as long as the picture.
+        if let dcpCarrier {
+            args.append(contentsOf: ["-t", FFMPEGCommandBuilder.ffmpegTimeString(from: dcpCarrier.duration)])
+        } else if let durationArgs = FFMPEGCommandBuilder.trimDurationArgument(start: normalizedStart, end: FFMPEGCommandBuilder.normalizedTrimPoint(trimEnd)) {
             args.append(contentsOf: durationArgs)
         }
 
@@ -4559,7 +4610,7 @@ actor FFMPEGConverter {
         // Treat that the same as a silent source instead of indexing the empty selection below.
         guard !selectedStreamIndices.isEmpty else {
             logger.info("Package audio: all audio tracks were removed by routing configuration")
-            return .noAudioInSource
+            return await silentOrNoAudio()
         }
 
         // For multiple selected streams that are all mono, amerge them.
@@ -4568,18 +4619,30 @@ actor FFMPEGConverter {
             let channels = audioStreams.indices.contains(idx) ? (audioStreams[idx].channels ?? 0) : 0
             return channels == 1
         }
-        if selectedStreamIndices.count > 1 && selectedAllMono {
+        let merged = selectedStreamIndices.count > 1 && selectedAllMono
+        let sourceChannels: Int? = merged
+            ? selectedStreamIndices.count
+            : (audioStreams.indices.contains(selectedStreamIndices[0]) ? audioStreams[selectedStreamIndices[0]].channels : nil)
+        // DCP: place the source in the 5.1 carrier and pad short audio to the picture length.
+        let dcpFilter = dcpCarrier.map {
+            "\(DCPAudioCarrier.channelMapFilter(sourceChannels: sourceChannels)),apad=whole_dur=\(FFMPEGCommandBuilder.ffmpegTimeString(from: $0.duration))"
+        }
+        if merged {
             var filterInputs = ""
             for idx in selectedStreamIndices {
                 filterInputs += "[\(audioInput.ffmpegInputIndex):a:\(idx)]"
             }
+            let carrierSuffix = dcpFilter.map { ",\($0)" } ?? ""
             args.append(contentsOf: [
-                "-filter_complex", "\(filterInputs)amerge=inputs=\(selectedStreamIndices.count)[aout]",
+                "-filter_complex", "\(filterInputs)amerge=inputs=\(selectedStreamIndices.count)\(carrierSuffix)[aout]",
                 "-map", "[aout]",
             ])
         } else {
             // Map a single audio stream
             args.append(contentsOf: ["-map", "\(audioInput.ffmpegInputIndex):a:\(selectedStreamIndices[0])"])
+            if let dcpFilter {
+                args.append(contentsOf: ["-af", dcpFilter])
+            }
         }
 
         args.append(contentsOf: [
@@ -4589,7 +4652,21 @@ actor FFMPEGConverter {
         ])
 
         logger.info("Extracting audio as WAV for DCP: \(audioWavURL.lastPathComponent) (streams: \(selectedStreamIndices))")
+        return await runPCMWAVExtraction(
+            args: args, ffmpegPath: ffmpegPath, inputURL: inputURL, outputFolder: outputFolder,
+            audioWavURL: audioWavURL, sourceChannels: sourceChannels, subprocessRunner: subprocessRunner
+        )
+    }
 
+    private static func runPCMWAVExtraction(
+        args: [String],
+        ffmpegPath: String,
+        inputURL: URL,
+        outputFolder: URL,
+        audioWavURL: URL,
+        sourceChannels: Int?,
+        subprocessRunner: any SubprocessRunning
+    ) async -> AudioExtractionResult {
         let sensitiveValues = Set(
             args.filter { $0.hasPrefix("/") } + [
                 ffmpegPath,
@@ -4632,7 +4709,7 @@ actor FFMPEGConverter {
             }
 
             logger.info("Audio WAV extraction complete: \(audioWavURL.lastPathComponent)")
-            return .extracted(audioWavURL)
+            return .extracted(audioWavURL, sourceChannels: sourceChannels)
         } catch is CancellationError {
             cleanupPartialOutput()
             return .failed(reason: "Conversion cancelled")
