@@ -24,6 +24,9 @@
 - The right-edge cursor-hide zone no longer leaves the cursor hidden after switching items, leaving fullscreen or switching apps.
 - Trim points set in fullscreen stay with the item when you move back and forth through the queue, and items inside encoding groups keep their trims and navigate within their group.
 - Auto Next no longer risks skipping an item when the end of a clip is reported twice.
+- Added a volume slider and mute button. M toggles mute and ⌃↑/⌃↓ change the volume by 10%; the setting is remembered. MPV volume now follows the same linear scale as AVPlayer, so 50% is half as loud rather than barely audible.
+- The display no longer dims or sleeps during fullscreen playback of files played through MPV.
+- Typing a timecode for a file whose metadata is still loading no longer jumps to the start, and in and out points set in fullscreen apply to loop playback straight away.
 
 # v.4.6.0
 
