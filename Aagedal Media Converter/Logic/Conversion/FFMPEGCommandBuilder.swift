@@ -767,6 +767,17 @@ enum FFMPEGCommandBuilder {
             arguments.append(contentsOf: additionalOutputArguments)
         }
         metadataPlan.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart, outputExtension: outputFileURL.pathExtension)
+        // Appended after the metadata policy, which removes earlier per-stream
+        // -map_metadata options that the attachment tag restore depends on.
+        if preset != .streamCopy && preset.outputsVideoTrack {
+            arguments.append(contentsOf: await subtitleAttachmentArguments(
+                keepSubtitles: capturedSubtitleSettings.keepSubtitles,
+                outputExtension: outputFileURL.pathExtension,
+                outputArguments: arguments.dropFirst(outputArgumentsStart),
+                inputURL: inputURL,
+                sourceMetadata: sourceMetadata
+            ))
+        }
         // These chapters are explicitly authored by the stitching workflow and
         // must survive the preset's policy for inherited source metadata.
         if let chapterInputIndex {
@@ -854,6 +865,29 @@ extension FFMPEGCommandBuilder {
         SubtitleMappingPlan(
             keepSubtitles: keepSubtitles,
             outputExtension: outputExtension
+        ).arguments
+    }
+
+    /// Font attachments accompanying copied Matroska subtitles. The source is
+    /// probed only when metadata stripping requires the attachment count.
+    static func subtitleAttachmentArguments(
+        keepSubtitles: Bool,
+        outputExtension: String,
+        outputArguments: some Collection<String>,
+        inputURL: URL,
+        sourceMetadata: VideoMetadata?
+    ) async -> [String] {
+        let subtitlePlan = SubtitleMappingPlan(keepSubtitles: keepSubtitles, outputExtension: outputExtension)
+        guard subtitlePlan == .copy else { return [] }
+        let stripsStreamMetadata = SubtitleAttachmentPlan.stripsStreamMetadata(outputArguments)
+        var attachmentCount = sourceMetadata?.attachmentCount
+        if stripsStreamMetadata, sourceMetadata == nil {
+            attachmentCount = try? await BoundedVideoMetadataProbe.metadata(for: inputURL).attachmentCount
+        }
+        return SubtitleAttachmentPlan(
+            subtitlePlan: subtitlePlan,
+            stripsStreamMetadata: stripsStreamMetadata,
+            attachmentCount: attachmentCount
         ).arguments
     }
 

@@ -186,6 +186,8 @@ struct VideoMetadata: Equatable, Sendable {
     let comment: String?
     var description: String? = nil
     var sourceURL: String? = nil
+    /// Matroska attached files (typically ASS subtitle fonts), in ffmpeg `t:<n>` order.
+    var attachmentCount = 0
     let timecode: String?
     let timecodes: [TimecodeEntry]
     let frameCount: Int?
@@ -681,6 +683,7 @@ actor VideoMetadataService {
             subtitleStreams: subtitles
         )
         result.description = textMetadata.description
+        result.attachmentCount = meta.attachments.count
         result.sourceURL = textMetadata.sourceURL ?? ContainerTextMetadata.webURL(result.comment)
         return result
     }

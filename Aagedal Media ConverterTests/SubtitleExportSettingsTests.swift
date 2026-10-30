@@ -20,6 +20,62 @@ final class SubtitleExportSettingsTests: XCTestCase {
         XCTAssertEqual(SubtitleMappingPlan.quickTimeText.arguments, ["-map", "0:s?", "-c:s", "mov_text"])
     }
 
+    func testAttachmentPlanCopiesFontsAlongsideMatroskaSubtitles() {
+        XCTAssertEqual(
+            SubtitleAttachmentPlan(subtitlePlan: .copy, stripsStreamMetadata: false, attachmentCount: nil).arguments,
+            ["-map", "0:t?", "-c:t", "copy"]
+        )
+        XCTAssertEqual(
+            SubtitleAttachmentPlan(subtitlePlan: .copy, stripsStreamMetadata: true, attachmentCount: 2).arguments,
+            ["-map", "0:t:0", "-map", "0:t:1", "-c:t", "copy",
+             "-map_metadata:s:t:0", "0:s:t:0", "-map_metadata:s:t:1", "0:s:t:1"]
+        )
+        // Without a known count, untagged attachments would make the Matroska muxer fail.
+        for count in [nil, 0] {
+            XCTAssertEqual(SubtitleAttachmentPlan(subtitlePlan: .copy, stripsStreamMetadata: true, attachmentCount: count), .omit)
+        }
+        for plan in [SubtitleMappingPlan.omit, .quickTimeText] {
+            XCTAssertEqual(SubtitleAttachmentPlan(subtitlePlan: plan, stripsStreamMetadata: false, attachmentCount: 3), .omit)
+        }
+        XCTAssertTrue(SubtitleAttachmentPlan.stripsStreamMetadata(["-c:v", "libx265", "-map_metadata", "-1"]))
+        XCTAssertTrue(SubtitleAttachmentPlan.stripsStreamMetadata(["-map_metadata:s", "-1"]))
+        XCTAssertFalse(SubtitleAttachmentPlan.stripsStreamMetadata(["-map_metadata", "0", "-map_metadata:g", "-1"]))
+    }
+
+    func testStrippedMatroskaCommandRestoresAttachmentTagsAfterMetadataPolicy() async throws {
+        let suite = "SubtitleExportSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: AppConstants.keepSubtitlesKey)
+        defaults.set(false, forKey: AppConstants.preserveMetadataPreferenceKey(for: .h265))
+        var metadata = VideoMetadata(
+            duration: 1, formatName: "matroska", containerLongName: nil, sizeBytes: nil,
+            bitRate: nil, comment: nil, timecode: nil, timecodes: [], frameCount: nil,
+            containerCreationDate: nil, containerModificationDate: nil, title: nil, artist: nil,
+            gpsLatitude: nil, gpsLongitude: nil, gpsAltitude: nil, warnings: [],
+            videoStreams: [], audioStreams: [], subtitleStreams: []
+        )
+        metadata.attachmentCount = 1
+        let codecSettings = try XCTUnwrap(CodecExportSettings(preset: .h265, defaults: defaults))
+        let command = await FFMPEGCommandBuilder.buildCommand(
+            inputURL: URL(fileURLWithPath: "/source/episode.mkv"),
+            outputFileURL: URL(fileURLWithPath: "/output/episode.mkv"),
+            preset: .h265,
+            codecSettings: codecSettings,
+            subtitleSettings: SubtitleExportSettings(defaults: defaults),
+            comment: "", includeDateTag: false, trimStart: nil, trimEnd: nil,
+            sourceMetadata: metadata
+        )
+        let args = command.arguments
+        let strip = try XCTUnwrap(args.firstIndex(of: "-map_metadata"))
+        XCTAssertEqual(args[strip + 1], "-1")
+        let restore = try XCTUnwrap(args.firstIndex(of: "-map_metadata:s:t:0"))
+        XCTAssertGreaterThan(restore, strip)
+        XCTAssertEqual(args[restore + 1], "0:s:t:0")
+        XCTAssertTrue(args.contains("0:t:0"))
+        XCTAssertFalse(args.contains("0:t:1"))
+    }
+
     func testSettingsDefaultAndCapturedCommandsRemainIndependentOfLaterEdits() async throws {
         let suite = "SubtitleExportSettingsTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

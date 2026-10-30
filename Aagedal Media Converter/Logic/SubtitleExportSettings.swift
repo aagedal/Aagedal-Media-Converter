@@ -39,3 +39,53 @@ enum SubtitleMappingPlan: Equatable, Sendable {
         }
     }
 }
+
+/// Matroska sources carry the fonts their ASS/SSA subtitles were authored
+/// against as attachments. Without them players substitute fonts with other
+/// metrics, which shifts karaoke and typesetting away from burned-in text.
+enum SubtitleAttachmentPlan: Equatable, Sendable {
+    case omit
+    /// Stream tags survive, so every attachment can be copied verbatim.
+    case copyAll
+    /// `-map_metadata -1` also drops the filename/mimetype tags the Matroska
+    /// muxer requires, and a blanket `0:s:t` source would copy the first
+    /// attachment's tags onto all of them. Map and restore each probed index.
+    case copyRestoringTags(count: Int)
+
+    init(subtitlePlan: SubtitleMappingPlan, stripsStreamMetadata: Bool, attachmentCount: Int?) {
+        guard subtitlePlan == .copy else {
+            self = .omit
+            return
+        }
+        guard stripsStreamMetadata else {
+            self = .copyAll
+            return
+        }
+        guard let attachmentCount, attachmentCount > 0 else {
+            self = .omit
+            return
+        }
+        self = .copyRestoringTags(count: attachmentCount)
+    }
+
+    /// Whether `arguments` (already carrying the metadata policy) disable
+    /// FFmpeg's automatic per-stream tag copy.
+    static func stripsStreamMetadata(_ arguments: some Collection<String>) -> Bool {
+        zip(arguments, arguments.dropFirst()).contains { option, value in
+            value == "-1" && (option == "-map_metadata" || option.hasPrefix("-map_metadata:s"))
+        }
+    }
+
+    var arguments: [String] {
+        switch self {
+        case .omit:
+            return []
+        case .copyAll:
+            return ["-map", "0:t?", "-c:t", "copy"]
+        case .copyRestoringTags(let count):
+            let indices = 0..<count
+            return indices.flatMap { ["-map", "0:t:\($0)"] } + ["-c:t", "copy"]
+                + indices.flatMap { ["-map_metadata:s:t:\($0)", "0:s:t:\($0)"] }
+        }
+    }
+}

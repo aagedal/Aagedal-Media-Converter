@@ -2701,7 +2701,7 @@
 			repositoryURL = "https://github.com/aagedal/SwiftMediaMetadata.git";
 			requirement = {
 				kind = revision;
-				revision = 74794cf1b9fd8ad0156eb695f816241eb00271c9;
+				revision = 3f2f24c659b8e3e9c82d3dac1cfe871477309c5c;
 			};
 		};
 		C1DCF31D2FB2341100D617D4 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
