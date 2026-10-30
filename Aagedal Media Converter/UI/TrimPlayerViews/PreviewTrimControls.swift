@@ -55,7 +55,8 @@ struct PreviewTrimControls: View {
                     chapters: controller.currentChapters,
                     showChapters: showChapters,
                     isLoading: controller.isLoadingPreviewAssets,
-                    step: 0.1,
+                    // Handles and range drags snap to frames.
+                    step: TrimEditor(duration: duration, frameRate: item.trimFrameRate).step,
                     hideFilmstrip: false,
                     compactMode: isCompactMode,
                     onEditingChanged: onTrimEditingChanged,

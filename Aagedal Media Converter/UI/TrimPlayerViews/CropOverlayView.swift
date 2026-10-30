@@ -10,92 +10,68 @@
 import SwiftUI
 import AppKit
 
-/// Interactive crop overlay view that renders over the video player
-/// Allows users to draw and adjust a crop rectangle with handles
+/// Interactive crop overlay view that renders over the video player.
+/// Drawing and pointer mapping live here; all crop geometry is delegated to `CropEditor`.
 struct CropOverlayView: View {
     @Binding var cropConfig: CropConfig
-    let sourceWidth: Int
-    let sourceHeight: Int
-    let videoAspectRatio: Double
+    /// Shape of the displayed picture (width / height), including PAR and rotation.
+    let displayAspectRatio: Double
+    /// Display aspect ratio chosen in the crop panel; falls back to the config's own lock.
+    var lockedAspectRatio: Double? = nil
     let isEnabled: Bool
 
-    @State private var isDragging = false
-    @State private var dragMode: DragMode = .none
-    @State private var dragStartRect: CropRect?
-    @State private var shiftPressedAspectRatio: Double? = nil
-    @State private var isOptionKeyPressed = false
-    @State private var isShiftKeyPressed = false
+    private enum DragState {
+        case idle
+        /// The drag started outside the crop box and is ignored until release.
+        case ignored
+        case active(handle: CropHandle, startRect: CropRect)
+    }
 
-    enum DragMode {
-        case none
-        case move
-        case resizeTopLeft
-        case resizeTopRight
-        case resizeBottomLeft
-        case resizeBottomRight
-        case resizeTop
-        case resizeBottom
-        case resizeLeft
-        case resizeRight
+    @State private var dragState: DragState = .idle
+    /// Ratio captured when Shift is first held during a drag (free-form crops only).
+    @State private var shiftLockedRatio: Double?
+    @State private var isScalingFromCenter = false
+
+    private var editor: CropEditor { CropEditor(displayAspectRatio: displayAspectRatio) }
+
+    private var activeHandle: CropHandle? {
+        if case .active(let handle, _) = dragState { return handle }
+        return nil
     }
 
     var body: some View {
         GeometryReader { geometry in
             let videoFrame = calculateVideoFrame(in: geometry.size)
-            let screenRect = normalizedToScreen(
-                cropConfig.normalizedRect,
-                videoFrame: videoFrame
-            )
+            let screenRect = normalizedToScreen(cropConfig.normalizedRect, videoFrame: videoFrame)
 
             ZStack {
                 // Darkened overlay outside crop area
-                cropDimOverlay(screenRect: screenRect, geometry: geometry)
+                cropDimOverlay(screenRect: screenRect)
 
-                // Crop rectangle with handles
                 if isEnabled {
                     cropRectangleView(screenRect: screenRect)
-                        .gesture(dragGesture(geometry: geometry, videoFrame: videoFrame))
-
-                    // Cursor tracking overlay (visual feedback only, doesn't intercept events)
-                    CursorTrackingView(screenRect: screenRect, videoFrame: videoFrame)
                         .allowsHitTesting(false)
 
-                    // Center crosshair when Option key is pressed (center scaling mode)
-                    if isOptionKeyPressed && isDragging {
+                    // Cursor feedback only; never intercepts events
+                    CursorTrackingView(screenRect: screenRect, activeHandle: activeHandle)
+                        .allowsHitTesting(false)
+
+                    // Center crosshair while Option-scaling from the center
+                    if isScalingFromCenter {
                         centerCrosshairView(screenRect: screenRect)
                             .allowsHitTesting(false)
                     }
-
-                    // Modifier key tracker
-                    ModifierKeyTrackerView(
-                        isOptionPressed: $isOptionKeyPressed,
-                        isShiftPressed: $isShiftKeyPressed
-                    )
-                    .allowsHitTesting(false)
-                    .onChange(of: isShiftKeyPressed) { _, newValue in
-                        if isDragging && newValue {
-                            // Shift just pressed during drag - capture current aspect ratio in DISPLAY space
-                            let currentRect = cropConfig.normalizedRect
-                            // Convert from normalized space to display space
-                            // normalized ratio is in fractions of source dimensions
-                            // display ratio accounts for video aspect ratio (including PAR)
-                            let normalizedRatio = currentRect.width / currentRect.height
-                            let displayRatio = normalizedRatio * videoAspectRatio
-                            shiftPressedAspectRatio = displayRatio
-                        } else if !newValue {
-                            // Shift released - clear captured ratio
-                            shiftPressedAspectRatio = nil
-                        }
-                    }
                 }
             }
+            .contentShape(Rectangle())
+            .gesture(dragGesture(screenRect: screenRect, videoFrame: videoFrame))
         }
         .allowsHitTesting(isEnabled)
     }
 
     // MARK: - Overlay Components
 
-    private func cropDimOverlay(screenRect: CGRect, geometry: GeometryProxy) -> some View {
+    private func cropDimOverlay(screenRect: CGRect) -> some View {
         // Creates darkened overlay with cutout for crop area
         Color.black.opacity(0.5)
             .mask(
@@ -112,12 +88,6 @@ struct CropOverlayView: View {
 
     private func cropRectangleView(screenRect: CGRect) -> some View {
         ZStack {
-            // Transparent fill for better hit testing (makes entire interior draggable)
-            Rectangle()
-                .fill(Color.white.opacity(0.001))  // Nearly invisible but receives hits
-                .frame(width: screenRect.width, height: screenRect.height)
-                .position(x: screenRect.midX, y: screenRect.midY)
-
             // White border
             Rectangle()
                 .stroke(Color.white, lineWidth: 2)
@@ -210,569 +180,116 @@ struct CropOverlayView: View {
         let hPoint = CGPoint(x: corner.x - hDir * armLength, y: corner.y)
         let vPoint = CGPoint(x: corner.x, y: corner.y - vDir * armLength)
 
-        return ZStack {
-            Path { path in
-                path.move(to: hPoint)
-                path.addLine(to: corner)
-                path.addLine(to: vPoint)
-            }
-            .stroke(Color.white, style: StrokeStyle(lineWidth: 3.5, lineCap: .square))
-
-            // Invisible hit area
-            Circle()
-                .fill(Color.clear)
-                .frame(width: 28, height: 28)
-                .contentShape(Circle())
-                .position(corner)
+        return Path { path in
+            path.move(to: hPoint)
+            path.addLine(to: corner)
+            path.addLine(to: vPoint)
         }
+        .stroke(Color.white, style: StrokeStyle(lineWidth: 3.5, lineCap: .square))
     }
 
     private func edgeHandle(at point: CGPoint, isVertical: Bool) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(.white)
-                .frame(
-                    width: isVertical ? 4 : 24,
-                    height: isVertical ? 24 : 4
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 2)
-                        .stroke(Color.black.opacity(0.5), lineWidth: 0.5)
-                )
-
-            // Invisible expanded hit area
-            Rectangle()
-                .fill(Color.clear)
-                .frame(width: 28, height: 28)
-                .contentShape(Rectangle())
-        }
-        .position(point)
+        RoundedRectangle(cornerRadius: 2)
+            .fill(.white)
+            .frame(
+                width: isVertical ? 4 : 24,
+                height: isVertical ? 24 : 4
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 2)
+                    .stroke(Color.black.opacity(0.5), lineWidth: 0.5)
+            )
+            .position(point)
     }
 
     // MARK: - Gesture Handling
 
-    private func dragGesture(geometry: GeometryProxy, videoFrame: CGRect) -> some Gesture {
+    private func dragGesture(screenRect: CGRect, videoFrame: CGRect) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
-                handleDragChanged(value: value, geometry: geometry, videoFrame: videoFrame)
+                handleDragChanged(value: value, screenRect: screenRect, videoFrame: videoFrame)
             }
             .onEnded { _ in
-                handleDragEnded()
+                dragState = .idle
+                shiftLockedRatio = nil
+                isScalingFromCenter = false
             }
     }
 
-    private func handleDragChanged(value: DragGesture.Value, geometry: GeometryProxy, videoFrame: CGRect) {
-        if !isDragging {
-            isDragging = true
-            dragStartRect = cropConfig.normalizedRect
-            dragMode = determineDragMode(location: value.startLocation, videoFrame: videoFrame)
+    private func handleDragChanged(value: DragGesture.Value, screenRect: CGRect, videoFrame: CGRect) {
+        if case .idle = dragState {
+            guard let handle = CropHandle.hitTest(value.startLocation, in: screenRect) else {
+                dragState = .ignored
+                return
+            }
+            dragState = .active(handle: handle, startRect: cropConfig.normalizedRect)
         }
+        guard case .active(let handle, let startRect) = dragState,
+              videoFrame.width > 0, videoFrame.height > 0 else { return }
 
-        guard let startRect = dragStartRect else { return }
+        // Modifiers are read live so keys held before the click count too.
+        let flags = NSEvent.modifierFlags
+        let fromCenter = flags.contains(.option) && handle != .move
+        isScalingFromCenter = fromCenter
 
-        // Store original center point for Option key (center scaling) mode
-        let originalCenter = CGPoint(
-            x: startRect.x + startRect.width / 2,
-            y: startRect.y + startRect.height / 2
-        )
-
-        let screenDelta = value.translation
-        let normalizedDelta = screenToNormalizedDelta(screenDelta, videoFrame: videoFrame)
-
-        var newRect = startRect
-
-        // Apply transformations based on drag mode
-        switch dragMode {
-        case .move:
-            newRect = moveRect(startRect, by: normalizedDelta)
-        case .resizeTopLeft:
-            newRect = resizeTopLeft(startRect, by: normalizedDelta, scaleFromCenter: isOptionKeyPressed)
-        case .resizeTopRight:
-            newRect = resizeTopRight(startRect, by: normalizedDelta, scaleFromCenter: isOptionKeyPressed)
-        case .resizeBottomLeft:
-            newRect = resizeBottomLeft(startRect, by: normalizedDelta, scaleFromCenter: isOptionKeyPressed)
-        case .resizeBottomRight:
-            newRect = resizeBottomRight(startRect, by: normalizedDelta, scaleFromCenter: isOptionKeyPressed)
-        case .resizeTop:
-            newRect = resizeTop(startRect, by: normalizedDelta, scaleFromCenter: isOptionKeyPressed)
-        case .resizeBottom:
-            newRect = resizeBottom(startRect, by: normalizedDelta, scaleFromCenter: isOptionKeyPressed)
-        case .resizeLeft:
-            newRect = resizeLeft(startRect, by: normalizedDelta, scaleFromCenter: isOptionKeyPressed)
-        case .resizeRight:
-            newRect = resizeRight(startRect, by: normalizedDelta, scaleFromCenter: isOptionKeyPressed)
-        case .none:
-            return
-        }
-
-        // Apply aspect ratio constraint
-        // Shift key: lock to aspect ratio when shift was first pressed during this drag
-        // Config lock: use configured aspect ratio
-        let aspectRatioToUse: Double? = if isShiftKeyPressed {
-            shiftPressedAspectRatio
+        // A configured lock wins; otherwise Shift holds the box's ratio from when it was pressed.
+        let aspectRatio: Double?
+        if let locked = lockedAspectRatio ?? cropConfig.aspectRatioLock?.numericRatio {
+            aspectRatio = locked
+        } else if flags.contains(.shift) {
+            let ratio = shiftLockedRatio ?? editor.displayAspectRatio(of: cropConfig.normalizedRect)
+            shiftLockedRatio = ratio
+            aspectRatio = ratio
         } else {
-            cropConfig.aspectRatioLock?.numericRatio
+            shiftLockedRatio = nil
+            aspectRatio = nil
         }
 
-        if let aspectRatio = aspectRatioToUse {
-            newRect = constrainToAspectRatio(newRect, ratio: aspectRatio, dragMode: dragMode)
-        }
-
-        // Clamp to valid bounds (0-1), preserving aspect ratio if locked
-        // When scaling from center (Option key), preserve the center point
-        newRect = clampRect(newRect, aspectRatio: aspectRatioToUse, preserveCenter: isOptionKeyPressed ? originalCenter : nil)
-
-        cropConfig.normalizedRect = newRect
-    }
-
-    private func handleDragEnded() {
-        isDragging = false
-        dragMode = .none
-        dragStartRect = nil
-        shiftPressedAspectRatio = nil
+        let delta = CGSize(
+            width: value.translation.width / videoFrame.width,
+            height: value.translation.height / videoFrame.height
+        )
+        cropConfig.normalizedRect = editor.resized(
+            startRect, handle: handle, by: delta, fromCenter: fromCenter, aspectRatio: aspectRatio
+        )
     }
 
     // MARK: - Coordinate Mapping
 
     /// Calculates the rect where video actually renders (accounting for letterbox/pillarbox)
     private func calculateVideoFrame(in playerSize: CGSize) -> CGRect {
+        guard playerSize.width > 0, playerSize.height > 0 else { return .zero }
         let playerAspect = playerSize.width / playerSize.height
 
-        if abs(videoAspectRatio - playerAspect) < 0.01 {
-            // No letterboxing
+        if abs(displayAspectRatio - playerAspect) < 0.01 {
             return CGRect(origin: .zero, size: playerSize)
         }
 
-        if videoAspectRatio > playerAspect {
+        if displayAspectRatio > playerAspect {
             // Video is wider: letterbox top/bottom
-            let videoHeight = playerSize.width / videoAspectRatio
+            let videoHeight = playerSize.width / displayAspectRatio
             let offsetY = (playerSize.height - videoHeight) / 2
             return CGRect(x: 0, y: offsetY, width: playerSize.width, height: videoHeight)
         } else {
             // Video is taller: pillarbox left/right
-            let videoWidth = playerSize.height * videoAspectRatio
+            let videoWidth = playerSize.height * displayAspectRatio
             let offsetX = (playerSize.width - videoWidth) / 2
             return CGRect(x: offsetX, y: 0, width: videoWidth, height: playerSize.height)
         }
     }
 
-    /// Converts normalized crop rect (0-1 in source pixel space) to screen coordinates within video frame
+    /// Maps the normalized crop rect onto the displayed video.
     ///
-    /// The normalized rect is stored as fractions of SOURCE PIXEL dimensions (for correct FFMPEG output).
-    /// The crop box shows WHERE on the displayed video the crop will be taken from.
-    ///
-    /// For non-square PAR sources (e.g., 1440×1080 displayed as 1920×1080):
-    /// - The preview displays the source stretched to 16:9
-    /// - The crop box covers the same RELATIVE area of the displayed video as the pixel crop
-    /// - A 1:1 PIXEL crop will appear as 4:3 on the stretched preview (covering 75% width, 100% height)
-    /// - But the OUTPUT will be 1:1 because it uses setsar=1:1
-    ///
-    /// Note: The box shows the COVERAGE (which pixels are included), not the OUTPUT shape.
-    /// Users rely on the aspect ratio preset label to know what the output will look like.
+    /// Normalized coordinates are fractions of the stored pixel grid. Pixel-aspect stretching is
+    /// uniform across the frame, so those fractions are also fractions of the displayed picture:
+    /// the box covers exactly the pixels FFmpeg will keep, for anamorphic sources too.
     private func normalizedToScreen(_ rect: CropRect, videoFrame: CGRect) -> CGRect {
-        // Direct mapping: normalized fractions map to video frame fractions
-        // This ensures box edges align with the corresponding pixel positions on the displayed video
         CGRect(
             x: videoFrame.origin.x + rect.x * videoFrame.width,
             y: videoFrame.origin.y + rect.y * videoFrame.height,
             width: rect.width * videoFrame.width,
             height: rect.height * videoFrame.height
         )
-    }
-
-    /// Converts a screen point to normalized coordinates
-    ///
-    /// Screen position maps 1:1 with normalized position (center of screen = center of normalized space)
-    /// This is because PAR stretching is uniform across the frame.
-    private func screenToNormalized(_ point: CGPoint, videoFrame: CGRect) -> CGPoint {
-        return CGPoint(
-            x: (point.x - videoFrame.origin.x) / videoFrame.width,
-            y: (point.y - videoFrame.origin.y) / videoFrame.height
-        )
-    }
-
-    /// Converts screen delta to normalized delta
-    ///
-    /// For position changes, this maps 1:1 (no PAR correction needed).
-    /// For width changes during resize, PAR correction is needed but that's handled
-    /// by computing from absolute positions rather than deltas.
-    private func screenToNormalizedDelta(_ delta: CGSize, videoFrame: CGRect) -> CGSize {
-        return CGSize(
-            width: Double(delta.width) / Double(videoFrame.width),
-            height: Double(delta.height) / Double(videoFrame.height)
-        )
-    }
-
-    /// PAR value for coordinate conversions
-    private var par: Double {
-        let sourceAspect = Double(sourceWidth) / Double(sourceHeight)
-        return videoAspectRatio / sourceAspect
-    }
-
-    // MARK: - Drag Mode Detection
-
-    private func determineDragMode(location: CGPoint, videoFrame: CGRect) -> DragMode {
-        let screenRect = normalizedToScreen(cropConfig.normalizedRect, videoFrame: videoFrame)
-        let hitSize: CGFloat = 20  // Hit area around handles
-
-        // Check corners first (priority over edges)
-        if location.distance(to: CGPoint(x: screenRect.minX, y: screenRect.minY)) < hitSize {
-            return .resizeTopLeft
-        }
-        if location.distance(to: CGPoint(x: screenRect.maxX, y: screenRect.minY)) < hitSize {
-            return .resizeTopRight
-        }
-        if location.distance(to: CGPoint(x: screenRect.minX, y: screenRect.maxY)) < hitSize {
-            return .resizeBottomLeft
-        }
-        if location.distance(to: CGPoint(x: screenRect.maxX, y: screenRect.maxY)) < hitSize {
-            return .resizeBottomRight
-        }
-
-        // Check edges
-        if abs(location.y - screenRect.minY) < hitSize &&
-           location.x > screenRect.minX + hitSize &&
-           location.x < screenRect.maxX - hitSize {
-            return .resizeTop
-        }
-        if abs(location.y - screenRect.maxY) < hitSize &&
-           location.x > screenRect.minX + hitSize &&
-           location.x < screenRect.maxX - hitSize {
-            return .resizeBottom
-        }
-        if abs(location.x - screenRect.minX) < hitSize &&
-           location.y > screenRect.minY + hitSize &&
-           location.y < screenRect.maxY - hitSize {
-            return .resizeLeft
-        }
-        if abs(location.x - screenRect.maxX) < hitSize &&
-           location.y > screenRect.minY + hitSize &&
-           location.y < screenRect.maxY - hitSize {
-            return .resizeRight
-        }
-
-        // Check if inside rectangle (move mode)
-        if screenRect.contains(location) {
-            return .move
-        }
-
-        return .none
-    }
-
-    // MARK: - Rectangle Manipulation
-
-    private func moveRect(_ rect: CropRect, by delta: CGSize) -> CropRect {
-        CropRect(
-            x: rect.x + delta.width,
-            y: rect.y + delta.height,
-            width: rect.width,
-            height: rect.height
-        )
-    }
-
-    private func resizeTopLeft(_ rect: CropRect, by delta: CGSize, scaleFromCenter: Bool) -> CropRect {
-        if scaleFromCenter {
-            // Scale from center: opposite corner moves equally in opposite direction
-            return CropRect(
-                x: rect.x + delta.width,
-                y: rect.y + delta.height,
-                width: rect.width - delta.width * 2,
-                height: rect.height - delta.height * 2
-            )
-        } else {
-            return CropRect(
-                x: rect.x + delta.width,
-                y: rect.y + delta.height,
-                width: rect.width - delta.width,
-                height: rect.height - delta.height
-            )
-        }
-    }
-
-    private func resizeTopRight(_ rect: CropRect, by delta: CGSize, scaleFromCenter: Bool) -> CropRect {
-        if scaleFromCenter {
-            return CropRect(
-                x: rect.x - delta.width,
-                y: rect.y + delta.height,
-                width: rect.width + delta.width * 2,
-                height: rect.height - delta.height * 2
-            )
-        } else {
-            return CropRect(
-                x: rect.x,
-                y: rect.y + delta.height,
-                width: rect.width + delta.width,
-                height: rect.height - delta.height
-            )
-        }
-    }
-
-    private func resizeBottomLeft(_ rect: CropRect, by delta: CGSize, scaleFromCenter: Bool) -> CropRect {
-        if scaleFromCenter {
-            return CropRect(
-                x: rect.x + delta.width,
-                y: rect.y - delta.height,
-                width: rect.width - delta.width * 2,
-                height: rect.height + delta.height * 2
-            )
-        } else {
-            return CropRect(
-                x: rect.x + delta.width,
-                y: rect.y,
-                width: rect.width - delta.width,
-                height: rect.height + delta.height
-            )
-        }
-    }
-
-    private func resizeBottomRight(_ rect: CropRect, by delta: CGSize, scaleFromCenter: Bool) -> CropRect {
-        if scaleFromCenter {
-            return CropRect(
-                x: rect.x - delta.width,
-                y: rect.y - delta.height,
-                width: rect.width + delta.width * 2,
-                height: rect.height + delta.height * 2
-            )
-        } else {
-            return CropRect(
-                x: rect.x,
-                y: rect.y,
-                width: rect.width + delta.width,
-                height: rect.height + delta.height
-            )
-        }
-    }
-
-    private func resizeTop(_ rect: CropRect, by delta: CGSize, scaleFromCenter: Bool) -> CropRect {
-        if scaleFromCenter {
-            return CropRect(
-                x: rect.x,
-                y: rect.y + delta.height,
-                width: rect.width,
-                height: rect.height - delta.height * 2
-            )
-        } else {
-            return CropRect(
-                x: rect.x,
-                y: rect.y + delta.height,
-                width: rect.width,
-                height: rect.height - delta.height
-            )
-        }
-    }
-
-    private func resizeBottom(_ rect: CropRect, by delta: CGSize, scaleFromCenter: Bool) -> CropRect {
-        if scaleFromCenter {
-            return CropRect(
-                x: rect.x,
-                y: rect.y - delta.height,
-                width: rect.width,
-                height: rect.height + delta.height * 2
-            )
-        } else {
-            return CropRect(
-                x: rect.x,
-                y: rect.y,
-                width: rect.width,
-                height: rect.height + delta.height
-            )
-        }
-    }
-
-    private func resizeLeft(_ rect: CropRect, by delta: CGSize, scaleFromCenter: Bool) -> CropRect {
-        if scaleFromCenter {
-            return CropRect(
-                x: rect.x + delta.width,
-                y: rect.y,
-                width: rect.width - delta.width * 2,
-                height: rect.height
-            )
-        } else {
-            return CropRect(
-                x: rect.x + delta.width,
-                y: rect.y,
-                width: rect.width - delta.width,
-                height: rect.height
-            )
-        }
-    }
-
-    private func resizeRight(_ rect: CropRect, by delta: CGSize, scaleFromCenter: Bool) -> CropRect {
-        if scaleFromCenter {
-            return CropRect(
-                x: rect.x - delta.width,
-                y: rect.y,
-                width: rect.width + delta.width * 2,
-                height: rect.height
-            )
-        } else {
-            return CropRect(
-                x: rect.x,
-                y: rect.y,
-                width: rect.width + delta.width,
-                height: rect.height
-            )
-        }
-    }
-
-    // MARK: - Aspect Ratio Constraints
-
-    private func constrainToAspectRatio(_ rect: CropRect, ratio: Double, dragMode: DragMode) -> CropRect {
-        // Convert target aspect ratio from VISUAL space to normalized (source-pixel) space.
-        // `ratio` is the desired displayed/output shape.
-        // Normalized coordinates are stored in source pixel space, while the preview is shown in display space,
-        // so we derive the normalized ratio using the display aspect ratio.
-        let normalizedTargetRatio = ratio / videoAspectRatio
-
-        let currentRatio = rect.width / rect.height
-
-        if abs(currentRatio - normalizedTargetRatio) < 0.01 {
-            return rect  // Already at correct ratio
-        }
-
-        switch dragMode {
-        case .resizeTopLeft, .resizeTopRight, .resizeBottomLeft, .resizeBottomRight:
-            // Corner resize: adjust height to match width / normalizedTargetRatio
-            let newHeight = rect.width / normalizedTargetRatio
-            let deltaY = newHeight - rect.height
-
-            // Adjust y position for top corners to maintain bottom edge
-            if dragMode == .resizeTopLeft || dragMode == .resizeTopRight {
-                return CropRect(x: rect.x, y: rect.y - deltaY, width: rect.width, height: newHeight)
-            } else {
-                return CropRect(x: rect.x, y: rect.y, width: rect.width, height: newHeight)
-            }
-
-        case .resizeTop, .resizeBottom:
-            // Vertical edge: adjust width to match height * normalizedTargetRatio
-            let newWidth = rect.height * normalizedTargetRatio
-            let deltaX = (newWidth - rect.width) / 2
-            return CropRect(x: rect.x - deltaX, y: rect.y, width: newWidth, height: rect.height)
-
-        case .resizeLeft, .resizeRight:
-            // Horizontal edge: adjust height to match width / normalizedTargetRatio
-            let newHeight = rect.width / normalizedTargetRatio
-            let deltaY = (newHeight - rect.height) / 2
-            return CropRect(x: rect.x, y: rect.y - deltaY, width: rect.width, height: newHeight)
-
-        default:
-            return rect
-        }
-    }
-
-    private func clampRect(_ rect: CropRect, aspectRatio: Double? = nil, preserveCenter: CGPoint? = nil) -> CropRect {
-        var clamped = rect
-
-        // If aspect ratio is locked, we need to maintain it while clamping
-        if let targetRatio = aspectRatio {
-            // Convert target aspect ratio from VISUAL space to normalized (source-pixel) space
-            let normalizedTargetRatio = targetRatio / videoAspectRatio
-
-            // Calculate the maximum rect that fits within bounds with the target aspect ratio
-            // Try both width-constrained and height-constrained and pick the smaller one
-
-            // Width-constrained: fit to width = 1.0
-            let widthConstrainedWidth = 1.0
-            let widthConstrainedHeight = widthConstrainedWidth / normalizedTargetRatio
-
-            // Height-constrained: fit to height = 1.0
-            let heightConstrainedHeight = 1.0
-            let heightConstrainedWidth = heightConstrainedHeight * normalizedTargetRatio
-
-            // Pick the constraint that fits
-            let maxWidth: Double
-            let maxHeight: Double
-            if widthConstrainedHeight <= 1.0 {
-                // Width-constrained fits
-                maxWidth = widthConstrainedWidth
-                maxHeight = widthConstrainedHeight
-            } else {
-                // Must use height-constrained
-                maxWidth = heightConstrainedWidth
-                maxHeight = heightConstrainedHeight
-            }
-
-            // Ensure minimum size (2% of frame for the smaller dimension)
-            let minSize = 0.02
-            let currentSize = min(clamped.width, clamped.height)
-
-            if currentSize < minSize {
-                // Scale up to minimum size while maintaining aspect ratio
-                if clamped.width < clamped.height {
-                    clamped.width = minSize
-                    clamped.height = minSize / normalizedTargetRatio
-                } else {
-                    clamped.height = minSize
-                    clamped.width = minSize * normalizedTargetRatio
-                }
-            }
-
-            // Clamp to maximum size while maintaining aspect ratio
-            if clamped.width > maxWidth || clamped.height > maxHeight {
-                clamped.width = maxWidth
-                clamped.height = maxHeight
-            }
-
-            // Clamp position to ensure rect stays within bounds
-            if let center = preserveCenter {
-                // Center-locked mode: position based on center point
-                clamped.x = center.x - clamped.width / 2
-                clamped.y = center.y - clamped.height / 2
-
-                // If centered rect goes out of bounds, clamp it
-                clamped.x = max(0, min(1 - clamped.width, clamped.x))
-                clamped.y = max(0, min(1 - clamped.height, clamped.y))
-            } else {
-                clamped.x = max(0, min(1 - clamped.width, clamped.x))
-                clamped.y = max(0, min(1 - clamped.height, clamped.y))
-            }
-
-        } else {
-            // No aspect ratio lock - clamp freely
-
-            // Ensure minimum size (2% of frame)
-            let minSize = 0.02
-            clamped.width = max(minSize, clamped.width)
-            clamped.height = max(minSize, clamped.height)
-
-            if let center = preserveCenter {
-                // Center-locked mode: position based on center point
-                clamped.x = center.x - clamped.width / 2
-                clamped.y = center.y - clamped.height / 2
-
-                // If centered rect goes out of bounds, adjust size to fit
-                if clamped.x < 0 {
-                    clamped.width = min(clamped.width, center.x * 2)
-                    clamped.x = center.x - clamped.width / 2
-                }
-                if clamped.y < 0 {
-                    clamped.height = min(clamped.height, center.y * 2)
-                    clamped.y = center.y - clamped.height / 2
-                }
-                if clamped.x + clamped.width > 1 {
-                    clamped.width = min(clamped.width, (1 - center.x) * 2)
-                    clamped.x = center.x - clamped.width / 2
-                }
-                if clamped.y + clamped.height > 1 {
-                    clamped.height = min(clamped.height, (1 - center.y) * 2)
-                    clamped.y = center.y - clamped.height / 2
-                }
-
-                // Final safety clamp
-                clamped.x = max(0, min(1 - clamped.width, clamped.x))
-                clamped.y = max(0, min(1 - clamped.height, clamped.y))
-            } else {
-                // Clamp position to bounds
-                clamped.x = max(0, min(1 - clamped.width, clamped.x))
-                clamped.y = max(0, min(1 - clamped.height, clamped.y))
-
-                // Clamp size to not exceed bounds
-                clamped.width = min(1 - clamped.x, clamped.width)
-                clamped.height = min(1 - clamped.y, clamped.height)
-            }
-        }
-
-        return clamped
     }
 }
 
@@ -786,226 +303,77 @@ extension CGPoint {
 
 // MARK: - Cursor Tracking
 
-/// Tracks mouse position and changes cursor based on crop area being hovered
+/// Sets the system cursor for the crop handle under the pointer, using the same hit test as the
+/// drag gesture so the cursor always matches what a click will do.
 private struct CursorTrackingView: NSViewRepresentable {
     let screenRect: CGRect
-    let videoFrame: CGRect
+    let activeHandle: CropHandle?
 
-    func makeNSView(context: Context) -> NSView {
+    func makeNSView(context: Context) -> CursorTrackingNSView {
         let view = CursorTrackingNSView()
         view.screenRect = screenRect
-        view.videoFrame = videoFrame
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
-        if let trackingView = nsView as? CursorTrackingNSView {
-            trackingView.screenRect = screenRect
-            trackingView.videoFrame = videoFrame
-        }
+    func updateNSView(_ nsView: CursorTrackingNSView, context: Context) {
+        nsView.screenRect = screenRect
+        nsView.activeHandle = activeHandle
     }
 
-    class CursorTrackingNSView: NSView {
+    final class CursorTrackingNSView: NSView {
         var screenRect: CGRect = .zero
-        var videoFrame: CGRect = .zero
-        private var trackingArea: NSTrackingArea?
-
-        override func updateTrackingAreas() {
-            super.updateTrackingAreas()
-
-            if let existingTrackingArea = trackingArea {
-                removeTrackingArea(existingTrackingArea)
+        var activeHandle: CropHandle? {
+            didSet {
+                if let activeHandle { Self.cursor(for: activeHandle, isDragging: true).set() }
             }
+        }
 
-            let options: NSTrackingArea.Options = [
-                .mouseEnteredAndExited,
-                .mouseMoved,
-                .activeInKeyWindow
-            ]
+        // Match SwiftUI's top-left origin so `screenRect` can be compared directly.
+        override var isFlipped: Bool { true }
 
-            trackingArea = NSTrackingArea(
-                rect: bounds,
-                options: options,
+        override init(frame frameRect: NSRect) {
+            super.init(frame: frameRect)
+            addTrackingArea(NSTrackingArea(
+                rect: .zero,
+                options: [.mouseEnteredAndExited, .mouseMoved, .activeInKeyWindow, .inVisibleRect],
                 owner: self,
                 userInfo: nil
-            )
+            ))
+        }
 
-            if let trackingArea = trackingArea {
-                addTrackingArea(trackingArea)
-            }
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
         }
 
         override func mouseMoved(with event: NSEvent) {
+            guard activeHandle == nil else { return }
             let location = convert(event.locationInWindow, from: nil)
-            let cursor = cursorForLocation(location)
-            cursor.set()
+            if let handle = CropHandle.hitTest(location, in: screenRect) {
+                Self.cursor(for: handle, isDragging: false).set()
+            } else {
+                NSCursor.arrow.set()
+            }
         }
 
         override func mouseExited(with event: NSEvent) {
+            guard activeHandle == nil else { return }
             NSCursor.arrow.set()
         }
 
-        private func cursorForLocation(_ location: CGPoint) -> NSCursor {
-            let hitSize: CGFloat = 20
-
-            // Helper to create cursor from SF Symbol with white outline for visibility on dark backgrounds
-            func diagonalCursor(systemName: String, fallback: NSCursor) -> NSCursor {
-                if let image = NSImage(systemSymbolName: systemName, accessibilityDescription: nil) {
-                    let config = NSImage.SymbolConfiguration(pointSize: 16, weight: .bold)
-                    let configuredImage = image.withSymbolConfiguration(config) ?? image
-                    let cursorSize = NSSize(width: 20, height: 20)
-                    let finalImage = NSImage(size: cursorSize, flipped: false) { rect in
-                        // Draw white outline by rendering the symbol offset in all directions
-                        guard let tinted = configuredImage.copy() as? NSImage else { return false }
-                        tinted.lockFocus()
-                        NSColor.white.set()
-                        NSRect(origin: .zero, size: tinted.size).fill(using: .sourceAtop)
-                        tinted.unlockFocus()
-
-                        let drawRect = NSRect(
-                            x: (rect.width - configuredImage.size.width) / 2,
-                            y: (rect.height - configuredImage.size.height) / 2,
-                            width: configuredImage.size.width,
-                            height: configuredImage.size.height
-                        )
-                        // Draw white copies offset in 8 directions for outline
-                        for dx in stride(from: -1.0, through: 1.0, by: 1.0) {
-                            for dy in stride(from: -1.0, through: 1.0, by: 1.0) {
-                                if dx == 0 && dy == 0 { continue }
-                                tinted.draw(in: drawRect.offsetBy(dx: dx, dy: dy),
-                                            from: .zero, operation: .sourceOver, fraction: 1.0)
-                            }
-                        }
-                        // Draw black symbol on top
-                        guard let blackSymbol = configuredImage.copy() as? NSImage else { return false }
-                        blackSymbol.lockFocus()
-                        NSColor.black.set()
-                        NSRect(origin: .zero, size: blackSymbol.size).fill(using: .sourceAtop)
-                        blackSymbol.unlockFocus()
-                        blackSymbol.draw(in: drawRect,
-                                         from: .zero, operation: .sourceOver, fraction: 1.0)
-                        return true
-                    }
-                    return NSCursor(image: finalImage, hotSpot: NSPoint(x: 10, y: 10))
-                }
-                return fallback
+        static func cursor(for handle: CropHandle, isDragging: Bool) -> NSCursor {
+            let position: NSCursor.FrameResizePosition
+            switch handle {
+            case .move: return isDragging ? .closedHand : .openHand
+            case .topLeft: position = .topLeft
+            case .top: position = .top
+            case .topRight: position = .topRight
+            case .right: position = .right
+            case .bottomRight: position = .bottomRight
+            case .bottom: position = .bottom
+            case .bottomLeft: position = .bottomLeft
+            case .left: position = .left
             }
-
-            // Check corners first (higher priority than edges)
-            // Note: In NSView coordinates, minY is TOP and maxY is BOTTOM
-            // Top-left corner - visually this is NW, should resize diagonally to SE
-            if location.distance(to: CGPoint(x: screenRect.minX, y: screenRect.minY)) < hitSize {
-                if #available(macOS 10.13, *) {
-                    return diagonalCursor(systemName: "arrow.up.right.and.arrow.down.left", fallback: .crosshair)
-                }
-                return .crosshair
-            }
-            // Top-right corner - visually this is NE, should resize diagonally to SW
-            if location.distance(to: CGPoint(x: screenRect.maxX, y: screenRect.minY)) < hitSize {
-                if #available(macOS 10.13, *) {
-                    return diagonalCursor(systemName: "arrow.up.left.and.arrow.down.right", fallback: .crosshair)
-                }
-                return .crosshair
-            }
-            // Bottom-left corner - visually this is SW, should resize diagonally to NE
-            if location.distance(to: CGPoint(x: screenRect.minX, y: screenRect.maxY)) < hitSize {
-                if #available(macOS 10.13, *) {
-                    return diagonalCursor(systemName: "arrow.up.left.and.arrow.down.right", fallback: .crosshair)
-                }
-                return .crosshair
-            }
-            // Bottom-right corner - visually this is SE, should resize diagonally to NW
-            if location.distance(to: CGPoint(x: screenRect.maxX, y: screenRect.maxY)) < hitSize {
-                if #available(macOS 10.13, *) {
-                    return diagonalCursor(systemName: "arrow.up.right.and.arrow.down.left", fallback: .crosshair)
-                }
-                return .crosshair
-            }
-
-            // Check edges (only if not near corners)
-            // Top edge
-            if abs(location.y - screenRect.minY) < hitSize &&
-               location.x >= screenRect.minX + hitSize &&
-               location.x <= screenRect.maxX - hitSize {
-                return .resizeUpDown
-            }
-            // Bottom edge
-            if abs(location.y - screenRect.maxY) < hitSize &&
-               location.x >= screenRect.minX + hitSize &&
-               location.x <= screenRect.maxX - hitSize {
-                return .resizeUpDown
-            }
-            // Left edge
-            if abs(location.x - screenRect.minX) < hitSize &&
-               location.y >= screenRect.minY + hitSize &&
-               location.y <= screenRect.maxY - hitSize {
-                return .resizeLeftRight
-            }
-            // Right edge
-            if abs(location.x - screenRect.maxX) < hitSize &&
-               location.y >= screenRect.minY + hitSize &&
-               location.y <= screenRect.maxY - hitSize {
-                return .resizeLeftRight
-            }
-
-            // Check if inside rectangle (move mode)
-            if screenRect.contains(location) {
-                return .openHand  // Hand cursor for moving
-            }
-
-            return .arrow
-        }
-    }
-}
-
-// MARK: - Modifier Key Tracking
-
-/// Tracks modifier key state (Option and Shift)
-private struct ModifierKeyTrackerView: NSViewRepresentable {
-    @Binding var isOptionPressed: Bool
-    @Binding var isShiftPressed: Bool
-
-    func makeNSView(context: Context) -> NSView {
-        let view = ModifierKeyTrackingNSView()
-        view.isOptionPressed = $isOptionPressed
-        view.isShiftPressed = $isShiftPressed
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        // No updates needed
-    }
-
-    class ModifierKeyTrackingNSView: NSView {
-        var isOptionPressed: Binding<Bool>?
-        var isShiftPressed: Binding<Bool>?
-        private var monitor: Any? {
-            willSet {
-                if let oldMonitor = monitor {
-                    NSEvent.removeMonitor(oldMonitor)
-                }
-            }
-        }
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-
-            if window != nil {
-                // Monitor flag changes
-                monitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
-                    self?.updateModifierState(event.modifierFlags)
-                    return event
-                }
-            } else {
-                monitor = nil
-            }
-        }
-
-        private func updateModifierState(_ flags: NSEvent.ModifierFlags) {
-            DispatchQueue.main.async { [weak self] in
-                self?.isOptionPressed?.wrappedValue = flags.contains(.option)
-                self?.isShiftPressed?.wrappedValue = flags.contains(.shift)
-            }
+            return .frameResize(position: position, directions: .all)
         }
     }
 }

@@ -314,6 +314,32 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertEqual(result.discardedStandardErrorBytes, 0)
     }
 
+    func testSubprocessRunnerDoesNotSpinAfterOutputPipesClose() async throws {
+        func processCPUSeconds() -> Double {
+            var usage = rusage()
+            getrusage(RUSAGE_SELF, &usage)
+            func seconds(_ time: timeval) -> Double { Double(time.tv_sec) + Double(time.tv_usec) / 1_000_000 }
+            return seconds(usage.ru_utime) + seconds(usage.ru_stime)
+        }
+
+        // The child closes both pipes but keeps running, so the runner sees end-of-file long
+        // before it can collect the exit status. Left installed, the readability handlers would
+        // spin two threads at full CPU for that whole second.
+        let cpuBefore = processCPUSeconds()
+        let result = try await SubprocessRunner().run(
+            SubprocessRequest(
+                executableURL: URL(fileURLWithPath: "/bin/sh"),
+                arguments: ["-c", "printf 'out'; printf 'err' >&2; exec 1>&- 2>&-; sleep 1"]
+            )
+        )
+        let cpuUsed = processCPUSeconds() - cpuBefore
+
+        XCTAssertTrue(result.succeeded)
+        XCTAssertEqual(result.standardOutputText, "out")
+        XCTAssertEqual(result.standardErrorText, "err")
+        XCTAssertLessThan(cpuUsed, 0.5, "Readability handlers kept running after end-of-file")
+    }
+
     func testSubprocessRunnerReturnsNonzeroExitAsResult() async throws {
         let result = try await SubprocessRunner().run(
             SubprocessRequest(
@@ -8683,6 +8709,66 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertLessThan(pixels[centerPixelOffset], 30)
         XCTAssertGreaterThan(pixels[centerPixelOffset + 1], 140)
         XCTAssertLessThan(pixels[centerPixelOffset + 2], 30)
+    }
+
+    func testGeneratedRotatedFixtureCropsTheDisplayedOrientation() async throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AagedalMediaConverterCropTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let codedURL = temporaryDirectory.appendingPathComponent("coded.mov")
+        let fixtureURL = temporaryDirectory.appendingPathComponent("portrait-fixture.mov")
+        let outputURL = temporaryDirectory.appendingPathComponent("cropped.rgb")
+
+        // Stored like a portrait phone clip: 1920x1080 with a quarter-turn display matrix.
+        // The bands run across the stored width, so on screen (1080x1920) they are stacked
+        // vertically, and the centered lime square survives either rotation direction.
+        try runFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi",
+            "-i", "color=c=black:s=1920x1080:r=1,drawbox=x=0:y=0:w=420:h=1080:c=red:t=fill,drawbox=x=420:y=0:w=1080:h=1080:c=lime:t=fill,drawbox=x=1500:y=0:w=420:h=1080:c=blue:t=fill",
+            "-frames:v", "1", "-c:v", "libx264", "-qp", "0", "-pix_fmt", "yuv444p", codedURL.path
+        ])
+        try runFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-display_rotation", "-90", "-i", codedURL.path, "-c", "copy", fixtureURL.path
+        ])
+
+        let probed = await FFMPEGCommandBuilder.sourceGeometry(for: fixtureURL, sourceMetadata: nil)
+        let geometry = try XCTUnwrap(probed)
+        XCTAssertEqual(geometry.width, 1080)
+        XCTAssertEqual(geometry.height, 1920)
+
+        // The displayed square, as the crop overlay stores it: fractions of the portrait frame.
+        let crop = CropConfig(normalizedRect: CropRect(x: 0, y: 420.0 / 1920.0, width: 1, height: 1080.0 / 1920.0))
+        var args = presetVideoArguments()
+        XCTAssertTrue(FFMPEGCommandBuilder.applyCropToVideoFilter(
+            &args,
+            cropConfig: crop,
+            sourceWidth: geometry.width,
+            sourceHeight: geometry.height,
+            pixelAspectRatio: geometry.pixelAspectRatio
+        ))
+        let filterChain = try videoFilter(in: args)
+        XCTAssertTrue(filterChain.contains("crop=1080:1080:0:420"), filterChain)
+
+        let conversionLog = try runFFmpeg([
+            "-hide_banner", "-loglevel", "info", "-y", "-i", fixtureURL.path,
+            "-vf", "\(filterChain),showinfo", "-frames:v", "1",
+            "-pix_fmt", "rgb24", "-f", "rawvideo", outputURL.path
+        ])
+        XCTAssertTrue(conversionLog.contains("s:1080x1080"), conversionLog)
+
+        let pixels = try Data(contentsOf: outputURL)
+        XCTAssertEqual(pixels.count, 1080 * 1080 * 3)
+        // Top, center and bottom rows are all inside the lime square, with no guard band.
+        for row in [4, 540, 1075] {
+            let offset = ((row * 1080) + 540) * 3
+            XCTAssertLessThan(pixels[offset], 30, "row \(row)")
+            XCTAssertGreaterThan(pixels[offset + 1], 140, "row \(row)")
+            XCTAssertLessThan(pixels[offset + 2], 30, "row \(row)")
+        }
     }
 
     func testGeneratedVideoAudioFixtureRunsCoreConverterAndValidatesOutput() async throws {

@@ -38,33 +38,21 @@ struct CropControlsView: View {
         }
     }
 
-    private var sourceWidth: Int {
-        item.metadata?.primaryVideoStream?.width ?? 1920
+    /// Pixel grid the fields edit, oriented as shown in the preview (rotated clips included).
+    private var frame: CropFrame {
+        item.cropFrame ?? CropFrame(pixelWidth: 1920, pixelHeight: 1080, displayAspectRatio: item.videoDisplayAspectRatio)
     }
 
-    private var sourceHeight: Int {
-        item.metadata?.primaryVideoStream?.height ?? 1080
+    private var currentConfig: CropConfig {
+        item.cropConfig ?? CropConfig(normalizedRect: .fullFrame)
     }
 
-    /// The video's display aspect ratio (accounting for pixel aspect ratio / PAR)
-    private var videoDisplayAspectRatio: Double {
-        item.videoDisplayAspectRatio ?? (Double(sourceWidth) / Double(sourceHeight))
-    }
-
-    private var configBinding: Binding<CropConfig> {
-        // Lazy initialization pattern from AudioRoutingView
+    private var aspectRatioBinding: Binding<AspectRatio> {
         Binding(
-            get: {
-                if let config = item.cropConfig {
-                    return config
-                } else {
-                    // Default: full frame
-                    return CropConfig(normalizedRect: .fullFrame)
-                }
-            },
-            set: { newValue in
-                item.cropConfig = newValue.isActive ? newValue : nil
-                updatePixelInputsFromConfig()
+            get: { selectedAspectRatio },
+            set: { newRatio in
+                selectedAspectRatio = newRatio
+                item.updateCrop { config, editor in config.lockAspectRatio(newRatio, using: editor) }
             }
         )
     }
@@ -75,7 +63,7 @@ struct CropControlsView: View {
                 // Main controls row
                 HStack(spacing: 8) {
                     // Aspect ratio picker
-                    Picker("Crop aspect ratio", selection: $selectedAspectRatio) {
+                    Picker("Crop aspect ratio", selection: aspectRatioBinding) {
                         ForEach(AspectRatio.allCases) { ratio in
                             Text(ratio.displayName).tag(ratio)
                         }
@@ -84,97 +72,15 @@ struct CropControlsView: View {
                     .labelsHidden()
                     .accessibilityIdentifier("crop.aspectRatio")
                     .frame(width: 200)
-                    .onChange(of: selectedAspectRatio) { _, newRatio in
-                        var config = configBinding.wrappedValue
-                        config.aspectRatioLock = newRatio == .free ? nil : newRatio
-
-                         // If not free, adjust the rectangle to match the aspect ratio
-                         if let targetRatio = newRatio.numericRatio {
-                             var rect = config.normalizedRect
-
-                             // Calculate center point to maintain position
-                             let centerX = rect.x + rect.width / 2
-                             let centerY = rect.y + rect.height / 2
-
-                             // Convert target aspect ratio from VISUAL space to normalized (source-pixel) space.
-                             // The target ratio (e.g. 1:1) specifies the desired displayed/output shape.
-                             // For anamorphic sources, normalizedRect is stored in source pixel coordinates,
-                             // so we must use the *display* aspect ratio (DAR) to derive the pixel-space ratio.
-                             let normalizedTargetRatio = targetRatio / videoDisplayAspectRatio
-
-                             // Calculate maximum rectangle that fits aspect ratio within bounds
-                             // Start with current area, but ensure it fits within 1.0 x 1.0 bounds
-                             let area = min(rect.width * rect.height, 1.0 * 1.0)
-
-                             // Calculate dimensions that maintain aspect ratio and fit within bounds
-                             var newWidth: Double
-                             var newHeight: Double
-
-                             // Try to fit rectangle with target aspect ratio within full frame
-                             if normalizedTargetRatio >= 1.0 {
-                                 // Wider than tall: fit width to 1.0, scale height accordingly
-                                 newWidth = 1.0
-                                 newHeight = newWidth / normalizedTargetRatio
-                                 if newHeight > 1.0 {
-                                     // If height still exceeds, scale down proportionally
-                                     newHeight = 1.0
-                                     newWidth = newHeight * normalizedTargetRatio
-                                 }
-                             } else {
-                                 // Taller than wide: fit height to 1.0, scale width accordingly
-                                 newHeight = 1.0
-                                 newWidth = newHeight * normalizedTargetRatio
-                                 if newWidth > 1.0 {
-                                     // If width still exceeds, scale down proportionally
-                                     newWidth = 1.0
-                                     newHeight = newWidth / normalizedTargetRatio
-                                 }
-                             }
-
-                             // If the calculated rectangle is smaller than we'd like, try to make it larger
-                             // while maintaining aspect ratio and staying within bounds
-                             let maxPossibleWidth = 1.0
-                             let maxPossibleHeight = 1.0
-
-                             if normalizedTargetRatio >= 1.0 {
-                                 // For wide ratios, maximize width first
-                                 newWidth = min(maxPossibleWidth, sqrt(area * normalizedTargetRatio))
-                                 newHeight = newWidth / normalizedTargetRatio
-                                 if newHeight > maxPossibleHeight {
-                                     newHeight = maxPossibleHeight
-                                     newWidth = newHeight * normalizedTargetRatio
-                                 }
-                             } else {
-                                 // For tall ratios, maximize height first
-                                 newHeight = min(maxPossibleHeight, sqrt(area / normalizedTargetRatio))
-                                 newWidth = newHeight * normalizedTargetRatio
-                                 if newWidth > maxPossibleWidth {
-                                     newWidth = maxPossibleWidth
-                                     newHeight = newWidth / normalizedTargetRatio
-                                 }
-                             }
-
-                             // Position to maintain center as much as possible, but ensure it fits
-                             rect.width = newWidth
-                             rect.height = newHeight
-                             rect.x = max(0, min(1.0 - rect.width, centerX - rect.width / 2))
-                             rect.y = max(0, min(1.0 - rect.height, centerY - rect.height / 2))
-
-                             config.normalizedRect = rect
-                         }
-
-                        configBinding.wrappedValue = config
-                        updatePixelInputsFromConfig()
-                    }
 
                     Divider()
                         .frame(height: 20)
 
-                    // Pixel inputs with auto-apply
-                    compactPixelField(label: "X", value: $pixelX, field: .x, autoApply: true)
-                    compactPixelField(label: "Y", value: $pixelY, field: .y, autoApply: true)
-                    compactPixelField(label: "W", value: $pixelWidth, field: .width, autoApply: true)
-                    compactPixelField(label: "H", value: $pixelHeight, field: .height, autoApply: true)
+                    // Pixel inputs apply on Return and when focus leaves the field
+                    compactPixelField(label: "X", value: $pixelX, field: .x)
+                    compactPixelField(label: "Y", value: $pixelY, field: .y)
+                    compactPixelField(label: "W", value: $pixelWidth, field: .width)
+                    compactPixelField(label: "H", value: $pixelHeight, field: .height)
 
                     Divider()
                         .frame(height: 20)
@@ -191,6 +97,7 @@ struct CropControlsView: View {
                     Button("Center") {
                         centerCrop()
                     }
+                    .help("Center the crop box in the frame")
                     .accessibilityLabel("Center crop")
                     .accessibilityIdentifier("crop.center")
                     .buttonStyle(.bordered)
@@ -209,11 +116,20 @@ struct CropControlsView: View {
                     .accessibilityIdentifier("crop.done")
                 }
 
-                // Warning message for Stream Copy preset (always visible to prevent UI shift)
+                // Info line (always visible to prevent UI shift)
                 HStack(spacing: 4) {
                     Image(systemName: "info.circle")
                         .font(.caption2)
                         .foregroundColor(.secondary)
+                    if let config = item.cropConfig, let output = frame.outputSize(for: config) {
+                        Text(outputDescription(output))
+                            .font(.caption2.monospacedDigit())
+                            .foregroundColor(.secondary)
+                            .accessibilityIdentifier("crop.outputSize")
+                        Text("·")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
                     Text("Note: Crop requires re-encoding and will not work with Stream Copy preset.")
                         .font(.caption2)
                         .foregroundColor(.secondary)
@@ -233,10 +149,25 @@ struct CropControlsView: View {
                     selectedAspectRatio = config.aspectRatioLock ?? .free
                 }
             }
+            .onChange(of: item.cropConfig) { _, _ in
+                // Drags and keyboard shortcuts edit the crop too; keep the fields current.
+                updatePixelInputsFromConfig()
+            }
+            .onChange(of: focusedField) { previous, _ in
+                if let previous { applyPixelInputs(editedField: previous) }
+            }
         }
     }
 
-    private func compactPixelField(label: String, value: Binding<String>, field: Field, autoApply: Bool = false) -> some View {
+    private func outputDescription(_ output: (width: Int, height: Int)) -> String {
+        let size = "\(output.width) × \(output.height)"
+        if abs(frame.pixelAspectRatio - 1) > 0.01 {
+            return String(localized: "Output \(size) (square pixels)", comment: "Crop output size for an anamorphic source.")
+        }
+        return String(localized: "Output \(size)", comment: "Crop output size.")
+    }
+
+    private func compactPixelField(label: String, value: Binding<String>, field: Field) -> some View {
         HStack(spacing: 2) {
             Text(label)
                 .font(.caption2)
@@ -252,40 +183,53 @@ struct CropControlsView: View {
                 .accessibilityHint("Enter a pixel value and press Return to apply.")
                 .accessibilityIdentifier("crop.\(field)")
                 .onSubmit {
-                    if autoApply {
-                        applyPixelInputs()
-                    }
+                    applyPixelInputs(editedField: field)
                 }
         }
     }
 
     private func updatePixelInputsFromConfig() {
-        let config = configBinding.wrappedValue
-        let pixelRect = config.pixelRect(sourceWidth: sourceWidth, sourceHeight: sourceHeight)
-
+        let pixelRect = currentConfig.pixelRect(sourceWidth: frame.pixelWidth, sourceHeight: frame.pixelHeight)
         pixelX = "\(pixelRect.x)"
         pixelY = "\(pixelRect.y)"
         pixelWidth = "\(pixelRect.width)"
         pixelHeight = "\(pixelRect.height)"
     }
 
-    private func applyPixelInputs() {
-        guard let x = Int(pixelX),
-              let y = Int(pixelY),
-              let width = Int(pixelWidth),
-              let height = Int(pixelHeight) else {
+    /// Applies the typed pixel values. Values are clamped to the frame; with an aspect-ratio
+    /// lock, the edited dimension wins and the other one follows.
+    private func applyPixelInputs(editedField: Field) {
+        let frame = frame
+        let current = currentConfig.pixelRect(sourceWidth: frame.pixelWidth, sourceHeight: frame.pixelHeight)
+        guard let x = Int(pixelX.trimmingCharacters(in: .whitespaces)),
+              let y = Int(pixelY.trimmingCharacters(in: .whitespaces)),
+              let width = Int(pixelWidth.trimmingCharacters(in: .whitespaces)),
+              let height = Int(pixelHeight.trimmingCharacters(in: .whitespaces)) else {
+            updatePixelInputsFromConfig()
             return
         }
+        let typed = PixelCropRect(x: x, y: y, width: width, height: height)
+        guard typed != current else { return }
 
-        let pixelRect = PixelCropRect(x: x, y: y, width: width, height: height)
-        var config = CropConfig.fromPixelRect(
-            pixelRect,
-            sourceWidth: sourceWidth,
-            sourceHeight: sourceHeight,
-            aspectRatioLock: selectedAspectRatio == .free ? nil : selectedAspectRatio
-        )
-        config.aspectRatioLock = selectedAspectRatio == .free ? nil : selectedAspectRatio
-        configBinding.wrappedValue = config
+        let lock = selectedAspectRatio
+        item.updateCrop { config, editor in
+            var rect = editor.clamped(CropRect.fromPixelRect(typed, width: frame.pixelWidth, height: frame.pixelHeight))
+            if let ratio = lock.numericRatio {
+                switch editedField {
+                case .width, .height:
+                    rect = editor.matching(rect, aspectRatio: ratio, keepingWidth: editedField == .width)
+                case .x, .y:
+                    // Only the position changed; keep the locked size.
+                    rect.width = config.normalizedRect.width
+                    rect.height = config.normalizedRect.height
+                    rect = editor.clamped(rect)
+                }
+            }
+            config.normalizedRect = rect
+            config.aspectRatioLock = lock == .free ? nil : lock
+        }
+        // Show the values actually applied (clamped or ratio-adjusted).
+        updatePixelInputsFromConfig()
     }
 
     private func resetCrop() {
@@ -294,17 +238,18 @@ struct CropControlsView: View {
         updatePixelInputsFromConfig()
     }
 
+    /// Centers the current crop box; with no crop yet, starts from an 80% box in the chosen ratio.
     private func centerCrop() {
-        // Create a centered crop at 80% of source dimensions
-        let centerX = 0.1
-        let centerY = 0.1
-        let cropWidth = 0.8
-        let cropHeight = 0.8
-
-        var config = CropConfig(
-            normalizedRect: CropRect(x: centerX, y: centerY, width: cropWidth, height: cropHeight)
-        )
-        config.aspectRatioLock = selectedAspectRatio == .free ? nil : selectedAspectRatio
-        configBinding.wrappedValue = config
+        let lock = selectedAspectRatio
+        item.updateCrop { config, editor in
+            var rect = config.normalizedRect
+            if !config.isActive {
+                let ratio = lock.numericRatio
+                let start = ratio.map { editor.fitted(rect, to: $0) } ?? rect
+                rect = editor.scaled(start, by: 0.8, aspectRatio: ratio)
+            }
+            config.normalizedRect = editor.centered(rect)
+            config.aspectRatioLock = lock == .free ? nil : lock
+        }
     }
 }

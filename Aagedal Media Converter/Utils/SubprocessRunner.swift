@@ -762,7 +762,13 @@ private final class SubprocessExecution: @unchecked Sendable {
                 }
 
                 let data = fileHandle.availableData
-                guard !data.isEmpty else { return }
+                guard !data.isEmpty else {
+                    // End of file. FileHandle keeps invoking a handler that is left installed,
+                    // spinning a thread at full CPU until `finish()` runs; on small CI runners
+                    // those spinning handlers starve the work that would call `finish()`.
+                    fileHandle.readabilityHandler = nil
+                    return
+                }
                 collector.append(data)
                 outputHandler?(SubprocessOutputChunk(stream: stream, data: data))
             }

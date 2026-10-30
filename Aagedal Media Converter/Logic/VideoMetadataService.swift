@@ -225,6 +225,24 @@ struct VideoMetadata: Equatable, Sendable {
         let title: String?
         let isDefault: Bool
         let isForced: Bool
+        /// Display rotation in degrees from the container's display matrix (negative = clockwise).
+        var rotation: Int? = nil
+
+        /// True when the display matrix turns the picture a quarter turn. FFmpeg applies the
+        /// rotation before any filter runs, so filters see the frame with width and height swapped.
+        var isQuarterTurnRotated: Bool {
+            rotation.map { abs($0) % 180 == 90 } ?? false
+        }
+
+        /// Frame dimensions as FFmpeg's filters (and the preview) see them, after autorotation.
+        var orientedWidth: Int? { isQuarterTurnRotated ? height : width }
+        var orientedHeight: Int? { isQuarterTurnRotated ? width : height }
+
+        /// Pixel aspect ratio after autorotation. A quarter turn swaps the pixel's axes.
+        var orientedPixelAspectRatio: Double? {
+            guard let par = pixelAspectRatio?.doubleValue, par > 0 else { return nil }
+            return isQuarterTurnRotated ? 1 / par : par
+        }
 
         /// Calculates chroma channel resolution based on subsampling
         /// Returns nil for 4:4:4 (same as luma), grayscale, or unknown subsampling
@@ -732,7 +750,11 @@ actor VideoMetadataService {
                let (pn, pd) = stream.pixelAspectRatio, pd > 0, h > 0 {
                 let num = w * pn
                 let den = h * pd
-                return VideoMetadata.Ratio(numerator: num, denominator: den)
+                // Display dimensions are post-rotation; keep the fallback in the same orientation.
+                let isQuarterTurn = stream.rotation.map { abs($0) % 180 == 90 } ?? false
+                return isQuarterTurn
+                    ? VideoMetadata.Ratio(numerator: den, denominator: num)
+                    : VideoMetadata.Ratio(numerator: num, denominator: den)
             }
             return nil
         }()
@@ -780,7 +802,8 @@ actor VideoMetadataService {
             isInterlaced: interlaced,
             title: stream.title,
             isDefault: stream.isDefault ?? false,
-            isForced: stream.isForced ?? false
+            isForced: stream.isForced ?? false,
+            rotation: stream.rotation
         )
     }
 
