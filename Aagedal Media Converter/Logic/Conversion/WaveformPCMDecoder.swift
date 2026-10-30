@@ -16,6 +16,8 @@ struct FrequencyBandData: Sendable {
     /// magnitudes[frameIndex][bandIndex], each value in 0.0–1.0.
     let magnitudes: [[Float]]
     let totalDuration: Double
+    /// Video frame rate the magnitudes were sampled at.
+    let frameRate: Double
 }
 
 enum WaveformPCMDecoder {
@@ -87,8 +89,8 @@ enum WaveformPCMDecoder {
         )
         try Task.checkCancellation()
 
-        // 2. Read PCM data
-        let pcmData = try Data(contentsOf: pcmFile)
+        // 2. Read PCM data (memory-mapped: an hour of 48 kHz float mono is ~690 MB)
+        let pcmData = try Data(contentsOf: pcmFile, options: .alwaysMapped)
         let totalSamples = pcmData.count / MemoryLayout<Float>.size
         guard totalSamples > 0 else {
             throw WaveformPCMDecoderError.noAudioSamples
@@ -96,13 +98,13 @@ enum WaveformPCMDecoder {
 
         // 3. Compute frequency bands via FFT
         let bandEdges = computeBandEdges(distribution: frequencyDistribution, bandCount: bandCount)
-        let hopSize = Int(Double(analysisRate) / frameRate)
+        let samplesPerFrame = Double(analysisRate) / frameRate
         let frameCount = max(1, Int(ceil(duration * frameRate)))
 
         let magnitudes = try computeFrequencyBands(
             pcmData: pcmData,
             totalSamples: totalSamples,
-            hopSize: hopSize,
+            samplesPerFrame: samplesPerFrame,
             frameCount: frameCount,
             bandEdges: bandEdges,
             bandCount: bandCount
@@ -114,7 +116,8 @@ enum WaveformPCMDecoder {
             bandCount: bandCount,
             frameCount: frameCount,
             magnitudes: magnitudes,
-            totalDuration: duration
+            totalDuration: duration,
+            frameRate: frameRate
         )
     }
 
@@ -271,7 +274,7 @@ enum WaveformPCMDecoder {
     private static func computeFrequencyBands(
         pcmData: Data,
         totalSamples: Int,
-        hopSize: Int,
+        samplesPerFrame: Double,
         frameCount: Int,
         bandEdges: [Double],
         bandCount: Int
@@ -294,9 +297,6 @@ enum WaveformPCMDecoder {
 
         var magnitudes = [[Float]](repeating: [Float](repeating: 0, count: bandCount), count: frameCount)
 
-        // Track per-band peaks for independent normalization
-        var bandPeaks = [Float](repeating: 0, count: bandCount)
-
         try pcmData.withUnsafeBytes { rawBuffer in
             let samples = rawBuffer.bindMemory(to: Float.self)
 
@@ -304,26 +304,33 @@ enum WaveformPCMDecoder {
             var windowed = [Float](repeating: 0, count: fftSize)
             var realp = [Float](repeating: 0, count: halfN)
             var imagp = [Float](repeating: 0, count: halfN)
+            var binMagnitudes = [Float](repeating: 0, count: halfN)
 
             for frame in 0..<frameCount {
                 if frame.isMultiple(of: 16) {
                     try Task.checkCancellation()
                 }
-                let center = frame * hopSize
-                let start = max(0, center - fftSize / 2)
-                let available = max(0, min(fftSize, totalSamples - start))
+                // Exact (fractional) frame position so non-integer hop sizes
+                // (e.g. 29.97 fps) don't drift out of sync over long files.
+                let center = Int((Double(frame) * samplesPerFrame).rounded())
+                let windowStart = center - fftSize / 2
+                let srcStart = max(0, windowStart)
+                let srcEnd = min(totalSamples, windowStart + fftSize)
 
-                // Zero-pad if not enough samples
-                windowed = [Float](repeating: 0, count: fftSize)
-                for i in 0..<available {
-                    windowed[i] = samples[start + i]
+                // Zero-pad on whichever side runs past the audio, keeping the
+                // window centered on the frame time.
+                vDSP_vclr(&windowed, 1, vDSP_Length(fftSize))
+                if srcEnd > srcStart, let base = samples.baseAddress {
+                    let dstOffset = srcStart - windowStart
+                    windowed.withUnsafeMutableBufferPointer { dst in
+                        (dst.baseAddress! + dstOffset).update(from: base + srcStart, count: srcEnd - srcStart)
+                    }
                 }
 
                 // Apply window
                 vDSP_vmul(windowed, 1, window, 1, &windowed, 1, vDSP_Length(fftSize))
 
                 // Pack into split complex and run FFT
-                var binMagnitudes = [Float](repeating: 0, count: halfN)
                 realp.withUnsafeMutableBufferPointer { rBuf in
                     imagp.withUnsafeMutableBufferPointer { iBuf in
                         var splitComplex = DSPSplitComplex(
@@ -364,24 +371,51 @@ enum WaveformPCMDecoder {
                         count += 1
                     }
                     magnitudes[frame][band] = count > 0 ? sum / Float(count) : 0
-                    bandPeaks[band] = max(bandPeaks[band], magnitudes[frame][band])
                 }
             }
         }
 
-        // Per-band normalization: each band independently scaled to 0.0–1.0
-        // This ensures treble bands are as visually active as bass bands,
-        // since raw FFT magnitudes drop off steeply with frequency.
-        for band in 0..<bandCount {
-            let peak = bandPeaks[band]
-            if peak > 0 {
-                for frame in 0..<frameCount {
-                    magnitudes[frame][band] /= peak
-                }
-            }
-        }
-
+        normalizePerBand(&magnitudes, bandCount: bandCount)
         return magnitudes
+    }
+
+    /// Percentile used as each band's reference level. Using a high percentile
+    /// rather than the absolute max keeps a single transient (a click, a cymbal
+    /// crash) from flattening the rest of the file.
+    static let normalizationPercentile: Double = 0.995
+    /// Floor for each band's reference level, relative to the loudest band's.
+    /// Without it, bands with no real content (e.g. treble above a low source
+    /// sample rate) get their noise floor amplified to full height. −40 dB.
+    static let relativeNoiseFloor: Float = 0.01
+
+    /// Per-band normalization: each band independently scaled to roughly 0.0–1.0.
+    /// This keeps treble bands as visually active as bass bands, since raw FFT
+    /// magnitudes drop off steeply with frequency. Values above the reference
+    /// level exceed 1.0 and are clamped by the renderer.
+    static func normalizePerBand(_ magnitudes: inout [[Float]], bandCount: Int) {
+        let frameCount = magnitudes.count
+        guard frameCount > 0, bandCount > 0 else { return }
+
+        var references = [Float](repeating: 0, count: bandCount)
+        var column = [Float](repeating: 0, count: frameCount)
+        let percentileIndex = min(frameCount - 1, Int(Double(frameCount - 1) * normalizationPercentile))
+        for band in 0..<bandCount {
+            for frame in 0..<frameCount {
+                column[frame] = magnitudes[frame][band]
+            }
+            column.sort()
+            references[band] = column[percentileIndex]
+        }
+
+        let loudest = references.max() ?? 0
+        guard loudest > 0 else { return }
+        let floor = loudest * relativeNoiseFloor
+        for band in 0..<bandCount {
+            let reference = max(references[band], floor)
+            for frame in 0..<frameCount {
+                magnitudes[frame][band] /= reference
+            }
+        }
     }
 
     /// Precomputes the range of FFT bins for each frequency band.

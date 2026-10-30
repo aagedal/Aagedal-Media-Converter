@@ -2073,6 +2073,7 @@ actor ConversionManager: Sendable {
             customInputArguments: customInputArguments
         )
 
+        conversionRequest.exportsMatteSidecar = preset.exportsMatteSidecar()
         conversionRequest.outputURLResolved = { url in resolvedSingleOutput.withLock { $0 = url } }
         conversionRequest.etaUpdate = { eta in
             Task { @MainActor in

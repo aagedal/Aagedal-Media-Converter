@@ -24,6 +24,11 @@ struct FFMPEGCommand {
     let normalizedTrimEnd: Double?
     let effectiveDuration: Double?
     var preparationError: String? = nil
+    /// Whether the encoded output keeps the input's alpha channel
+    /// (set by the native waveform pipeline when transparency was requested).
+    var preservesAlpha: Bool = false
+    /// Matte sidecar written by this same command (native waveform pipeline).
+    var matteOutputURL: URL? = nil
 }
 
 /// Resolves the common filter spellings for the primary video stream.
@@ -302,6 +307,9 @@ struct WaveformVideoRequest: Sendable {
     let backgroundGradientEnabled: Bool
     let backgroundGradientEndHex: String
     let waveformOpacity: Double
+    /// Render over a transparent background when the output format can carry alpha
+    /// (native Swift renderer only). Otherwise the background color is used.
+    var transparentBackground: Bool = false
 
     var resolutionString: String {
         "\(width)x\(height)"
@@ -614,6 +622,13 @@ enum FFMPEGCommandBuilder {
                 ffmpegArgs: &ffmpegArgs,
                 sourceMetadata: sourceMetadata
             )
+
+            // Keep the alpha channel of alpha sources when exporting to ProRes 4444 / XQ.
+            // Other formats keep their configured pixel format.
+            if visualSourceURL == nil, sourceMetadata?.videoStreams.first?.hasAlpha == true,
+               isAlphaCapableProRes(ffmpegArgs) {
+                enableAlphaOutput(in: &ffmpegArgs)
+            }
 
             // Filter out unsupported audio codecs (e.g., APAC spatial audio from iPhone)
             // Skip for stream copy (which doesn't decode) and when audio routing is applied (has its own mapping)
@@ -1108,7 +1123,9 @@ extension FFMPEGCommandBuilder {
         comment: String = "",
         writeEmptyComment: Bool = false,
         includeDateTag: Bool = true,
-        additionalOutputArguments: [String]? = nil
+        additionalOutputArguments: [String]? = nil,
+        transparentBackground: Bool = false,
+        matteOutputURL: URL? = nil
     ) async -> FFMPEGCommand {
         let trimPlan = FFMPEGTrimPlan(start: trimStart, end: trimEnd)
         let normalizedTrimStart = trimPlan.start
@@ -1182,6 +1199,25 @@ extension FFMPEGCommandBuilder {
             // The piped frames are already container-sized; only the X′Y′Z′ conversion remains.
             ffmpegArgs += ["-vf", DCPColorConversion.filterChain]
         }
+        // Transparency is only honoured when the chosen encoder can carry alpha;
+        // the renderer falls back to the opaque background otherwise.
+        let preservesAlpha = transparentBackground && capturedDCPSettings == nil
+            && enableAlphaOutput(in: &ffmpegArgs)
+        // Otherwise a transparent waveform can still be delivered as fill + matte: the
+        // rendered alpha is split off into a second output with the same video encoder.
+        let writesMatte = transparentBackground && !preservesAlpha && matteOutputURL != nil
+            && capturedDCPSettings == nil && preset.supportsMatteSidecar
+        if writesMatte {
+            arguments.insert(contentsOf: [
+                "-filter_complex", "[0:v]split=2[wavefill][wavemattesrc];[wavemattesrc]alphaextract[wavematte]",
+            ], at: outputArgumentsStart)
+            if let mapIndex = arguments.indices.first(where: {
+                arguments[$0] == "-map" && $0 + 1 < arguments.count && arguments[$0 + 1] == "0:v"
+            }) {
+                arguments[mapIndex + 1] = "[wavefill]"
+            }
+        }
+        let matteEncoderArguments = writesMatte ? matteSidecarOutputOptions(from: ffmpegArgs) : []
 
         // Audio routing uses input index 1 (the audio file)
         if !isMuted, let audioRoutingConfig, preset.outputsAudioTrack,
@@ -1215,14 +1251,187 @@ extension FFMPEGCommandBuilder {
         metadataPlan.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart, outputExtension: outputFileURL.pathExtension)
         arguments.append(outputFileURL.path)
 
+        if writesMatte, let matteOutputURL {
+            arguments += ["-map", "[wavematte]"] + trimPlan.durationArguments + matteEncoderArguments
+            arguments += ["-an", "-sn", "-dn", matteOutputURL.path]
+        }
+
         let effectiveDuration = trimPlan.effectiveDuration
 
         return FFMPEGCommand(
             arguments: arguments,
             normalizedTrimStart: normalizedTrimStart,
             normalizedTrimEnd: normalizedTrimEnd,
-            effectiveDuration: effectiveDuration
+            effectiveDuration: effectiveDuration,
+            preservesAlpha: preservesAlpha,
+            matteOutputURL: writesMatte ? matteOutputURL : nil
         )
+    }
+
+    // MARK: - Alpha Output
+
+    /// Encoders that keep the alpha channel of BGRA input when no `-pix_fmt` is
+    /// forced (verified against the bundled FFmpeg). MJPEG is the notable exception.
+    static let alphaPreservingDefaultEncoders: Set<String> = [
+        "png", "apng", "tiff", "exr", "dpx", "bmp", "targa", "sgi",
+        "libjxl", "libopenjpeg", "ffv1", "qtrle",
+    ]
+
+    /// ProRes profile names (VideoToolbox and prores_ks spellings) that carry alpha.
+    private static let alphaProResProfiles: Set<String> = ["4444", "xq", "4444xq", "4", "5"]
+    private static let videoCodecKeys: Set<String> = ["-c:v", "-vcodec", "-codec:v", "-c:v:0", "-codec:v:0"]
+    private static let videoProfileKeys: Set<String> = ["-profile:v", "-profile:v:0"]
+    private static let pixelFormatKeys: Set<String> = ["-pix_fmt", "-pix_fmt:v", "-pix_fmt:v:0"]
+
+    /// Index of the value following the last occurrence of any of `keys`.
+    private static func lastValueIndex(for keys: Set<String>, in args: [String]) -> Int? {
+        guard let index = args.indices.last(where: { keys.contains(args[$0]) }),
+              index + 1 < args.count else { return nil }
+        return index + 1
+    }
+
+    /// Whether an FFmpeg pixel format name includes an alpha channel.
+    static func pixelFormatHasAlpha(_ pixelFormat: String) -> Bool {
+        let format = pixelFormat.lowercased()
+        if format.hasPrefix("yuva") || format.hasPrefix("gbrap") || format.hasPrefix("ya")
+            || format.hasPrefix("ayuv") { return true }
+        return ["rgba", "bgra", "argb", "abgr"].contains { format.contains($0) }
+    }
+
+    /// Whether the arguments encode ProRes with a 4444 / 4444 XQ profile.
+    static func isAlphaCapableProRes(_ ffmpegArgs: [String]) -> Bool {
+        guard let encoder = lastValueIndex(for: videoCodecKeys, in: ffmpegArgs).map({ ffmpegArgs[$0].lowercased() }),
+              encoder.hasPrefix("prores"),
+              let profile = lastValueIndex(for: videoProfileKeys, in: ffmpegArgs).map({ ffmpegArgs[$0].lowercased() })
+        else { return false }
+        return alphaProResProfiles.contains(profile)
+    }
+
+    /// Makes the output keep an alpha channel when the encoder can carry one.
+    /// ProRes 4444 / 4444 XQ is switched to `yuva444p10le`, because the presets force
+    /// a 4:2:2 format that silently drops alpha. Returns whether the output will
+    /// contain alpha.
+    @discardableResult
+    static func enableAlphaOutput(in ffmpegArgs: inout [String]) -> Bool {
+        let pixelFormatIndex = lastValueIndex(for: pixelFormatKeys, in: ffmpegArgs)
+        if isAlphaCapableProRes(ffmpegArgs) {
+            if let pixelFormatIndex {
+                ffmpegArgs[pixelFormatIndex] = "yuva444p10le"
+            } else {
+                ffmpegArgs += ["-pix_fmt", "yuva444p10le"]
+            }
+            return true
+        }
+        if let pixelFormatIndex {
+            return pixelFormatHasAlpha(ffmpegArgs[pixelFormatIndex])
+        }
+        let encoder = lastValueIndex(for: videoCodecKeys, in: ffmpegArgs).map { ffmpegArgs[$0].lowercased() }
+        return encoder.map(alphaPreservingDefaultEncoders.contains) ?? false
+    }
+
+    // MARK: - Matte Sidecar
+
+    /// `clip.mp4` → `clip_matte.mp4`, next to the main output.
+    static func matteSidecarURL(for outputURL: URL) -> URL {
+        let base = outputURL.deletingPathExtension().lastPathComponent + "_matte"
+        let directory = outputURL.deletingLastPathComponent()
+        return outputURL.pathExtension.isEmpty
+            ? directory.appendingPathComponent(base)
+            : directory.appendingPathComponent(base).appendingPathExtension(outputURL.pathExtension)
+    }
+
+    /// Index where output options start (just past the last `-i <input>`).
+    private static func outputOptionsStart(in arguments: [String]) -> Int {
+        arguments.lastIndex(of: "-i").map { min($0 + 2, arguments.count) } ?? 0
+    }
+
+    /// Whether a finished command's output keeps an alpha channel. Only output options
+    /// are inspected, so a rawvideo `-pix_fmt bgra` input does not count.
+    static func outputKeepsAlpha(_ arguments: [String]) -> Bool {
+        var outputOptions = Array(arguments[outputOptionsStart(in: arguments)...].dropLast())
+        return enableAlphaOutput(in: &outputOptions)
+    }
+
+    /// Value-less options removed from the matte output (re-added explicitly where needed).
+    private static let matteStrippedFlags: Set<String> = ["-an", "-sn", "-dn", "-vn", "-shortest"]
+    /// Options (with one value) that belong to audio, subtitles, data, attachments,
+    /// stream mapping or metadata — none of which the matte carries.
+    private static let matteStrippedOptions: Set<String> = [
+        "-map", "-acodec", "-scodec", "-dcodec", "-ab", "-aq", "-ar", "-ac", "-af",
+        "-sample_fmt", "-channel_layout", "-ch_layout", "-attach", "-filter_complex", "-lavfi",
+        "-filter_complex_script", "-progress", "-aframes",
+    ]
+
+    /// Output options of the main file reduced to the video encoder settings, so the
+    /// matte is encoded exactly like the main video (same codec, profile, bitrate,
+    /// pixel format, container options, frame rate and video filters).
+    static func matteSidecarOutputOptions(from outputOptions: [String]) -> [String] {
+        var result: [String] = []
+        var index = 0
+        while index < outputOptions.count {
+            let option = outputOptions[index]
+            if matteStrippedFlags.contains(option) {
+                index += 1
+                continue
+            }
+            let specifiers = option.split(separator: ":").dropFirst()
+            let targetsOtherStream = specifiers.contains { ["a", "s", "d", "t"].contains($0) }
+            if option.hasPrefix("-") && index + 1 < outputOptions.count,
+               matteStrippedOptions.contains(option) || targetsOtherStream
+                || option.hasPrefix("-map_") || option.hasPrefix("-metadata") || option.hasPrefix("-disposition") {
+                index += 2
+                continue
+            }
+            result.append(option)
+            index += 1
+        }
+        return result
+    }
+
+    /// Pins a 16-bit alpha format first: FFmpeg cannot negotiate formats for `alphaextract`
+    /// directly after `scale` (the presets' desqueeze/resize), and 16 bits keep 10/12-bit alpha.
+    static let matteExtractionFilter = "format=yuva444p16le,alphaextract"
+
+    /// Second-pass FFmpeg arguments that re-read the source with the main command's
+    /// inputs, trim and video filters, append `alphaextract`, and encode the result with
+    /// the main video encoder. Returns nil when the main video is produced by a complex
+    /// filter graph (the matte could not be guaranteed to line up).
+    static func sourceMatteArguments(fromMainArguments arguments: [String], matteOutputURL: URL) -> [String]? {
+        guard arguments.count > 1 else { return nil }
+        let outputStart = outputOptionsStart(in: arguments)
+        let inputs = arguments[..<outputStart]
+        let outputOptions = Array(arguments[outputStart...].dropLast())
+        let usesVideoGraph = zip(arguments, arguments.dropFirst()).contains { option, value in
+            ["-filter_complex", "-lavfi"].contains(option)
+                && (value.contains("[0:v") || value.contains("[0]") || value.contains("[0:0]"))
+        }
+        guard !usesVideoGraph, !arguments.contains("-filter_complex_script") else { return nil }
+
+        // Drop the progress reporter (the matte pass is a quiet post-processing step) and
+        // any audio filter graphs, whose outputs would be left unconnected.
+        var globalsAndInputs: [String] = []
+        var index = inputs.startIndex
+        while index < inputs.endIndex {
+            if ["-progress", "-filter_complex", "-lavfi"].contains(inputs[index]), index + 1 < inputs.endIndex {
+                index += 2
+                continue
+            }
+            globalsAndInputs.append(inputs[index])
+            index += 1
+        }
+
+        var matteOptions = matteSidecarOutputOptions(from: outputOptions)
+        let candidate = globalsAndInputs + matteOptions
+        if let filterIndex = PrimaryVideoFilterPlan(arguments: candidate).filterOptionIndex,
+           filterIndex >= globalsAndInputs.count, filterIndex + 1 < candidate.count {
+            let optionIndex = filterIndex - globalsAndInputs.count
+            let chain = matteOptions[optionIndex + 1]
+            matteOptions[optionIndex + 1] = chain.isEmpty ? matteExtractionFilter : chain + "," + matteExtractionFilter
+        } else {
+            matteOptions += ["-vf", matteExtractionFilter]
+        }
+        return ["-nostats", "-loglevel", "error"] + globalsAndInputs + ["-map", "0:v:0"] + matteOptions
+            + ["-an", "-sn", "-dn", matteOutputURL.path]
     }
 
     /// Applies audio routing for the native waveform pipeline where audio is input 1.

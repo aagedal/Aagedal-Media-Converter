@@ -4,94 +4,143 @@
 //
 // Renders frequency band visualizer frames as raw BGRA pixel data
 // for piping to FFmpeg during native waveform video generation.
-// Supports multiple visual styles: capsules, bars, wire.
+// Supports multiple visual styles: capsules, bars, wire, plus the advanced
+// halo, orb, ridgeline and LED meter styles (see +AdvancedStyles).
 // Supports gradient fills for foreground/background, background images, and opacity.
 
 import Foundation
 import CoreGraphics
 import ImageIO
+import Accelerate
 import OSLog
 
 enum NativeWaveformVideoRenderer {
 
-    private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "NativeWaveformRenderer")
+    static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "NativeWaveformRenderer")
 
     /// Fraction of band width used as horizontal gap between elements.
     private static let gapFraction: CGFloat = 0.4
     /// Vertical margin (fraction of frame height) above/below tallest element.
-    private static let verticalMarginFraction: CGFloat = 0.08
+    static let verticalMarginFraction: CGFloat = 0.08
     /// Horizontal padding on edges (fraction of frame width).
-    private static let horizontalPaddingFraction: CGFloat = 0.04
+    static let horizontalPaddingFraction: CGFloat = 0.04
 
     // MARK: - Public API
 
-    /// Renders a single video frame as raw BGRA pixel data.
-    static func renderFrame(
-        style: SwiftWaveformStyle,
-        bandMagnitudes: [Float],
-        previousMagnitudes: [Float]?,
-        width: Int,
-        height: Int,
-        foregroundColor: (r: UInt8, g: UInt8, b: UInt8),
-        backgroundColor: (r: UInt8, g: UInt8, b: UInt8),
-        foregroundGradientEnd: (r: UInt8, g: UInt8, b: UInt8)? = nil,
-        backgroundGradientEnd: (r: UInt8, g: UInt8, b: UInt8)? = nil,
-        backgroundImage: CGImage? = nil,
-        waveformOpacity: Double = 1.0
-    ) -> Data {
-        let bandCount = bandMagnitudes.count
-        guard bandCount > 0, width > 0, height > 0 else {
-            return Data(count: width * height * 4)
-        }
+    typealias RGB = (r: UInt8, g: UInt8, b: UInt8)
 
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let bytesPerRow = width * 4
+    /// Creates a BGRA bitmap context suitable for `drawFrame`. Reuse one context
+    /// across frames to avoid allocating a full frame buffer per frame.
+    static func makeContext(width: Int, height: Int) -> CGContext? {
+        guard width > 0, height > 0 else { return nil }
         let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
             .union(.byteOrder32Little)  // BGRA layout
-
-        guard let ctx = CGContext(
+        return CGContext(
             data: nil,
             width: width,
             height: height,
             bitsPerComponent: 8,
-            bytesPerRow: bytesPerRow,
-            space: colorSpace,
+            bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: bitmapInfo.rawValue
-        ) else {
+        )
+    }
+
+    /// Renders a single video frame as raw BGRA pixel data.
+    static func renderFrame(
+        style: SwiftWaveformStyle,
+        frame: WaveformFrameInput,
+        width: Int,
+        height: Int,
+        foregroundColor: RGB,
+        backgroundColor: RGB,
+        foregroundGradientEnd: RGB? = nil,
+        backgroundGradientEnd: RGB? = nil,
+        backgroundImage: CGImage? = nil,
+        waveformOpacity: Double = 1.0,
+        transparentBackground: Bool = false,
+        context: CGContext? = nil
+    ) -> Data {
+        let byteCount = width * height * 4
+        guard let ctx = context ?? makeContext(width: width, height: height),
+              ctx.width == width, ctx.height == height else {
             logger.error("Failed to create CGContext for frame rendering")
-            return Data(count: width * height * 4)
+            return Data(count: max(0, byteCount))
         }
 
+        drawFrame(in: ctx, style: style, frame: frame,
+                  foregroundColor: foregroundColor, backgroundColor: backgroundColor,
+                  foregroundGradientEnd: foregroundGradientEnd, backgroundGradientEnd: backgroundGradientEnd,
+                  backgroundImage: backgroundImage, waveformOpacity: waveformOpacity,
+                  transparentBackground: transparentBackground)
+
+        guard let data = ctx.data else {
+            return Data(count: byteCount)
+        }
+        if transparentBackground {
+            // CoreGraphics stores premultiplied alpha; FFmpeg's `bgra` is straight alpha.
+            // Alpha is the last channel in BGRA as in RGBA, so the RGBA routine applies.
+            var buffer = vImage_Buffer(data: data, height: vImagePixelCount(height),
+                                       width: vImagePixelCount(width), rowBytes: ctx.bytesPerRow)
+            vImageUnpremultiplyData_RGBA8888(&buffer, &buffer, vImage_Flags(kvImageNoFlags))
+        }
+        return Data(bytes: data, count: ctx.bytesPerRow * height)
+    }
+
+    /// Renders a single frame as a `CGImage` (used by the settings style preview).
+    static func renderImage(
+        style: SwiftWaveformStyle,
+        frame: WaveformFrameInput,
+        width: Int,
+        height: Int,
+        foregroundColor: RGB,
+        backgroundColor: RGB,
+        foregroundGradientEnd: RGB? = nil,
+        backgroundGradientEnd: RGB? = nil,
+        backgroundImage: CGImage? = nil,
+        waveformOpacity: Double = 1.0,
+        transparentBackground: Bool = false
+    ) -> CGImage? {
+        guard let ctx = makeContext(width: width, height: height) else { return nil }
+        drawFrame(in: ctx, style: style, frame: frame,
+                  foregroundColor: foregroundColor, backgroundColor: backgroundColor,
+                  foregroundGradientEnd: foregroundGradientEnd, backgroundGradientEnd: backgroundGradientEnd,
+                  backgroundImage: backgroundImage, waveformOpacity: waveformOpacity,
+                  transparentBackground: transparentBackground)
+        return ctx.makeImage()
+    }
+
+    /// Draws one frame into `ctx`, fully replacing its previous contents.
+    static func drawFrame(
+        in ctx: CGContext,
+        style: SwiftWaveformStyle,
+        frame: WaveformFrameInput,
+        foregroundColor: RGB,
+        backgroundColor: RGB,
+        foregroundGradientEnd: RGB? = nil,
+        backgroundGradientEnd: RGB? = nil,
+        backgroundImage: CGImage? = nil,
+        waveformOpacity: Double = 1.0,
+        transparentBackground: Bool = false
+    ) {
+        let width = ctx.width
+        let height = ctx.height
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
         let fullRect = CGRect(x: 0, y: 0, width: width, height: height)
 
-        // --- Background rendering (priority: image > gradient > solid) ---
-        if let bgImage = backgroundImage {
-            ctx.draw(bgImage, in: fullRect)
-        } else if let bgEnd = backgroundGradientEnd {
-            let bgR = CGFloat(backgroundColor.r) / 255.0
-            let bgG = CGFloat(backgroundColor.g) / 255.0
-            let bgB = CGFloat(backgroundColor.b) / 255.0
-            let endR = CGFloat(bgEnd.r) / 255.0
-            let endG = CGFloat(bgEnd.g) / 255.0
-            let endB = CGFloat(bgEnd.b) / 255.0
-            let colors = [
-                CGColor(colorSpace: colorSpace, components: [bgR, bgG, bgB, 1.0])!,
-                CGColor(colorSpace: colorSpace, components: [endR, endG, endB, 1.0])!
-            ] as CFArray
-            if let gradient = CGGradient(colorsSpace: colorSpace, colors: colors, locations: [0, 1]) {
-                // CGContext origin is bottom-left; visually top = y=height, bottom = y=0
-                ctx.drawLinearGradient(gradient,
-                    start: CGPoint(x: 0, y: CGFloat(height)),
-                    end: CGPoint(x: 0, y: 0),
-                    options: [])
-            }
-        } else {
-            let bgR = CGFloat(backgroundColor.r) / 255.0
-            let bgG = CGFloat(backgroundColor.g) / 255.0
-            let bgB = CGFloat(backgroundColor.b) / 255.0
-            ctx.setFillColor(red: bgR, green: bgG, blue: bgB, alpha: 1.0)
-            ctx.fill(fullRect)
-        }
+        // Clear first so a reused context never leaks the previous frame through
+        // transparent regions of a background image.
+        ctx.clear(fullRect)
+
+        let background = BackgroundSpec(color: backgroundColor, gradientEnd: backgroundGradientEnd,
+                                        image: backgroundImage, isTransparent: transparentBackground)
+        drawBackground(background, in: ctx, colorSpace: colorSpace)
+
+        let bandMagnitudes = frame.magnitudes
+        let bandCount = bandMagnitudes.count
+        guard bandCount > 0 else { return }
+        // Motion blur trail only makes sense when band counts match.
+        let previousMagnitudes = frame.previousMagnitudes?.count == bandCount ? frame.previousMagnitudes : nil
 
         // --- Foreground waveform rendering ---
         let fgR = CGFloat(foregroundColor.r) / 255.0
@@ -103,10 +152,14 @@ enum NativeWaveformVideoRenderer {
         let fgEndG: CGFloat? = foregroundGradientEnd.map { CGFloat($0.g) / 255.0 }
         let fgEndB: CGFloat? = foregroundGradientEnd.map { CGFloat($0.b) / 255.0 }
 
-        // Apply waveform opacity
+        // Waveform opacity is applied to the whole foreground as one layer so
+        // overlapping shapes (motion trail, wire fill + stroke) don't stack up
+        // into visibly darker/brighter seams.
         let effectiveOpacity = CGFloat(min(1.0, max(0.5, waveformOpacity)))
-        if effectiveOpacity < 1.0 {
+        let usesLayer = effectiveOpacity < 1.0
+        if usesLayer {
             ctx.setAlpha(effectiveOpacity)
+            ctx.beginTransparencyLayer(auxiliaryInfo: nil)
         }
 
         let layout = FrameLayout(width: width, height: height, bandCount: bandCount)
@@ -127,17 +180,80 @@ enum NativeWaveformVideoRenderer {
                        bandMagnitudes: bandMagnitudes, previousMagnitudes: previousMagnitudes,
                        fgR: fgR, fgG: fgG, fgB: fgB,
                        fgEndR: fgEndR, fgEndG: fgEndG, fgEndB: fgEndB)
+        case .halo, .orb, .ridgeline, .led:
+            let palette = Palette(start: foregroundColor, end: foregroundGradientEnd)
+            let input = WaveformFrameInput(
+                magnitudes: bandMagnitudes,
+                previousMagnitudes: previousMagnitudes,
+                peakMagnitudes: frame.peakMagnitudes?.count == bandCount ? frame.peakMagnitudes : nil,
+                history: frame.history.filter { $0.count == bandCount },
+                historyPhase: frame.historyPhase,
+                time: frame.time
+            )
+            switch style {
+            case .halo:
+                renderHalo(ctx: ctx, colorSpace: colorSpace, frame: input, palette: palette)
+            case .orb:
+                renderOrb(ctx: ctx, colorSpace: colorSpace, frame: input, palette: palette)
+            case .ridgeline:
+                renderRidgeline(ctx: ctx, colorSpace: colorSpace, frame: input, palette: palette,
+                                background: background)
+            case .led:
+                renderLEDMeter(ctx: ctx, colorSpace: colorSpace, layout: layout, frame: input, palette: palette)
+            case .capsules, .bars, .wire:
+                break
+            }
         }
 
-        // Restore alpha
-        if effectiveOpacity < 1.0 {
+        if usesLayer {
+            ctx.endTransparencyLayer()
             ctx.setAlpha(1.0)
         }
+    }
 
-        guard let data = ctx.data else {
-            return Data(count: width * height * 4)
+    static func cgColor(_ rgb: RGB, _ colorSpace: CGColorSpace) -> CGColor {
+        CGColor(colorSpace: colorSpace, components: [
+            CGFloat(rgb.r) / 255.0, CGFloat(rgb.g) / 255.0, CGFloat(rgb.b) / 255.0, 1.0
+        ]) ?? CGColor(gray: 0, alpha: 1)
+    }
+
+    // MARK: - Background
+
+    struct BackgroundSpec {
+        let color: RGB
+        let gradientEnd: RGB?
+        let image: CGImage?
+        /// Leave the background empty (alpha export). A background image still wins.
+        var isTransparent = false
+    }
+
+    /// Fills the current clip with the frame background (priority: image > transparent >
+    /// gradient > solid). Also used by the ridgeline style to occlude lines behind each
+    /// ridge — for a transparent background that means clearing to zero alpha.
+    static func drawBackground(_ background: BackgroundSpec, in ctx: CGContext, colorSpace: CGColorSpace) {
+        let fullRect = CGRect(x: 0, y: 0, width: ctx.width, height: ctx.height)
+        if background.isTransparent && background.image == nil {
+            ctx.saveGState()
+            ctx.setBlendMode(.clear)
+            ctx.fill(fullRect)
+            ctx.restoreGState()
+        } else if let bgImage = background.image {
+            ctx.setFillColor(red: 0, green: 0, blue: 0, alpha: 1.0)
+            ctx.fill(fullRect)
+            ctx.draw(bgImage, in: fullRect)
+        } else if let bgEnd = background.gradientEnd {
+            let colors = [cgColor(background.color, colorSpace), cgColor(bgEnd, colorSpace)] as CFArray
+            if let gradient = CGGradient(colorsSpace: colorSpace, colors: colors, locations: [0, 1]) {
+                // CGContext origin is bottom-left; visually top = y=height, bottom = y=0
+                ctx.drawLinearGradient(gradient,
+                    start: CGPoint(x: 0, y: fullRect.height),
+                    end: CGPoint(x: 0, y: 0),
+                    options: [])
+            }
+        } else {
+            ctx.setFillColor(cgColor(background.color, colorSpace))
+            ctx.fill(fullRect)
         }
-        return Data(bytes: data, count: bytesPerRow * height)
     }
 
     // MARK: - Background Image Loading
@@ -176,7 +292,7 @@ enum NativeWaveformVideoRenderer {
 
     // MARK: - Shared Layout
 
-    private struct FrameLayout {
+    struct FrameLayout {
         let frameWidth: CGFloat
         let frameHeight: CGFloat
         let centerY: CGFloat
@@ -265,16 +381,23 @@ enum NativeWaveformVideoRenderer {
                 let y = layout.centerY - h / 2.0
                 let path = CGPath(roundedRect: CGRect(x: x, y: y, width: layout.bandWidth, height: h),
                                   cornerWidth: cornerRadius, cornerHeight: cornerRadius, transform: nil)
-                ctx.saveGState()
-                ctx.addPath(path)
-                ctx.clip()
-                // Gradient from center (start color) to edges (end color)
-                drawVerticalGradient(ctx: ctx, colorSpace: colorSpace,
-                                     startR: fgR, startG: fgG, startB: fgB,
-                                     endR: fgEndR!, endG: fgEndG!, endB: fgEndB!,
-                                     fromY: layout.centerY, toY: y,
-                                     width: layout.frameWidth)
-                ctx.restoreGState()
+                // Gradient from center (start color) to both ends (end color),
+                // mirrored like the bars style.
+                for (edgeY, halfRect) in [
+                    (y, CGRect(x: x, y: y, width: layout.bandWidth, height: h / 2.0)),
+                    (y + h, CGRect(x: x, y: layout.centerY, width: layout.bandWidth, height: h / 2.0)),
+                ] {
+                    ctx.saveGState()
+                    ctx.addPath(path)
+                    ctx.clip()
+                    ctx.clip(to: halfRect)
+                    drawVerticalGradient(ctx: ctx, colorSpace: colorSpace,
+                                         startR: fgR, startG: fgG, startB: fgB,
+                                         endR: fgEndR!, endG: fgEndG!, endB: fgEndB!,
+                                         fromY: layout.centerY, toY: edgeY,
+                                         width: layout.frameWidth)
+                    ctx.restoreGState()
+                }
             }
         } else {
             ctx.setFillColor(red: fgR, green: fgG, blue: fgB, alpha: 1.0)
@@ -429,28 +552,40 @@ enum NativeWaveformVideoRenderer {
         return pts
     }
 
+    /// Appends a smooth curve through `pts` (after the first, which must already be
+    /// the current point) using cubic segments with horizontal tangents at each
+    /// band peak. This keeps the curve symmetric between neighbours and never
+    /// overshoots below the center line.
+    static func addSmoothCurve(to path: CGMutablePath, points: [CGPoint]) {
+        guard points.count > 1 else { return }
+        for i in 1..<points.count {
+            let p0 = points[i - 1]
+            let p1 = points[i]
+            let midX = (p0.x + p1.x) / 2.0
+            path.addCurve(to: p1,
+                          control1: CGPoint(x: midX, y: p0.y),
+                          control2: CGPoint(x: midX, y: p1.y))
+        }
+    }
+
+    /// Curve points for one half of the wire (above = +y in CG coordinates).
+    private static func wireCurvePoints(layout: FrameLayout, magnitudes: [Float], above: Bool) -> [CGPoint] {
+        let halfMax = layout.maxBarHeight / 2.0
+        let sign: CGFloat = above ? 1.0 : -1.0
+        return wirePoints(layout: layout, magnitudes: magnitudes).map {
+            CGPoint(x: $0.x, y: layout.centerY + sign * $0.mag * halfMax)
+        }
+    }
+
     /// Builds a CGMutablePath for one half (top or bottom) of the wire fill area.
     private static func buildWireFillPath(layout: FrameLayout, magnitudes: [Float], above: Bool) -> CGMutablePath? {
-        let pts = wirePoints(layout: layout, magnitudes: magnitudes)
-        guard pts.count > 2 else { return nil }
-        let halfMax = layout.maxBarHeight / 2.0
-        let sign: CGFloat = above ? 1.0 : -1.0  // In CG coords: above center = +y, below = -y
-
+        let pts = wireCurvePoints(layout: layout, magnitudes: magnitudes, above: above)
+        guard pts.count > 2, let first = pts.first, let last = pts.last else { return nil }
         let path = CGMutablePath()
-        path.move(to: CGPoint(x: pts[0].x, y: layout.centerY))
-        for i in 0..<pts.count {
-            let x = pts[i].x
-            let y = layout.centerY + sign * pts[i].mag * halfMax
-            if i == 0 {
-                path.addLine(to: CGPoint(x: x, y: y))
-            } else {
-                let cpX = (pts[i - 1].x + x) / 2.0
-                path.addQuadCurve(to: CGPoint(x: x, y: y), control: CGPoint(x: cpX, y: path.currentPoint.y))
-            }
-        }
-        if let lastX = pts.last?.x {
-            path.addLine(to: CGPoint(x: lastX, y: layout.centerY))
-        }
+        path.move(to: CGPoint(x: first.x, y: layout.centerY))
+        path.addLine(to: first)
+        addSmoothCurve(to: path, points: pts)
+        path.addLine(to: CGPoint(x: last.x, y: layout.centerY))
         path.closeSubpath()
         return path
     }
@@ -460,46 +595,13 @@ enum NativeWaveformVideoRenderer {
         ctx: CGContext, layout: FrameLayout,
         magnitudes: [Float], vMargin: CGFloat, mirrored: Bool
     ) {
-        let pts = wirePoints(layout: layout, magnitudes: magnitudes)
-        guard pts.count > 2, let lastX = pts.last?.x else { return }
-        let halfMax = layout.maxBarHeight / 2.0
-
-        // Top half
-        let topPath = CGMutablePath()
-        topPath.move(to: CGPoint(x: pts[0].x, y: layout.centerY))
-        for i in 0..<pts.count {
-            let x = pts[i].x
-            let y = layout.centerY - pts[i].mag * halfMax
-            if i == 0 {
-                topPath.addLine(to: CGPoint(x: x, y: y))
-            } else {
-                let cpX = (pts[i - 1].x + x) / 2.0
-                topPath.addQuadCurve(to: CGPoint(x: x, y: y), control: CGPoint(x: cpX, y: topPath.currentPoint.y))
-            }
+        if let topPath = buildWireFillPath(layout: layout, magnitudes: magnitudes, above: true) {
+            ctx.addPath(topPath)
         }
-        topPath.addLine(to: CGPoint(x: lastX, y: layout.centerY))
-        topPath.closeSubpath()
-        ctx.addPath(topPath)
-        ctx.fillPath()
-
-        if mirrored {
-            let bottomPath = CGMutablePath()
-            bottomPath.move(to: CGPoint(x: pts[0].x, y: layout.centerY))
-            for i in 0..<pts.count {
-                let x = pts[i].x
-                let y = layout.centerY + pts[i].mag * halfMax
-                if i == 0 {
-                    bottomPath.addLine(to: CGPoint(x: x, y: y))
-                } else {
-                    let cpX = (pts[i - 1].x + x) / 2.0
-                    bottomPath.addQuadCurve(to: CGPoint(x: x, y: y), control: CGPoint(x: cpX, y: bottomPath.currentPoint.y))
-                }
-            }
-            bottomPath.addLine(to: CGPoint(x: lastX, y: layout.centerY))
-            bottomPath.closeSubpath()
+        if mirrored, let bottomPath = buildWireFillPath(layout: layout, magnitudes: magnitudes, above: false) {
             ctx.addPath(bottomPath)
-            ctx.fillPath()
         }
+        ctx.fillPath()
     }
 
     /// Strokes just the curve outline (top or bottom half).
@@ -507,29 +609,18 @@ enum NativeWaveformVideoRenderer {
         ctx: CGContext, layout: FrameLayout,
         magnitudes: [Float], vMargin: CGFloat, above: Bool
     ) {
-        let pts = wirePoints(layout: layout, magnitudes: magnitudes)
-        guard pts.count > 2 else { return }
-        let sign: CGFloat = above ? -1.0 : 1.0
-        let halfMax = layout.maxBarHeight / 2.0
-
+        let pts = wireCurvePoints(layout: layout, magnitudes: magnitudes, above: above)
+        guard pts.count > 2, let first = pts.first else { return }
         let path = CGMutablePath()
-        for i in 0..<pts.count {
-            let x = pts[i].x
-            let y = layout.centerY + sign * pts[i].mag * halfMax
-            if i == 0 {
-                path.move(to: CGPoint(x: x, y: y))
-            } else {
-                let cpX = (pts[i - 1].x + x) / 2.0
-                path.addQuadCurve(to: CGPoint(x: x, y: y), control: CGPoint(x: cpX, y: path.currentPoint.y))
-            }
-        }
+        path.move(to: first)
+        addSmoothCurve(to: path, points: pts)
         ctx.addPath(path)
         ctx.strokePath()
     }
 
     // MARK: - Helpers
 
-    private static func clamp01(_ value: Float) -> Float {
+    static func clamp01(_ value: Float) -> Float {
         max(0, min(1, value))
     }
 }
