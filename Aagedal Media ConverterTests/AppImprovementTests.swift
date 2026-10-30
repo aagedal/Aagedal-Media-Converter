@@ -407,6 +407,7 @@ final class NativeWaveformImprovementTests: XCTestCase {
             includeDateTag: false, transparentBackground: true)
         XCTAssertTrue(command.preservesAlpha)
         XCTAssertTrue(command.arguments.contains("yuva444p10le"), command.arguments.joined(separator: " "))
+        try await requireHardwareProResEncoder(in: directory)
 
         var frames = Data()
         for _ in 0..<fps {
@@ -618,6 +619,7 @@ final class NativeWaveformImprovementTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
+        try await requireHardwareProResEncoder(in: directory)
         let source = directory.appendingPathComponent("graphic.mov")
         try await runFFmpeg(["-f", "lavfi", "-i", "color=c=white@0.5:s=64x36:r=25:d=1,format=yuva444p10le",
                              "-c:v", "prores_ks", "-profile:v", "4444", "-pix_fmt", "yuva444p10le", source.path])
@@ -679,6 +681,18 @@ final class NativeWaveformImprovementTests: XCTestCase {
         XCTAssertLessThan(matteGray[0], 15, "Corner is transparent → black matte")
         XCTAssertLessThan(fillGray[0], 15, "Fill is black where transparent, not the red background")
         XCTAssertTrue(matteGray.contains { $0 > 240 }, "Halo is opaque somewhere")
+    }
+
+    /// The ProRes preset encodes with `prores_videotoolbox`, which needs Apple's hardware
+    /// ProRes encoder. Virtualized CI hosts don't expose it, so skip the encode there.
+    private func requireHardwareProResEncoder(in directory: URL) async throws {
+        let probe = directory.appendingPathComponent("prores-probe.mov")
+        do {
+            try await runFFmpeg(["-f", "lavfi", "-i", "color=c=black:s=64x36:r=25:d=0.04",
+                                 "-c:v", "prores_videotoolbox", "-profile:v", "4444", probe.path])
+        } catch {
+            throw XCTSkip("Hardware ProRes encoder (VideoToolbox) unavailable on this host")
+        }
     }
 
     /// All frames of the first video stream as 8-bit luma.
