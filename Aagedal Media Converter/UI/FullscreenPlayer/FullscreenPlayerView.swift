@@ -31,11 +31,7 @@ struct FullscreenPlayerView: View {
     @StateObject private var controller: PreviewPlayerController
     @State private var itemState: VideoItem
 
-    @State private var showOverlay: Bool
-    @State private var isMouseIdle = false
-    @State private var isHoveringControls = false
-    @State private var isHoveringRightEdge = false
-    @State private var overlayHideTask: Task<Void, Never>?
+    @StateObject private var overlay: FullscreenOverlayController
     @State private var isDraggingTimeline = false
     // Timecode display state
     @State private var timecodeDisplayMode: TimecodeDisplayMode
@@ -94,8 +90,7 @@ struct FullscreenPlayerView: View {
         self.startTime = startTime
         self._itemState = State(initialValue: item)
         self._controller = StateObject(wrappedValue: PreviewPlayerController(videoItem: item))
-        self._showOverlay = State(initialValue: !initialOverlayHidden)
-        self._isMouseIdle = State(initialValue: initialOverlayHidden)
+        self._overlay = StateObject(wrappedValue: FullscreenOverlayController(initiallyVisible: !initialOverlayHidden))
         self._timecodeDisplayMode = State(initialValue: initialTimecodeDisplayMode)
         self._queueAutoAdvanceState = State(initialValue: queueAutoAdvanceEnabled)
         self._queueLoopState = State(initialValue: queueLoopEnabled)
@@ -150,7 +145,7 @@ struct FullscreenPlayerView: View {
 
                 // Floating speed indicator — shown when overlay is hidden so the
                 // user still sees JKL feedback during cursor-hidden playback.
-                if !showOverlay && !isHoveringControls && !isDraggingTimeline {
+                if !isOverlayVisible {
                     VStack {
                         HStack {
                             PlaybackSpeedIndicator(
@@ -166,7 +161,7 @@ struct FullscreenPlayerView: View {
                     .allowsHitTesting(false)
                 }
 
-                if showOverlay || isHoveringControls || isDraggingTimeline {
+                if isOverlayVisible {
                     // Overlay controls - no tap gestures, blocks clicks from reaching background
                     controlsOverlay
                         .transition(.opacity)
@@ -188,23 +183,11 @@ struct FullscreenPlayerView: View {
                 HStack {
                     Spacer()
                     ZStack {
-                        RightEdgeCursorHideZone { hovering in
-                            isHoveringRightEdge = hovering
-                            if hovering {
-                                if !isHoveringControls, !isDraggingTimeline {
-                                    overlayHideTask?.cancel()
-                                    withAnimation(.easeOut(duration: 0.2)) {
-                                        showOverlay = false
-                                    }
-                                    onOverlayVisibilityChanged?(true)
-                                }
-                            } else {
-                                showOverlay = true
-                                scheduleOverlayHide()
-                            }
+                        FullscreenCursorHideZone { hovering in
+                            overlay.setRightEdgeHovered(hovering)
                         }
 
-                        if showCursorHideHint && showOverlay && !isHoveringRightEdge {
+                        if showCursorHideHint && overlay.isVisible && !overlay.isRightEdgeHovered {
                             RoundedRectangle(cornerRadius: 6)
                                 .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
                                 .foregroundStyle(.white.opacity(0.25))
@@ -219,8 +202,8 @@ struct FullscreenPlayerView: View {
                                     .foregroundStyle(.white.opacity(0.3))
                                 }
                                 .padding(6)
-                                .animation(.easeInOut(duration: 0.3), value: showOverlay)
-                                .animation(.easeInOut(duration: 0.3), value: isHoveringRightEdge)
+                                .animation(.easeInOut(duration: 0.3), value: overlay.isVisible)
+                                .animation(.easeInOut(duration: 0.3), value: overlay.isRightEdgeHovered)
                                 .allowsHitTesting(false)
                         }
                     }
@@ -229,16 +212,16 @@ struct FullscreenPlayerView: View {
                 .padding(.bottom, bottomBarClearance)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
-            .onContinuousHover { phase in
-                switch phase {
-                case .active:
-                    handleMouseHover()
-                case .ended:
-                    break
-                }
-            }
+            .animation(.easeInOut(duration: 0.25), value: overlay.isVisible)
 
         }
+        .background(
+            FullscreenWindowReader { window in
+                overlay.install(window: window) { [isEditingTimecodeBinding = $isEditingTimecode, isDraggingBinding = $isDraggingTimeline] in
+                    isEditingTimecodeBinding.wrappedValue || isDraggingBinding.wrappedValue
+                }
+            }
+        )
         .background(
             FullscreenKeyboardHandler(
                 controller: controller,
@@ -325,13 +308,15 @@ struct FullscreenPlayerView: View {
             }
             autoPlayPending = false
         }
+        .onChange(of: overlay.isVisible) { _, isVisible in
+            onOverlayVisibilityChanged?(!isVisible)
+        }
+        .onChange(of: isEditingTimecode) { _, _ in refreshOverlayForInteraction() }
+        .onChange(of: isDraggingTimeline) { _, _ in refreshOverlayForInteraction() }
         .onAppear {
             autoAdvanceTriggered = false
             controller.playbackDidFinish = onPlaybackDidFinish
-            // Schedule overlay hide if it's currently visible
-            if showOverlay {
-                scheduleOverlayHide()
-            }
+            overlay.bindPlayState(to: controller)
 
             // Capture startTime immediately on appear to avoid any SwiftUI state issues
             let capturedStartTime = startTime
@@ -357,8 +342,7 @@ struct FullscreenPlayerView: View {
         }
         .onDisappear {
             controller.playbackDidFinish = nil
-            overlayHideTask?.cancel()
-            overlayHideTask = nil
+            overlay.tearDown()
 
             // Report final position before teardown
             let finalPosition = controller.currentPlaybackTime
@@ -439,25 +423,27 @@ struct FullscreenPlayerView: View {
         VStack(spacing: 0) {
             topBar
                 .transition(.move(edge: .top).combined(with: .opacity))
-                .onHover(perform: handleControlsHover)
+                .onHover { overlay.setControlsHovered($0) }
 
             Spacer(minLength: 0)
                 .allowsHitTesting(false)
 
             bottomBar
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .onHover(perform: handleControlsHover)
+                .onHover { overlay.setControlsHovered($0) }
         }
     }
 
-    private func handleControlsHover(_ hovering: Bool) {
-        isHoveringControls = hovering
-        if hovering {
-            showOverlay = true
-            isMouseIdle = false
-            overlayHideTask?.cancel()
+    private var isOverlayVisible: Bool {
+        overlay.isVisible || isDraggingTimeline || isEditingTimecode
+    }
+
+    private func refreshOverlayForInteraction() {
+        if isEditingTimecode || isDraggingTimeline {
+            overlay.reveal()
+            overlay.cancelScheduledHide()
         } else {
-            scheduleOverlayHide()
+            overlay.scheduleHide()
         }
     }
 
@@ -499,7 +485,6 @@ struct FullscreenPlayerView: View {
                     .shadow(color: .black.opacity(0.5), radius: 4, x: 0, y: 2)
             }
             .buttonStyle(.plain)
-            .keyboardShortcut(.escape, modifiers: [])
             .help("Close (esc)")
             .accessibilityLabel("Close fullscreen player")
             .accessibilityIdentifier("fullscreen.close")
@@ -922,99 +907,6 @@ struct FullscreenPlayerView: View {
         .help("Select subtitle track")
     }
 
-    private func handleKeyCommand(_ key: String, _ modifiersRaw: UInt, _ keyCode: UInt16) -> Bool {
-        let modifiers = NSEvent.ModifierFlags(rawValue: modifiersRaw)
-        let lower = key.lowercased()
-
-        if key == " " {
-            controller.togglePlayback()
-            return true
-        }
-
-        // Option+J/L: slow reverse/forward
-        if modifiers.contains(.option) {
-            switch lower {
-            case "j":
-                controller.slowReverse()
-                return true
-            case "l":
-                controller.slowForward()
-                return true
-            default:
-                break
-            }
-        }
-
-        switch lower {
-        case "j":
-            controller.startReverseSimulation()
-            return true
-        case "k":
-            controller.togglePlayback()
-            return true
-        case "l":
-            controller.fastForward()
-            return true
-        default:
-            break
-        }
-
-        switch Int(keyCode) {
-        case kVK_LeftArrow:
-            controller.seekByFrames(-1)
-            return true
-        case kVK_RightArrow:
-            controller.seekByFrames(1)
-            return true
-        case kVK_UpArrow:
-            controller.seekByFrames(-10)
-            return true
-        case kVK_DownArrow:
-            controller.seekByFrames(10)
-            return true
-        default:
-            break
-        }
-
-        return false
-    }
-
-    private func scheduleOverlayHide() {
-        overlayHideTask?.cancel()
-
-        guard !isHoveringControls, !isDraggingTimeline else { return }
-
-        overlayHideTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            guard !Task.isCancelled else { return }
-            guard !isHoveringControls, !isDraggingTimeline else { return }
-
-            // Set cursor state immediately (not animatable)
-            isMouseIdle = true
-
-            withAnimation(.easeOut(duration: 0.25)) {
-                showOverlay = false
-                isHoveringControls = false
-            }
-            onOverlayVisibilityChanged?(true)
-        }
-    }
-
-    private func forceHideOverlay() {
-        // Don't hide while hovering controls or dragging the timeline
-        guard !isHoveringControls, !isDraggingTimeline else { return }
-
-        overlayHideTask?.cancel()
-        overlayHideTask = nil
-
-        isMouseIdle = true
-
-        withAnimation(.easeOut(duration: 0.2)) {
-            showOverlay = false
-        }
-        onOverlayVisibilityChanged?(true)
-    }
-
     private func captureScreenshot() {
         Task {
             let defaults = UserDefaults.standard
@@ -1029,18 +921,6 @@ struct FullscreenPlayerView: View {
                 Self.logger.error("Screenshot capture failed: \(error.localizedDescription, privacy: .private)")
             }
         }
-    }
-
-    private func handleMouseHover() {
-        // Don't show overlay if in right edge zone
-        guard !isHoveringRightEdge else { return }
-
-        if !showOverlay {
-            onOverlayVisibilityChanged?(false)
-        }
-        showOverlay = true
-        isMouseIdle = false
-        scheduleOverlayHide()
     }
 
     private func formatTime(_ seconds: Double) -> String {
@@ -1308,151 +1188,6 @@ struct FullscreenPlayerView: View {
     }
 }
 
-// MARK: - Cursor Modifier
-
-private struct CursorVisibilityModifier: ViewModifier {
-    let isHidden: Bool
-
-    @State private var isHovering = false
-    @State private var hasPushedCursor = false
-
-    func body(content: Content) -> some View {
-        content
-            .onContinuousHover { phase in
-                switch phase {
-                case .active:
-                    if !isHovering {
-                        isHovering = true
-                        pushCursor()
-                    }
-                case .ended:
-                    if isHovering {
-                        isHovering = false
-                        popCursor()
-                    }
-                }
-            }
-            .onChange(of: isHidden) { _, _ in
-                // Cursor visibility changed while hovering - update the cursor
-                if isHovering {
-                    popCursor()
-                    pushCursor()
-                }
-            }
-            .onDisappear {
-                popCursor()
-            }
-    }
-
-    private func pushCursor() {
-        let cursor = isHidden ? NSCursor.hidden : NSCursor.arrow
-        cursor.push()
-        hasPushedCursor = true
-    }
-
-    private func popCursor() {
-        if hasPushedCursor {
-            NSCursor.pop()
-            hasPushedCursor = false
-        }
-    }
-}
-
-extension View {
-    func hideCursor(_ hide: Bool) -> some View {
-        modifier(CursorVisibilityModifier(isHidden: hide))
-    }
-}
-
-extension NSCursor {
-    static var hidden: NSCursor {
-        // Create a transparent cursor image
-        let size = NSSize(width: 16, height: 16)
-        let image = NSImage(size: size)
-        image.lockFocus()
-        NSColor.clear.set()
-        NSRect(origin: .zero, size: size).fill()
-        image.unlockFocus()
-        return NSCursor(image: image, hotSpot: NSPoint(x: 8, y: 8))
-    }
-}
-
-// MARK: - Right Edge Cursor Hide Zone
-
-private struct RightEdgeCursorHideZone: NSViewRepresentable {
-    let onHoverChanged: (Bool) -> Void
-
-    func makeNSView(context: Context) -> RightEdgeCursorHideNSView {
-        let view = RightEdgeCursorHideNSView()
-        view.onHoverChanged = onHoverChanged
-        return view
-    }
-
-    func updateNSView(_ nsView: RightEdgeCursorHideNSView, context: Context) {
-        nsView.onHoverChanged = onHoverChanged
-    }
-}
-
-private class RightEdgeCursorHideNSView: NSView {
-    var onHoverChanged: ((Bool) -> Void)?
-    private var trackingArea: NSTrackingArea?
-    private var isHovering = false
-
-    // Allow clicks to pass through while keeping tracking areas active
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        return nil
-    }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-
-        if let existing = trackingArea {
-            removeTrackingArea(existing)
-        }
-
-        let options: NSTrackingArea.Options = [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect]
-        trackingArea = NSTrackingArea(rect: bounds, options: options, owner: self, userInfo: nil)
-        if let area = trackingArea {
-            addTrackingArea(area)
-        }
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        super.mouseEntered(with: event)
-        isHovering = true
-        NSCursor.hide()
-        onHoverChanged?(true)
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        super.mouseExited(with: event)
-        isHovering = false
-        NSCursor.unhide()
-        onHoverChanged?(false)
-    }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        if window != nil {
-            updateTrackingAreas()
-        }
-    }
-
-    override func removeFromSuperview() {
-        if isHovering {
-            NSCursor.unhide()
-            isHovering = false
-        }
-        super.removeFromSuperview()
-    }
-
-    deinit {
-        if isHovering {
-            NSCursor.unhide()
-        }
-    }
-}
-
 // MARK: - AVPlayer View
 
 private struct FullscreenAVPlayerView: NSViewRepresentable {
@@ -1469,6 +1204,35 @@ private struct FullscreenAVPlayerView: NSViewRepresentable {
     
     func updateNSView(_ nsView: AVPlayerView, context: Context) {
         nsView.player = player
+    }
+}
+
+// MARK: - Window Reader
+
+/// Reports the hosting window once the view is attached, so AppKit observers can be
+/// scoped to the player window rather than the whole app.
+private struct FullscreenWindowReader: NSViewRepresentable {
+    let onWindow: (NSWindow) -> Void
+
+    func makeNSView(context: Context) -> ReaderView {
+        let view = ReaderView()
+        view.onWindow = onWindow
+        return view
+    }
+
+    func updateNSView(_ nsView: ReaderView, context: Context) {
+        nsView.onWindow = onWindow
+    }
+
+    final class ReaderView: NSView {
+        var onWindow: ((NSWindow) -> Void)?
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let window { onWindow?(window) }
+        }
     }
 }
 
@@ -1524,6 +1288,7 @@ private struct FullscreenKeyboardHandler: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         view.isHidden = true
+        context.coordinator.view = view
         context.coordinator.install()
         return view
     }
@@ -1576,6 +1341,7 @@ private struct FullscreenKeyboardHandler: NSViewRepresentable {
         var onClearAllTrim: @Sendable () -> Void
         var onSeekToTrimIn: @Sendable () -> Void
         var onSeekToTrimOut: @Sendable () -> Void
+        weak var view: NSView?
         private var monitor: Any?
 
         init(
@@ -1627,6 +1393,19 @@ private struct FullscreenKeyboardHandler: NSViewRepresentable {
 
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] (event: NSEvent) -> NSEvent? in
                 guard let self else { return event }
+
+                // Local monitors are app-wide. Only act on keys aimed at the player's own
+                // window, and stand aside while a text field (timecode entry) is editing so
+                // Space, arrows, Return and Esc reach it.
+                let eventWindowNumber = event.windowNumber
+                let shouldHandle = MainActor.assumeIsolated { () -> Bool in
+                    guard let window = self.view?.window,
+                          window.windowNumber == eventWindowNumber,
+                          window.isKeyWindow else { return false }
+                    return !self.isEditingTimecode && !(window.firstResponder is NSText)
+                }
+                guard shouldHandle else { return event }
+
                 guard let characters = event.charactersIgnoringModifiers else { return event }
 
                 let keyCode = event.keyCode
@@ -1763,7 +1542,7 @@ private struct FullscreenKeyboardHandler: NSViewRepresentable {
                 }
 
                 // CMD+S: Capture screenshot
-                if hasCommand && lower == "s" {
+                if hasCommand && !hasShift && !hasOption && !hasControl && lower == "s" {
                     DispatchQueue.main.async { [weak self] in
                         self?.captureScreenshot()
                     }

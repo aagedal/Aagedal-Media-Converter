@@ -31,6 +31,10 @@ final class FullscreenPlayerWindowController {
     // Currently playing item identifier
     private var currentlyPlayingItemID: UUID?
 
+    // Identifies the player view currently installed; end-of-playback reports from
+    // a replaced view are ignored.
+    private var playerSessionID = UUID()
+
     // Overlay state preserved across video switches
     private var isOverlayHidden = false
 
@@ -103,6 +107,8 @@ final class FullscreenPlayerWindowController {
 
         // Create the SwiftUI view with navigation callbacks
         let itemID = item.id
+        let sessionID = UUID()
+        playerSessionID = sessionID
         let playerView = FullscreenPlayerView(
             item: item,
             initialOverlayHidden: false,
@@ -111,7 +117,7 @@ final class FullscreenPlayerWindowController {
                 self?.closeFullscreenPlayer()
             },
             onTrimChanged: onItemTrimChanged != nil ? { [weak self] trimStart, trimEnd in
-                self?.onItemTrimChanged?(itemID, trimStart, trimEnd)
+                self?.handleItemTrimChanged(itemID: itemID, trimStart: trimStart, trimEnd: trimEnd)
             } : nil,
             onPreviousItem: { [weak self] in
                 MainActor.assumeIsolated { self?.goToPreviousItem() }
@@ -141,7 +147,7 @@ final class FullscreenPlayerWindowController {
             },
             onPlaybackDidFinish: { [weak self] in
                 Task { @MainActor in
-                    self?.handlePlaybackDidFinish()
+                    self?.handlePlaybackDidFinish(session: sessionID)
                 }
             },
             autoPlayOnReady: false
@@ -249,6 +255,8 @@ final class FullscreenPlayerWindowController {
         currentTimecodeDisplayMode = .preferred
 
         // Create the SwiftUI view with position callbacks
+        let sessionID = UUID()
+        playerSessionID = sessionID
         let playerView = FullscreenPlayerView(
             item: item,
             initialOverlayHidden: false,
@@ -287,7 +295,7 @@ final class FullscreenPlayerWindowController {
             },
             onPlaybackDidFinish: { [weak self] in
                 Task { @MainActor in
-                    self?.handlePlaybackDidFinish()
+                    self?.handlePlaybackDidFinish(session: sessionID)
                 }
             },
             autoPlayOnReady: false
@@ -380,6 +388,8 @@ final class FullscreenPlayerWindowController {
 
         // Create new player view with updated item, preserving overlay and timecode state
         let itemID = item.id
+        let sessionID = UUID()
+        playerSessionID = sessionID
         let playerView = FullscreenPlayerView(
             item: item,
             initialOverlayHidden: isOverlayHidden,
@@ -388,7 +398,7 @@ final class FullscreenPlayerWindowController {
                 self?.closeFullscreenPlayer()
             },
             onTrimChanged: onItemTrimChanged != nil ? { [weak self] trimStart, trimEnd in
-                self?.onItemTrimChanged?(itemID, trimStart, trimEnd)
+                self?.handleItemTrimChanged(itemID: itemID, trimStart: trimStart, trimEnd: trimEnd)
             } : onTrimChanged,
             onPreviousItem: { [weak self] in
                 MainActor.assumeIsolated { self?.goToPreviousItem() }
@@ -418,10 +428,9 @@ final class FullscreenPlayerWindowController {
             },
             onPlaybackDidFinish: { [weak self] in
                 Task { @MainActor in
-                    self?.handlePlaybackDidFinish()
+                    self?.handlePlaybackDidFinish(session: sessionID)
                 }
-            }
-            ,
+            },
             autoPlayOnReady: autoPlayOnReady
         )
 
@@ -464,8 +473,22 @@ final class FullscreenPlayerWindowController {
         onItemTrimChanged = nil
     }
     
+    /// Keeps the queue snapshot in step with trim edits so navigating back to an item
+    /// shows its current trim points, then forwards the change to the owner.
+    private func handleItemTrimChanged(itemID: UUID, trimStart: Double?, trimEnd: Double?) {
+        if let index = queue.firstIndex(where: { $0.id == itemID }) {
+            queue[index].trimStart = trimStart
+            queue[index].trimEnd = trimEnd
+        }
+        onItemTrimChanged?(itemID, trimStart, trimEnd)
+    }
+
     @MainActor
-    private func handlePlaybackDidFinish() {
+    private func handlePlaybackDidFinish(session: UUID) {
+        // Both the near-end proximity check and the player's own end-of-file callback
+        // report completion. Advancing installs a new view (and session), so a second
+        // report from the old view is dropped instead of skipping an extra item.
+        guard session == playerSessionID else { return }
         logger.debug("handlePlaybackDidFinish called - autoAdvance: \(self.queueAutoAdvanceEnabled), currentIndex: \(self.currentIndex), queueCount: \(self.queue.count)")
 
         guard queueAutoAdvanceEnabled,

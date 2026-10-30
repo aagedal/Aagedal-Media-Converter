@@ -145,6 +145,8 @@
 		8E824AC02EF8AB02001A6B95 /* MPVMetalLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E824ABB2EF8AB02001A6B95 /* MPVMetalLayer.swift */; };
 		8E824AC12EF8AB02001A6B95 /* MPVPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E824ABC2EF8AB02001A6B95 /* MPVPlayer.swift */; };
 		8E824AC32EF8AB2C001A6B95 /* MPVVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E824AC22EF8AB2C001A6B95 /* MPVVideoView.swift */; };
+		6EA4438287DD44FAB7470441 /* FullscreenOverlayController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F76D69D9B114DAEB39F3008 /* FullscreenOverlayController.swift */; };
+		9E2717A336B24287A965B93C /* FullscreenCursorHideZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 967BB4A74321451E82A461ED /* FullscreenCursorHideZone.swift */; };
 		8E824AC52EF8AB46001A6B95 /* FullscreenMPVView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E824AC42EF8AB46001A6B95 /* FullscreenMPVView.swift */; };
 		8E903F5F2E05642D0075E05C /* FileNameProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E903F5E2E05642D0075E05C /* FileNameProcessor.swift */; };
 		8E9B52552ED65156006E6A10 /* AudioRoutingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9B52542ED65156006E6A10 /* AudioRoutingModels.swift */; };
@@ -569,6 +571,8 @@
 		8E824ABC2EF8AB02001A6B95 /* MPVPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVPlayer.swift; sourceTree = "<group>"; };
 		8E824ABD2EF8AB02001A6B95 /* MPVProperty.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVProperty.swift; sourceTree = "<group>"; };
 		8E824AC22EF8AB2C001A6B95 /* MPVVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVVideoView.swift; sourceTree = "<group>"; };
+		1F76D69D9B114DAEB39F3008 /* FullscreenOverlayController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullscreenOverlayController.swift; sourceTree = "<group>"; };
+		967BB4A74321451E82A461ED /* FullscreenCursorHideZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullscreenCursorHideZone.swift; sourceTree = "<group>"; };
 		8E824AC42EF8AB46001A6B95 /* FullscreenMPVView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullscreenMPVView.swift; sourceTree = "<group>"; };
 		8E903F5E2E05642D0075E05C /* FileNameProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileNameProcessor.swift; sourceTree = "<group>"; };
 		8E9B52542ED65156006E6A10 /* AudioRoutingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRoutingModels.swift; sourceTree = "<group>"; };
@@ -1085,6 +1089,8 @@
 				8E501D002EF2002000717373 /* FullscreenPlayerView.swift */,
 				8E501D012EF2002000717373 /* FullscreenPlayerWindowController.swift */,
 				8E824AC42EF8AB46001A6B95 /* FullscreenMPVView.swift */,
+				967BB4A74321451E82A461ED /* FullscreenCursorHideZone.swift */,
+				1F76D69D9B114DAEB39F3008 /* FullscreenOverlayController.swift */,
 			);
 			path = FullscreenPlayer;
 			sourceTree = "<group>";
@@ -1996,6 +2002,8 @@
 				CFDA4F1FFB4945D68D0C63C2 /* AppIntentHandoff.swift in Sources */,
 				8EC9A7012EC14CE90082C67F /* PreviewPlayerHelpers.swift in Sources */,
 				8E824AC52EF8AB46001A6B95 /* FullscreenMPVView.swift in Sources */,
+				9E2717A336B24287A965B93C /* FullscreenCursorHideZone.swift in Sources */,
+				6EA4438287DD44FAB7470441 /* FullscreenOverlayController.swift in Sources */,
 				8EC9A6FE2EC149140082C67F /* PreviewPlayerController.swift in Sources */,
 				8E545D942C3412AE0088C274 /* ConversionManager.swift in Sources */,
 				E771FBCBB8024A7A9BC66B55 /* MergeCompatibilityPolicy.swift in Sources */,

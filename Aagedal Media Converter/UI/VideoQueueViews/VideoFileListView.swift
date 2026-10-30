@@ -1963,16 +1963,6 @@ private struct KeyEventHandlingView: NSViewRepresentable {
                     return event
                 }
 
-                // Pass through when the fullscreen player is open. Local NSEvent monitors fire
-                // independently per install, so without this guard the queue's Space (QuickLook)
-                // and other shortcuts would collide with the fullscreen player's own handlers.
-                let isFullscreenPlayerOpen = MainActor.assumeIsolated {
-                    FullscreenPlayerWindowController.shared.isFullscreenPlayerOpen
-                }
-                if isFullscreenPlayerOpen {
-                    return event
-                }
-
                 // Pass through when the key window is a sheet or modal panel (e.g. NSOpenPanel,
                 // NSSavePanel, confirmation alerts). Otherwise this monitor swallows shortcuts
                 // the panel itself needs, like ⌘A to select all items in the file picker.
