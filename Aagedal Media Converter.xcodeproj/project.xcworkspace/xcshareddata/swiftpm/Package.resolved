@@ -22,7 +22,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/aagedal/SwiftMediaMetadata.git",
       "state" : {
-        "revision" : "74794cf1b9fd8ad0156eb695f816241eb00271c9"
+        "revision" : "b81876ab9fddad0761c50657a05dc56ac0f61f29"
       }
     }
   ],

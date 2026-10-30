@@ -45,6 +45,8 @@
 - One outdated saved job could make every new encode fail with another file's settings error.
 - Metadata probes that time out are retried once. Fixed conformance encoding for FourCC codec names and 10-bit 4:2:2 H.264.
 - Updated SwiftMediaMetadata to 3.0.3. MXF metadata reads now skip media essence using partition indexes, and XAVC clips report their displayed 1080-line picture size.
+- MKV exports that keep subtitles now also keep the fonts attached to the source, so styled ASS subtitles and karaoke no longer shift when a player falls back to another font. This works with metadata stripped too (#64).
+- Updated SwiftMediaMetadata to 3.1.0, which reads Matroska font attachments.
 
 # v.4.5.6
 
