@@ -40,6 +40,62 @@ private struct TrimHandleGeometry {
     }
 }
 
+// MARK: - Seek Throttling
+
+/// Coalesces seeks from timeline drags so the player isn't flooded (MPV/VLC fallback formats are
+/// especially sensitive). Shared by the handle and scrub layers; the controller shows keyframe
+/// previews while scrubbing and does an exact seek when the drag ends.
+@MainActor
+private final class TimelineSeekThrottle {
+    private let interval: TimeInterval = 0.04  // ~25 Hz
+    private var lastFireTime: Date = .distantPast
+    private var pendingTime: Double?
+    private var pendingTask: Task<Void, Never>?
+    private var pendingSeek: ((Double) -> Void)?
+
+    func seek(_ time: Double, using onSeek: @escaping (Double) -> Void) {
+        let elapsed = Date().timeIntervalSince(lastFireTime)
+        if elapsed >= interval {
+            cancel()
+            fire(time, onSeek)
+            return
+        }
+        pendingTime = time
+        pendingSeek = onSeek
+        guard pendingTask == nil else { return }
+        let delay = max(0, interval - elapsed)
+        pendingTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard let self, !Task.isCancelled else { return }
+            self.pendingTask = nil
+            self.flush()
+        }
+    }
+
+    /// Sends the latest pending seek now, e.g. when a drag ends.
+    func flush() {
+        pendingTask?.cancel()
+        pendingTask = nil
+        if let time = pendingTime, let onSeek = pendingSeek {
+            fire(time, onSeek)
+        }
+        pendingTime = nil
+        pendingSeek = nil
+    }
+
+    func cancel() {
+        pendingTask?.cancel()
+        pendingTask = nil
+        pendingTime = nil
+        pendingSeek = nil
+    }
+
+    private func fire(_ time: Double, _ onSeek: (Double) -> Void) {
+        lastFireTime = Date()
+        onSeek(time)
+    }
+}
+
 struct TrimTimelineView: View {
     @Binding private var trimStart: Double
     @Binding private var trimEnd: Double
@@ -86,6 +142,12 @@ struct TrimTimelineView: View {
     @State private var isDraggingStartHandle: Bool = false
     @State private var isDraggingEndHandle: Bool = false
 
+    /// One throttle for every drag on the timeline, so handle and scrub seeks share a budget.
+    @State private var seekThrottle = TimelineSeekThrottle()
+
+    /// Snapping grid (one frame for video), range rules and minimum length.
+    private var editor: TrimEditor { TrimEditor(duration: duration, step: step) }
+
     private let filmstripHeight: CGFloat = 72
     private let waveformHeight: CGFloat = 66
     private let combinedHeight: CGFloat = 138
@@ -110,7 +172,7 @@ struct TrimTimelineView: View {
         chapters: [Chapter] = [],
         showChapters: Bool = true,
         isLoading: Bool,
-        step: Double = 0.1,
+        step: Double = TrimEditor.fallbackStep,
         hideFilmstrip: Bool = false,
         compactMode: Bool = false,
         onEditingChanged: @escaping (Bool) -> Void,
@@ -158,9 +220,9 @@ struct TrimTimelineView: View {
 
     private var accessibleReadyTimelineControls: some View {
         let timelineDuration = duration
-        let requestedIncrement = step.isFinite && step > 0 ? step : 0.1
-        let increment = min(requestedIncrement, timelineDuration / 2)
-        let minimumGap = increment
+        let editor = editor
+        // VoiceOver steps in tenths of a second; frame-by-frame would be impractically slow.
+        let increment = min(max(editor.step, 0.1), timelineDuration / 2)
         return VStack {
             Slider(value: Binding(
                 get: { min(max(0, playbackTime), timelineDuration) },
@@ -175,7 +237,8 @@ struct TrimTimelineView: View {
                 get: { min(max(0, trimStart), timelineDuration) },
                 set: { value in
                     onEditingChanged(true)
-                    trimStart = max(0, min(value, trimEnd - minimumGap))
+                    trimStart = editor.start(value, end: trimEnd)
+                    onSeek(trimStart)
                     onEditingChanged(false)
                 }
             ), in: 0...timelineDuration, step: increment) {
@@ -188,7 +251,8 @@ struct TrimTimelineView: View {
                 get: { min(max(0, trimEnd), timelineDuration) },
                 set: { value in
                     onEditingChanged(true)
-                    trimEnd = min(timelineDuration, max(value, trimStart + minimumGap))
+                    trimEnd = editor.end(value, start: trimStart)
+                    onSeek(trimEnd)
                     onEditingChanged(false)
                 }
             ), in: 0...timelineDuration, step: increment) {
@@ -214,21 +278,20 @@ struct TrimTimelineView: View {
 private struct TrimHandlesInteractionLayer: View {
     @Binding var trimStart: Double
     @Binding var trimEnd: Double
-    let duration: Double
-    let step: Double
+    let editor: TrimEditor
     let isSymmetricScalingActive: Bool
+    let seekThrottle: TimelineSeekThrottle
     let onEditingChanged: (Bool) -> Void
+    let onSeek: (Double) -> Void
     @Binding var isDraggingStart: Bool
     @Binding var isDraggingEnd: Bool
 
     private let coordinateSpace = "trimHandleDrag"
 
-    @State private var startInitialValue: Double?
-    @State private var endInitialValue: Double?
+    /// Range when the current handle drag began; every update is computed from it.
+    @State private var dragInitialRange: (start: Double, end: Double)?
 
-    // For symmetric scaling, we need to store both initial values
-    @State private var symmetricInitialStart: Double?
-    @State private var symmetricInitialEnd: Double?
+    private var duration: Double { editor.duration }
 
     var body: some View {
         GeometryReader { geometry in
@@ -238,10 +301,10 @@ private struct TrimHandlesInteractionLayer: View {
 
             ZStack(alignment: .topLeading) {
                 handleView(range: handles.startRange, position: handles.startX, height: height, isActive: isDraggingStart)
-                    .gesture(startGesture(width: width))
+                    .gesture(handleGesture(isStart: true, width: width))
 
                 handleView(range: handles.endRange, position: handles.endX, height: height, isActive: isDraggingEnd)
-                    .gesture(endGesture(width: width))
+                    .gesture(handleGesture(isStart: false, width: width))
             }
             .frame(width: width, height: height, alignment: .topLeading)
             .allowsHitTesting(duration > 0)
@@ -263,132 +326,40 @@ private struct TrimHandlesInteractionLayer: View {
             .offset(x: range.lowerBound)
     }
 
-    private func startGesture(width: CGFloat) -> some Gesture {
+    private func handleGesture(isStart: Bool, width: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .named(coordinateSpace))
             .onChanged { value in
                 guard duration > 0 else { return }
-                if !isDraggingStart {
-                    isDraggingStart = true
-                    startInitialValue = trimStart
-                    symmetricInitialStart = trimStart
-                    symmetricInitialEnd = trimEnd
+                if dragInitialRange == nil {
+                    dragInitialRange = (trimStart, trimEnd)
+                    if isStart { isDraggingStart = true } else { isDraggingEnd = true }
                     onEditingChanged(true)
                 }
-
-                let baseValue = startInitialValue ?? trimStart
-                let deltaValue = delta(for: value.translation.width, width: width)
-                let proposed = baseValue + deltaValue
-                let snapped = snap(proposed)
+                guard let initial = dragInitialRange else { return }
+                let delta = Double(value.translation.width / width) * duration
 
                 if isSymmetricScalingActive {
-                    // Symmetric scaling: move end handle in opposite direction
-                    let initialStart = symmetricInitialStart ?? trimStart
-                    let initialEnd = symmetricInitialEnd ?? trimEnd
-
-                    var newStart = snap(initialStart + deltaValue)
-                    var newEnd = snap(initialEnd - deltaValue)
-
-                    // Clamp to valid bounds
-                    newStart = max(0, newStart)
-                    newEnd = min(duration, newEnd)
-
-                    // Ensure they don't cross
-                    let minGap = max(step, 0.0001)
-                    if newStart >= newEnd - minGap {
-                        let midpoint = (initialStart + initialEnd) / 2
-                        newStart = midpoint - minGap / 2
-                        newEnd = midpoint + minGap / 2
-                    }
-
-                    trimStart = newStart
-                    trimEnd = newEnd
+                    // Option: the other handle mirrors this one around the range's center.
+                    let range = editor.symmetric(
+                        start: initial.start, end: initial.end, growth: isStart ? -delta : delta
+                    )
+                    trimStart = range.start
+                    trimEnd = range.end
+                } else if isStart {
+                    trimStart = editor.start(initial.start + delta, end: initial.end)
                 } else {
-                    trimStart = clampStart(snapped)
+                    trimEnd = editor.end(initial.end + delta, start: initial.start)
                 }
+                // Show the frame under the dragged handle.
+                seekThrottle.seek(isStart ? trimStart : trimEnd, using: onSeek)
             }
             .onEnded { _ in
-                if isDraggingStart {
-                    isDraggingStart = false
-                    startInitialValue = nil
-                    symmetricInitialStart = nil
-                    symmetricInitialEnd = nil
-                    onEditingChanged(false)
-                }
+                guard dragInitialRange != nil else { return }
+                seekThrottle.flush()
+                dragInitialRange = nil
+                if isStart { isDraggingStart = false } else { isDraggingEnd = false }
+                onEditingChanged(false)
             }
-    }
-
-    private func endGesture(width: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 0, coordinateSpace: .named(coordinateSpace))
-            .onChanged { value in
-                guard duration > 0 else { return }
-                if !isDraggingEnd {
-                    isDraggingEnd = true
-                    endInitialValue = trimEnd
-                    symmetricInitialStart = trimStart
-                    symmetricInitialEnd = trimEnd
-                    onEditingChanged(true)
-                }
-
-                let baseValue = endInitialValue ?? trimEnd
-                let deltaValue = delta(for: value.translation.width, width: width)
-                let proposed = baseValue + deltaValue
-                let snapped = snap(proposed)
-
-                if isSymmetricScalingActive {
-                    // Symmetric scaling: move start handle in opposite direction
-                    let initialStart = symmetricInitialStart ?? trimStart
-                    let initialEnd = symmetricInitialEnd ?? trimEnd
-
-                    var newStart = snap(initialStart - deltaValue)
-                    var newEnd = snap(initialEnd + deltaValue)
-
-                    // Clamp to valid bounds
-                    newStart = max(0, newStart)
-                    newEnd = min(duration, newEnd)
-
-                    // Ensure they don't cross
-                    let minGap = max(step, 0.0001)
-                    if newStart >= newEnd - minGap {
-                        let midpoint = (initialStart + initialEnd) / 2
-                        newStart = midpoint - minGap / 2
-                        newEnd = midpoint + minGap / 2
-                    }
-
-                    trimStart = newStart
-                    trimEnd = newEnd
-                } else {
-                    trimEnd = clampEnd(snapped)
-                }
-            }
-            .onEnded { _ in
-                if isDraggingEnd {
-                    isDraggingEnd = false
-                    endInitialValue = nil
-                    symmetricInitialStart = nil
-                    symmetricInitialEnd = nil
-                    onEditingChanged(false)
-                }
-            }
-    }
-
-    private func clampStart(_ value: Double) -> Double {
-        let maxStart = trimEnd - max(step, 0.0001)
-        return min(max(0, value), maxStart)
-    }
-
-    private func clampEnd(_ value: Double) -> Double {
-        let minEnd = trimStart + max(step, 0.0001)
-        return max(min(duration, value), minEnd)
-    }
-
-    private func delta(for translation: CGFloat, width: CGFloat) -> Double {
-        guard width > 0 else { return 0 }
-        return Double(translation / width) * duration
-    }
-
-    private func snap(_ value: Double) -> Double {
-        guard step > 0 else { return value }
-        return (value / step).rounded() * step
     }
 }
 
@@ -596,12 +567,10 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
 
                 // Scrubbing layer (behind handles)
                 TimelineScrubLayer(
-                    duration: duration,
                     trimStart: $trimStart,
                     trimEnd: $trimEnd,
-                    step: step,
-                    isRangeSelectionActive: isCommandKeyPressed,
-                    isRangeSlidingActive: isShiftKeyPressed,
+                    editor: editor,
+                    seekThrottle: seekThrottle,
                     onEditingChanged: onEditingChanged,
                     onSeek: onSeek
                 )
@@ -609,10 +578,11 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
                 TrimHandlesInteractionLayer(
                     trimStart: $trimStart,
                     trimEnd: $trimEnd,
-                    duration: duration,
-                    step: step,
+                    editor: editor,
                     isSymmetricScalingActive: isOptionKeyPressed,
+                    seekThrottle: seekThrottle,
                     onEditingChanged: onEditingChanged,
+                    onSeek: onSeek,
                     isDraggingStart: $isDraggingStartHandle,
                     isDraggingEnd: $isDraggingEndHandle
                 )
@@ -1210,66 +1180,28 @@ private struct HoverLabelView: View {
 // MARK: - Scrubbing Layer
 
 private struct TimelineScrubLayer: View {
-    let duration: Double
     @Binding var trimStart: Double
     @Binding var trimEnd: Double
-    let step: Double
-    let isRangeSelectionActive: Bool
-    let isRangeSlidingActive: Bool
+    let editor: TrimEditor
+    let seekThrottle: TimelineSeekThrottle
     let onEditingChanged: (Bool) -> Void
     let onSeek: (Double) -> Void
 
-    @State private var isScrubbing = false
-    @State private var isRangeSelecting = false
-    @State private var rangeStartTime: Double?
-
-    // Range sliding state
-    @State private var isRangeSliding = false
-    @State private var slideInitialTrimStart: Double?
-    @State private var slideInitialTrimEnd: Double?
-    @State private var slideInitialClickTime: Double?
-
-    // Drag-seek throttling: coalesce rapid onChanged events so we don't flood the
-    // underlying player (MPV/VLC fallback formats are especially sensitive).
-    // The controller uses keyframe previews during MPV drags and an exact seek on release.
-    @State private var lastSeekFireTime: Date = .distantPast
-    @State private var pendingSeekTime: Double?
-    @State private var pendingSeekTask: Task<Void, Never>?
-    private let seekThrottleInterval: TimeInterval = 0.04  // ~25 Hz
-
-    private func throttledSeek(_ time: Double) {
-        let now = Date()
-        let elapsed = now.timeIntervalSince(lastSeekFireTime)
-        if elapsed >= seekThrottleInterval {
-            pendingSeekTask?.cancel()
-            pendingSeekTask = nil
-            pendingSeekTime = nil
-            lastSeekFireTime = now
-            onSeek(time)
-            return
-        }
-        pendingSeekTime = time
-        guard pendingSeekTask == nil else { return }
-        let delay = seekThrottleInterval - elapsed
-        pendingSeekTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            guard !Task.isCancelled, let t = pendingSeekTime else { return }
-            pendingSeekTask = nil
-            pendingSeekTime = nil
-            lastSeekFireTime = Date()
-            onSeek(t)
-        }
+    /// Chosen when the drag begins from the modifiers held then, and kept until release,
+    /// so pressing or releasing a key mid-drag can't switch modes.
+    private enum DragMode {
+        case scrub
+        /// Command: drag out a new range from `anchor`.
+        case rangeSelect(anchor: Double)
+        /// Shift inside the range: move the whole range.
+        case rangeSlide(start: Double, end: Double, clickTime: Double)
+        /// Started on a trim handle; the handle layer owns it.
+        case ignored
     }
 
-    private func flushPendingSeek() {
-        pendingSeekTask?.cancel()
-        pendingSeekTask = nil
-        if let t = pendingSeekTime {
-            pendingSeekTime = nil
-            lastSeekFireTime = Date()
-            onSeek(t)
-        }
-    }
+    @State private var dragMode: DragMode?
+
+    private var duration: Double { editor.duration }
 
     var body: some View {
         GeometryReader { geometry in
@@ -1280,143 +1212,89 @@ private struct TimelineScrubLayer: View {
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
                             guard duration > 0 else { return }
-
                             let width = geometry.size.width
-                            let clickX = value.location.x
-                            let clickTime = timeForPosition(clickX, width: width)
+                            let clickTime = timeForPosition(value.location.x, width: width)
+                            let mode = dragMode ?? beginDrag(at: value.startLocation.x, width: width)
 
-                            // A gesture belongs to its initial target, even if it later crosses a handle.
-                            if !isScrubbing && !isRangeSelecting && !isRangeSliding {
-                                let handles = TrimHandleGeometry(trimStart: trimStart, trimEnd: trimEnd, duration: duration, width: width)
-                                guard !handles.containsHandle(at: value.startLocation.x) else { return }
-                            }
-
-                            // Range selection mode when Command is held
-                            if isRangeSelectionActive {
-                                if !isRangeSelecting {
-                                    // Start of range selection - set in-point
-                                    isRangeSelecting = true
-                                    onEditingChanged(true)
-                                    let snapped = snap(clickTime)
-                                    rangeStartTime = snapped
-                                    trimStart = max(0, snapped)
-                                    onSeek(trimStart)
-                                    lastSeekFireTime = Date()
-                                } else {
-                                    // During range selection - update out-point preview
-                                    let snapped = snap(clickTime)
-                                    // Temporarily update end to show visual feedback
-                                    let start = rangeStartTime ?? trimStart
-                                    if snapped >= start {
-                                        trimEnd = min(duration, snapped)
-                                    } else {
-                                        // Dragging before start - swap preview
-                                        trimStart = max(0, snapped)
-                                        trimEnd = min(duration, start)
-                                    }
-                                    throttledSeek(snapped)
-                                }
+                            switch mode {
+                            case .ignored:
                                 return
+                            case .scrub:
+                                seekThrottle.seek(clickTime, using: onSeek)
+                            case .rangeSelect(let anchor):
+                                selectRange(from: anchor, to: clickTime)
+                                seekThrottle.seek(editor.snap(clickTime), using: onSeek)
+                            case .rangeSlide(let start, let end, let initialClick):
+                                let range = editor.slid(start: start, end: end, by: clickTime - initialClick)
+                                setRange(start: range.start, end: range.end)
+                                seekThrottle.seek(clickTime, using: onSeek)
                             }
-
-                            // Range sliding mode when Shift is held and click is between trim points
-                            if isRangeSlidingActive {
-                                let isBetweenTrimPoints = clickTime > trimStart && clickTime < trimEnd
-
-                                if !isRangeSliding && isBetweenTrimPoints {
-                                    // Start of range sliding
-                                    isRangeSliding = true
-                                    onEditingChanged(true)
-                                    slideInitialTrimStart = trimStart
-                                    slideInitialTrimEnd = trimEnd
-                                    slideInitialClickTime = clickTime
-                                } else if isRangeSliding {
-                                    // During range sliding - move both points by the same delta
-                                    guard let initialStart = slideInitialTrimStart,
-                                          let initialEnd = slideInitialTrimEnd,
-                                          let initialClick = slideInitialClickTime else { return }
-
-                                    let delta = clickTime - initialClick
-                                    let rangeDuration = initialEnd - initialStart
-
-                                    // Calculate new positions
-                                    var newStart = initialStart + delta
-                                    var newEnd = initialEnd + delta
-
-                                    // Clamp to valid bounds
-                                    if newStart < 0 {
-                                        newStart = 0
-                                        newEnd = rangeDuration
-                                    }
-                                    if newEnd > duration {
-                                        newEnd = duration
-                                        newStart = duration - rangeDuration
-                                    }
-
-                                    // Snap to grid
-                                    trimStart = snap(max(0, newStart))
-                                    trimEnd = snap(min(duration, newEnd))
-
-                                    // Seek to current position within the range
-                                    throttledSeek(clickTime)
-                                }
-                                return
-                            }
-
-                            if !isScrubbing {
-                                isScrubbing = true
-                                onEditingChanged(true)
-                            }
-                            throttledSeek(clickTime)
                         }
                         .onEnded { value in
-                            // Include the release location even when the final drag update was throttled.
-                            if isScrubbing || isRangeSelecting || isRangeSliding {
-                                pendingSeekTime = timeForPosition(value.location.x, width: geometry.size.width)
+                            defer { dragMode = nil }
+                            guard let mode = dragMode else { return }
+                            if case .ignored = mode { return }
+
+                            // Include the release location even when the last update was throttled.
+                            let releaseTime = timeForPosition(value.location.x, width: geometry.size.width)
+                            if case .rangeSelect(let anchor) = mode {
+                                selectRange(from: anchor, to: releaseTime)
                             }
-                            flushPendingSeek()
-
-                            if isRangeSelecting {
-                                // End of range selection - finalize out-point
-                                let width = geometry.size.width
-                                let clickX = value.location.x
-                                let time = timeForPosition(clickX, width: width)
-                                let snapped = snap(time)
-                                let start = rangeStartTime ?? trimStart
-
-                                // Ensure start < end, swap if necessary
-                                if snapped >= start {
-                                    trimStart = max(0, start)
-                                    trimEnd = min(duration, snapped)
-                                } else {
-                                    trimStart = max(0, snapped)
-                                    trimEnd = min(duration, start)
-                                }
-
-                                onEditingChanged(false)
-                            }
-
-                            if isRangeSliding {
-                                onEditingChanged(false)
-                            }
-
-                            if isScrubbing { onEditingChanged(false) }
-
-                            // Always reset all drag states to prevent stuck modes
-                            isRangeSelecting = false
-                            rangeStartTime = nil
-                            isRangeSliding = false
-                            slideInitialTrimStart = nil
-                            slideInitialTrimEnd = nil
-                            slideInitialClickTime = nil
-                            isScrubbing = false
+                            seekThrottle.seek(releaseTime, using: onSeek)
+                            seekThrottle.flush()
+                            onEditingChanged(false)
                         }
                 )
         }
         .onDisappear {
-            pendingSeekTask?.cancel()
-            pendingSeekTask = nil
-            pendingSeekTime = nil
+            seekThrottle.cancel()
+        }
+    }
+
+    private func beginDrag(at startX: CGFloat, width: CGFloat) -> DragMode {
+        // A gesture belongs to its initial target, even if it later crosses a handle.
+        let handles = TrimHandleGeometry(trimStart: trimStart, trimEnd: trimEnd, duration: duration, width: width)
+        guard !handles.containsHandle(at: startX) else {
+            dragMode = .ignored
+            return .ignored
+        }
+
+        let startTime = timeForPosition(startX, width: width)
+        let flags = NSEvent.modifierFlags
+        let mode: DragMode
+        if flags.contains(.command) {
+            mode = .rangeSelect(anchor: editor.snap(startTime))
+        } else if flags.contains(.shift), startTime > trimStart, startTime < trimEnd {
+            mode = .rangeSlide(start: trimStart, end: trimEnd, clickTime: startTime)
+        } else {
+            mode = .scrub
+        }
+        dragMode = mode
+        onEditingChanged(true)
+        return mode
+    }
+
+    /// Range between the anchor and the pointer, in either direction, at least one step long.
+    private func selectRange(from anchor: Double, to time: Double) {
+        let snapped = editor.clampedTime(editor.snap(time))
+        var start = min(anchor, snapped)
+        var end = max(anchor, snapped)
+        if end - start < editor.minimumLength {
+            end = min(duration, start + editor.minimumLength)
+            start = max(0, end - editor.minimumLength)
+        }
+        setRange(start: start, end: end)
+    }
+
+    /// Writes both points in an order that never momentarily crosses them, since the trim
+    /// bindings clear the opposite point when a range would collapse.
+    private func setRange(start: Double, end: Double) {
+        if start >= trimEnd {
+            trimEnd = end
+            trimStart = start
+        } else {
+            trimStart = start
+            trimEnd = end
         }
     }
 
@@ -1424,11 +1302,6 @@ private struct TimelineScrubLayer: View {
         guard width > 0 else { return 0 }
         let fraction = Double(max(0, min(x, width)) / width)
         return max(0, min(duration, duration * fraction))
-    }
-
-    private func snap(_ value: Double) -> Double {
-        guard step > 0 else { return value }
-        return (value / step).rounded() * step
     }
 }
 

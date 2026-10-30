@@ -15,6 +15,9 @@ struct PreviewPlayerContent: View {
     let togglePlaybackControls: () -> Void
     let keyHandler: (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool
     @Binding var currentPlaybackTime: Double
+    /// Aspect ratio chosen in the crop panel. Kept outside `item.cropConfig` because an
+    /// uncropped frame stores no config, yet a lock chosen for it must still apply to drags.
+    var cropAspectRatioLock: AspectRatio = .free
     @State private var showPreviewUnavailable = false
 
     private struct PreviewAvailabilityKey: Equatable {
@@ -27,6 +30,23 @@ struct PreviewPlayerContent: View {
             return CGFloat(ratio)
         }
         return 16.0 / 9.0
+    }
+
+    private var cropOverlay: some View {
+        CropOverlayView(
+            cropConfig: Binding(
+                get: { item.cropConfig ?? CropConfig(normalizedRect: .fullFrame) },
+                set: { newValue in
+                    var config = newValue
+                    // A crop started from the full frame has no config yet; record the chosen ratio.
+                    if cropAspectRatioLock != .free { config.aspectRatioLock = cropAspectRatioLock }
+                    item.cropConfig = config.isActive ? config : nil
+                }
+            ),
+            displayAspectRatio: Double(playerAspectRatio),
+            lockedAspectRatio: cropAspectRatioLock.numericRatio,
+            isEnabled: true
+        )
     }
 
     private var isPreviewAvailable: Bool {
@@ -100,16 +120,7 @@ struct PreviewPlayerContent: View {
 
                     // Crop overlay
                     if controller.isCropEnabled, item.hasVideoStream {
-                        CropOverlayView(
-                            cropConfig: Binding(
-                                get: { item.cropConfig ?? CropConfig(normalizedRect: .fullFrame) },
-                                set: { item.cropConfig = $0.isActive ? $0 : nil }
-                            ),
-                            sourceWidth: item.metadata?.primaryVideoStream?.width ?? 1920,
-                            sourceHeight: item.metadata?.primaryVideoStream?.height ?? 1080,
-                            videoAspectRatio: Double(playerAspectRatio),
-                            isEnabled: true
-                        )
+                        cropOverlay
                     }
 
                     overlayIndicators
@@ -131,16 +142,7 @@ struct PreviewPlayerContent: View {
 
                     // Crop overlay
                     if controller.isCropEnabled, item.hasVideoStream {
-                        CropOverlayView(
-                            cropConfig: Binding(
-                                get: { item.cropConfig ?? CropConfig(normalizedRect: .fullFrame) },
-                                set: { item.cropConfig = $0.isActive ? $0 : nil }
-                            ),
-                            sourceWidth: item.metadata?.primaryVideoStream?.width ?? 1920,
-                            sourceHeight: item.metadata?.primaryVideoStream?.height ?? 1080,
-                            videoAspectRatio: Double(playerAspectRatio),
-                            isEnabled: true
-                        )
+                        cropOverlay
                     }
 
                     overlayIndicators

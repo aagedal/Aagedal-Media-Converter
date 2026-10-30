@@ -802,11 +802,30 @@ enum FFMPEGCommandBuilder {
 }
 
 extension FFMPEGCommandBuilder {
+    /// Frame geometry as FFmpeg's filters see it. FFmpeg autorotates before filtering, so a
+    /// portrait phone clip stored as 1920x1080 with a -90° display matrix filters as 1080x1920.
     struct SourceGeometry {
         let width: Int
         let height: Int
         let pixelAspectRatio: Double?
         let displayAspectRatio: Double?
+
+        init(width: Int, height: Int, pixelAspectRatio: Double?, displayAspectRatio: Double?) {
+            self.width = width
+            self.height = height
+            self.pixelAspectRatio = pixelAspectRatio
+            self.displayAspectRatio = displayAspectRatio
+        }
+
+        init?(stream: VideoMetadata.VideoStream) {
+            guard let width = stream.orientedWidth, let height = stream.orientedHeight else { return nil }
+            self.init(
+                width: width,
+                height: height,
+                pixelAspectRatio: stream.orientedPixelAspectRatio,
+                displayAspectRatio: stream.displayAspectRatio?.doubleValue
+            )
+        }
     }
 
     /// Resolve crop geometry from request metadata, a timed-media probe, or a still image.
@@ -818,27 +837,15 @@ extension FFMPEGCommandBuilder {
         probeMetadataIfNeeded: Bool = true
     ) async -> SourceGeometry? {
         if let stream = sourceMetadata?.primaryVideoStream,
-           let width = stream.width,
-           let height = stream.height {
-            return SourceGeometry(
-                width: width,
-                height: height,
-                pixelAspectRatio: stream.pixelAspectRatio?.doubleValue,
-                displayAspectRatio: stream.displayAspectRatio?.doubleValue
-            )
+           let geometry = SourceGeometry(stream: stream) {
+            return geometry
         }
 
         if probeMetadataIfNeeded,
            let metadata = try? await BoundedVideoMetadataProbe.metadata(for: sourceURL),
            let stream = metadata.primaryVideoStream,
-           let width = stream.width,
-           let height = stream.height {
-            return SourceGeometry(
-                width: width,
-                height: height,
-                pixelAspectRatio: stream.pixelAspectRatio?.doubleValue,
-                displayAspectRatio: stream.displayAspectRatio?.doubleValue
-            )
+           let geometry = SourceGeometry(stream: stream) {
+            return geometry
         }
 
         guard let imageSource = CGImageSourceCreateWithURL(sourceURL as CFURL, nil),

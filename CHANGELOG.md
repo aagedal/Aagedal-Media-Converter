@@ -1,3 +1,21 @@
+# v.4.7.0
+
+### Crop
+
+- Cropping portrait phone videos and other rotated clips works. The crop box, pixel fields and output now follow the picture as it is shown; previously FFmpeg rejected the crop, or cut the wrong area and squeezed the result. AV2 encodes of rotated clips also keep their portrait shape.
+- Dragging an edge or corner past the frame, or past the opposite edge, no longer moves the rest of the box. With an aspect ratio locked, corners follow vertical drags too and stop at the frame instead of sliding.
+- Holding Shift before you start dragging keeps the box's shape, and no longer switches off a locked aspect ratio.
+- Choosing an aspect ratio from the menu or with ⌘1–⌘9 gives the same box. Center now centers the current box instead of replacing it with an 80% box, and both respect the locked ratio.
+- The pixel fields follow the box while you drag, apply when you leave a field as well as on Return, stay inside the frame, and keep a locked aspect ratio by adjusting the other dimension. The crop panel shows the output size, including the square-pixel size for anamorphic sources.
+- Edges can be grabbed along their whole length, and the pointer shows the standard macOS resize cursors.
+
+### Trim
+
+- Trim handles and range drags snap to frames instead of a fixed 0.1-second grid, so any frame can be an in or out point. Points within half a frame of the start or end count as untrimmed.
+- Setting an in-point after the out-point (I), or an out-point before the in-point (O), now clears the other point instead of leaving an empty range.
+- Shift-dragging the range keeps its length exactly, and Option-dragging a handle stays centered when one side reaches the start or end of the file.
+- Dragging trim handles sends fewer seeks to the player, which keeps MPV previews responsive. The drag mode (scrub, ⌘ range select, ⇧ slide) is chosen when you press the mouse button and no longer changes if you press or release a key mid-drag; ⇧-dragging outside the range now scrubs.
+
 # v.4.6.0
 
 ### Downloads

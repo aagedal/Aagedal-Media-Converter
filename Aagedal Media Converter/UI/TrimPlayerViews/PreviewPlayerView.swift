@@ -43,7 +43,8 @@ struct PreviewPlayerView: View {
                 showsPlaybackControls: showsPlaybackControls,
                 togglePlaybackControls: { showsPlaybackControls.toggle() },
                 keyHandler: handleKeyCommand,
-                currentPlaybackTime: $currentPlaybackTime
+                currentPlaybackTime: $currentPlaybackTime,
+                cropAspectRatioLock: selectedCropAspectRatio
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.black.opacity(0.9))
@@ -119,38 +120,26 @@ struct PreviewPlayerView: View {
         .onChange(of: item) { _, newValue in controller.updateVideoItem(newValue) }
     }
 
+    /// Trim rules for this item; the timeline uses the same duration and frame grid.
+    private var trimEditor: TrimEditor {
+        TrimEditor(duration: controller.effectiveDuration, frameRate: item.trimFrameRate)
+    }
+
+    // The timeline seeks (throttled) while it edits these, so the setters only store values.
     private var trimStartBinding: Binding<Double> {
         Binding(
             get: { item.trimStart ?? 0 },
             set: { newValue in
-                let duration = max(item.durationSeconds, 0)
-                let clamped = max(0, min(newValue, duration))
-                let sanitized = clamped <= 0.05 ? nil : clamped
-                item.trimStart = sanitized
-                if let end = item.trimEnd, end < item.effectiveTrimStart {
-                    item.trimEnd = sanitized
-                }
-                // Seek to the new trim start position to show the first frame
-                controller.seekTo(item.effectiveTrimStart)
+                (item.trimStart, item.trimEnd) = trimEditor.settingIn(newValue, end: item.trimEnd)
             }
         )
     }
 
     private var trimEndBinding: Binding<Double> {
         Binding(
-            get: { item.trimEnd ?? item.durationSeconds },
+            get: { item.trimEnd ?? trimEditor.duration },
             set: { newValue in
-                let duration = max(item.durationSeconds, 0)
-                let clamped = max(0, min(newValue, duration))
-                let minEnd = item.effectiveTrimStart
-                let sanitizedValue = max(clamped, minEnd)
-                if sanitizedValue >= duration - 0.05 {
-                    item.trimEnd = nil
-                } else {
-                    item.trimEnd = sanitizedValue
-                }
-                // Seek to the new trim end position to show the last frame
-                controller.seekTo(item.effectiveTrimEnd)
+                (item.trimStart, item.trimEnd) = trimEditor.settingOut(newValue, start: item.trimStart)
             }
         )
     }
@@ -229,38 +218,20 @@ struct PreviewPlayerView: View {
             // Option+I: Clear trim start (set to beginning)
             item.trimStart = nil
         } else {
-            // I: Set trim start to current playback position
-            // Use currentPlaybackTime directly instead of getCurrentTime() to work during preparation
-            let currentTime = currentPlaybackTime
-            let duration = max(item.durationSeconds, 0)
-            let clamped = max(0, min(currentTime, duration))
-            // Only set if it's not at the very start
-            item.trimStart = clamped <= 0.05 ? nil : clamped
-            // Ensure trim end is after trim start
-            if let end = item.trimEnd, end < item.effectiveTrimStart {
-                item.trimEnd = item.trimStart
-            }
+            // I: Set trim start to current playback position. An in-point past the out-point
+            // clears the out-point. Uses currentPlaybackTime so it works during preparation.
+            (item.trimStart, item.trimEnd) = trimEditor.settingIn(currentPlaybackTime, end: item.trimEnd)
         }
     }
-    
+
     private func handleTrimOutPoint(clearToEnd: Bool) {
         if clearToEnd {
             // Option+O: Clear trim end (set to end of video)
             item.trimEnd = nil
         } else {
-            // O: Set trim end to current playback position
-            // Use currentPlaybackTime directly instead of getCurrentTime() to work during preparation
-            let currentTime = currentPlaybackTime
-            let duration = max(item.durationSeconds, 0)
-            let clamped = max(0, min(currentTime, duration))
-            let minEnd = item.effectiveTrimStart
-            let sanitizedValue = max(clamped, minEnd)
-            // Only set if it's not at the very end
-            if sanitizedValue >= duration - 0.05 {
-                item.trimEnd = nil
-            } else {
-                item.trimEnd = sanitizedValue
-            }
+            // O: Set trim end to current playback position. An out-point before the in-point
+            // clears the in-point.
+            (item.trimStart, item.trimEnd) = trimEditor.settingOut(currentPlaybackTime, start: item.trimStart)
         }
     }
 
@@ -268,75 +239,17 @@ struct PreviewPlayerView: View {
 
     /// Move the crop box by the given delta in normalized coordinates
     private func moveCropBox(dx: Double, dy: Double) {
-        var config = item.cropConfig ?? CropConfig(normalizedRect: .fullFrame)
-        var rect = config.normalizedRect
-
-        // Apply the delta
-        rect.x += dx
-        rect.y += dy
-
-        // Clamp to bounds (0-1)
-        rect.x = max(0, min(1 - rect.width, rect.x))
-        rect.y = max(0, min(1 - rect.height, rect.y))
-
-        config.normalizedRect = rect
-        item.cropConfig = config.isActive ? config : nil
+        let lock = selectedCropAspectRatio
+        item.updateCrop { config, editor in
+            config.normalizedRect = editor.moved(config.normalizedRect, by: CGSize(width: dx, height: dy))
+            config.aspectRatioLock = lock == .free ? nil : lock
+        }
     }
 
     /// Select a crop aspect ratio preset via keyboard shortcut
     private func selectCropAspectRatio(_ newRatio: AspectRatio) {
         selectedCropAspectRatio = newRatio
-
-        var config = item.cropConfig ?? CropConfig(normalizedRect: .fullFrame)
-        config.aspectRatioLock = newRatio == .free ? nil : newRatio
-
-        // If not free, adjust the rectangle to match the aspect ratio
-        if let targetRatio = newRatio.numericRatio {
-            var rect = config.normalizedRect
-
-            // Calculate center point to maintain position
-            let centerX = rect.x + rect.width / 2
-            let centerY = rect.y + rect.height / 2
-
-            // Get the video's display aspect ratio
-            let videoDisplayAspectRatio = item.videoDisplayAspectRatio ?? (16.0 / 9.0)
-
-            // Convert target aspect ratio from VISUAL space to normalized (source-pixel) space
-            let normalizedTargetRatio = targetRatio / videoDisplayAspectRatio
-
-            // Calculate dimensions that maintain aspect ratio and fit within bounds
-            var newWidth: Double
-            var newHeight: Double
-
-            // Try to fit rectangle with target aspect ratio within full frame
-            if normalizedTargetRatio >= 1.0 {
-                // Wider than tall: fit width to 1.0, scale height accordingly
-                newWidth = 1.0
-                newHeight = newWidth / normalizedTargetRatio
-                if newHeight > 1.0 {
-                    newHeight = 1.0
-                    newWidth = newHeight * normalizedTargetRatio
-                }
-            } else {
-                // Taller than wide: fit height to 1.0, scale width accordingly
-                newHeight = 1.0
-                newWidth = newHeight * normalizedTargetRatio
-                if newWidth > 1.0 {
-                    newWidth = 1.0
-                    newHeight = newWidth / normalizedTargetRatio
-                }
-            }
-
-            // Position to maintain center as much as possible, but ensure it fits
-            rect.width = newWidth
-            rect.height = newHeight
-            rect.x = max(0, min(1.0 - rect.width, centerX - rect.width / 2))
-            rect.y = max(0, min(1.0 - rect.height, centerY - rect.height / 2))
-
-            config.normalizedRect = rect
-        }
-
-        item.cropConfig = config.isActive ? config : nil
+        item.updateCrop { config, editor in config.lockAspectRatio(newRatio, using: editor) }
     }
 
     /// Reset crop to full frame
@@ -345,57 +258,13 @@ struct PreviewPlayerView: View {
         selectedCropAspectRatio = .free
     }
 
-    /// Scale the crop box by a factor while maintaining center position and aspect ratio
+    /// Scale the crop box around its center, keeping a locked aspect ratio
     private func scaleCropBox(factor: Double) {
-        var config = item.cropConfig ?? CropConfig(normalizedRect: .fullFrame)
-        var rect = config.normalizedRect
-
-        // Calculate center point
-        let centerX = rect.x + rect.width / 2
-        let centerY = rect.y + rect.height / 2
-
-        // Scale dimensions
-        var newWidth = rect.width * factor
-        var newHeight = rect.height * factor
-
-        // Clamp to minimum size (2% of frame)
-        let minSize = 0.02
-        newWidth = max(minSize, newWidth)
-        newHeight = max(minSize, newHeight)
-
-        // Clamp to maximum size (full frame)
-        newWidth = min(1.0, newWidth)
-        newHeight = min(1.0, newHeight)
-
-        // If aspect ratio is locked, maintain it
-        if let targetRatio = selectedCropAspectRatio.numericRatio {
-            let videoDisplayAspectRatio = item.videoDisplayAspectRatio ?? (16.0 / 9.0)
-            let normalizedTargetRatio = targetRatio / videoDisplayAspectRatio
-
-            // Adjust to maintain aspect ratio
-            if normalizedTargetRatio >= 1.0 {
-                newHeight = newWidth / normalizedTargetRatio
-                if newHeight > 1.0 {
-                    newHeight = 1.0
-                    newWidth = newHeight * normalizedTargetRatio
-                }
-            } else {
-                newWidth = newHeight * normalizedTargetRatio
-                if newWidth > 1.0 {
-                    newWidth = 1.0
-                    newHeight = newWidth / normalizedTargetRatio
-                }
-            }
+        let lock = selectedCropAspectRatio
+        item.updateCrop { config, editor in
+            config.normalizedRect = editor.scaled(config.normalizedRect, by: factor, aspectRatio: lock.numericRatio)
+            config.aspectRatioLock = lock == .free ? nil : lock
         }
-
-        // Position centered
-        rect.width = newWidth
-        rect.height = newHeight
-        rect.x = max(0, min(1.0 - rect.width, centerX - rect.width / 2))
-        rect.y = max(0, min(1.0 - rect.height, centerY - rect.height / 2))
-
-        config.normalizedRect = rect
-        item.cropConfig = config.isActive ? config : nil
     }
 
     private func handleKeyCommand(key: String, modifiers: NSEvent.ModifierFlags, specialKey: NSEvent.SpecialKey? = nil) -> Bool {

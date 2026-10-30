@@ -1085,6 +1085,13 @@ struct VideoItem: Identifiable, Equatable, Sendable {
         return max(end, effectiveTrimStart)
     }
     
+    /// Frame rate the trim timeline snaps to; `nil` for audio-only items or unknown rates.
+    var trimFrameRate: Double? {
+        if let config = imageSequenceConfig { return config.frameRate }
+        guard hasVideoStream else { return nil }
+        return metadata?.primaryVideoStream?.frameRate?.value
+    }
+
     /// Duration of the trimmed range in seconds.
     var trimmedDuration: Double {
         max(effectiveTrimEnd - effectiveTrimStart, 0)
@@ -1134,14 +1141,33 @@ struct VideoItem: Identifiable, Equatable, Sendable {
             return ratioValue
         }
         if
-            let width = metadata?.primaryVideoStream?.width,
-            let height = metadata?.primaryVideoStream?.height,
+            let width = metadata?.primaryVideoStream?.orientedWidth,
+            let height = metadata?.primaryVideoStream?.orientedHeight,
             width > 0,
             height > 0
         {
             return Double(width) / Double(height)
         }
         return nil
+    }
+
+    /// The frame the crop tools edit: oriented the way the preview shows it and FFmpeg's filters see it.
+    var cropFrame: CropFrame? {
+        guard let stream = metadata?.primaryVideoStream,
+              let width = stream.orientedWidth, let height = stream.orientedHeight else { return nil }
+        return CropFrame(pixelWidth: width, pixelHeight: height, displayAspectRatio: videoDisplayAspectRatio)
+    }
+
+    var cropEditor: CropEditor {
+        CropEditor(displayAspectRatio: videoDisplayAspectRatio ?? 16.0 / 9.0)
+    }
+
+    /// Edits the crop starting from the full frame when none is set. A crop that ends up
+    /// covering the whole frame is stored as `nil`, so "no crop" has a single representation.
+    mutating func updateCrop(_ change: (inout CropConfig, CropEditor) -> Void) {
+        var config = cropConfig ?? CropConfig(normalizedRect: .fullFrame)
+        change(&config, cropEditor)
+        cropConfig = config.isActive ? config : nil
     }
 
     var videoResolutionDescription: String? {
