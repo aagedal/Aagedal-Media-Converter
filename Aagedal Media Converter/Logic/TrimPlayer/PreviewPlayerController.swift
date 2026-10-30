@@ -32,12 +32,21 @@ final class PreviewPlayerController: ObservableObject {
         let title: String
     }
 
+    /// mpv cubes volume/100 internally (audio_get_gain), so send the cube root to keep
+    /// the UI percentage linear in amplitude like AVPlayer. Same mapping as Aagedal Media Player.
+    nonisolated static func mpvVolume(for percent: Double) -> Double {
+        let amplitude = percent.isFinite ? min(100, max(0, percent)) / 100 : 1
+        return 100 * cbrt(amplitude)
+    }
+
     // MARK: - Published State
     
+    /// Linear amplitude percentage (0–100), matching AVPlayer.volume.
     @Published var volume: Double = 100 {
         didSet {
+            player?.volume = Float(volume / 100.0)
             if useMPV, let mpvPlayer {
-                mpvPlayer.volume = volume
+                mpvPlayer.volume = Self.mpvVolume(for: volume)
             }
             if let audioPlayer = imageSequenceAudioPlayer {
                 audioPlayer.volume = Float(volume / 100.0)
@@ -46,6 +55,7 @@ final class PreviewPlayerController: ObservableObject {
     }
     @Published var isMuted: Bool = false {
         didSet {
+            player?.isMuted = isMuted
             if useMPV, let mpvPlayer {
                 mpvPlayer.isMuted = isMuted
             }
@@ -328,6 +338,8 @@ final class PreviewPlayerController: ObservableObject {
         // speech and turns them on by system preference. Use the file's own
         // default tracks instead; audio tracks are selected explicitly anyway.
         player.appliesMediaSelectionCriteriaAutomatically = false
+        player.volume = Float(volume / 100.0)
+        player.isMuted = isMuted
 
         self.player = player
         
@@ -381,7 +393,7 @@ final class PreviewPlayerController: ObservableObject {
         }
 
         // Apply volume/mute state before loading
-        mpv.volume = volume
+        mpv.volume = Self.mpvVolume(for: volume)
         mpv.isMuted = isMuted
 
         // Load without autostarting, with start time

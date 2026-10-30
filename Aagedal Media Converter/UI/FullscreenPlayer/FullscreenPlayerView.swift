@@ -48,6 +48,9 @@ struct FullscreenPlayerView: View {
     // Timeline scrubbing
     @State private var isNarrow = false
     @AppStorage("showCursorHideHint") private var showCursorHideHint: Bool = true
+    @AppStorage("fullscreenPlayerVolume") private var storedVolume: Double = 100
+    @AppStorage("fullscreenPlayerMuted") private var storedMuted: Bool = false
+    @State private var displaySleepBlocker = DisplaySleepBlocker()
 
     private let rightEdgeWidth: CGFloat = 60
     private let narrowBreakpoint: CGFloat = 620
@@ -308,6 +311,11 @@ struct FullscreenPlayerView: View {
             }
             autoPlayPending = false
         }
+        .onChange(of: overlay.isPlaying) { _, isPlaying in
+            displaySleepBlocker.setActive(isPlaying)
+        }
+        .onChange(of: controller.volume) { _, volume in storedVolume = volume }
+        .onChange(of: controller.isMuted) { _, muted in storedMuted = muted }
         .onChange(of: overlay.isVisible) { _, isVisible in
             onOverlayVisibilityChanged?(!isVisible)
         }
@@ -317,6 +325,8 @@ struct FullscreenPlayerView: View {
             autoAdvanceTriggered = false
             controller.playbackDidFinish = onPlaybackDidFinish
             overlay.bindPlayState(to: controller)
+            controller.volume = min(100, max(0, storedVolume))
+            controller.isMuted = storedMuted
 
             // Capture startTime immediately on appear to avoid any SwiftUI state issues
             let capturedStartTime = startTime
@@ -343,6 +353,7 @@ struct FullscreenPlayerView: View {
         .onDisappear {
             controller.playbackDidFinish = nil
             overlay.tearDown()
+            displaySleepBlocker.setActive(false)
 
             // Report final position before teardown
             let finalPosition = controller.currentPlaybackTime
@@ -464,18 +475,6 @@ struct FullscreenPlayerView: View {
                 #endif
             }
 
-            if isLowQualityPreview {
-                Text("Low quality preview")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.orange)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(Color.black.opacity(0.4))
-                    )
-            }
-
             Spacer()
 
             Button(action: onClose) {
@@ -595,6 +594,8 @@ struct FullscreenPlayerView: View {
         if !controller.subtitleTrackOptions.isEmpty {
             subtitleTrackSelector
         }
+
+        volumeControl
 
         toggleButton(systemName: queueAutoAdvanceState ? "arrow.right.circle.fill" : "arrow.right.circle",
                      isOn: queueAutoAdvanceState,
@@ -828,8 +829,35 @@ struct FullscreenPlayerView: View {
         return (controller.player?.rate ?? 0) != 0
     }
 
-    private var isLowQualityPreview: Bool {
-        false  // All playback now uses native AVPlayer or MPV
+    private var volumeControl: some View {
+        HStack(spacing: 4) {
+            Button {
+                controller.isMuted.toggle()
+            } label: {
+                Image(systemName: volumeSymbol)
+                    .font(.system(size: 13))
+                    .frame(width: 24, height: 28)
+            }
+            .buttonStyle(.plain)
+            .help(controller.isMuted ? "Unmute (M)" : "Mute (M)")
+            .accessibilityLabel(controller.isMuted ? "Unmute" : "Mute")
+            .accessibilityIdentifier("fullscreen.mute")
+
+            Slider(value: $controller.volume, in: 0...100)
+                .controlSize(.mini)
+                .frame(width: 70)
+                .help("Volume (⌃↑ / ⌃↓)")
+                .accessibilityLabel("Volume")
+                .accessibilityValue("\(Int(controller.volume.rounded())) percent")
+                .accessibilityIdentifier("fullscreen.volume")
+        }
+    }
+
+    private var volumeSymbol: String {
+        if controller.isMuted || controller.volume <= 0 { return "speaker.slash.fill" }
+        if controller.volume < 34 { return "speaker.wave.1.fill" }
+        if controller.volume < 67 { return "speaker.wave.2.fill" }
+        return "speaker.wave.3.fill"
     }
 
     private var audioTrackSelector: some View {
@@ -923,21 +951,6 @@ struct FullscreenPlayerView: View {
         }
     }
 
-    private func formatTime(_ seconds: Double) -> String {
-        guard seconds.isFinite && seconds >= 0 else { return "0:00" }
-        
-        let totalSeconds = Int(seconds)
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
-        let secs = totalSeconds % 60
-        
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, secs)
-        } else {
-            return String(format: "%d:%02d", minutes, secs)
-        }
-    }
-    
     // MARK: - Timecode Editing
     
     private func startTimecodeEdit() {
@@ -997,8 +1010,8 @@ struct FullscreenPlayerView: View {
             return
         }
         
-        // Clamp to valid range
-        let duration = max(itemState.durationSeconds, 0)
+        // Clamp to valid range (the player's duration covers files whose metadata is still loading)
+        let duration = observedDuration
         let clampedTime = max(0, min(seekTime, duration))
         
         // Seek to position
@@ -1145,14 +1158,14 @@ struct FullscreenPlayerView: View {
             itemState.trimStart = nil
         } else {
             let currentTime = controller.currentPlaybackTime
-            let duration = max(itemState.durationSeconds, 0)
+            let duration = observedDuration
             let clamped = max(0, min(currentTime, duration))
             itemState.trimStart = clamped <= 0.05 ? nil : clamped
             if let end = itemState.trimEnd, end < itemState.effectiveTrimStart {
                 itemState.trimEnd = itemState.trimStart
             }
         }
-        onTrimChanged?(itemState.trimStart, itemState.trimEnd)
+        trimDidChange()
     }
 
     private func handleTrimOutPoint(clearToEnd: Bool) {
@@ -1160,7 +1173,7 @@ struct FullscreenPlayerView: View {
             itemState.trimEnd = nil
         } else {
             let currentTime = controller.currentPlaybackTime
-            let duration = max(itemState.durationSeconds, 0)
+            let duration = observedDuration
             let clamped = max(0, min(currentTime, duration))
             let minEnd = itemState.effectiveTrimStart
             let sanitizedValue = max(clamped, minEnd)
@@ -1170,13 +1183,19 @@ struct FullscreenPlayerView: View {
                 itemState.trimEnd = sanitizedValue
             }
         }
-        onTrimChanged?(itemState.trimStart, itemState.trimEnd)
+        trimDidChange()
     }
 
     private func clearAllTrimPoints() {
         itemState.trimStart = nil
         itemState.trimEnd = nil
-        onTrimChanged?(nil, nil)
+        trimDidChange()
+    }
+
+    /// Keeps the player's trim/loop boundaries current and reports the change.
+    private func trimDidChange() {
+        controller.updateVideoItem(itemState)
+        onTrimChanged?(itemState.trimStart, itemState.trimEnd)
     }
 
     private func seekToTrimIn() {
@@ -1204,6 +1223,32 @@ private struct FullscreenAVPlayerView: NSViewRepresentable {
     
     func updateNSView(_ nsView: AVPlayerView, context: Context) {
         nsView.player = player
+    }
+}
+
+// MARK: - Display Sleep
+
+/// Keeps the display awake during playback. AVPlayer does this on its own; MPV and
+/// image-sequence playback don't, so fullscreen playback could dim mid-clip.
+private final class DisplaySleepBlocker {
+    private var activity: NSObjectProtocol?
+
+    func setActive(_ active: Bool) {
+        if active, activity == nil {
+            activity = ProcessInfo.processInfo.beginActivity(
+                options: [.idleDisplaySleepDisabled, .userInitiated],
+                reason: "Fullscreen video playback"
+            )
+        } else if !active, let activity {
+            ProcessInfo.processInfo.endActivity(activity)
+            self.activity = nil
+        }
+    }
+
+    deinit {
+        if let activity {
+            ProcessInfo.processInfo.endActivity(activity)
+        }
     }
 }
 
@@ -1539,6 +1584,23 @@ private struct FullscreenKeyboardHandler: NSViewRepresentable {
                         }
                         return nil
                     }
+                }
+
+                // M: Toggle mute. Ctrl+Up/Down: volume ±10%
+                if noModifiers && lower == "m" {
+                    let controller = self.controller
+                    MainActor.assumeIsolated { controller.isMuted.toggle() }
+                    return nil
+                }
+                if hasControl && !hasCommand && !hasOption,
+                   keyCode == UInt16(kVK_UpArrow) || keyCode == UInt16(kVK_DownArrow) {
+                    let delta: Double = keyCode == UInt16(kVK_UpArrow) ? 10 : -10
+                    let controller = self.controller
+                    MainActor.assumeIsolated {
+                        controller.volume = min(100, max(0, controller.volume + delta))
+                        if delta > 0 { controller.isMuted = false }
+                    }
+                    return nil
                 }
 
                 // CMD+S: Capture screenshot
