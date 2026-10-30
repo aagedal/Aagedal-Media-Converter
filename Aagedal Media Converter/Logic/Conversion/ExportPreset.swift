@@ -1611,6 +1611,23 @@ enum ExportPreset: String, CaseIterable, Identifiable {
         return defaults.bool(forKey: AppConstants.preserveMetadataPreferenceKey)
     }
 
+    /// Whether the preset can write a matte sidecar: single-file video outputs whose
+    /// format may drop alpha. Packages, image sequences, stream copy, AV2 and formats
+    /// that always keep alpha (FFV1) are excluded.
+    var supportsMatteSidecar: Bool {
+        switch self {
+        case .videoLoop, .videoLoopWithSound, .h264, .h265, .av1, .tvHEVC, .tvAVCIntra, .prores, .proxy,
+             .custom1, .custom2, .custom3, .custom4, .custom5, .custom6, .custom7, .custom8, .custom9, .custom10:
+            return true
+        case .animatedStill, .av2, .lossless, .streamCopy, .audioOnly, .imageSequence, .dcp, .imfJ2K, .imfProRes:
+            return false
+        }
+    }
+
+    func exportsMatteSidecar(defaults: UserDefaults = .standard) -> Bool {
+        supportsMatteSidecar && defaults.bool(forKey: AppConstants.matteSidecarPreferenceKey(for: self))
+    }
+
     var supportsOriginalMetadataPreservation: Bool {
         switch self {
         case .imageSequence, .dcp, .imfJ2K, .imfProRes: return false

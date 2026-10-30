@@ -27,6 +27,7 @@ enum SettingsSyncKeys {
         keys.formUnion(customPresetKeys)
         keys.formUnion(staticKeys)
         keys.formUnion(ExportPreset.allCases.map { AppConstants.preserveMetadataPreferenceKey(for: $0) })
+        keys.formUnion(ExportPreset.allCases.map { AppConstants.matteSidecarPreferenceKey(for: $0) })
         return keys
     }()
 
@@ -218,6 +219,7 @@ enum SettingsSyncKeys {
         AppConstants.audioWaveformBackgroundGradientEnabledKey,
         AppConstants.audioWaveformBackgroundGradientEndColorKey,
         AppConstants.audioWaveformOpacityKey,
+        AppConstants.audioWaveformTransparentBackgroundKey,
 
         // Timecode
         AppConstants.defaultTimecodeModeKey,

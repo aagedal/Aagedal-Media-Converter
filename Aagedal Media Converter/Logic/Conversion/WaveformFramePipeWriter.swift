@@ -14,10 +14,6 @@ enum WaveformFramePipeWriter {
 
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "WaveformPipeWriter")
 
-    /// Smoothing decay factor per frame. Fast attack (instant rise), slow release.
-    /// At 25 fps a value of 0.85 means ~150 ms half-life.
-    private static let decayFactor: Float = 0.85
-
     // MARK: - Public API
 
     /// Renders all waveform video frames and writes them to a subprocess's standard input.
@@ -38,6 +34,8 @@ enum WaveformFramePipeWriter {
     ///   - backgroundGradientEndHex: End color for background gradient (start is backgroundHex).
     ///   - backgroundImage: Pre-scaled CGImage to use as background (takes priority over gradient/solid).
     ///   - waveformOpacity: Opacity for waveform shapes (0.5–1.0), allows background to show through.
+    ///   - transparentBackground: Leave the background transparent and emit straight
+    ///     (non-premultiplied) alpha. Only pass `true` when the encoder keeps alpha.
     ///   - progressUpdate: Called with 0.0–1.0 progress fraction.
     static func writeFrames(
         to standardInput: SubprocessStandardInputWriter,
@@ -53,6 +51,7 @@ enum WaveformFramePipeWriter {
         backgroundGradientEndHex: String = "000000",
         backgroundImage: CGImage? = nil,
         waveformOpacity: Double = 1.0,
+        transparentBackground: Bool = false,
         progressUpdate: @escaping @Sendable (Double) -> Void
     ) async {
         let frameCount = frequencyData.frameCount
@@ -65,11 +64,18 @@ enum WaveformFramePipeWriter {
         let bgGradientEnd: (r: UInt8, g: UInt8, b: UInt8)? = backgroundGradientEnabled
             ? NativeWaveformRenderer.parseHexColor(backgroundGradientEndHex) : nil
 
-        // Smoothed magnitudes for animation (fast attack, slow release)
-        var smoothed = [Float](repeating: 0, count: bandCount)
-        var previousSmoothed: [Float]? = nil
+        // Smoothing, peak hold and ridge history (shared with the settings preview)
+        var animation = WaveformAnimationState(
+            bandCount: bandCount,
+            frameRate: frequencyData.frameRate,
+            style: style
+        )
 
-        logger.info("Starting native waveform render: \(frameCount) frames, \(width)x\(height), \(bandCount) bands")
+        // One bitmap reused for every frame — avoids allocating (and zero-filling)
+        // a full-resolution buffer per frame, which is ~33 MB at 4K.
+        let context = NativeWaveformVideoRenderer.makeContext(width: width, height: height)
+
+        logger.info("Starting native waveform render: \(frameCount) frames, \(width)x\(height), \(bandCount) bands, alpha: \(transparentBackground)")
 
         for frame in 0..<frameCount {
             // Check cancellation
@@ -78,22 +84,11 @@ enum WaveformFramePipeWriter {
                 break
             }
 
-            // Snapshot previous smoothed values for motion blur
-            let prevForBlur = previousSmoothed
+            let frameInput = animation.advance(raw: frequencyData.magnitudes[frame])
 
-            // Apply smoothing: fast attack (instant), slow release (decay)
-            let rawMagnitudes = frequencyData.magnitudes[frame]
-            previousSmoothed = smoothed
-            for band in 0..<bandCount {
-                let raw = rawMagnitudes[band]
-                smoothed[band] = max(raw, smoothed[band] * decayFactor)
-            }
-
-            // Render frame with motion blur trail from previous frame
             let frameData = NativeWaveformVideoRenderer.renderFrame(
                 style: style,
-                bandMagnitudes: smoothed,
-                previousMagnitudes: prevForBlur,
+                frame: frameInput,
                 width: width,
                 height: height,
                 foregroundColor: fg,
@@ -101,7 +96,9 @@ enum WaveformFramePipeWriter {
                 foregroundGradientEnd: fgGradientEnd,
                 backgroundGradientEnd: bgGradientEnd,
                 backgroundImage: backgroundImage,
-                waveformOpacity: waveformOpacity
+                waveformOpacity: waveformOpacity,
+                transparentBackground: transparentBackground,
+                context: context
             )
 
             // Write to pipe (blocks if FFmpeg's encoding is slower — natural backpressure)
