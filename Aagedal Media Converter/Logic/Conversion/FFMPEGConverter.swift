@@ -1996,6 +1996,14 @@ actor FFMPEGConverter {
 
                     // ----- Audio essence wrap (shared between App #2e and RDD 45) -----
                     var imfAudioMXF: URL? = nil
+                    var imfAudioLabels: IMFAudioLabels? = nil
+                    let imfTitle: String
+                    if let metaTitle = capturedRequest.imfMetadata?.contentTitleText, !metaTitle.isEmpty {
+                        imfTitle = metaTitle
+                    } else {
+                        imfTitle = capturedInputBaseName
+                    }
+                    let audioLanguage = capturedRequest.imfMetadata?.audioLanguage ?? "en"
                     if success {
                         progressUpdate(0.86, "Extracting audio for IMF")
                         print("[IMF] extracting audio")
@@ -2027,12 +2035,9 @@ actor FFMPEGConverter {
                             let tmpAudioMXF = FileManager.default.temporaryDirectory
                                 .appendingPathComponent("imf_audio_\(UUID().uuidString).mxf")
 
-                            // Pad the WAV to match the picture frame count so asdcp-wrap's
-                            // edit-unit index matches the actual essence length. Without this,
-                            // sources whose duration doesn't quantise cleanly to picture frames
-                            // (e.g. 156.36 s → 3754 frames @ 24 fps but only ~3752.6 audio
-                            // frames worth of samples) produce a truncated MXF that Resolve
-                            // refuses to play even though mpv tolerates it.
+                            // Fit the WAV to the picture frame count. Every CPL sequence must
+                            // last as long as the picture, so a short track file is invalid and
+                            // a long one only carries samples the composition never plays.
                             let duration = effectiveDurationBox.value ?? totalDurationBox.value
                             let pictureFrameCount = Self.resolvedIMFPictureFrameCount(
                                 exactFrameCount: exactPictureFrameCount,
@@ -2042,7 +2047,7 @@ actor FFMPEGConverter {
                             )
                             let wavURL: URL
                             if pictureFrameCount > 0,
-                               let padded = await self?.padWAVToFrameCount(
+                               let fitted = await self?.fitWAVToFrameCount(
                                    conversionID: conversionID,
                                    inputWAV: originalWavURL,
                                    frameCount: pictureFrameCount,
@@ -2050,22 +2055,53 @@ actor FFMPEGConverter {
                                    editRateDenominator: frameRate.editRateDenominator,
                                    ffmpegPath: capturedFfmpegPath
                                ) {
-                                wavURL = padded
-                                Self.cleanupTempFile(at: originalWavURL, label: "IMF audio WAV (pre-pad)")
+                                wavURL = fitted
+                                Self.cleanupTempFile(at: originalWavURL, label: "IMF audio WAV (pre-fit)")
                             } else {
                                 wavURL = originalWavURL
-                                print("[IMF] WAV padding skipped (frameCount=\(pictureFrameCount))")
+                                errorReason = String(localized: "IMF audio wrap failed: could not fit the audio to the picture duration", comment: "Shown when ffmpeg cannot pad or trim the extracted IMF audio to the exact picture length.")
+                                success = false
+                            }
+
+                            // IMF audio track files must carry an MCA soundfield group with the
+                            // spoken language. Layouts other than mono/stereo/5.1/7.1 stay unlabelled.
+                            var mcaLabelsURL: URL? = nil
+                            if success, let channelCount = Self.wavChannelCount(at: wavURL) {
+                                let soundfieldOverride = capturedRequest.audioRoutingConfig?.outputTracks
+                                    .lazy.compactMap { $0.mcaOverride?.soundfield }
+                                    .first { $0.channelCount == channelCount }
+                                if let labels = IMFAudioLabels(
+                                    channelCount: channelCount,
+                                    soundfieldOverride: soundfieldOverride,
+                                    language: audioLanguage,
+                                    title: imfTitle
+                                ) {
+                                    let labelsURL = FileManager.default.temporaryDirectory
+                                        .appendingPathComponent("imf_mca_labels_\(UUID().uuidString).txt")
+                                    do {
+                                        try labels.bmxLabelsFile.write(to: labelsURL, atomically: true, encoding: .utf8)
+                                        mcaLabelsURL = labelsURL
+                                        imfAudioLabels = labels
+                                    } catch {
+                                        Self.logger.error("Failed to write IMF MCA labels: \(error.localizedDescription, privacy: .public)")
+                                    }
+                                } else {
+                                    Self.logger.warning("IMF audio has \(channelCount) channels; no standard MCA layout, leaving it unlabelled")
+                                }
                             }
 
                             // raw2bmx's IMF writer produces clip-wrapped OP1a PCM with a
                             // 48 kHz edit rate. asdcp-wrap produces a DCP-style OPAtom
                             // track with a picture edit rate, unsuitable for an IMF CPL.
-                            if let raw2bmxPath = BinaryPathResolver.raw2bmxPath {
-                                let audioWrapArgs: [String] = [
+                            if success, let raw2bmxPath = BinaryPathResolver.raw2bmxPath {
+                                var audioWrapArgs: [String] = [
                                     "-t", "imf", "-o", tmpAudioMXF.path,
                                     "--track-map", "singlemca",
-                                    "--wave", wavURL.path
                                 ]
+                                if let mcaLabelsURL {
+                                    audioWrapArgs.append(contentsOf: ["--track-mca-labels", "x", mcaLabelsURL.path])
+                                }
+                                audioWrapArgs.append(contentsOf: ["--wave", wavURL.path])
                                 Self.logger.info("Launching raw2bmx for IMF audio")
                                 let wrapResult = await self?.runTrackedPackageWrapper(
                                     conversionID: conversionID,
@@ -2076,13 +2112,13 @@ actor FFMPEGConverter {
                                 switch wrapResult {
                                 case .success(let diagnostic):
                                     if !diagnostic.isEmpty {
-                                        Self.logger.info("asdcp-wrap IMF audio output: \(diagnostic.prefix(500), privacy: .public)")
+                                        Self.logger.info("raw2bmx IMF audio output: \(diagnostic.prefix(500), privacy: .public)")
                                     }
                                     imfAudioMXF = tmpAudioMXF
                                     Self.logger.info("IMF audio essence created (raw2bmx)")
                                     progressUpdate(0.94, "Wrapping audio essence")
                                 case .failed(_, let reason, let diagnostic):
-                                    Self.logger.error("asdcp-wrap failed for IMF audio: \(diagnostic.prefix(300), privacy: .public)")
+                                    Self.logger.error("raw2bmx failed for IMF audio: \(diagnostic.prefix(300), privacy: .public)")
                                     errorReason = Self.dcpIMFErrorReason(
                                         base: String(localized: "IMF audio wrap failed: \(reason)", comment: "Shown when raw2bmx cannot create the IMF audio essence."),
                                         stderr: diagnostic
@@ -2092,12 +2128,15 @@ actor FFMPEGConverter {
                                     errorReason = "Conversion cancelled"
                                     success = false
                                 }
-                            } else {
+                            } else if success {
                                 Self.logger.error("raw2bmx not found — cannot create IMF audio essence")
                                 errorReason = String(localized: "IMF audio wrap failed: raw2bmx not found", comment: "Shown when the bundled raw2bmx binary cannot be located, blocking IMF audio essence creation.")
                                 success = false
                             }
                             Self.cleanupTempFile(at: wavURL, label: "IMF audio WAV")
+                            if let mcaLabelsURL {
+                                Self.cleanupTempFile(at: mcaLabelsURL, label: "IMF MCA labels")
+                            }
                         }
                     }
 
@@ -2114,13 +2153,6 @@ actor FFMPEGConverter {
                             editRateDenominator: frameRate.editRateDenominator
                         )
 
-                        let imfTitle: String
-                        if let metaTitle = capturedRequest.imfMetadata?.contentTitleText, !metaTitle.isEmpty {
-                            imfTitle = metaTitle
-                        } else {
-                            imfTitle = capturedInputBaseName
-                        }
-                        let audioLanguage = capturedRequest.imfMetadata?.audioLanguage ?? "en"
 
                         let folderName = await IMFManifestWriter.shared.packageFolderName(
                             title: imfTitle,
@@ -2152,6 +2184,7 @@ actor FFMPEGConverter {
                                 frameCount: max(frameCount, 1),
                                 color: color,
                                 itemMetadata: capturedRequest.imfMetadata,
+                                audioLabels: imfAudioLabels,
                                 progress: { imfProgress in
                                     let overall = 0.94 + imfProgress * 0.06
                                     let pct = Int(imfProgress * 100)
@@ -5036,6 +5069,29 @@ actor FFMPEGConverter {
         await FFMPEGProbeService.getVideoDuration(for: url)
     }
 
+    /// Reads the channel count from a RIFF WAV's `fmt ` chunk. The metadata probe cannot
+    /// report WAV stream topology, and the IMF MCA labels must match the extracted layout.
+    static func wavChannelCount(at url: URL) -> Int? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        guard let header = try? handle.read(upToCount: 12), header.count == 12,
+              header.prefix(4) == Data("RIFF".utf8),
+              header.suffix(4) == Data("WAVE".utf8) else { return nil }
+        // Chunks before `fmt ` are small (e.g. JUNK); stop after a bounded scan.
+        for _ in 0..<16 {
+            guard let chunkHeader = try? handle.read(upToCount: 8), chunkHeader.count == 8 else { return nil }
+            let size = chunkHeader.suffix(4).enumerated().reduce(0) { $0 | Int($1.element) << (8 * $1.offset) }
+            if chunkHeader.prefix(4) == Data("fmt ".utf8) {
+                guard size >= 4, let format = try? handle.read(upToCount: 4), format.count == 4 else { return nil }
+                let channels = Int(format[format.startIndex + 2]) | Int(format[format.startIndex + 3]) << 8
+                return channels > 0 ? channels : nil
+            }
+            guard let offset = try? handle.offset(),
+                  (try? handle.seek(toOffset: offset + UInt64(size + size % 2))) != nil else { return nil }
+        }
+        return nil
+    }
+
     /// Uses the exact wrapped picture frame count when available so audio padding and the CPL
     /// agree with the MXF. Falls back to source duration before wrapping has completed.
     static func resolvedIMFPictureFrameCount(
@@ -5061,19 +5117,15 @@ actor FFMPEGConverter {
         ))
     }
 
-    /// Pads (or, if already long enough, leaves alone) a 48 kHz PCM WAV so it has
-    /// at least `frameCount` picture frames worth of samples. Required by the
-    /// IMF audio path: asdcp-wrap writes a frame-rate-keyed edit-unit index
-    /// claiming one entry per picture frame, but the index is computed from the
-    /// expected duration — if the WAV is short of that by even a fractional
-    /// frame, the resulting MXF has an index entry pointing past the end of the
-    /// essence and Resolve refuses to play it (mxf2raw also reports the file as
-    /// "general error" with a "last edit unit not available" message).
+    /// Pads with silence or trims a 48 kHz PCM WAV so it holds exactly `frameCount`
+    /// picture frames worth of samples. The IMF CPL plays the audio track file for
+    /// the picture's duration, so a short file cannot cover the composition and
+    /// surplus samples (e.g. a source audio tail) would only be dead weight.
     ///
-    /// For non-integer rates (29.97, 59.94) the per-frame sample count is not
-    /// integer, so we use a ceiling on `frameCount × 48000 × den / num` — a
-    /// slight overshoot is fine, asdcp-wrap takes only what it needs.
-    private func padWAVToFrameCount(
+    /// For non-integer rates (29.97, 59.94) the per-frame sample count is not an
+    /// integer, so this uses the ceiling of `frameCount × 48000 × den / num`, the
+    /// same rounding `IMFManifestWriter.resourceDuration` applies to the CPL.
+    private func fitWAVToFrameCount(
         conversionID: UUID,
         inputWAV: URL,
         frameCount: Int,
@@ -5082,19 +5134,23 @@ actor FFMPEGConverter {
         ffmpegPath: String
     ) async -> URL? {
         guard frameCount > 0, editRateNumerator > 0, editRateDenominator > 0 else { return nil }
-        let totalSamples = Int(ceil(Double(frameCount) * 48000.0 * Double(editRateDenominator) / Double(editRateNumerator)))
+        guard let totalSamples = IMFManifestWriter.resourceDuration(
+            compositionFrames: frameCount,
+            compositionEditRate: (editRateNumerator, editRateDenominator),
+            resourceEditRate: "48000/1"
+        ) else { return nil }
         let outputWAV = inputWAV.deletingLastPathComponent()
-            .appendingPathComponent("audio_padded_\(UUID().uuidString).wav")
+            .appendingPathComponent("audio_fitted_\(UUID().uuidString).wav")
 
         let args: [String] = [
             "-y", "-nostdin",
             "-i", inputWAV.path,
-            "-af", "apad=whole_len=\(totalSamples)",
+            "-af", "apad=whole_len=\(totalSamples),atrim=end_sample=\(totalSamples)",
             "-c:a", "pcm_s24le",
             "-ar", "48000",
             outputWAV.path
         ]
-        Self.logger.info("Padding IMF WAV to \(totalSamples) samples")
+        Self.logger.info("Fitting IMF WAV to \(totalSamples) samples")
         let result = await runTrackedPackageWrapper(
             conversionID: conversionID,
             executablePath: ffmpegPath,
@@ -5104,11 +5160,11 @@ actor FFMPEGConverter {
         switch result {
         case .success(let diagnostic):
             if !diagnostic.isEmpty {
-                Self.logger.info("IMF WAV padding output: \(diagnostic.prefix(500), privacy: .public)")
+                Self.logger.info("IMF WAV fitting output: \(diagnostic.prefix(500), privacy: .public)")
             }
             return outputWAV
         case .failed(_, let reason, let diagnostic):
-            Self.logger.error("IMF WAV padding failed (\(reason, privacy: .public)): \(diagnostic.prefix(300), privacy: .public)")
+            Self.logger.error("IMF WAV fitting failed (\(reason, privacy: .public)): \(diagnostic.prefix(300), privacy: .public)")
             return nil
         case .cancelled:
             return nil

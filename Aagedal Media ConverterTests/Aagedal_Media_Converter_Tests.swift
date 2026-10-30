@@ -12172,7 +12172,11 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         try FileManager.default.createDirectory(at: packageDirectory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
 
-        let (videoSource, audioSource) = try makeIMFTestEssences(in: temporaryDirectory, includeAudio: true)
+        let labels = try XCTUnwrap(IMFAudioLabels(channelCount: 2, language: "nb", title: "Episode, Special"))
+        // Audio runs half a second past the picture; the CPL must only play the first 24 frames of it.
+        let (videoSource, audioSource) = try makeIMFTestEssences(
+            in: temporaryDirectory, includeAudio: true, audioSeconds: 1.5, audioLabels: labels
+        )
 
         let assembled = await IMFManifestWriter.shared.assembleIMP(
             videoMXFURL: videoSource,
@@ -12188,6 +12192,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
                 annotationText: "Archive & delivery <master>",
                 audioLanguage: "nb"
             ),
+            audioLabels: labels,
             progress: { _ in }
         )
 
@@ -12226,8 +12231,23 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertEqual(try xmlTexts(named: "Annotation", at: cplURL).first, "Archive & delivery <master>")
         XCTAssertEqual(try xmlTexts(named: "ContentKind", at: cplURL), [IMFContentKind.episode.rawValue])
         XCTAssertEqual(try xmlTexts(named: "EditRate", at: cplURL), ["24 1", "24 1", "48000 1"])
-        XCTAssertEqual(try xmlTexts(named: "IntrinsicDuration", at: cplURL), ["24", "48000"])
+        XCTAssertEqual(try xmlTexts(named: "IntrinsicDuration", at: cplURL), ["24", "72000"])
         XCTAssertEqual(try xmlTexts(named: "SourceDuration", at: cplURL), ["24", "48000"])
+        let rootChildren = try XCTUnwrap(try XMLDocument(contentsOf: cplURL, options: []).rootElement()?.children)
+            .compactMap(\.localName)
+        XCTAssertLessThan(
+            try XCTUnwrap(rootChildren.firstIndex(of: "LocaleList")),
+            try XCTUnwrap(rootChildren.firstIndex(of: "ExtensionProperties"))
+        )
+        XCTAssertEqual(try xmlTexts(named: "MCATagSymbol", at: cplURL), ["chL", "chR", "sgST"])
+        XCTAssertEqual(try xmlTexts(named: "RFC5646SpokenLanguage", at: cplURL), ["nb"])
+        XCTAssertEqual(try xmlTexts(named: "MCATitle", at: cplURL), ["Episode Special"])
+        XCTAssertEqual(try xmlTexts(named: "MCAAudioContentKind", at: cplURL), ["PRM"])
+        XCTAssertEqual(try xmlTexts(named: "MCAAudioElementKind", at: cplURL), ["FCMP"])
+        let groupLinks = Set(try xmlTexts(named: "SoundfieldGroupLinkID", at: cplURL))
+        let groupLink = try XCTUnwrap(try XMLDocument(contentsOf: cplURL, options: []).nodes(forXPath:
+            "//*[local-name()='SoundfieldGroupLabelSubDescriptor']/*[local-name()='MCALinkID']").first?.stringValue)
+        XCTAssertEqual(groupLinks, [groupLink])
         let descriptors = try xmlTexts(named: "EssenceDescriptor", at: cplURL)
         XCTAssertEqual(descriptors.count, 2)
         let cpl = try XMLDocument(contentsOf: cplURL, options: [])
@@ -12312,7 +12332,12 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertEqual(try IMFPackageParser.parsePackage(folder: imfDirectory).essences.map(\.kind), [.mainImage])
     }
 
-    private func makeIMFTestEssences(in directory: URL, includeAudio: Bool) throws -> (URL, URL?) {
+    private func makeIMFTestEssences(
+        in directory: URL,
+        includeAudio: Bool,
+        audioSeconds: Double = 1,
+        audioLabels: IMFAudioLabels? = nil
+    ) throws -> (URL, URL?) {
         func run(_ executable: String, _ arguments: [String]) throws {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: executable)
@@ -12334,10 +12359,16 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         guard includeAudio else { return (video, nil) }
         let wav = directory.appendingPathComponent("sound.wav")
         try run(ffmpeg, ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
-                         "sine=frequency=440:duration=1", "-ac", "2", "-ar", "48000", "-c:a", "pcm_s24le", wav.path])
+                         "sine=frequency=440:duration=\(audioSeconds)", "-ac", "2", "-ar", "48000", "-c:a", "pcm_s24le", wav.path])
         let raw2bmx = try XCTUnwrap(BinaryPathResolver.raw2bmxPath)
         let audio = directory.appendingPathComponent("sound.mxf")
-        try run(raw2bmx, ["-t", "imf", "-o", audio.path, "--track-map", "singlemca", "--wave", wav.path])
+        var wrapArguments = ["-t", "imf", "-o", audio.path, "--track-map", "singlemca"]
+        if let audioLabels {
+            let labelsURL = directory.appendingPathComponent("labels.txt")
+            try audioLabels.bmxLabelsFile.write(to: labelsURL, atomically: true, encoding: .utf8)
+            wrapArguments += ["--track-mca-labels", "x", labelsURL.path]
+        }
+        try run(raw2bmx, wrapArguments + ["--wave", wav.path])
         return (video, audio)
     }
 

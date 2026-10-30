@@ -46,6 +46,97 @@ enum IMFContentKind: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+// MARK: - IMF Audio MCA Labels
+
+/// The single soundfield group written into an IMF audio track file (SMPTE ST 377-4 MCA)
+/// and mirrored in the CPL's WAVEPCMDescriptor. ST 2067-2 expects every audio track file
+/// to carry a labelled soundfield group with spoken language, title, and content kinds.
+struct IMFAudioLabels: Equatable, Sendable {
+    let soundfieldSymbol: String
+    /// One bmx channel tag symbol per essence channel, in WAV channel order.
+    let channelSymbols: [String]
+    let language: String
+    let title: String
+    let titleVersion: String
+    /// MCAAudioContentKind — `PRM` (primary programme).
+    let contentKind: String
+    /// MCAAudioElementKind — `FCMP` (full composite mix).
+    let elementKind: String
+
+    /// Chooses a layout for the extracted PCM channel count. A manual soundfield override
+    /// from the routing UI wins when its channel count matches. Otherwise standard layouts
+    /// are assumed for 1/2/6/8 channels; other counts return nil and stay unlabelled.
+    init?(
+        channelCount: Int,
+        soundfieldOverride: MCAStandardSoundfield? = nil,
+        language: String,
+        title: String,
+        titleVersion: String = "Original"
+    ) {
+        if let soundfieldOverride, soundfieldOverride.channelCount == channelCount {
+            soundfieldSymbol = soundfieldOverride.bmxSymbol
+            channelSymbols = soundfieldOverride.bmxChannelSymbols
+        } else {
+            switch channelCount {
+            case 1:
+                soundfieldSymbol = "sgM"
+                channelSymbols = ["chM1"]
+            case 2:
+                soundfieldSymbol = "sgST"
+                channelSymbols = ["chL", "chR"]
+            case 6:
+                // FFmpeg writes 5.1 and 5.1(side) WAVs as L R C LFE Ls Rs.
+                soundfieldSymbol = "sg51"
+                channelSymbols = ["chL", "chR", "chC", "chLFE", "chLs", "chRs"]
+            case 8:
+                // FFmpeg's 7.1 WAV order follows the channel-mask bits: back pair before side pair.
+                soundfieldSymbol = "sg71"
+                channelSymbols = ["chL", "chR", "chC", "chLFE", "chLrs", "chRrs", "chLss", "chRss"]
+            default:
+                return nil
+            }
+        }
+        self.language = Self.sanitizedLanguageTag(language)
+        self.title = Self.sanitizedText(title, fallback: "Untitled")
+        self.titleVersion = Self.sanitizedText(titleVersion, fallback: "Original")
+        contentKind = "PRM"
+        elementKind = "FCMP"
+    }
+
+    /// Content of the file passed to `raw2bmx --track-mca-labels` for one multichannel track.
+    var bmxLabelsFile: String {
+        var lines = ["0"]
+        for (index, symbol) in channelSymbols.enumerated() {
+            lines.append("\(symbol), chan=\(index)")
+        }
+        lines.append(
+            "\(soundfieldSymbol), id=sg1, lang=\(language), mcatitle=\(title), "
+                + "mcatitleversion=\(titleVersion), mcaaudiocontentkind=\(contentKind), "
+                + "mcaaudioelementkind=\(elementKind)"
+        )
+        return lines.joined(separator: "\n") + "\n"
+    }
+
+    /// RFC 5646 tags are ASCII letters, digits, and hyphens; anything else falls back to `und`.
+    static func sanitizedLanguageTag(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isValid = !trimmed.isEmpty && trimmed.unicodeScalars.allSatisfy {
+            ($0.isASCII && CharacterSet.alphanumerics.contains($0)) || $0 == "-"
+        }
+        return isValid ? trimmed : "und"
+    }
+
+    /// bmx separates label properties with commas and lines with newlines.
+    private static func sanitizedText(_ value: String, fallback: String) -> String {
+        let cleaned = value
+            .components(separatedBy: CharacterSet(charactersIn: ",").union(.newlines).union(.controlCharacters))
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return cleaned.isEmpty ? fallback : cleaned
+    }
+}
+
 // MARK: - IMF Application
 
 /// Selects which IMF Application the export targets. Each Application has its own

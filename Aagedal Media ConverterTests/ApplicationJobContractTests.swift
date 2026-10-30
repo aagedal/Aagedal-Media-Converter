@@ -5793,7 +5793,9 @@ final class ApplicationJobContractTests: XCTestCase {
         jobID: ApplicationJobID,
         state: ApplicationJobState
     ) async throws -> ApplicationJobRecord {
-        for _ in 0..<200 {
+        // Live package jobs (DCP/IMF) can take several seconds on CI runners.
+        let deadline = ContinuousClock.now + .seconds(30)
+        while ContinuousClock.now < deadline {
             if let record = try await service.record(for: jobID) {
                 if record.state == state { return record }
                 if record.state.isTerminal {

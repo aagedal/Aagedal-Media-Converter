@@ -14,8 +14,8 @@ final class IMFSettingsTests: XCTestCase {
         generator.executableURL = URL(fileURLWithPath: ffmpeg)
         generator.arguments = ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
                                "testsrc2=size=64x64:rate=24:duration=0.25", "-f", "lavfi", "-i",
-                               "sine=frequency=440:duration=0.25", "-c:v", "prores_ks", "-profile:v", "3",
-                               "-pix_fmt", "yuv422p10le", "-c:a", "pcm_s24le", "-shortest", source.path]
+                               "sine=frequency=440:duration=0.5", "-c:v", "prores_ks", "-profile:v", "3",
+                               "-pix_fmt", "yuv422p10le", "-c:a", "pcm_s24le", source.path]
         try generator.run()
         generator.waitUntilExit()
         XCTAssertEqual(generator.terminationStatus, 0)
@@ -41,6 +41,18 @@ final class IMFSettingsTests: XCTestCase {
         let proResPackage = directory.appendingPathComponent(proResMap).deletingLastPathComponent()
         XCTAssertEqual(try IMFPackageParser.parsePackage(folder: proResPackage).essences.map(\.kind),
                        [.mainImage, .mainAudio])
+        // The mono audio outlasts the picture; it is labelled and fitted to the picture duration.
+        let cplPath = try XCTUnwrap(xmlFiles.first { $0.contains("CPL_") && $0.hasSuffix(".xml") })
+        let cpl = try XMLDocument(contentsOf: directory.appendingPathComponent(cplPath), options: [])
+        func texts(_ name: String) throws -> [String] {
+            try cpl.nodes(forXPath: "//*[local-name()='\(name)']").compactMap(\.stringValue)
+        }
+        let pictureFrames = try XCTUnwrap(Int(try XCTUnwrap(texts("SourceDuration").first)))
+        XCTAssertEqual(try texts("SourceDuration"), ["\(pictureFrames)", "\(pictureFrames * 2000)"])
+        XCTAssertEqual(try texts("IntrinsicDuration"), ["\(pictureFrames)", "\(pictureFrames * 2000)"])
+        XCTAssertEqual(try texts("MCATagSymbol"), ["chM1", "sgM"])
+        XCTAssertEqual(try texts("RFC5646SpokenLanguage"), ["en"])
+        XCTAssertEqual(try texts("MCATitle"), ["source"])
 
         let j2kCompleted = expectation(description: "experimental JPEG 2000 IMF export")
         let j2kConverter = FFMPEGConverter()
@@ -64,6 +76,71 @@ final class IMFSettingsTests: XCTestCase {
             .appendingPathComponent(j2kMap).deletingLastPathComponent()
         XCTAssertEqual(try IMFPackageParser.parsePackage(folder: j2kPackage).essences.map(\.kind),
                        [.mainImage, .mainAudio])
+    }
+
+    func testAudioLabelsUseStandardLayoutsAndSanitizeLabelFileValues() throws {
+        XCTAssertNil(IMFAudioLabels(channelCount: 4, language: "en", title: "Quad"))
+        let surround = try XCTUnwrap(IMFAudioLabels(channelCount: 8, language: "nb-NO", title: "Film"))
+        XCTAssertEqual(surround.soundfieldSymbol, "sg71")
+        XCTAssertEqual(surround.channelSymbols,
+                       ["chL", "chR", "chC", "chLFE", "chLrs", "chRrs", "chLss", "chRss"])
+        XCTAssertEqual(surround.language, "nb-NO")
+
+        let overridden = try XCTUnwrap(IMFAudioLabels(
+            channelCount: 2, soundfieldOverride: .dualMono, language: "en<script>", title: "A, B\nC"
+        ))
+        XCTAssertEqual(overridden.soundfieldSymbol, "sgDM")
+        XCTAssertEqual(overridden.language, "und")
+        XCTAssertEqual(overridden.title, "A B C")
+        XCTAssertEqual(overridden.bmxLabelsFile, [
+            "0",
+            "chM1, chan=0",
+            "chM2, chan=1",
+            "sgDM, id=sg1, lang=und, mcatitle=A B C, mcatitleversion=Original, "
+                + "mcaaudiocontentkind=PRM, mcaaudioelementkind=FCMP",
+            "",
+        ].joined(separator: "\n"))
+        // A mismatched override falls back to the channel-count layout.
+        XCTAssertEqual(IMFAudioLabels(channelCount: 6, soundfieldOverride: .stereo, language: "en", title: "T")?
+            .soundfieldSymbol, "sg51")
+    }
+
+    func testResourceDurationRoundsFractionalRatesUp() {
+        func samples(_ frames: Int, _ numerator: Int, _ denominator: Int) -> Int? {
+            IMFManifestWriter.resourceDuration(
+                compositionFrames: frames,
+                compositionEditRate: (numerator, denominator),
+                resourceEditRate: "48000/1"
+            )
+        }
+        XCTAssertEqual(samples(24, 24, 1), 48000)
+        XCTAssertEqual(samples(24, 24000, 1001), 48048)
+        XCTAssertEqual(samples(5, 30000, 1001), 8008)
+        XCTAssertEqual(samples(1, 30000, 1001), 1602)
+        XCTAssertNil(IMFManifestWriter.resourceDuration(
+            compositionFrames: 1, compositionEditRate: (24, 1), resourceEditRate: "invalid"
+        ))
+    }
+
+    func testWAVChannelCountReadsExtensibleFormatChunk() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("IMFWAV-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let wav = directory.appendingPathComponent("surround.wav")
+        let generator = Process()
+        generator.executableURL = URL(fileURLWithPath: try XCTUnwrap(BinaryPathResolver.ffmpegPath))
+        generator.arguments = ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
+                               "sine=duration=0.1", "-af", "pan=5.1|c0=c0|c1=c0|c2=c0|c3=c0|c4=c0|c5=c0",
+                               "-c:a", "pcm_s24le", wav.path]
+        try generator.run()
+        generator.waitUntilExit()
+        XCTAssertEqual(generator.terminationStatus, 0)
+        XCTAssertEqual(FFMPEGConverter.wavChannelCount(at: wav), 6)
+
+        let notWAV = directory.appendingPathComponent("not.wav")
+        try Data("not a riff file".utf8).write(to: notWAV)
+        XCTAssertNil(FFMPEGConverter.wavChannelCount(at: notWAV))
     }
 
     func testAbsentAndInvalidPreferencesPreserveFallbacksWithoutRewritingValues() throws {
