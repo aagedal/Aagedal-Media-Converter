@@ -279,6 +279,7 @@ enum ImageSequenceDetector {
                 imageFormat: format,
                 totalSizeBytes: totalSize
             )
+            config.hasGaps = hasGaps
 
             // Detect associated audio file in the same directory
             if detectsAssociatedAudio {
@@ -347,7 +348,8 @@ enum ImageSequenceDetector {
 
         // Priority 1: Exact prefix match (e.g., "render_.wav" for "render_%04d.exr")
         let trimmedPrefix = prefix.trimmingCharacters(in: CharacterSet(charactersIn: "._- "))
-        for file in audioFiles {
+        // An unnamed sequence ("0001.png") would otherwise match every audio file by prefix.
+        for file in audioFiles where !trimmedPrefix.isEmpty {
             let baseName = file.deletingPathExtension().lastPathComponent
             if baseName == trimmedPrefix {
                 logger.info("Found matching audio file: \(file.lastPathComponent, privacy: .public)")
@@ -356,7 +358,7 @@ enum ImageSequenceDetector {
         }
 
         // Priority 2: Prefix starts with the sequence prefix
-        for file in audioFiles {
+        for file in audioFiles where !trimmedPrefix.isEmpty {
             let baseName = file.deletingPathExtension().lastPathComponent.lowercased()
             if baseName.hasPrefix(trimmedPrefix.lowercased()) {
                 logger.info("Found prefix-matching audio file: \(file.lastPathComponent, privacy: .public)")

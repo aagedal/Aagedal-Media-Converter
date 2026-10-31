@@ -80,6 +80,13 @@ struct C2PAMetadata: Codable, Sendable, Equatable {
         actions?.lazy.compactMap(\.digitalSourceType).first ?? actionsDigitalSourceType
     }
 
+    /// Whether any action declares a generative-AI source type, e.g. a captured clip later
+    /// edited with a trained algorithm.
+    var declaresGenerativeAI: Bool {
+        let declared = (actions ?? []).compactMap(\.digitalSourceType) + [actionsDigitalSourceType].compactMap { $0 }
+        return declared.contains(where: C2PAFormatting.isGenerativeAI)
+    }
+
     static let empty = C2PAMetadata(
         hasContentCredentials: false,
         hasSignature: false,

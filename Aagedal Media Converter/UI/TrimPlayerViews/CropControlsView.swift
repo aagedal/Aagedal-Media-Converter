@@ -153,6 +153,11 @@ struct CropControlsView: View {
                 // Drags and keyboard shortcuts edit the crop too; keep the fields current.
                 updatePixelInputsFromConfig()
             }
+            .onChange(of: item.cropFrame) { _, _ in
+                // Metadata can arrive after the panel opens; drop values typed against the
+                // 1920×1080 placeholder so leaving a field doesn't apply them to the real frame.
+                updatePixelInputsFromConfig()
+            }
             .onChange(of: focusedField) { previous, _ in
                 if let previous { applyPixelInputs(editedField: previous) }
             }

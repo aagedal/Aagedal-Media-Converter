@@ -82,8 +82,9 @@ enum FolderImportScanner {
     }
 
     /// `expand(_:)` off the main actor, plus the image sequences in the folders
-    /// it found. Audio that a sequence uses as its soundtrack is left out of
-    /// `fileURLs` so it isn't also queued on its own.
+    /// it found. Audio that a gap-free sequence uses as its soundtrack is left out
+    /// of `fileURLs` so it isn't also queued on its own. Numbered stills with gaps
+    /// (e.g. a few photos) may not be a real sequence, so their audio is kept.
     static func expandWithImageSequences(_ urls: [URL]) async -> (fileURLs: [URL], sequences: [ImageSequenceConfig]) {
         let expansion = await Task.detached(priority: .userInitiated) { expand(urls) }.value
         var sequences: [ImageSequenceConfig] = []
@@ -91,7 +92,7 @@ enum FolderImportScanner {
             guard !Task.isCancelled else { break }
             sequences += await ImageSequenceDetector.detectSequences(inFolder: folder, securityScopedAccessURL: folder)
         }
-        let soundtracks = Set(sequences.compactMap { $0.associatedAudioURL?.standardizedFileURL })
+        let soundtracks = Set(sequences.filter { !$0.hasGaps }.compactMap { $0.associatedAudioURL?.standardizedFileURL })
         let fileURLs = expansion.fileURLs.filter { !soundtracks.contains($0.standardizedFileURL) }
         return (fileURLs, sequences)
     }

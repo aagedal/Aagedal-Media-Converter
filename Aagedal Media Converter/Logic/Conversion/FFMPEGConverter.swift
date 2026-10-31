@@ -1324,7 +1324,8 @@ actor FFMPEGConverter {
         if request.exportsMatteSidecar, preset.supportsMatteSidecar, isOrdinaryFileExport,
            request.waveformRequest == nil, request.synthesizedVideoRequest == nil,
            request.visualSourceURL == nil, av2DecodeRequest == nil,
-           request.sourceMetadata?.videoStreams.first?.hasAlpha == true,
+           request.sourceMetadata?.videoStreams.first?.hasAlpha == true
+               || FFMPEGInputPlan(inputURL: inputURL, customArguments: effectiveCustomInputArguments).imageSequenceHasAlpha,
            !FFMPEGCommandBuilder.outputKeepsAlpha(finalArguments) {
             let matteURL = matteSidecar.reserve(for: outputFileURL, notOverwriting: inputURL, owner: conversionID)
             matteArguments = FFMPEGCommandBuilder.sourceMatteArguments(

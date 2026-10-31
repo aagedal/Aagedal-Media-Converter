@@ -623,18 +623,18 @@ enum FFMPEGCommandBuilder {
                 sourceMetadata: sourceMetadata
             )
 
-            // Keep the alpha channel of alpha sources when exporting to ProRes 4444 / XQ.
-            // Other formats keep their configured pixel format.
-            if visualSourceURL == nil, sourceMetadata?.videoStreams.first?.hasAlpha == true,
-               isAlphaCapableProRes(ffmpegArgs) {
-                enableAlphaOutput(in: &ffmpegArgs)
-            }
-
             // Filter out unsupported audio codecs (e.g., APAC spatial audio from iPhone)
             // Skip for stream copy (which doesn't decode) and when audio routing is applied (has its own mapping)
             if preset != .streamCopy && (audioRoutingConfig == nil || !(capturedCodecSettings?.appliesAudioRouting ?? preset.appliesAudioRouting)) {
                 await filterUnsupportedAudioStreams(inputURL: inputURL, ffmpegArgs: &ffmpegArgs)
             }
+        }
+
+        // Keep the alpha channel of alpha sources when exporting to ProRes 4444 / XQ.
+        // Other formats keep their configured pixel format.
+        if visualSourceURL == nil, isAlphaCapableProRes(ffmpegArgs),
+           isImageSequenceInput ? inputPlan.imageSequenceHasAlpha : sourceMetadata?.videoStreams.first?.hasAlpha == true {
+            enableAlphaOutput(in: &ffmpegArgs)
         }
 
         // Apply crop to video filter if configured and preset supports it
@@ -811,8 +811,12 @@ enum FFMPEGCommandBuilder {
                sourceColorSpace: stream.colorSpace,
                sourcePixelFormat: stream.pixelFormat,
                sourceCodec: stream.codec,
+               sourceTransfer: stream.colorTransfer,
+               sourcePrimaries: stream.colorPrimaries,
                sourceWidth: geometry.width,
                sourceHeight: geometry.height,
+               sourceCodedWidth: stream.width,
+               sourceCodedHeight: stream.height,
                sourcePixelAspectRatio: geometry.pixelAspectRatio ?? 1,
                arguments: arguments
            ) {
@@ -2837,6 +2841,14 @@ struct UntaggedColorPlan: Equatable, Sendable {
         }
     }
 
+    /// HDR or wide-gamut sources must not be retagged as BT.709 SDR.
+    static func isSDR(transfer: String?, primaries: String?) -> Bool {
+        let sdrTransfers: Set<String> = ["bt709", "smpte170m", "bt470bg", "bt470m", "gamma22", "gamma28", "bt601", "iec61966-2-1", "unknown", "unspecified"]
+        if let transfer, !sdrTransfers.contains(transfer) { return false }
+        if let primaries, ["bt2020", "smpte431", "smpte432"].contains(primaries) { return false }
+        return true
+    }
+
     /// The class players assume for untagged video of this pixel size.
     static func isHD(width: Int, height: Int) -> Bool {
         width >= 1280 || height > 576
@@ -2846,12 +2858,17 @@ struct UntaggedColorPlan: Equatable, Sendable {
         sourceColorSpace: String?,
         sourcePixelFormat: String?,
         sourceCodec: String? = nil,
+        sourceTransfer: String? = nil,
+        sourcePrimaries: String? = nil,
         sourceWidth: Int,
         sourceHeight: Int,
+        sourceCodedWidth: Int? = nil,
+        sourceCodedHeight: Int? = nil,
         sourcePixelAspectRatio: Double,
         arguments: [String]
     ) {
         guard sourceColorSpace == nil,
+              Self.isSDR(transfer: sourceTransfer?.lowercased(), primaries: sourcePrimaries?.lowercased()),
               Self.isYUV(pixelFormat: sourcePixelFormat?.lowercased(), codec: sourceCodec?.lowercased()),
               sourceWidth > 0, sourceHeight > 0,
               !arguments.contains(where: Self.colorOptions.contains),
@@ -2867,14 +2884,17 @@ struct UntaggedColorPlan: Equatable, Sendable {
                   width: sourceWidth, height: sourceHeight, pixelAspectRatio: sourcePixelAspectRatio
               ) else { return nil }
 
-        let sourceIsHD = Self.isHD(width: sourceWidth, height: sourceHeight)
+        // Players classify the decoded picture, before rotation; the output has rotation baked in.
+        let codedWidth = sourceCodedWidth ?? sourceWidth
+        let codedHeight = sourceCodedHeight ?? sourceHeight
+        let sourceIsHD = Self.isHD(width: codedWidth, height: codedHeight)
         guard sourceIsHD != Self.isHD(width: output.width, height: output.height) else { return nil }
 
         if sourceIsHD {
             inputOptions = ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"]
         } else {
             // 625-line sources use EBU primaries; everything else SD uses SMPTE C.
-            let standard = sourceHeight == 576 ? "bt470bg" : "smpte170m"
+            let standard = codedHeight == 576 ? "bt470bg" : "smpte170m"
             inputOptions = ["-colorspace", standard, "-color_primaries", standard, "-color_trc", "bt709"]
         }
         // Primaries are not converted, so they keep following the frames' tag.

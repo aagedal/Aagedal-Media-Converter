@@ -24,8 +24,17 @@
 # Usage:
 #   scripts/release.sh                 # uses MARKETING_VERSION from the project
 #   scripts/release.sh 4.1.2 520       # override version + build number
+#   scripts/release.sh --beta 1        # beta: GitHub prerelease tagged <version>-beta.1;
+#                                      # the appcast and Homebrew cask are left untouched
 #
 set -euo pipefail
+
+BETA_NUMBER=""
+if [[ "${1:-}" == "--beta" ]]; then
+    BETA_NUMBER="${2:-}"
+    [[ "$BETA_NUMBER" =~ ^[0-9]+$ ]] || { echo "Usage: scripts/release.sh --beta <number> [version build]" >&2; exit 1; }
+    shift 2
+fi
 
 echo "==> scripts/release.sh starting"
 
@@ -92,7 +101,15 @@ else
     CURRENT_PROJECT_VERSION=$(echo "$BUILD_SETTINGS" | awk -F' = ' '/^[[:space:]]*CURRENT_PROJECT_VERSION/{print $2; exit}')
 fi
 
-echo "==> Building $MARKETING_VERSION ($CURRENT_PROJECT_VERSION)"
+if [[ -n "$BETA_NUMBER" ]]; then
+    RELEASE_TAG="$MARKETING_VERSION-beta.$BETA_NUMBER"
+    RELEASE_TITLE="$MARKETING_VERSION beta $BETA_NUMBER"
+else
+    RELEASE_TAG="$MARKETING_VERSION"
+    RELEASE_TITLE="$MARKETING_VERSION"
+fi
+
+echo "==> Building $RELEASE_TITLE ($CURRENT_PROJECT_VERSION)"
 
 # -----------------------------------------------------------------------------
 # Build & export
@@ -176,7 +193,7 @@ xcrun stapler validate "$APP_PATH"
 # invalid") and Gatekeeper rejects the bundle as "damaged". The signature and
 # notarization staple live inside the bundle (CodeResources + Mach-O LC), not
 # in xattrs, so dropping the AppleDouble layer is safe.
-SAFE_VERSION="${MARKETING_VERSION//./-}"
+SAFE_VERSION="${RELEASE_TAG//./-}"
 RELEASE_ZIP_NAME="Aagedal_Media_Converter_${SAFE_VERSION}.zip"
 RELEASE_ZIP="$BUILD_DIR/$RELEASE_ZIP_NAME"
 /usr/bin/ditto -c -k --keepParent --norsrc --noextattr --noacl --noqtn "$APP_PATH" "$RELEASE_ZIP"
@@ -198,7 +215,7 @@ echo "==> Sparkle signature: $ED_SIGNATURE_LINE"
 # We already have length from stat, so just extract the signature value.
 ED_SIGNATURE=$(echo "$ED_SIGNATURE_LINE" | sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p')
 
-DOWNLOAD_URL="https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/$MARKETING_VERSION/$RELEASE_ZIP_NAME"
+DOWNLOAD_URL="https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/$RELEASE_TAG/$RELEASE_ZIP_NAME"
 
 # -----------------------------------------------------------------------------
 # Append appcast.xml entry
@@ -216,7 +233,7 @@ if python3 scripts/changelog-to-html.py CHANGELOG.md "$MARKETING_VERSION" > /tmp
     echo "==> Inline release notes extracted from CHANGELOG.md"
 else
     rm -f /tmp/release-notes-$$.html
-    RELEASE_NOTES_HTML="                <p>See <a href=\"https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/tag/$MARKETING_VERSION\">release notes</a>.</p>"
+    RELEASE_NOTES_HTML="                <p>See <a href=\"https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/tag/$RELEASE_TAG\">release notes</a>.</p>"
     echo "==> WARNING: $MARKETING_VERSION not found in CHANGELOG.md — using bare link in appcast"
 fi
 
@@ -267,30 +284,48 @@ xcrun stapler validate "$VERIFY_DIR/$SCHEME.app"
 RELEASE_PUBLISHED=false
 APPCAST_PR_FAILED=false
 if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
-    if gh release view "$MARKETING_VERSION" --repo "$GITHUB_OWNER/$GITHUB_REPO" >/dev/null 2>&1; then
-        echo "==> Using existing GitHub release $MARKETING_VERSION"
-    else
-        echo "==> Creating draft GitHub release $MARKETING_VERSION"
-        gh release create "$MARKETING_VERSION" --draft \
+    if gh release view "$RELEASE_TAG" --repo "$GITHUB_OWNER/$GITHUB_REPO" >/dev/null 2>&1; then
+        echo "==> Using existing GitHub release $RELEASE_TAG"
+    elif [[ -n "$BETA_NUMBER" ]]; then
+        echo "==> Creating draft GitHub prerelease $RELEASE_TAG"
+        BETA_NOTES="$BUILD_DIR/beta-notes.md"
+        python3 -B -c 'import sys; sys.path.insert(0, "scripts"); m = __import__("changelog-to-html"); print(m.extract_section(open("CHANGELOG.md").read(), sys.argv[1]))' \
+            "$MARKETING_VERSION" > "$BETA_NOTES" || echo "See CHANGELOG.md." > "$BETA_NOTES"
+        gh release create "$RELEASE_TAG" --draft --prerelease \
             --repo "$GITHUB_OWNER/$GITHUB_REPO" \
             --target main \
-            --title "$MARKETING_VERSION" \
+            --title "$RELEASE_TITLE" \
+            --notes-file "$BETA_NOTES"
+    else
+        echo "==> Creating draft GitHub release $RELEASE_TAG"
+        gh release create "$RELEASE_TAG" --draft \
+            --repo "$GITHUB_OWNER/$GITHUB_REPO" \
+            --target main \
+            --title "$RELEASE_TITLE" \
             --generate-notes
     fi
     # Upload sources first and stop on any failure before publishing the draft.
     # curl streams each file and displays transfer progress rather than a spinner.
     python3 scripts/upload-release-asset.py --repo "$GITHUB_OWNER/$GITHUB_REPO" \
-        --tag "$MARKETING_VERSION" "$SOURCE_COMPANION"
+        --tag "$RELEASE_TAG" "$SOURCE_COMPANION"
     python3 scripts/upload-release-asset.py --repo "$GITHUB_OWNER/$GITHUB_REPO" \
-        --tag "$MARKETING_VERSION" "$RELEASE_ZIP"
+        --tag "$RELEASE_TAG" "$RELEASE_ZIP"
     # A new (or resumed) draft is made public only after all uploads succeeded.
-    echo "==> Both assets uploaded. Publishing GitHub release $MARKETING_VERSION"
-    gh release edit "$MARKETING_VERSION" --repo "$GITHUB_OWNER/$GITHUB_REPO" --draft=false
+    echo "==> Both assets uploaded. Publishing GitHub release $RELEASE_TAG"
+    gh release edit "$RELEASE_TAG" --repo "$GITHUB_OWNER/$GITHUB_REPO" --draft=false
     RELEASE_PUBLISHED=true
 else
     echo "==> GitHub CLI is unavailable or unauthenticated — skipping upload."
-    echo "    1. Create release $MARKETING_VERSION at https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/new"
+    echo "    1. Create release $RELEASE_TAG at https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/new"
     echo "    2. Attach $RELEASE_ZIP and $SOURCE_COMPANION"
+fi
+
+if [[ -n "$BETA_NUMBER" ]]; then
+    # Betas are opt-in downloads: the update feed and the Homebrew cask keep
+    # pointing at the last stable release.
+    echo "==> Beta $RELEASE_TAG done. The appcast and Homebrew cask were not changed."
+    echo "    Release zip: $RELEASE_ZIP"
+    exit 0
 fi
 
 cp "$APPCAST_CANDIDATE" "$APPCAST"

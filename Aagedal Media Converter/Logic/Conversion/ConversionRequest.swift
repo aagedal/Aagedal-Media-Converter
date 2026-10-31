@@ -8,6 +8,7 @@
 // (at your option) any later version.
 
 import Foundation
+import ImageIO
 
 /// Encapsulates all data needed to perform a single FFMPEG conversion.
 /// Callbacks (progressUpdate, completion) are passed separately.
@@ -141,6 +142,26 @@ enum FFMPEGInputPlan: Equatable, Sendable {
     var isImageSequence: Bool {
         if case .imageSequence = self { return true }
         return false
+    }
+
+    /// Path of an image sequence's first frame: the pattern's frame-number placeholder
+    /// (e.g. `%04d`) replaced by the start number.
+    var imageSequenceFirstFramePath: String? {
+        guard case .imageSequence(let pattern, _, let startNumber, _) = self,
+              let range = pattern.range(of: "%0?[0-9]*d", options: [.regularExpression, .backwards]) else { return nil }
+        let placeholder = pattern[range]
+        let width = Int(placeholder.dropFirst().dropLast()) ?? 0
+        let number = String(Int(startNumber ?? "0") ?? 0)
+        let padded = String(repeating: "0", count: max(0, width - number.count)) + number
+        return pattern.replacingCharacters(in: range, with: padded)
+    }
+
+    /// Whether an image sequence's first frame has an alpha channel.
+    var imageSequenceHasAlpha: Bool {
+        guard let path = imageSequenceFirstFramePath,
+              let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] else { return false }
+        return properties[kCGImagePropertyHasAlpha] as? Bool ?? false
     }
 
     var companionAudioPath: String? {
