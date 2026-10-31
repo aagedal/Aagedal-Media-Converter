@@ -61,11 +61,15 @@ The list below shows the default bindings. Player, editor, and navigation shortc
 ### Playback
 - Space: Toggle play/pause
 - J/K/L: Play backwards, play/pause, play forwards (like in most NLEs)
+- Option + J / Option + L: Slow reverse / slow forward
 - Command + L: Toggle loop mode (only available for the native AVPlayer for technical reasons)
 
 ### Navigation
 - Arrow Left/Right: Go to previous/next frame
 - I/O: Set in and out point
+- Option + I / Option + O: Clear the in or out point
+- Option + X: Clear both trim points
+- Shift + I / Shift + O: Jump to the in or out point
 
 ### Timecode Input
 - +/- before a number: Jump that many seconds back/forward when pressing Enter
@@ -74,7 +78,11 @@ The list below shows the default bindings. Player, editor, and navigation shortc
 
 ### Tools
 - C: Enter crop tool
+- T: Toggle timecode display mode
 - Command + A: Toggle audio meter
+- Command + S: Capture screenshot
+- Command + F: Toggle fullscreen
+- Escape: Close editor
 
 
 ## Fullscreen Player
@@ -93,13 +101,27 @@ The list below shows the default bindings. Player, editor, and navigation shortc
 - Command + B: Go to previous item in queue
 - Command + N: Go to next item in queue
 
+### Trim
+- I/O: Set in and out point
+- Option + I / Option + O: Clear the in or out point
+- Option + X: Clear both trim points
+- Shift + I / Shift + O: Jump to the in or out point
+
 ### Other
 - A: Toggle Auto Next mode
 - Command + L: Toggle Loop Queue (only available when Auto Next is enabled)
 - T: Toggle timecode mode
+- M: Toggle mute
+- Control + Up/Down Arrow: Raise or lower the volume by 10%
 - Number keys (0-9) or timecode characters (+, -, ., :, ;): Activate timecode input
 - Command + S: Capture screenshot
 - Escape: Close fullscreen player
+
+
+## Metadata Window
+
+- Command + F: Search fields and values
+- Escape: Clear search
 
 
 ## Audio Routing View
@@ -129,7 +151,8 @@ The list below shows the default bindings. Player, editor, and navigation shortc
 - Control + 7: Downloads
 - Control + 8: Upload
 - Control + 9: Transcription
-- Control + 0: Updates
+- Control + 0: Analytics
+- Control + A: Updates
 - Control + K: Shortcuts (also works from main window)
 
 
@@ -159,9 +182,18 @@ The list below shows the default bindings. Player, editor, and navigation shortc
 - Escape or Command + .: Close/Cancel capture mode
 
 
+## Crop Mode
+
+- Command + 1: Free aspect ratio
+- Command + 2–9: 21:9, 16:9, 3:2, 4:3, 1:1, 3:4, 2:3 and 9:16 aspect ratios
+- Command + 0: Reset crop
+- Command + + / Command + -: Scale the crop box larger or smaller
+- Hold Shift before dragging: Keep the crop box's shape
+
+
 ## Trim Timeline Modifiers
 
-When manipulating the trim timeline:
-- Hold Command: Symmetrical scaling during trim operations
-- Hold Shift: Additional trim operations
-- Hold Option: Center-preserving scale from center
+The drag mode is chosen when you press the mouse button:
+- Hold Command: Range selection — click and drag to set in and out points
+- Hold Shift: Range sliding — drag to move the whole trim range, keeping its length
+- Hold Option: Symmetric scaling — drag a handle to move both handles symmetrically

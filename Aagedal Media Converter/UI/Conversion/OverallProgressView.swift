@@ -23,6 +23,25 @@ struct OverallProgressView: View {
     let totalCount: Int
     let currentFileETA: String?
 
+    /// Where this run started, so the queue estimate ignores items that were
+    /// already done before encoding began.
+    @State private var runStart: (date: Date, progress: Double)?
+
+    /// Remaining time for the whole queue, extrapolated from the progress made
+    /// since this run started. Nil until there's enough progress to be useful.
+    private var queueRemaining: TimeInterval? {
+        guard let runStart else { return nil }
+        let gained = progress - runStart.progress
+        let elapsed = Date().timeIntervalSince(runStart.date)
+        guard gained > 0.01, elapsed > 5, progress < 1 else { return nil }
+        return elapsed * (1 - progress) / gained
+    }
+
+    private static func formatted(_ seconds: TimeInterval) -> String {
+        let total = Int(seconds.rounded())
+        return String(format: "%02d:%02d:%02d", total / 3600, (total % 3600) / 60, total % 60)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -49,14 +68,22 @@ struct OverallProgressView: View {
                 Text("Overall: \(Int(progress * 100))%")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                Spacer()
-                if let eta = currentFileETA {
-                    Text("ETA: \(eta)")
+                if let remaining = queueRemaining {
+                    Text("ETA: \(Self.formatted(remaining))")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .monospacedDigit()
+                }
+                Spacer()
+                if let eta = currentFileETA {
+                    Text("This file: \(eta)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .monospacedDigit()
                 }
             }
         }
         .padding()
+        .onAppear { runStart = (Date(), progress) }
     }
 }

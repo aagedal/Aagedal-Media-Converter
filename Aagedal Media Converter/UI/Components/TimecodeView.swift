@@ -24,6 +24,14 @@ struct TimecodeView: View {
         case disabled = "Disable"
 
         var id: String { rawValue }
+
+        var title: LocalizedStringKey {
+            switch self {
+            case .preserveSource: "Preserve Source"
+            case .manual: "Manual Override"
+            case .disabled: "Disable"
+            }
+        }
     }
 
     var body: some View {
@@ -61,7 +69,7 @@ struct TimecodeView: View {
                 // Mode picker
                 Picker("Timecode Mode", selection: $selectedMode) {
                     ForEach(TimecodeMode.allCases) { mode in
-                        Text(mode.rawValue).tag(mode)
+                        Text(mode.title).tag(mode)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -292,6 +300,7 @@ struct TimecodeView: View {
             }
             .opacity(0)
             .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
         // Handle number key presses to start typing in manual mode
         .onKeyPress(characters: .decimalDigits) { press in
@@ -324,22 +333,13 @@ struct TimecodeView: View {
                 manualTimecode = tc
             }
         } else {
-            // nil config: use default from settings
-            let defaultModeRaw = UserDefaults.standard.string(forKey: AppConstants.defaultTimecodeModeKey) ?? AppConstants.defaultTimecodeModeRaw
+            // nil config means timecode is disabled for this item: items receive
+            // the settings default when they are queued, and the encoder treats
+            // nil as "write no timecode". Re-reading the settings default here
+            // would silently re-enable timecode after the user chose Disable.
             let defaultValue = UserDefaults.standard.string(forKey: AppConstants.defaultTimecodeValueKey) ?? AppConstants.defaultTimecodeValue
-
-            switch defaultModeRaw {
-            case "preserveSource":
-                selectedMode = .preserveSource
-                item.timecodeConfig = TimecodeConfig(mode: .preserveSource)
-            case "manual":
-                selectedMode = .manual
-                manualTimecode = defaultValue
-                item.timecodeConfig = TimecodeConfig(mode: .manual(defaultValue))
-            default: // "disabled"
-                selectedMode = .disabled
-                manualTimecode = item.metadata?.timecode ?? defaultValue
-            }
+            selectedMode = .disabled
+            manualTimecode = item.metadata?.timecode ?? defaultValue
         }
     }
 
@@ -407,12 +407,22 @@ struct TimecodeView: View {
         let maxFrames = getMaxFramesFromMetadata()
         guard frames < maxFrames else { return false }
 
+        // Drop-frame (;) is only valid for 29.97/59.94-style rates, and the
+        // first frame numbers of most minutes do not exist in drop-frame.
+        if input.contains(";") {
+            guard isDropFrameAllowed(maxFrames: maxFrames) else { return false }
+            if isDroppedFrameLabel(minutes: minutes, seconds: seconds, frames: frames, maxFrames: maxFrames) {
+                return false
+            }
+        }
+
         return true
     }
 
     private func getMaxFramesFromMetadata() -> Int {
         // Get frame rate from source video metadata
-        guard let frameRate = item.metadata?.primaryVideoStream?.frameRate?.value else {
+        guard let frameRate = item.metadata?.primaryVideoStream?.frameRate?.value,
+              frameRate.isFinite, frameRate >= 1 else {
             // Default to 30 fps if unknown (common for video)
             return 30
         }
@@ -424,39 +434,65 @@ struct TimecodeView: View {
         return roundedFrameRate
     }
 
+    /// FFmpeg only accepts drop-frame timecode for multiples of 30 fps
+    /// (29.97, 59.94, ...); anything else makes the encode fail.
+    private func isDropFrameAllowed(maxFrames: Int) -> Bool {
+        maxFrames % 30 == 0
+    }
+
+    /// Number of frame labels skipped at the start of each non-tenth minute.
+    private func dropFrameCount(maxFrames: Int) -> Int {
+        maxFrames / 15
+    }
+
+    private func isDroppedFrameLabel(minutes: Int, seconds: Int, frames: Int, maxFrames: Int) -> Bool {
+        seconds == 0 && minutes % 10 != 0 && frames < dropFrameCount(maxFrames: maxFrames)
+    }
+
     private func validationErrorMessage() -> String {
         // Provide specific error message based on what's wrong
         let components = manualTimecode.split(whereSeparator: { $0 == ":" || $0 == ";" })
 
         if components.count != 4 {
-            return "Invalid format. Use HH:MM:SS:FF or HH:MM:SS;FF"
+            return String(localized: "Invalid format. Use HH:MM:SS:FF or HH:MM:SS;FF")
         }
 
         guard let hours = Int(components[0]),
               let minutes = Int(components[1]),
               let seconds = Int(components[2]),
               let frames = Int(components[3]) else {
-            return "Invalid format. Use HH:MM:SS:FF or HH:MM:SS;FF"
+            return String(localized: "Invalid format. Use HH:MM:SS:FF or HH:MM:SS;FF")
         }
 
         if hours >= 24 {
-            return "Hours must be 00-23"
+            return String(localized: "Hours must be 00-23")
         }
 
         if minutes >= 60 {
-            return "Minutes must be 00-59"
+            return String(localized: "Minutes must be 00-59")
         }
 
         if seconds >= 60 {
-            return "Seconds must be 00-59"
+            return String(localized: "Seconds must be 00-59")
         }
 
         let maxFrames = getMaxFramesFromMetadata()
         if frames >= maxFrames {
-            return "Frames must be 00-\(String(format: "%02d", maxFrames - 1)) (based on \(maxFrames)fps source)"
+            let lastFrame = String(format: "%02d", maxFrames - 1)
+            return String(localized: "Frames must be 00-\(lastFrame) (based on \(maxFrames)fps source)")
         }
 
-        return "Invalid timecode format"
+        if manualTimecode.contains(";") {
+            if !isDropFrameAllowed(maxFrames: maxFrames) {
+                return String(localized: "Drop-frame timecode (;) requires a 29.97 or 59.94 fps source. Use : instead.")
+            }
+            if isDroppedFrameLabel(minutes: minutes, seconds: seconds, frames: frames, maxFrames: maxFrames) {
+                let firstFrame = String(format: "%02d", dropFrameCount(maxFrames: maxFrames))
+                return String(localized: "This frame number is skipped in drop-frame timecode. The minute starts at frame \(firstFrame).")
+            }
+        }
+
+        return String(localized: "Invalid timecode format")
     }
 
     private func autoCorrectTimecode() {
@@ -489,10 +525,18 @@ struct TimecodeView: View {
         let clampedMinutes = min(minutes, 59)
         let clampedSeconds = min(seconds, 59)
         let maxFrames = getMaxFramesFromMetadata()
-        let clampedFrames = min(frames, maxFrames - 1)
+        var clampedFrames = min(frames, maxFrames - 1)
 
-        // Preserve the separator (: or ;)
-        let separator = manualTimecode.contains(";") ? ";" : ":"
+        // Preserve the separator (: or ;), but only keep drop-frame when the
+        // source rate supports it.
+        let isDropFrame = manualTimecode.contains(";") && isDropFrameAllowed(maxFrames: maxFrames)
+        let separator = isDropFrame ? ";" : ":"
+
+        // Labels skipped by drop-frame snap to the first existing frame.
+        if isDropFrame,
+           isDroppedFrameLabel(minutes: clampedMinutes, seconds: clampedSeconds, frames: clampedFrames, maxFrames: maxFrames) {
+            clampedFrames = dropFrameCount(maxFrames: maxFrames)
+        }
 
         // Build corrected timecode
         let corrected = String(format: "%02d:%02d:%02d%@%02d",
@@ -507,6 +551,41 @@ struct TimecodeView: View {
         updateTimecodeConfig()
     }
 
+    /// Converts a timecode label to an absolute frame count, honouring drop-frame numbering.
+    private func frameNumber(hours: Int, minutes: Int, seconds: Int, frames: Int,
+                             maxFrames: Int, dropFrame: Bool) -> Int {
+        let totalMinutes = hours * 60 + minutes
+        var total = ((hours * 3600) + (minutes * 60) + seconds) * maxFrames + frames
+        if dropFrame {
+            total -= dropFrameCount(maxFrames: maxFrames) * (totalMinutes - totalMinutes / 10)
+        }
+        return total
+    }
+
+    /// Converts an absolute frame count back to timecode components, honouring drop-frame numbering.
+    private func timecodeComponents(fromFrameNumber frameNumber: Int, maxFrames: Int,
+                                    dropFrame: Bool) -> (hours: Int, minutes: Int, seconds: Int, frames: Int) {
+        var total = frameNumber
+        if dropFrame {
+            let drop = dropFrameCount(maxFrames: maxFrames)
+            let framesPerMinute = maxFrames * 60 - drop
+            let framesPerTenMinutes = maxFrames * 600 - drop * 9
+            let tens = total / framesPerTenMinutes
+            let remainder = total % framesPerTenMinutes
+            total += drop * 9 * tens
+            if remainder > drop {
+                total += drop * ((remainder - drop) / framesPerMinute)
+            }
+        }
+        let frames = total % maxFrames
+        total /= maxFrames
+        let seconds = total % 60
+        total /= 60
+        let minutes = total % 60
+        let hours = total / 60
+        return (hours, minutes, seconds, frames)
+    }
+
     private func adjustFrames(by delta: Int) {
         let components = manualTimecode.split(whereSeparator: { $0 == ":" || $0 == ";" })
 
@@ -519,49 +598,33 @@ struct TimecodeView: View {
         }
 
         let maxFrames = getMaxFramesFromMetadata()
+        let dropFrame = manualTimecode.contains(";") && isDropFrameAllowed(maxFrames: maxFrames)
 
         // Convert everything to total frames
-        var totalFrames = hours * 3600 * maxFrames
-        totalFrames += minutes * 60 * maxFrames
-        totalFrames += seconds * maxFrames
-        totalFrames += frames
+        var totalFrames = frameNumber(hours: hours, minutes: minutes, seconds: seconds, frames: frames,
+                                      maxFrames: maxFrames, dropFrame: dropFrame)
 
         // Add delta
         totalFrames += delta
 
-        // Ensure non-negative
-        totalFrames = max(0, totalFrames)
+        // Clamp to 00:00:00:00 ... 23:59:59:FF
+        let lastFrame = frameNumber(hours: 23, minutes: 59, seconds: 59, frames: maxFrames - 1,
+                                    maxFrames: maxFrames, dropFrame: dropFrame)
+        totalFrames = min(max(0, totalFrames), lastFrame)
 
         // Convert back to timecode components
-        var newFrames = totalFrames % maxFrames
-        totalFrames /= maxFrames
-
-        var newSeconds = totalFrames % 60
-        totalFrames /= 60
-
-        var newMinutes = totalFrames % 60
-        totalFrames /= 60
-
-        var newHours = totalFrames % 24
-
-        // Clamp to 23:59:59:FF
-        if newHours >= 24 {
-            newHours = 23
-            newMinutes = 59
-            newSeconds = 59
-            newFrames = maxFrames - 1
-        }
+        let new = timecodeComponents(fromFrameNumber: totalFrames, maxFrames: maxFrames, dropFrame: dropFrame)
 
         // Preserve the separator (: or ;)
-        let separator = manualTimecode.contains(";") ? ";" : ":"
+        let separator = dropFrame ? ";" : ":"
 
         // Build new timecode
         manualTimecode = String(format: "%02d:%02d:%02d%@%02d",
-                                newHours,
-                                newMinutes,
-                                newSeconds,
+                                new.hours,
+                                new.minutes,
+                                new.seconds,
                                 separator,
-                                newFrames)
+                                new.frames)
 
         isValidTimecode = true
         updateTimecodeConfig()

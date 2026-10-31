@@ -40,6 +40,8 @@ struct UpdateNotificationView: View {
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss")
+            .help("Dismiss")
         }
         .padding(12)
         .background(
@@ -56,9 +58,9 @@ struct UpdateNotificationView: View {
     private var subtitle: String {
         switch installSource {
         case .homebrew:
-            return "Version \(latestVersion) is available via Homebrew."
+            return String(localized: "Version \(latestVersion) is available via Homebrew.")
         case .directDownload:
-            return "Version \(latestVersion) is ready to download."
+            return String(localized: "Version \(latestVersion) is ready to download.")
         }
     }
 

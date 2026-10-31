@@ -156,6 +156,8 @@ struct ShortcutsSettingsView: View {
             ShortcutItem(keys: "J", description: "Play backwards"),
             ShortcutItem(keys: "K", description: "Play/pause"),
             ShortcutItem(keys: "L", description: "Play forwards"),
+            ShortcutItem(keys: "Option + J", description: "Slow reverse"),
+            ShortcutItem(keys: "Option + L", description: "Slow forward"),
             ShortcutItem(keys: "Cmd + L", description: "Toggle loop mode"),
         ]),
         ShortcutGroup(title: "Trim View – Navigation", shortcuts: [
@@ -165,6 +167,7 @@ struct ShortcutsSettingsView: View {
             ShortcutItem(keys: "O", description: "Set out point"),
             ShortcutItem(keys: "Option + I", description: "Clear trim start (reset to beginning)"),
             ShortcutItem(keys: "Option + O", description: "Clear trim end (reset to end)"),
+            ShortcutItem(keys: "Option + X", description: "Clear both trim points"),
             ShortcutItem(keys: "Shift + I", description: "Jump to trim in-point"),
             ShortcutItem(keys: "Shift + O", description: "Jump to trim out-point"),
         ]),
@@ -200,13 +203,29 @@ struct ShortcutsSettingsView: View {
             ShortcutItem(keys: "Cmd + B", description: "Go to previous item in queue"),
             ShortcutItem(keys: "Cmd + N", description: "Go to next item in queue"),
         ]),
+        ShortcutGroup(title: "Fullscreen Player – Trim", shortcuts: [
+            ShortcutItem(keys: "I", description: "Set in point"),
+            ShortcutItem(keys: "O", description: "Set out point"),
+            ShortcutItem(keys: "Option + I", description: "Clear trim start (reset to beginning)"),
+            ShortcutItem(keys: "Option + O", description: "Clear trim end (reset to end)"),
+            ShortcutItem(keys: "Option + X", description: "Clear both trim points"),
+            ShortcutItem(keys: "Shift + I", description: "Jump to trim in-point"),
+            ShortcutItem(keys: "Shift + O", description: "Jump to trim out-point"),
+        ]),
         ShortcutGroup(title: "Fullscreen Player – Other", shortcuts: [
             ShortcutItem(keys: "A", description: "Toggle Auto Next mode"),
             ShortcutItem(keys: "Cmd + L", description: "Toggle Loop Queue (requires Auto Next)"),
             ShortcutItem(keys: "T", description: "Toggle timecode mode"),
+            ShortcutItem(keys: "M", description: "Toggle mute"),
+            ShortcutItem(keys: "Ctrl + Up Arrow", description: "Raise volume by 10 percent"),
+            ShortcutItem(keys: "Ctrl + Down Arrow", description: "Lower volume by 10 percent"),
             ShortcutItem(keys: "0-9, +, -, ., :, ;", description: "Activate timecode input"),
             ShortcutItem(keys: "Cmd + S", description: "Capture screenshot"),
             ShortcutItem(keys: "Escape", description: "Close fullscreen player"),
+        ]),
+        ShortcutGroup(title: "Metadata Window", shortcuts: [
+            ShortcutItem(keys: "Cmd + F", description: "Search fields and values"),
+            ShortcutItem(keys: "Escape", description: "Clear search"),
         ]),
         ShortcutGroup(title: "Audio Routing View", shortcuts: [
             ShortcutItem(keys: "Ctrl + M", description: "Toggle mute audio"),
@@ -269,6 +288,7 @@ struct ShortcutsSettingsView: View {
             ShortcutItem(keys: "Cmd + 0", description: "Reset crop"),
             ShortcutItem(keys: "Cmd + +", description: "Scale crop box larger"),
             ShortcutItem(keys: "Cmd + -", description: "Scale crop box smaller"),
+            ShortcutItem(keys: "Shift", description: "Hold before dragging to keep the crop box’s shape"),
         ]),
     ]
 }

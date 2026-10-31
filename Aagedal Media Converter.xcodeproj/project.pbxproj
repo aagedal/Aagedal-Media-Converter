@@ -278,6 +278,7 @@
 		C954573AF1D84E73A9596708 /* DownloadHistoryServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1CFA07927E49B1A1883FBD /* DownloadHistoryServiceTests.swift */; };
 		C9C0A673908A4105B116FEDB /* IMFSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F96374D9F9450B93232C46 /* IMFSettings.swift */; };
 		CAMCARDSCAN0000001 /* CameraCardScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAMCARDSCAN0000002 /* CameraCardScanner.swift */; };
+		FOLDERIMPORT000001 /* FolderImportScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = FOLDERIMPORT000002 /* FolderImportScanner.swift */; };
 		CAMCARDVIEW0000001 /* CameraCardImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAMCARDVIEW0000002 /* CameraCardImportView.swift */; };
 		CAPCTRL00000001000BUILD /* CaptureControlPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAPCTRL00000001000FREF1 /* CaptureControlPanelView.swift */; };
 		CAPOVRL00000001000BUILD /* CaptureOverlayWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAPOVRL00000001000FREF1 /* CaptureOverlayWindowController.swift */; };
@@ -724,6 +725,7 @@
 		C67C434261D841BD82FD8EEC /* AV2AACParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2AACParser.swift; sourceTree = "<group>"; };
 		C9D639A2FE984963B2B59AF0 /* WatchFolderSelectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchFolderSelectionService.swift; sourceTree = "<group>"; };
 		CAMCARDSCAN0000002 /* CameraCardScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCardScanner.swift; sourceTree = "<group>"; };
+		FOLDERIMPORT000002 /* FolderImportScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderImportScanner.swift; sourceTree = "<group>"; };
 		CAMCARDVIEW0000002 /* CameraCardImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCardImportView.swift; sourceTree = "<group>"; };
 		CAPCTRL00000001000FREF1 /* CaptureControlPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureControlPanelView.swift; sourceTree = "<group>"; };
 		CAPOVRL00000001000FREF1 /* CaptureOverlayWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureOverlayWindowController.swift; sourceTree = "<group>"; };
@@ -1588,6 +1590,7 @@
 			isa = PBXGroup;
 			children = (
 				CAMCARDSCAN0000002 /* CameraCardScanner.swift */,
+				FOLDERIMPORT000002 /* FolderImportScanner.swift */,
 				A45921000000000000000012 /* CameraCardRecordingGrouping.swift */,
 				A45922000000000000000102 /* CameraCardRecordingMetadata.swift */,
 				IMFPKGIMP00000002 /* IMFPackageImporter.swift */,
@@ -2154,6 +2157,7 @@
 				IMGSEQMOD00000002 /* ImageSequenceModels.swift in Sources */,
 				IMGSEQDET00000002 /* ImageSequenceDetector.swift in Sources */,
 				CAMCARDSCAN0000001 /* CameraCardScanner.swift in Sources */,
+				FOLDERIMPORT000001 /* FolderImportScanner.swift in Sources */,
 				A45921000000000000000011 /* CameraCardRecordingGrouping.swift in Sources */,
 				A45922000000000000000101 /* CameraCardRecordingMetadata.swift in Sources */,
 				IMFPKGPAR00000001 /* IMFPackageParser.swift in Sources */,

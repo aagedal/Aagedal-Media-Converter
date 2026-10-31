@@ -754,8 +754,8 @@ final class CaptureOverlayWindowController: NSObject, NSWindowDelegate, NSMenuDe
 /// during a drag, Escape, etc.) flow to whichever app was previously active instead of to our
 /// local event monitors. Overriding `canBecomeKey` to `true` lets the panel hold keyboard focus
 /// while the app itself stays in the background, so local monitors fire and Space can be
-/// swallowed before the underlying app sees it.
-private final class CaptureRegionPanel: NSPanel {
+/// swallowed before the underlying app sees it. Also used by `RegionSelectionWindowController`.
+final class CaptureRegionPanel: NSPanel {
     override var canBecomeKey: Bool { true }
 }
 

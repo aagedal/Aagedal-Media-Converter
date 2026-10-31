@@ -270,3 +270,30 @@ final class CameraCardRecordingGroupingTests: XCTestCase {
         XCTAssertEqual(Set(expected), Set(urls))
     }
 }
+
+final class FolderImportScannerTests: XCTestCase {
+    func testFoldersExpandToSortedMediaAndImageFoldersWhileFilesPassThrough() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appendingPathComponent("Drop", isDirectory: true)
+        let frames = folder.appendingPathComponent("Render", isDirectory: true)
+        let package = folder.appendingPathComponent("Edit.app", isDirectory: true)
+        for directory in [frames, package] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        for path in ["clip10.mov", "clip2.mov", "notes.txt", ".hidden.mp4", "Render/frame_0001.png", "Edit.app/inside.mp4"] {
+            FileManager.default.createFile(atPath: folder.appendingPathComponent(path).path, contents: Data())
+        }
+        let looseFile = root.appendingPathComponent("loose.mp4")
+        FileManager.default.createFile(atPath: looseFile.path, contents: Data())
+
+        let expansion = FolderImportScanner.expand([looseFile, folder, package])
+
+        XCTAssertEqual(expansion.fileURLs.map(\.lastPathComponent), ["loose.mp4", "clip2.mov", "clip10.mov", "Edit.app"],
+                       "Packages are passed through as files, not scanned")
+        XCTAssertEqual(expansion.imageSequenceFolders.map(\.lastPathComponent), ["Render"])
+        XCTAssertFalse(FolderImportScanner.isImportableFolder(package))
+        XCTAssertFalse(FolderImportScanner.isImportableFolder(looseFile))
+        XCTAssertTrue(FolderImportScanner.isImportableFolder(folder))
+    }
+}

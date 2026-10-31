@@ -94,8 +94,15 @@ struct CaptureRegionOverlayView: View {
             .gesture(mainDragGesture(in: geometry.size))
             .onAppear {
                 if let initialRegion {
-                    selectionRect = initialRegion
+                    // The saved region may come from a different (larger) display, e.g. after
+                    // switching the capture display — keep it on this screen and persist the fix
+                    // so the recording's source rect stays inside the display.
+                    let clamped = clampToScreen(initialRegion, in: screenSize, ratio: nil)
+                    selectionRect = clamped
                     phase = .refining
+                    if clamped != initialRegion {
+                        onRegionChanged(clamped)
+                    }
                 }
             }
             .onChange(of: isShiftHeld) { _, newValue in
@@ -769,7 +776,14 @@ struct CaptureRegionOverlayView: View {
                 phase = .drawing
             }
         } else if let rect = selectionRect {
-            onRegionChanged(rect)
+            if rect.width < minimumSize || rect.height < minimumSize, let startRect = dragStartRect {
+                // A resize collapsed the region below the minimum size (down to 1 pt, which can
+                // round to a 0-pixel-wide recording); restore the pre-drag region instead.
+                selectionRect = startRect
+                onRegionChanged(startRect)
+            } else {
+                onRegionChanged(rect)
+            }
         }
 
         dragMode = .none
@@ -865,16 +879,31 @@ private struct RegionModifierKeyView: NSViewRepresentable {
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
-            if window != nil {
+            if let window {
+                // Closing the overlay panel does not detach this view, so also tear the monitors
+                // down when the window closes (e.g. when recording starts).
+                NotificationCenter.default.addObserver(
+                    self,
+                    selector: #selector(hostWindowWillClose(_:)),
+                    name: NSWindow.willCloseNotification,
+                    object: window
+                )
                 installMonitors()
             }
         }
 
         override func viewWillMove(toWindow newWindow: NSWindow?) {
             super.viewWillMove(toWindow: newWindow)
+            if let window {
+                NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: window)
+            }
             if newWindow == nil {
                 removeMonitors()
             }
+        }
+
+        @objc private func hostWindowWillClose(_ notification: Notification) {
+            removeMonitors()
         }
 
         deinit {
@@ -1002,7 +1031,16 @@ private struct CaptureRegionCursorView: NSViewRepresentable {
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
-            if window != nil {
+            if let window {
+                // Closing the overlay panel does not detach this view, so viewWillMove(toWindow: nil)
+                // is not guaranteed. Without this, the Escape monitor would outlive the overlay and
+                // keep swallowing Escape in the app's windows after recording.
+                NotificationCenter.default.addObserver(
+                    self,
+                    selector: #selector(hostWindowWillClose(_:)),
+                    name: NSWindow.willCloseNotification,
+                    object: window
+                )
                 if keyEventMonitor == nil {
                     keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                         if event.keyCode == 53 { // Escape
@@ -1026,15 +1064,28 @@ private struct CaptureRegionCursorView: NSViewRepresentable {
 
         override func viewWillMove(toWindow newWindow: NSWindow?) {
             super.viewWillMove(toWindow: newWindow)
+            if let window {
+                NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: window)
+            }
             if newWindow == nil {
-                if let monitor = keyEventMonitor {
-                    NSEvent.removeMonitor(monitor)
-                    keyEventMonitor = nil
-                }
-                if let monitor = mouseEventMonitor {
-                    NSEvent.removeMonitor(monitor)
-                    mouseEventMonitor = nil
-                }
+                removeMonitors()
+            }
+        }
+
+        @objc private func hostWindowWillClose(_ notification: Notification) {
+            removeMonitors()
+            // The overlay set crosshair / resize cursors; restore the arrow so it doesn't linger.
+            NSCursor.arrow.set()
+        }
+
+        private func removeMonitors() {
+            if let monitor = keyEventMonitor {
+                NSEvent.removeMonitor(monitor)
+                keyEventMonitor = nil
+            }
+            if let monitor = mouseEventMonitor {
+                NSEvent.removeMonitor(monitor)
+                mouseEventMonitor = nil
             }
         }
 
