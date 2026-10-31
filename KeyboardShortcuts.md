@@ -112,7 +112,7 @@ The list below shows the default bindings. Player, editor, and navigation shortc
 - Command + L: Toggle Loop Queue (only available when Auto Next is enabled)
 - T: Toggle timecode mode
 - M: Toggle mute
-- Control + Up/Down Arrow: Raise or lower the volume by 10%
+- Command + Up/Down Arrow: Raise or lower the volume by 10%
 - Number keys (0-9) or timecode characters (+, -, ., :, ;): Activate timecode input
 - Command + S: Capture screenshot
 - Escape: Close fullscreen player

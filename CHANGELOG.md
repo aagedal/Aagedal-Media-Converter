@@ -24,7 +24,7 @@
 - The right-edge cursor-hide zone no longer leaves the cursor hidden after switching items, leaving fullscreen or switching apps.
 - Trim points set in fullscreen stay with the item when you move back and forth through the queue, and items inside encoding groups keep their trims and navigate within their group.
 - Auto Next no longer risks skipping an item when the end of a clip is reported twice.
-- Added a volume slider and mute button. M toggles mute and ⌃↑/⌃↓ change the volume by 10%; the setting is remembered. MPV volume now follows the same linear scale as AVPlayer, so 50% is half as loud rather than barely audible.
+- Added a volume slider and mute button. M toggles mute and ⌘↑/⌘↓ change the volume by 10%; the setting is remembered. MPV volume now follows the same linear scale as AVPlayer, so 50% is half as loud rather than barely audible.
 - The display no longer dims or sleeps during fullscreen playback of files played through MPV.
 - Typing a timecode for a file whose metadata is still loading no longer jumps to the start, and in and out points set in fullscreen apply to loop playback straight away.
 
@@ -46,6 +46,41 @@
 - Include subfolders imports files from folders inside the watch folder, such as copied camera cards. The output folder is skipped when it sits inside the watch folder.
 - A Waiting button appears next to Watch Mode while files are still copying. It lists each file with its size and whether it's copying, settling (with a countdown), being checked, or can't be read yet.
 - Files you add to the queue by hand from the watch folder, and outputs saved into the watch folder, are no longer picked up when they leave the queue, and automatic cleanup never moves a queued item's output to the Trash.
+
+### Live streams
+
+- Scheduled live streams and premieres no longer fail. The download waits for the stream to start, and the row shows that it's waiting, the announced start time, the title and the thumbnail. Stopping a row that is still waiting cancels it.
+- Stopping a recording lets yt-dlp finish cleanly, so recordings from the start of the stream are merged into one playable file with metadata. Stopping again forces it. If a recording is cut off anyway, the recovered file gets a `.ts` extension when it is an MPEG transport stream.
+- New setting: Record live streams as growing files. The stream is written to one QuickTime `.mov` that DaVinci Resolve and Premiere Pro can import while it is still recording. The queue row's Finder, copy-path and drag buttons point at the growing file during the recording.
+- A recording that stalls or fails keeps what it has recorded instead of starting over, so footage isn't lost once a stream's rewind window has passed.
+- Recording from the start of a stream now uses yt-dlp-rs, updated to 0.6. Recorded duration and size are shown while recording.
+
+### DCP
+
+- New DCP validator (File › Validate DCP…). It checks the package's ASSETMAP, packing list and composition playlist against each other, file sizes and checksums, durations and frame rates, the MXF files, picture and sound rules, the 250 Mbps limit and JPEG 2000 headers. It also runs after every DCP export, and an export with errors is reported as failed; the package is kept so you can inspect it.
+- Colour is converted to DCI X′Y′Z′ the way DCP-o-matic does it. White was about 8% too bright before; mid-tones now look slightly darker than in earlier versions.
+- The bitrate setting now works; previously it had no effect. The chosen bitrate (at most 250 Mbps) caps every frame, so 25 and 30 fps and 4K exports stay within the DCI limit. 4K at 48 fps is blocked.
+- Asset IDs in the MXF files match the CPL, packing list and ASSETMAP, and the CPL's duration counts the frames actually encoded.
+- Audio is always a 5.1 track with channel labels and a language: mono goes to the centre channel, stereo to left and right, and 7.1 is folded down. It runs exactly as long as the picture, and files without audio get a silent track.
+- The CPL includes the Bv2.1 composition metadata, and folder names follow the ISDCF naming convention more closely.
+- DCP and IMF export need the bundled FFmpeg; a custom FFmpeg without its JPEG 2000 patches can't produce them.
+
+### IMF
+
+- Audio tracks are labelled as mono, stereo, 5.1 or 7.1 with the item's language and title, both in the MXF and in the CPL.
+- Audio is padded or cut to exactly the picture length. A longer audio tail used to make the audio run past the picture. Export now fails with an error if the audio can't be fitted.
+- JPEG 2000 (App 2e) frames are encoded at the chosen bitrate and declare an IMF profile. Before, every frame was lossless, at about 960 Mbps for 1080p24.
+
+### Waveforms and alpha
+
+- New waveform styles: Halo, Orb, Ridgeline and LED Meter, with gradient palettes and a style preview in Settings.
+- New per-preset option, Export matte sidecar when alpha would be lost (off by default). When a source with transparency is exported to a format that can't keep it, a black-and-white `_matte` file is written next to the export, with the same trim, crop and size. Transparent waveforms get one too.
+- ProRes 4444 and 4444 XQ keep transparency in the file itself.
+
+### MKV
+
+- MKV exports that keep subtitles now also keep the fonts attached to the source, so styled ASS subtitles and karaoke no longer shift when a player falls back to another font. This works with metadata stripped too (#64).
+- Updated SwiftMediaMetadata to 3.1.0, which reads Matroska font attachments.
 
 ### Timecode
 
@@ -123,8 +158,6 @@
 - One outdated saved job could make every new encode fail with another file's settings error.
 - Metadata probes that time out are retried once. Fixed conformance encoding for FourCC codec names and 10-bit 4:2:2 H.264.
 - Updated SwiftMediaMetadata to 3.0.3. MXF metadata reads now skip media essence using partition indexes, and XAVC clips report their displayed 1080-line picture size.
-- MKV exports that keep subtitles now also keep the fonts attached to the source, so styled ASS subtitles and karaoke no longer shift when a player falls back to another font. This works with metadata stripped too (#64).
-- Updated SwiftMediaMetadata to 3.1.0, which reads Matroska font attachments.
 
 # v.4.5.6
 

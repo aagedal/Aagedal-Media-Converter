@@ -902,9 +902,9 @@ extension FFMPEGCommandBuilder {
         let subtitlePlan = SubtitleMappingPlan(keepSubtitles: keepSubtitles, outputExtension: outputExtension)
         guard subtitlePlan == .copy else { return [] }
         let stripsStreamMetadata = SubtitleAttachmentPlan.stripsStreamMetadata(outputArguments)
-        var attachmentCount = sourceMetadata?.attachmentCount
+        var attachmentCount = sourceMetadata?.attachmentStreamCount
         if stripsStreamMetadata, sourceMetadata == nil {
-            attachmentCount = try? await BoundedVideoMetadataProbe.metadata(for: inputURL).attachmentCount
+            attachmentCount = try? await BoundedVideoMetadataProbe.metadata(for: inputURL).attachmentStreamCount
         }
         return SubtitleAttachmentPlan(
             subtitlePlan: subtitlePlan,

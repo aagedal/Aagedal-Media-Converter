@@ -846,7 +846,7 @@ struct FullscreenPlayerView: View {
             Slider(value: $controller.volume, in: 0...100)
                 .controlSize(.mini)
                 .frame(width: 70)
-                .help("Volume (⌃↑ / ⌃↓)")
+                .help("Volume (⌘↑ / ⌘↓)")
                 .accessibilityLabel("Volume")
                 .accessibilityValue("\(Int(controller.volume.rounded())) percent")
                 .accessibilityIdentifier("fullscreen.volume")
@@ -1153,17 +1153,18 @@ struct FullscreenPlayerView: View {
 
     // MARK: - Trim Handling
 
+    /// Same frame-snapped rules as the trim view's I/O keys.
+    private var trimEditor: TrimEditor {
+        TrimEditor(duration: observedDuration, frameRate: itemState.trimFrameRate)
+    }
+
     private func handleTrimInPoint(clearToStart: Bool) {
         if clearToStart {
             itemState.trimStart = nil
         } else {
-            let currentTime = controller.currentPlaybackTime
-            let duration = observedDuration
-            let clamped = max(0, min(currentTime, duration))
-            itemState.trimStart = clamped <= 0.05 ? nil : clamped
-            if let end = itemState.trimEnd, end < itemState.effectiveTrimStart {
-                itemState.trimEnd = itemState.trimStart
-            }
+            (itemState.trimStart, itemState.trimEnd) = trimEditor.settingIn(
+                controller.currentPlaybackTime, end: itemState.trimEnd
+            )
         }
         trimDidChange()
     }
@@ -1172,16 +1173,9 @@ struct FullscreenPlayerView: View {
         if clearToEnd {
             itemState.trimEnd = nil
         } else {
-            let currentTime = controller.currentPlaybackTime
-            let duration = observedDuration
-            let clamped = max(0, min(currentTime, duration))
-            let minEnd = itemState.effectiveTrimStart
-            let sanitizedValue = max(clamped, minEnd)
-            if sanitizedValue >= duration - 0.05 {
-                itemState.trimEnd = nil
-            } else {
-                itemState.trimEnd = sanitizedValue
-            }
+            (itemState.trimStart, itemState.trimEnd) = trimEditor.settingOut(
+                controller.currentPlaybackTime, start: itemState.trimStart
+            )
         }
         trimDidChange()
     }
@@ -1586,13 +1580,13 @@ private struct FullscreenKeyboardHandler: NSViewRepresentable {
                     }
                 }
 
-                // M: Toggle mute. Ctrl+Up/Down: volume ±10%
+                // M: Toggle mute. Cmd+Up/Down: volume ±10% (Ctrl+Up/Down belong to Mission Control)
                 if noModifiers && lower == "m" {
                     let controller = self.controller
                     MainActor.assumeIsolated { controller.isMuted.toggle() }
                     return nil
                 }
-                if hasControl && !hasCommand && !hasOption,
+                if hasCommand && !hasControl && !hasOption && !hasShift,
                    keyCode == UInt16(kVK_UpArrow) || keyCode == UInt16(kVK_DownArrow) {
                     let delta: Double = keyCode == UInt16(kVK_UpArrow) ? 10 : -10
                     let controller = self.controller

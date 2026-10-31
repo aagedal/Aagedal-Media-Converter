@@ -254,8 +254,20 @@ struct DCPAudioCarrier: Equatable, Sendable {
     /// MXF has the same number of edit units as the picture MXF.
     let duration: Double
 
+    /// Exact 48 kHz sample count for the picture duration. Every DCP edit rate divides
+    /// 48 000, so each frame gets a whole number of samples.
+    let sampleCount: Int
+
     init(frameCount: Int, frameRate: DCPFrameRate) {
         duration = Double(frameCount) * Double(frameRate.editRateDenominator) / Double(frameRate.editRateNumerator)
+        sampleCount = frameCount * 48_000 * frameRate.editRateDenominator / frameRate.editRateNumerator
+    }
+
+    /// Pads short audio and cuts long audio to exactly `sampleCount` samples. Working in
+    /// seconds rounds to milliseconds and can leave the last edit unit short, which
+    /// asdcp-wrap then drops.
+    var lengthFilter: String {
+        "apad=whole_len=\(sampleCount),atrim=end_sample=\(sampleCount)"
     }
 
     /// Maps the source channels (in FFmpeg/WAV order) onto L,R,C,LFE,Ls,Rs.

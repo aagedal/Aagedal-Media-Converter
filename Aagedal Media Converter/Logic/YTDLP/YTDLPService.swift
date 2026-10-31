@@ -1607,6 +1607,18 @@ actor YTDLPService {
         }
         defer { watchdogTask.cancel() }
 
+        /// A live recording that already wrote footage — a growing file, or the per-format
+        /// files of a `--live-from-start` recording — must be kept. Falling back to yt-dlp
+        /// deletes those files and starts over, and once the stream's DVR window has passed
+        /// the footage is gone.
+        func hasRecordedLiveOutput() -> Bool {
+            if let growingFile = parsedState.read({ $0.growingFileURL }),
+               FileManager.default.fileExists(atPath: growingFile.path) {
+                return true
+            }
+            return parsedState.read({ $0.isLive }) && !control.reportedFiles(in: outputFolder).isEmpty
+        }
+
         func throwCancellation(_ reason: YTDLPDownloadControl.StopReason) throws -> Never {
             switch reason {
             case .userRequested:
@@ -1617,9 +1629,8 @@ actor YTDLPService {
                 throw YTDLPError.liveRecordingStopped
             case .stalled:
                 logger.warning("Download terminated due to stall")
-                // Keep a growing file rather than retrying over it with yt-dlp.
-                if let growingFile = parsedState.read({ $0.growingFileURL }),
-                   FileManager.default.fileExists(atPath: growingFile.path) {
+                // Keep what a live recording wrote rather than retrying over it with yt-dlp.
+                if hasRecordedLiveOutput() {
                     throw YTDLPError.liveRecordingStopped
                 }
                 throw YTDLPError.stalled
@@ -1687,11 +1698,11 @@ actor YTDLPService {
             throw YTDLPError.liveRecordingStopped
         }
 
-        // A growing file may already be in an editor's timeline: keep what was recorded
-        // instead of removing it and starting over with yt-dlp.
-        if terminationStatus != 0, let growingFile = parsedState.read({ $0.growingFileURL }),
-           FileManager.default.fileExists(atPath: growingFile.path) {
-            logger.warning("Growing-file recording ended with exit \(terminationStatus); keeping the recorded file")
+        // A growing file may already be in an editor's timeline, and a from-start recording
+        // may be past the stream's DVR window: keep what was recorded instead of removing it
+        // and starting over with yt-dlp.
+        if terminationStatus != 0, hasRecordedLiveOutput() {
+            logger.warning("Live recording ended with exit \(terminationStatus); keeping the recorded files")
             throw YTDLPError.liveRecordingStopped
         }
 
@@ -1711,9 +1722,11 @@ actor YTDLPService {
         logger.info("Final output path from parsing: \(outputPath ?? "nil", privacy: .auto)")
 
         // Verify output file exists
+        // After Stop, a missing output must not trigger the yt-dlp fallback: it would delete
+        // the partial files and start recording again.
+        let outputNotFound: YTDLPError = wasInterrupted ? .liveRecordingStopped : .outputNotFound
         guard let finalPath = outputPath else {
-            if wasInterrupted { throw YTDLPError.liveRecordingStopped }
-            throw YTDLPError.outputNotFound
+            throw outputNotFound
         }
 
         let outputURL: URL
@@ -1731,11 +1744,11 @@ actor YTDLPService {
         guard resolvedOutput.path == resolvedFolder.path
             || resolvedOutput.path.hasPrefix(resolvedFolder.path + "/") else {
             logger.error("yt-dlp output path \(resolvedOutput.path, privacy: .public) is outside chosen folder \(resolvedFolder.path, privacy: .public)")
-            throw YTDLPError.outputNotFound
+            throw outputNotFound
         }
 
         guard FileManager.default.fileExists(atPath: outputURL.path) else {
-            throw YTDLPError.outputNotFound
+            throw outputNotFound
         }
 
         if Task.isCancelled {
