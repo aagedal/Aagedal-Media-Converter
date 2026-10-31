@@ -730,4 +730,53 @@ final class DownloadSectionTests: XCTestCase {
         XCTAssertEqual(YTDLPProgressParser.parseSourceDuration("__AMC_SOURCE_DURATION__=634.0"), 634)
         XCTAssertNil(YTDLPProgressParser.parseSourceDuration("__AMC_SOURCE_DURATION__=NA"))
     }
+
+    func testWaitingForAScheduledStreamOnlyKeepsTheMacAwakeNearItsStartWhenAllowed() {
+        let now = Date()
+        let lead = DownloadManager.streamWaitKeepAwakeLead
+        let farAway = now.addingTimeInterval(3 * 24 * 3600)
+        func awake(waiting: Bool = true, _ startsAt: Date?, keep: Bool = false) -> Bool {
+            DownloadManager.keepsMacAwake(waitingForStream: waiting, startsAt: startsAt, now: now, keepAwakeWhileWaiting: keep)
+        }
+        XCTAssertTrue(awake(waiting: false, nil), "Downloads and recordings always keep the Mac awake")
+        XCTAssertTrue(awake(farAway, keep: true), "The default keeps the Mac awake for the whole wait")
+        XCTAssertFalse(awake(farAway))
+        XCTAssertTrue(awake(nil), "An unknown start time could be any moment")
+        XCTAssertTrue(awake(now.addingTimeInterval(lead - 1)))
+        XCTAssertTrue(awake(now.addingTimeInterval(-60)), "A stream running late keeps the Mac awake")
+    }
+
+    func testConcurrencyLimiterRunsAtMostItsLimitAtOnce() async {
+        let limiter = AsyncConcurrencyLimiter(limit: 3)
+        let counter = ConcurrencyCounter()
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0..<20 {
+                group.addTask {
+                    await limiter.run {
+                        await counter.enter()
+                        try? await Task.sleep(for: .milliseconds(5))
+                        await counter.leave()
+                    }
+                }
+            }
+        }
+        let peak = await counter.peak
+        let current = await counter.current
+        XCTAssertEqual(peak, 3)
+        XCTAssertEqual(current, 0)
+    }
+}
+
+private actor ConcurrencyCounter {
+    private(set) var current = 0
+    private(set) var peak = 0
+
+    func enter() {
+        current += 1
+        peak = max(peak, current)
+    }
+
+    func leave() {
+        current -= 1
+    }
 }

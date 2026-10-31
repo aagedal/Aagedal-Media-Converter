@@ -67,8 +67,12 @@ struct WatchFolderImportLedger: Codable, Equatable, Sendable {
         return entries.count != before
     }
 
-    mutating func removeAll() {
-        entries.removeAll()
+    /// Forgets files imported at or before `date`, the time "Forget Imported Files" was used.
+    /// Returns true when anything was removed.
+    mutating func forget(importedThrough date: Date) -> Bool {
+        let before = entries.count
+        entries = entries.filter { $0.value.importedAt > date }
+        return entries.count != before
     }
 
     private static func key(for url: URL) -> String {

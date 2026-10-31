@@ -792,6 +792,10 @@ enum AppConstants {
     /// Record live streams with yt-dlp-rs `--growing-file` (one `.mov` editors can
     /// import while it is written). Off by default.
     static let ytdlpGrowingFileKey = "ytdlpGrowingFile"
+    /// Keep the Mac awake for the whole wait for a scheduled live stream or premiere. When off,
+    /// it may idle-sleep until an hour before the announced start. On by default.
+    static let ytdlpKeepAwakeWhileWaitingKey = "ytdlpKeepAwakeWhileWaiting"
+    static let defaultYTDLPKeepAwakeWhileWaiting = true
     static let ytdlpAudioOnlyKey = "ytdlpAudioOnly"
     static let ytdlpDownloadPlaylistKey = "ytdlpDownloadPlaylist"
 

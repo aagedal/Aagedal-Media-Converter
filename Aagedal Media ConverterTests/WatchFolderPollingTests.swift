@@ -134,6 +134,29 @@ final class WatchFolderPollingTests: XCTestCase {
         XCTAssertEqual(afterForget, [clip])
     }
 
+    /// A scan running when Forget is used writes its old history back. A relaunch before
+    /// the next scan must still treat those files as forgotten.
+    func testForgottenHistoryWrittenBackByARunningScanStaysForgotten() async throws {
+        let folder = try makeFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let clip = folder.appendingPathComponent("clip.mov")
+        try Data([1]).write(to: clip)
+        let store = WatchFolderImportHistoryStore(fileURL: folder.appendingPathComponent(".history.json"))
+        let modified = try XCTUnwrap(clip.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
+
+        var stale = WatchFolderImportLedger()
+        stale.record(clip, size: 1, modifiedAt: modified, at: Date().addingTimeInterval(-60))
+        let afterForget = try await importsAfterScans(3, in: folder, historyStore: store, configure: { defaults in
+            WatchFolderImportHistoryStore.forgetAll(defaults: defaults, store: store)
+            store.save(stale)
+        })
+        XCTAssertEqual(afterForget, [clip])
+
+        var ledger = stale
+        XCTAssertTrue(ledger.forget(importedThrough: Date().addingTimeInterval(-30)))
+        XCTAssertFalse(ledger.contains(clip, size: 1, modifiedAt: modified))
+    }
+
     func testSubfoldersAreImportedOnlyWhenEnabledAndSkipExcludedFolders() async throws {
         let folder = try makeFolder()
         defer { try? FileManager.default.removeItem(at: folder) }

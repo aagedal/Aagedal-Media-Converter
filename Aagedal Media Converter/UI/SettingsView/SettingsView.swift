@@ -366,6 +366,7 @@ struct SettingsView: View {
                     String(localized: "Auto-encode after download"),
                     String(localized: "When enabled, new downloads will automatically start encoding after the download completes."),
                     String(localized: "Auto-upload after download"),
+                    String(localized: "Keep Mac awake while waiting for scheduled streams"),
                     String(localized: "When enabled, new downloads will be uploaded after encoding completes. Requires upload to be configured in Settings > Upload."),
                     String(localized: "Upload not configured"),
                     String(localized: "Download Folder"),

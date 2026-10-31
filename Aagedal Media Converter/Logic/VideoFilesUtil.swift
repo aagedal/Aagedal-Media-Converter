@@ -118,7 +118,41 @@ private final class NonJoiningTaskResolution<Output: Sendable>: @unchecked Senda
     }
 }
 
+/// Runs at most `limit` operations at once; the rest wait their turn in arrival order.
+actor AsyncConcurrencyLimiter {
+    private let limit: Int
+    private var running = 0
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    init(limit: Int) {
+        self.limit = max(1, limit)
+    }
+
+    func run<Output: Sendable>(_ operation: @Sendable () async -> Output) async -> Output {
+        if running < limit {
+            running += 1
+        } else {
+            // The slot is handed over directly by `release`, so `running` stays counted.
+            await withCheckedContinuation { waiters.append($0) }
+        }
+        defer { release() }
+        return await operation()
+    }
+
+    private func release() {
+        if waiters.isEmpty {
+            running -= 1
+        } else {
+            waiters.removeFirst().resume()
+        }
+    }
+}
+
 struct VideoFileUtils: Sendable {
+    /// Each import reads metadata and extracts a thumbnail, often in subprocesses. A dropped
+    /// folder can hold thousands of files, so only a few are probed at a time, in queue order.
+    static let detailsLimiter = AsyncConcurrencyLimiter(limit: 4)
+
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "VideoFileUtils")
 
     struct VideoItemDetails: Sendable {
@@ -293,6 +327,23 @@ struct VideoFileUtils: Sendable {
         generateRowThumbnailIfMissing: Bool = true,
         counter: Int? = nil,
         namingSettings: VideoImportNamingSettings? = nil
+    ) async -> VideoItemDetails {
+        await detailsLimiter.run {
+            await loadDetailsNow(
+                for: url, outputFolder: outputFolder, preset: preset,
+                generateRowThumbnailIfMissing: generateRowThumbnailIfMissing,
+                counter: counter, namingSettings: namingSettings
+            )
+        }
+    }
+
+    private static func loadDetailsNow(
+        for url: URL,
+        outputFolder: String?,
+        preset: ExportPreset,
+        generateRowThumbnailIfMissing: Bool,
+        counter: Int?,
+        namingSettings: VideoImportNamingSettings?
     ) async -> VideoItemDetails {
         let namingSettings = namingSettings ?? VideoImportNamingSettings(preset: preset)
         // Skip if file doesn't exist (e.g., scheduled downloads)

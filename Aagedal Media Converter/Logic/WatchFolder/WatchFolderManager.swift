@@ -57,7 +57,6 @@ actor WatchFolderManager {
     private let historyStore: WatchFolderImportHistoryStore
     private var importLedger: WatchFolderImportLedger?
     private var ledgerNeedsSave = false
-    private var historyClearedAt: Double = 0
 
     private var eventSource: WatchFolderEventSource?
     /// FSEvents misses changes made on network volumes by other machines; poll those often.
@@ -477,17 +476,20 @@ actor WatchFolderManager {
 
     private func loadLedger() -> WatchFolderImportLedger {
         var ledger = importLedger ?? historyStore.load()
-        // "Forget Imported Files" in Settings deletes the saved file and bumps this marker.
-        let clearedAt = defaults.double(forKey: AppConstants.watchFolderImportHistoryClearedAtKey)
-        if clearedAt > historyClearedAt {
-            if importLedger != nil, !ledger.isEmpty {
-                ledger.removeAll()
-                ledgerNeedsSave = true
-            }
-            historyClearedAt = clearedAt
+        if applyForget(to: &ledger) {
+            ledgerNeedsSave = true
         }
         importLedger = ledger
         return ledger
+    }
+
+    /// "Forget Imported Files" in Settings deletes the saved file and records when it was used.
+    /// Dropping everything imported before then also covers a history that a scan running at
+    /// that moment loaded earlier and wrote back afterwards.
+    private func applyForget(to ledger: inout WatchFolderImportLedger) -> Bool {
+        let clearedAt = defaults.double(forKey: AppConstants.watchFolderImportHistoryClearedAtKey)
+        guard clearedAt > 0 else { return false }
+        return ledger.forget(importedThrough: Date(timeIntervalSince1970: clearedAt))
     }
 
     private func recordImported(_ url: URL, observation: WatchFolderObservation, at date: Date) {
@@ -498,8 +500,11 @@ actor WatchFolderManager {
     }
 
     private func saveLedgerIfNeeded() {
-        guard ledgerNeedsSave, let importLedger else { return }
+        guard ledgerNeedsSave, var importLedger else { return }
         ledgerNeedsSave = false
+        // Forget may have been used while this scan ran; never write the old history back.
+        _ = applyForget(to: &importLedger)
+        self.importLedger = importLedger
         historyStore.save(importLedger)
     }
 

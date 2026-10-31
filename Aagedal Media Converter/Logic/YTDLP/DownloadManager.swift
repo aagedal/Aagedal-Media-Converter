@@ -43,6 +43,14 @@ class DownloadManager {
     /// Sequential "Download all" playlist runs keyed by `VideoItem.playlistDownloadBatchID`.
     private var playlistBatchTasks: [UUID: Task<Void, Never>] = [:]
 
+    /// Idle-sleep assertions held by running downloads, tagged with the download that owns them.
+    private var sleepAssertions: [UUID: (control: YTDLPDownloadControl, token: UUID)] = [:]
+    /// Re-checks the sleep policy when a scheduled stream's start comes within range.
+    private var sleepPolicyTasks: [UUID: Task<Void, Never>] = [:]
+
+    /// How long before a scheduled stream's announced start the Mac is kept awake.
+    nonisolated static let streamWaitKeepAwakeLead: TimeInterval = 60 * 60
+
     /// Live recording stat update tasks keyed by VideoItem ID
     private var liveRecordingStatTasks: [UUID: Task<Void, Never>] = [:]
     private let thumbnailTasks = DownloadAuxiliaryTaskStore()
@@ -665,12 +673,17 @@ class DownloadManager {
                 self.cancelDownload(itemID: itemID)
                 return
             }
-            // Keep App Nap from throttling output parsing and the stall watchdog, and
-            // idle sleep from cutting off long downloads and live recordings.
+            // Keep App Nap from throttling output parsing and the stall watchdog. Idle
+            // sleep is blocked separately, so the user can let a long wait for a
+            // scheduled stream sleep until shortly before the stream starts.
             let activity = ProcessInfo.processInfo.beginActivity(
-                options: .userInitiated, reason: "Downloading a video"
+                options: .userInitiatedAllowingIdleSystemSleep, reason: "Downloading a video"
             )
-            defer { ProcessInfo.processInfo.endActivity(activity) }
+            self.refreshSleepAssertion(itemID: itemID)
+            defer {
+                ProcessInfo.processInfo.endActivity(activity)
+                self.releaseSleepAssertion(itemID: itemID, control: control)
+            }
             await self.performDownload(
                 itemID: itemID, urlString: urlString, outputFolder: outputFolder,
                 liveFromStart: liveFromStart, audioOnly: audioOnly, section: section,
@@ -762,6 +775,7 @@ class DownloadManager {
                         if isLiveStream && !wasLiveStreamRecording {
                             self.logger.info("[LiveStream] Detected live stream, starting stat updates")
                             self.startLiveRecordingStatUpdates(itemID: itemID, outputFolder: outputFolder, control: control)
+                            self.refreshSleepAssertion(itemID: itemID)
                         }
                     }
                 },
@@ -875,6 +889,7 @@ class DownloadManager {
                     item.downloadProgress = 0
                     item.downloadSpeed = nil
                 }
+                refreshSleepAssertion(itemID: itemID)
                 fetchUpcomingStreamInfo(itemID: itemID, urlString: urlString)
                 await performDownload(
                     itemID: itemID, urlString: urlString, outputFolder: outputFolder,
@@ -1010,6 +1025,7 @@ class DownloadManager {
         case .streamAvailable:
             logger.info("[LiveStream] Awaited stream is available")
             updateItem(itemID) { $0.waitingForLiveStream = false }
+            refreshSleepAssertion(itemID: itemID)
         case .recording(let duration, let bytes):
             // ffmpeg reports what it has written, which also covers yt-dlp-rs's
             // private working directory; stop probing the growing file.
@@ -1053,6 +1069,7 @@ class DownloadManager {
                         item.thumbnailData = thumbnailData
                     }
                 }
+                self.refreshSleepAssertion(itemID: itemID)
             case .failure(let error):
                 self.logger.info("Could not fetch upcoming stream info: \(error.localizedDescription)")
             }
@@ -1277,6 +1294,57 @@ class DownloadManager {
         // Extract first line only (handles multi-line pastes)
         let firstLine = string.components(separatedBy: .newlines).first ?? string
         return firstLine.trimmingCharacters(in: .whitespaces)
+    }
+
+    // MARK: - Idle Sleep
+
+    /// Whether a download should keep the Mac from idle-sleeping. Unless the user keeps it
+    /// awake for the whole wait, waiting for a scheduled stream only does so close to its
+    /// announced start, or when the start is unknown.
+    nonisolated static func keepsMacAwake(
+        waitingForStream: Bool, startsAt: Date?, now: Date, keepAwakeWhileWaiting: Bool
+    ) -> Bool {
+        guard waitingForStream, !keepAwakeWhileWaiting, let startsAt else { return true }
+        return startsAt.timeIntervalSince(now) <= streamWaitKeepAwakeLead
+    }
+
+    /// Holds or drops the running download's idle-sleep assertion to match its current state.
+    private func refreshSleepAssertion(itemID: UUID) {
+        guard let control = downloadControls[itemID] else { return }
+        sleepPolicyTasks.removeValue(forKey: itemID)?.cancel()
+        let item = findItem(itemID)
+        let waiting = item?.waitingForLiveStream ?? false
+        let startsAt = item?.liveStreamStartsAt
+        let keepAwakeWhileWaiting = UserDefaults.standard.object(forKey: AppConstants.ytdlpKeepAwakeWhileWaitingKey) as? Bool
+            ?? AppConstants.defaultYTDLPKeepAwakeWhileWaiting
+        if Self.keepsMacAwake(
+            waitingForStream: waiting, startsAt: startsAt, now: Date(), keepAwakeWhileWaiting: keepAwakeWhileWaiting
+        ) {
+            guard sleepAssertions[itemID]?.control !== control else { return }
+            PowerAssertion.shared.release(sleepAssertions[itemID]?.token)
+            sleepAssertions[itemID] = (control, PowerAssertion.shared.acquire(reason: "Downloading a video"))
+        } else {
+            PowerAssertion.shared.release(sleepAssertions.removeValue(forKey: itemID)?.token)
+            guard let startsAt else { return }
+            let delay = startsAt.timeIntervalSinceNow - Self.streamWaitKeepAwakeLead
+            sleepPolicyTasks[itemID] = Task { [weak self] in
+                // ContinuousClock keeps counting while the Mac sleeps.
+                try? await Task.sleep(for: .seconds(max(0, delay)))
+                guard !Task.isCancelled, let self, self.downloadControls[itemID] === control else { return }
+                self.sleepPolicyTasks.removeValue(forKey: itemID)
+                self.refreshSleepAssertion(itemID: itemID)
+            }
+        }
+    }
+
+    private func releaseSleepAssertion(itemID: UUID, control: YTDLPDownloadControl) {
+        if sleepAssertions[itemID]?.control === control {
+            PowerAssertion.shared.release(sleepAssertions.removeValue(forKey: itemID)?.token)
+        }
+        // A newer download of the same item owns a policy task registered now.
+        if downloadControls[itemID] == nil || downloadControls[itemID] === control {
+            sleepPolicyTasks.removeValue(forKey: itemID)?.cancel()
+        }
     }
 
     // MARK: - Private Helpers
