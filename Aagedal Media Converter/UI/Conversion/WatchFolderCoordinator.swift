@@ -21,6 +21,8 @@ import SwiftUI
 @MainActor
 final class WatchFolderCoordinator: ObservableObject {
     @Published var errorMessage: String?
+    /// Files seen in the watch folder that are still copying, settling or being checked.
+    @Published private(set) var pendingFiles: [WatchFolderPendingFile] = []
     private let manager: WatchFolderManager
     private var monitoringTask: Task<Void, Never>?
     private var autoEncodeTask: Task<Void, Never>?
@@ -43,7 +45,8 @@ final class WatchFolderCoordinator: ObservableObject {
         promptForFolder: @escaping @Sendable () async -> URL?,
         updatePath: @escaping @Sendable (String) async -> Void,
         onNewFiles: @escaping @Sendable ([URL]) async -> Void,
-        protectedFiles: @escaping @MainActor @Sendable () -> Set<URL> = { [] }
+        protectedFiles: @escaping @MainActor @Sendable () -> Set<URL> = { [] },
+        excludedFolders: @escaping @MainActor @Sendable () -> Set<URL> = { [] }
     ) async -> Bool {
         monitoringGeneration += 1
         let generation = monitoringGeneration
@@ -83,7 +86,12 @@ final class WatchFolderCoordinator: ObservableObject {
                     guard self?.monitoringGeneration == generation else { return }
                     await onNewFiles(urls)
                 }
-            }, protectedFiles: protectedFiles, onError: { [weak self] message in
+            }, protectedFiles: protectedFiles, excludedFolders: excludedFolders, onPendingFilesChanged: { [weak self] files in
+                Task { @MainActor [weak self] in
+                    guard let self, self.monitoringGeneration == generation else { return }
+                    self.pendingFiles = files
+                }
+            }, onError: { [weak self] message in
                 Task { @MainActor [weak self] in
                     guard let self, self.monitoringGeneration == generation else { return }
                     // Preserve any error already awaiting acknowledgement.
@@ -108,6 +116,7 @@ final class WatchFolderCoordinator: ObservableObject {
     }
 
     private func cancelSessionTasks() {
+        pendingFiles = []
         monitoringTask?.cancel()
         monitoringTask = nil
         autoEncodeTask?.cancel()

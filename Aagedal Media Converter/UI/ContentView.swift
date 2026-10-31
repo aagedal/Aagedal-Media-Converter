@@ -113,7 +113,9 @@ struct ContentView: View {
     @AppStorage(AppConstants.watchFolderPathKey) private var watchFolderPath = ""
     @AppStorage(AppConstants.watchFolderAutoActivateOnLaunchKey) private var watchFolderAutoActivateOnLaunch = false
     @State private var hasAppliedWatchFolderLaunchActivation = false
-    @StateObject private var watchFolderCoordinator = WatchFolderCoordinator()
+    @StateObject private var watchFolderCoordinator = WatchFolderCoordinator(
+        manager: WatchFolderManager(historyStore: .applicationDefault)
+    )
     @State private var watchFolderToggleID = UUID()
     @State private var mergeClipsEnabled = false
     @State private var mergeClipsAvailable = false
@@ -2991,6 +2993,7 @@ struct ContentView: View {
             hasFiles: !droppedFiles.isEmpty || !encodingGroups.isEmpty,
             watchFolderModeEnabled: $watchFolderModeEnabled,
             watchFolderPath: watchFolderPath,
+            watchFolderPendingFiles: watchFolderCoordinator.pendingFiles,
             selectedPreset: toolbarPresetBinding,
             presets: visiblePresets,
             displayName: { displayName(for: $0) },
@@ -3453,7 +3456,14 @@ struct ContentView: View {
                     protectedFiles: {
                         Set(allConversionItems.map(\.url))
                             .union(allConversionItems.compactMap { $0.imageSequenceConfig?.associatedAudioURL })
+                            // Outputs written into the watch folder must not be imported or trashed.
+                            .union(allConversionItems.compactMap(\.outputURL))
                             .union(activeApplicationJobSourceURLs)
+                    },
+                    excludedFolders: {
+                        // With subfolders watched, never descend into where outputs are written.
+                        Set(allConversionItems.compactMap { $0.outputURL?.deletingLastPathComponent() })
+                            .union(outputFolder.isEmpty ? [] : [URL(fileURLWithPath: outputFolder)])
                     }
                 )
 

@@ -6,6 +6,9 @@ import SwiftUI
 
 struct WatchFolderSettingsView: View {
     @State private var folderErrorMessage: String?
+    @State private var isConfirmingForget = false
+    @AppStorage(AppConstants.watchFolderIncludeSubfoldersKey) private var includeSubfolders = false
+    @AppStorage(AppConstants.watchFolderImportMemoryDaysKey) private var importMemoryDays = AppConstants.defaultWatchFolderImportMemoryDays
     @AppStorage(WatchFolderSelectionService.writableGrantPathKey) private var writableGrantPath = ""
     @AppStorage(AppConstants.watchFolderPathKey) private var watchFolderPath = ""
     @AppStorage(AppConstants.watchFolderAutoActivateOnLaunchKey) private var watchFolderAutoActivateOnLaunch = false
@@ -85,9 +88,14 @@ struct WatchFolderSettingsView: View {
             }
             .padding(8)
 
-            Text("When Watch Folder Mode is enabled in the toolbar, the app will automatically scan this folder every 5 seconds for new video files and add them to the conversion queue.")
+            Text("When Watch Mode is on in the toolbar, new video files in this folder are added to the conversion queue as soon as they have finished copying. Folders on network drives are also checked every 5 seconds, because they don't report changes made from other computers.")
                 .font(.caption)
                 .foregroundColor(.secondary)
+
+            Toggle("Include subfolders", isOn: $includeSubfolders)
+                .toggleStyle(SwitchToggleStyle())
+                .accessibilityIdentifier("settings.watchFolder.includeSubfolders")
+                .help("Also import files placed in folders inside the watch folder, such as copied camera cards. The output folder is skipped.")
 
             Picker("File settling time", selection: Binding(
                 get: { WatchFolderObservation.settlingInterval(defaults: .standard) },
@@ -101,6 +109,36 @@ struct WatchFolderSettingsView: View {
             Text("Wait until file size and modification time remain unchanged before importing or cleaning up. Files in the queue are never cleaned up.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            Picker("Remember imported files for", selection: Binding(
+                get: {
+                    AppConstants.watchFolderImportMemoryDaysValues.contains(importMemoryDays)
+                        ? importMemoryDays : AppConstants.defaultWatchFolderImportMemoryDays
+                },
+                set: { importMemoryDays = $0 }
+            )) {
+                ForEach(AppConstants.watchFolderImportMemoryDaysValues, id: \.self) { days in
+                    Text(Self.memoryDescription(days: days)).tag(days)
+                }
+            }
+            .accessibilityIdentifier("settings.watchFolder.importMemory")
+            HStack(alignment: .firstTextBaseline) {
+                Text("Imported files are not added again after you remove them from the queue or relaunch the app, as long as they stay in the folder, and for this long after they leave it. A file that is replaced or changed is imported again.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Forget Imported Files…") { isConfirmingForget = true }
+                    .confirmationDialog(
+                        "Forget imported files?",
+                        isPresented: $isConfirmingForget
+                    ) {
+                        Button("Forget", role: .destructive) {
+                            WatchFolderImportHistoryStore.forgetAll()
+                        }
+                    } message: {
+                        Text("Files still in the watch folder will be added to the queue again while Watch Mode is on.")
+                    }
+            }
 
             Toggle("Activate Watch Folder on app launch", isOn: $watchFolderAutoActivateOnLaunch)
                 .toggleStyle(SwitchToggleStyle())
@@ -157,6 +195,15 @@ struct WatchFolderSettingsView: View {
     }
 
     // MARK: - Helpers
+
+    private static func memoryDescription(days: Int) -> String {
+        switch days {
+        case 1: return "1 day"
+        case 7: return "1 week"
+        case 14: return "2 weeks"
+        default: return "\(days) days"
+        }
+    }
 
     private var ignoreDurationUnitBinding: Binding<WatchFolderDurationUnit> {
         Binding(

@@ -291,6 +291,60 @@ enum MetadataExporter {
         if let v = c2pa.actionsDigitalSourceType { dict["actionsDigitalSourceType"] = v }
         if let v = c2pa.manifestStore { dict["manifestStore"] = v }
         if let v = c2pa.assertions { dict["assertions"] = v }
+        if let v = c2pa.claimGeneratorVersion { dict["claimGeneratorVersion"] = v }
+        if let v = c2pa.title { dict["title"] = v }
+        if let v = c2pa.format { dict["format"] = v }
+        if let v = c2pa.authors { dict["authors"] = v }
+        if let v = c2pa.copyright { dict["copyright"] = v }
+        if let v = c2pa.digitalSourceType {
+            dict["digitalSourceType"] = v
+            dict["digitalSourceTypeName"] = C2PAFormatting.digitalSourceTypeName(v)
+        }
+        if let actions = c2pa.actions {
+            dict["actions"] = actions.map { action -> [String: Any] in
+                var entry: [String: Any] = ["action": action.action, "name": action.displayName]
+                if let v = action.softwareAgent { entry["softwareAgent"] = v }
+                if let v = action.digitalSourceType { entry["digitalSourceType"] = v }
+                if let v = action.description { entry["description"] = v }
+                return entry
+            }
+        }
+        if let ingredients = c2pa.ingredients {
+            dict["ingredients"] = ingredients.map { ingredient -> [String: Any] in
+                var entry: [String: Any] = [:]
+                if let v = ingredient.title { entry["title"] = v }
+                if let v = ingredient.format { entry["format"] = v }
+                if let v = ingredient.relationship { entry["relationship"] = v }
+                return entry
+            }
+        }
+        if let signature = c2pa.signature {
+            var entry: [String: Any] = ["hasTimestamp": signature.hasTimestamp, "verified": false]
+            if let v = signature.signer { entry["signer"] = v }
+            if let v = signature.signerOrganization { entry["signerOrganization"] = v }
+            if let v = signature.issuer { entry["issuer"] = v }
+            if let v = signature.algorithm { entry["algorithm"] = v }
+            if let v = signature.timestamp { entry["timestamp"] = ISO8601DateFormatter().string(from: v) }
+            if let v = signature.certificateExpiry { entry["certificateExpiry"] = ISO8601DateFormatter().string(from: v) }
+            dict["signature"] = entry
+        }
+        if let training = c2pa.trainingMining {
+            dict["trainingMining"] = training.map { entry -> [String: Any] in
+                var value: [String: Any] = ["category": entry.category, "use": entry.use]
+                if let v = entry.constraintInfo { value["constraintInfo"] = v }
+                return value
+            }
+        }
+        if c2pa.hasIdentityAssertion == true { dict["hasIdentityAssertion"] = true }
+        if let v = c2pa.redactionCount { dict["redactionCount"] = v }
+        if let history = c2pa.history, history.count > 1 {
+            dict["history"] = history.map { manifest -> [String: Any] in
+                var entry: [String: Any] = ["label": manifest.label, "actions": manifest.actions]
+                if let v = manifest.generator { entry["generator"] = v }
+                if let v = manifest.signer { entry["signer"] = v }
+                return entry
+            }
+        }
         return dict
     }
 

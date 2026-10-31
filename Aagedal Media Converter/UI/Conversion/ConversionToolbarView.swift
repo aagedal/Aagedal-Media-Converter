@@ -22,6 +22,7 @@ struct ConversionToolbarView: ToolbarContent {
     let hasFiles: Bool
     @Binding var watchFolderModeEnabled: Bool
     let watchFolderPath: String
+    let watchFolderPendingFiles: [WatchFolderPendingFile]
     @Binding var selectedPreset: ExportPreset
     let presets: [ExportPreset]
     let displayName: (ExportPreset) -> String
@@ -69,6 +70,10 @@ struct ConversionToolbarView: ToolbarContent {
             .toggleStyle(.button)
             .foregroundStyle(.yellow)
             .help(watchFolderPath.isEmpty ? "Select a watch folder to enable Watch Mode" : (watchFolderModeEnabled ? "Stop watching \(watchFolderPath)" : "Start watching \(watchFolderPath)"))
+
+            if watchFolderModeEnabled, !watchFolderPendingFiles.isEmpty {
+                WatchFolderPendingButton(files: watchFolderPendingFiles)
+            }
 
             Button(action: onShowCapture) {
                 Label("Capture", systemImage: "record.circle")

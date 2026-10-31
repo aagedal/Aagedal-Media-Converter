@@ -188,6 +188,19 @@ struct VideoMetadata: Equatable, Sendable {
     var sourceURL: String? = nil
     /// Matroska attached files (typically ASS subtitle fonts), in ffmpeg `t:<n>` order.
     var attachmentCount = 0
+    var chapters: [Chapter] = []
+    /// Human-readable labels for non-AV tracks (timecode, metadata, GPMF, …).
+    var dataTracks: [String] = []
+    /// Apple Live Photo pairing identifier.
+    var contentIdentifier: String? = nil
+    /// MPEG-TS service names, with the provider appended when the SDT carries one.
+    var broadcastServices: [String] = []
+
+    struct Chapter: Equatable, Sendable {
+        let startTime: Double
+        let endTime: Double?
+        let title: String?
+    }
     let timecode: String?
     let timecodes: [TimecodeEntry]
     let frameCount: Int?
@@ -227,6 +240,34 @@ struct VideoMetadata: Equatable, Sendable {
         let isForced: Bool
         /// Display rotation in degrees from the container's display matrix (negative = clockwise).
         var rotation: Int? = nil
+        var hdr: HDRInfo? = nil
+        var hasClosedCaptions = false
+
+        /// Display-ready HDR side data (mastering display, content light level, Dolby Vision).
+        struct HDRInfo: Equatable, Sendable {
+            var masteringDisplay: String?
+            var contentLightLevel: String?
+            var dolbyVision: String?
+            var hasDolbyVision: Bool { dolbyVision != nil }
+        }
+
+        /// Dynamic range classification from transfer characteristics and HDR side data.
+        var dynamicRangeDescription: String? {
+            let hdrBase: String?
+            switch colorTransfer {
+            case "smpte2084":
+                hdrBase = hdr?.masteringDisplay != nil || hdr?.contentLightLevel != nil ? "HDR10" : "PQ"
+            case "arib-std-b67":
+                hdrBase = "HLG"
+            default:
+                hdrBase = nil
+            }
+            if hdr?.hasDolbyVision == true {
+                return hdrBase.map { "Dolby Vision, \($0) compatible" } ?? "Dolby Vision"
+            }
+            if let hdrBase { return hdrBase }
+            return colorTransfer == nil ? nil : "SDR"
+        }
 
         /// True when the display matrix turns the picture a quarter turn. FFmpeg applies the
         /// rotation before any filter runs, so filters see the frame with width and height swapped.
@@ -282,6 +323,10 @@ struct VideoMetadata: Equatable, Sendable {
         let bitDepth: Int?
         let bitRate: Int64?
         let isDefault: Bool
+        var duration: Double? = nil
+        /// MXF multichannel-audio label (e.g. "Left (chL)"), with its soundfield group when known.
+        var mcaLabel: String? = nil
+        var mcaSoundfieldGroup: String? = nil
     }
 
     struct SubtitleStream: Equatable, Sendable {
@@ -702,6 +747,19 @@ actor VideoMetadataService {
         )
         result.description = textMetadata.description
         result.attachmentCount = meta.attachments.count
+        result.chapters = meta.chapters.map {
+            VideoMetadata.Chapter(startTime: $0.startTime, endTime: $0.endTime, title: $0.title)
+        }
+        result.dataTracks = meta.dataStreams.map { stream in
+            let label = stream.codecName ?? stream.codec ?? stream.handlerType
+            return [label, stream.title].compactMap { $0 }.joined(separator: " — ")
+        }
+        result.contentIdentifier = meta.contentIdentifier
+        result.broadcastServices = meta.mpegPrograms.compactMap { program in
+            guard let service = program.serviceName, !service.isEmpty else { return nil }
+            guard let provider = program.providerName, !provider.isEmpty else { return service }
+            return "\(service) (\(provider))"
+        }
         result.sourceURL = textMetadata.sourceURL ?? ContainerTextMetadata.webURL(result.comment)
         return result
     }
@@ -803,8 +861,47 @@ actor VideoMetadataService {
             title: stream.title,
             isDefault: stream.isDefault ?? false,
             isForced: stream.isForced ?? false,
-            rotation: stream.rotation
+            rotation: stream.rotation,
+            hdr: stream.hdr.flatMap(mapHDR),
+            hasClosedCaptions: stream.hasClosedCaptions ?? false
         )
+    }
+
+    static func mapHDR(_ hdr: SwiftMediaMetadata.HDRMetadata) -> VideoMetadata.VideoStream.HDRInfo? {
+        guard hdr.isPresent else { return nil }
+        var info = VideoMetadata.VideoStream.HDRInfo()
+        if let display = hdr.masteringDisplay {
+            let minNits = display.minLuminance < 1
+                ? String(format: "%.4f", display.minLuminance)
+                : String(format: "%.0f", display.minLuminance)
+            let gamut = Self.masteringPrimariesName(display).map { ", \($0)" } ?? ""
+            info.masteringDisplay = String(format: "%.0f", display.maxLuminance) + " / \(minNits) nits" + gamut
+        }
+        if let level = hdr.contentLightLevel {
+            info.contentLightLevel = "MaxCLL \(level.maxCLL) / MaxFALL \(level.maxFALL) nits"
+        }
+        if let dv = hdr.dolbyVision {
+            let compatibility: String? = switch dv.blSignalCompatibilityID {
+            case 1: "HDR10"
+            case 2: "SDR"
+            case 4: "HLG"
+            default: nil
+            }
+            let layers = [dv.blPresent ? "BL" : nil, dv.elPresent ? "EL" : nil, dv.rpuPresent ? "RPU" : nil]
+                .compactMap { $0 }.joined(separator: "+")
+            let profile = compatibility.map { "\(dv.profile).\(dv.blSignalCompatibilityID) (\($0))" } ?? "\(dv.profile)"
+            info.dolbyVision = "Profile \(profile), Level \(dv.level)" + (layers.isEmpty ? "" : ", \(layers)")
+        }
+        return info
+    }
+
+    /// Names the mastering display gamut when its green primary matches a well-known colour space.
+    private static func masteringPrimariesName(_ display: SwiftMediaMetadata.HDRMasteringDisplay) -> String? {
+        func near(_ a: Double, _ b: Double) -> Bool { abs(a - b) < 0.005 }
+        if near(display.greenX, 0.170) && near(display.greenY, 0.797) { return "BT.2020" }
+        if near(display.greenX, 0.265) && near(display.greenY, 0.690) { return "Display P3" }
+        if near(display.greenX, 0.300) && near(display.greenY, 0.600) { return "BT.709" }
+        return nil
     }
 
     static func mapAudioStream(
@@ -827,7 +924,12 @@ actor VideoMetadataService {
             channelLayout: hasInferredLayout ? nil : stream.channelLayout,
             bitDepth: stream.bitDepth,
             bitRate: stream.bitRate.map { Int64($0) },
-            isDefault: stream.isDefault ?? false
+            isDefault: stream.isDefault ?? false,
+            duration: stream.duration,
+            mcaLabel: stream.mcaChannelName.map { name in
+                stream.mcaChannelLabel.map { "\(name) (\($0))" } ?? name
+            } ?? stream.mcaChannelLabel,
+            mcaSoundfieldGroup: stream.mcaSoundfieldGroup
         )
     }
 

@@ -35,6 +35,8 @@ struct Aagedal_Media_Converter_App: App {
         UserDefaults.standard.register(defaults: [
             AppConstants.watchFolderIgnoreOlderThan24hKey: false,
             AppConstants.watchFolderAutoDeleteOlderThanWeekKey: false,
+            AppConstants.watchFolderIncludeSubfoldersKey: false,
+            AppConstants.watchFolderImportMemoryDaysKey: AppConstants.defaultWatchFolderImportMemoryDays,
             AppConstants.watchFolderIgnoreDurationValueKey: AppConstants.defaultWatchFolderIgnoreDurationValue,
             AppConstants.watchFolderIgnoreDurationUnitKey: AppConstants.defaultWatchFolderIgnoreDurationUnitRaw,
             AppConstants.watchFolderDeleteDurationValueKey: AppConstants.defaultWatchFolderDeleteDurationValue,

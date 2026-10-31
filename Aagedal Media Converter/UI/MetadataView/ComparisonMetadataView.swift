@@ -2,12 +2,17 @@
 // Copyright © 2025 Truls Aagedal
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import AppKit
 import SwiftUI
 
-/// Displays metadata comparison for multiple video items in the standalone metadata window.
-/// This is a read-only version without a dismiss button (window has its own close button).
+/// Displays metadata for one or more queue items side by side in the standalone metadata window.
+/// A single finished item gains a second column for its exported output. Rows come from
+/// `MetadataTableBuilder`, so search, the differences filter and copying share one definition.
 struct ComparisonMetadataView: View {
     let items: [VideoItem]
+    /// Owned by the window so the query survives selection changes (this view is recreated).
+    @Binding var searchText: String
+    @Binding var differencesOnly: Bool
 
     @State private var c2paByID: [UUID: C2PAMetadata] = [:]
     @State private var c2paCheckedIDs: Set<UUID> = []
@@ -22,9 +27,17 @@ struct ComparisonMetadataView: View {
     @State private var exportedItem: VideoItem?
     @State private var isLoadingExportedItem: Bool = false
 
-    private let labelColumnWidth: CGFloat = 140
-    private let valueColumnWidth: CGFloat = 200
+    @State private var exportErrorMessage: String?
+    @FocusState private var isSearchFocused: Bool
+    /// Comma-separated section IDs the user collapsed; persisted across launches.
+    @AppStorage("metadataWindowCollapsedSections") private var collapsedSectionsRaw = ""
+
+    private let labelColumnWidth: CGFloat = 170
+    private let minValueColumnWidth: CGFloat = 220
+    private let maxValueColumnWidth: CGFloat = 520
     private let columnSpacing: CGFloat = 16
+    private let contentPadding: CGFloat = 20
+    private let rowPadding: CGFloat = 10
 
     /// The items actually rendered in columns — source items plus an optional
     /// exported output file when a single source item has a completed export.
@@ -40,34 +53,72 @@ struct ComparisonMetadataView: View {
         items.count == 1 && exportedItem != nil
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            headerView
+    private var isSearching: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
-            ScrollView(.vertical) {
-                ScrollView(.horizontal, showsIndicators: true) {
-                    VStack(alignment: .leading, spacing: 24) {
-                        fileNamesRow
-                        Divider()
-                        c2paSection
-                        Divider()
-                        cameraSection
-                        Divider()
-                        generalSection
-                        Divider()
-                        videoSection
-                        Divider()
-                        audioSection
-                        Divider()
-                        subtitleSection
+    /// The filter persists in the window but only applies while several columns are shown.
+    private var isFilteringDifferences: Bool {
+        differencesOnly && displayItems.count > 1
+    }
+
+    private var allSections: [MetadataTableSection] {
+        MetadataTableBuilder(
+            items: displayItems,
+            c2pa: c2paMetadata(for:),
+            c2paStatus: c2paStatusValue(for:),
+            camera: cameraMetadata(for:),
+            cameraStatus: cameraStatusValue(for:)
+        ).build()
+    }
+
+    var body: some View {
+        let sections = MetadataTableFilter.apply(
+            allSections,
+            query: searchText,
+            differencesOnly: isFilteringDifferences
+        )
+
+        VStack(spacing: 0) {
+            headerBar(sections: sections)
+            Divider()
+            GeometryReader { geometry in
+                let valueWidth = valueColumnWidth(forAvailableWidth: geometry.size.width)
+                ScrollView(.vertical) {
+                    ScrollView(.horizontal, showsIndicators: true) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            fileCardsRow(valueWidth: valueWidth)
+                            if sections.isEmpty {
+                                noResultsView
+                                    .frame(width: max(0, geometry.size.width - contentPadding * 2))
+                            }
+                            ForEach(sections) { section in
+                                sectionView(section, valueWidth: valueWidth)
+                            }
+                        }
+                        .padding(contentPadding)
+                        .frame(minWidth: geometry.size.width, alignment: .leading)
                     }
-                    .padding(.trailing, 24)
                 }
             }
-            .textSelection(.enabled)
         }
-        .padding(24)
         .background(Color(nsColor: .windowBackgroundColor))
+        .background {
+            // ⌘F focuses the search field, matching Finder and Mail.
+            Button("") { isSearchFocused = true }
+                .keyboardShortcut("f", modifiers: .command)
+                .opacity(0)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+        }
+        .alert("Export Failed", isPresented: Binding(
+            get: { exportErrorMessage != nil },
+            set: { if !$0 { exportErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { exportErrorMessage = nil }
+        } message: {
+            Text(exportErrorMessage ?? "")
+        }
         .id(items.map(\.id)) // Force view recreation when items change
         .task(id: items.map(\.id)) {
             await loadExportedItemIfNeeded()
@@ -91,22 +142,69 @@ struct ComparisonMetadataView: View {
         }
     }
 
-    private var headerView: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(headerTitle)
-                .font(.title)
-                .fontWeight(.semibold)
-            if items.count > 1 {
-                Text("\(items.count) files selected")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
-            } else if isLoadingExportedItem {
-                HStack(spacing: 6) {
-                    ProgressView().scaleEffect(0.7)
-                    Text("Loading exported output…")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+    // MARK: - Header
+
+    private func headerBar(sections: [MetadataTableSection]) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(headerTitle)
+                    .font(.title2.weight(.semibold))
+                headerSubtitle(sections: sections)
+            }
+
+            Spacer(minLength: 12)
+
+            if displayItems.count > 1 {
+                Toggle(isOn: $differencesOnly) {
+                    Label("Differences", systemImage: "line.3.horizontal.decrease.circle")
                 }
+                .toggleStyle(.button)
+                .help("Show only fields whose values differ between the files")
+            }
+
+            searchField
+
+            Menu {
+                Button("Copy All as Text") { copyAsText(sections: sections) }
+                Divider()
+                Button("Export JSON…") { export(.json) }
+                    .disabled(items.count != 1)
+                Button("Export PDF…") { export(.pdf) }
+                    .disabled(items.count != 1)
+                Divider()
+                Button("Expand All Sections") { collapsedSectionsRaw = "" }
+                Button("Collapse All Sections") {
+                    collapsedSectionsRaw = allSections.map(\.id).joined(separator: ",")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Copy or export metadata")
+        }
+        .padding(.horizontal, contentPadding)
+        .padding(.vertical, 12)
+    }
+
+    @ViewBuilder
+    private func headerSubtitle(sections: [MetadataTableSection]) -> some View {
+        if isSearching || isFilteringDifferences {
+            let count = sections.reduce(0) { $0 + $1.fieldCount }
+            Text(count == 1 ? "1 matching field" : "\(count) matching fields")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        } else if items.count > 1 {
+            Text("\(items.count) files selected")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        } else if isLoadingExportedItem {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Loading exported output…")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -117,58 +215,123 @@ struct ComparisonMetadataView: View {
         return "Metadata"
     }
 
-    private var fileNamesRow: some View {
-        HStack(alignment: .top, spacing: columnSpacing) {
-            Text("")
-                .frame(width: labelColumnWidth, alignment: .leading)
-
-            ForEach(Array(displayItems.enumerated()), id: \.element.id) { index, item in
-                VStack(alignment: .leading, spacing: 8) {
-                    if let role = roleLabel(for: index) {
-                        Text(role)
-                            .font(.caption.weight(.bold))
-                            .foregroundColor(.secondary)
-                    }
-
-                    // Thumbnail
-                    if let thumbnailData = item.thumbnailData,
-                       let nsImage = NSImage(data: thumbnailData) {
-                        Image(nsImage: nsImage)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(height: 80)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                    } else {
-                        // Placeholder for files without thumbnails
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.secondary.opacity(0.2))
-                            .frame(height: 80)
-                            .overlay {
-                                Image(systemName: item.hasVideoStream ? "film" : "waveform")
-                                    .font(.title)
-                                    .foregroundColor(.secondary)
-                            }
-                    }
-
-                    // Filename
-                    Text(item.name)
-                        .font(.headline)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Button {
-                        NSWorkspace.shared.activateFileViewerSelecting([item.url])
-                    } label: {
-                        Label("Reveal in Finder", systemImage: "folder")
-                            .font(.subheadline)
-                    }
-                    .buttonStyle(.link)
-                    .help("Show file in Finder")
+    private var searchField: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("Search fields and values", text: $searchText)
+                .textFieldStyle(.plain)
+                .focused($isSearchFocused)
+                .onExitCommand { searchText = "" }
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
                 }
-                .frame(width: valueColumnWidth, alignment: .leading)
+                .buttonStyle(.plain)
+                .help("Clear search")
             }
         }
-        .padding(.bottom, 12)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color(nsColor: .textBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(isSearchFocused ? Color.accentColor.opacity(0.6) : Color.primary.opacity(0.12))
+        )
+        .frame(width: 230)
+    }
+
+    // MARK: - File Cards
+
+    private func fileCardsRow(valueWidth: CGFloat) -> some View {
+        HStack(alignment: .top, spacing: columnSpacing) {
+            Color.clear
+                .frame(width: labelColumnWidth, height: 1)
+
+            ForEach(Array(displayItems.enumerated()), id: \.element.id) { index, item in
+                fileCard(for: item, index: index)
+                    .frame(width: valueWidth, alignment: .leading)
+            }
+        }
+        .padding(.horizontal, rowPadding)
+    }
+
+    private func fileCard(for item: VideoItem, index: Int) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let role = roleLabel(for: index) {
+                Text(role)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+            } else if displayItems.count > 1 {
+                Text("FILE \(index + 1)")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+
+            thumbnail(for: item)
+
+            Text(item.name)
+                .font(.headline)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+
+            HStack(spacing: 6) {
+                if let c2pa = c2paMetadata(for: item), c2pa.hasContentCredentials {
+                    badge("Content Credentials", systemImage: "checkmark.seal.fill", tint: .green)
+                    if let sourceType = c2pa.digitalSourceType, C2PAFormatting.isGenerativeAI(sourceType) {
+                        badge("Generative AI", systemImage: "sparkles", tint: .purple)
+                    }
+                }
+                if let range = item.metadata?.primaryVideoStream?.dynamicRangeDescription, range != "SDR" {
+                    badge(range, systemImage: "sun.max.fill", tint: .orange)
+                }
+            }
+
+            Button {
+                NSWorkspace.shared.activateFileViewerSelecting([item.url])
+            } label: {
+                Label("Reveal in Finder", systemImage: "folder")
+                    .font(.subheadline)
+            }
+            .buttonStyle(.link)
+            .help(item.url.path)
+        }
+    }
+
+    @ViewBuilder
+    private func thumbnail(for item: VideoItem) -> some View {
+        if let thumbnailData = item.thumbnailData, let nsImage = NSImage(data: thumbnailData) {
+            Image(nsImage: nsImage)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxHeight: 96, alignment: .leading)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        } else {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color.secondary.opacity(0.15))
+                .frame(width: 140, height: 80)
+                .overlay {
+                    Image(systemName: item.hasVideoStream ? "film" : "waveform")
+                        .font(.title)
+                        .foregroundStyle(.secondary)
+                }
+        }
+    }
+
+    private func badge(_ title: String, systemImage: String, tint: Color) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(tint.opacity(0.12)))
     }
 
     private func roleLabel(for index: Int) -> String? {
@@ -176,152 +339,191 @@ struct ComparisonMetadataView: View {
         return index == 0 ? "SOURCE" : "OUTPUT"
     }
 
-    // MARK: - General Section
+    // MARK: - Sections
 
-    private var generalSection: some View {
-        sectionView(title: "GENERAL") {
-            comparisonRow("Container") { item in
-                item.metadata?.containerLongName ?? item.metadata?.formatName
-            }
-            comparisonRow("Duration") { item in
-                item.duration
-            }
-            comparisonRow("File Size") { item in
-                formattedSize(for: item)
-            }
-            comparisonRow("Title") { item in
-                item.metadata?.title
-            }
-            comparisonRow("Artist") { item in
-                item.metadata?.artist
-            }
-            comparisonRow("Source URL") { item in
-                item.metadata?.sourceURL
-            }
-            comparisonRow("Date Created") { item in
-                formattedCreationDate(for: item)
-            }
-            comparisonRow("Date Modified") { item in
-                formattedModificationDate(for: item)
-            }
-            comparisonRow("Bit Rate") { item in
-                formatBitRate(item.metadata?.bitRate)
-            }
-            comparisonRow("GPS") { item in
-                formattedGPS(for: item)
-            }
-            comparisonRow("GPS Altitude") { item in
-                formattedGPSAltitude(for: item)
-            }
-            // Timecodes: when multiple sources carry distinct values, emit a
-            // row per source so the reader can spot disagreements.
-            let maxTimecodeSources = displayItems
-                .map { $0.metadata?.timecodes.count ?? 0 }
-                .max() ?? 0
-            if maxTimecodeSources <= 1 {
-                comparisonRow("Timecode") { item in
-                    item.metadata?.timecodes.first?.value ?? item.metadata?.timecode
+    private var collapsedSections: Set<String> {
+        Set(collapsedSectionsRaw.split(separator: ",").map(String.init))
+    }
+
+    private func isExpanded(_ section: MetadataTableSection) -> Bool {
+        // Search results are never hidden behind a collapsed section.
+        isSearching || isFilteringDifferences || !collapsedSections.contains(section.id)
+    }
+
+    private func toggleSection(_ section: MetadataTableSection) {
+        var collapsed = collapsedSections
+        if collapsed.remove(section.id) == nil { collapsed.insert(section.id) }
+        collapsedSectionsRaw = collapsed.sorted().joined(separator: ",")
+    }
+
+    private func sectionView(_ section: MetadataTableSection, valueWidth: CGFloat) -> some View {
+        let expanded = isExpanded(section)
+        return VStack(alignment: .leading, spacing: 6) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { toggleSection(section) }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(expanded ? 90 : 0))
+                        .frame(width: 12)
+                    Image(systemName: section.systemImage)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 18)
+                    Text(section.title)
+                        .font(.headline)
+                    if !expanded, section.fieldCount > 0 {
+                        Text("\(section.fieldCount)")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(Color.secondary.opacity(0.15)))
+                    }
+                    Spacer(minLength: 0)
                 }
-            } else {
-                let sources = uniqueTimecodeSources()
-                ForEach(sources, id: \.self) { source in
-                    comparisonRow("Timecode (\(source.label))") { item in
-                        item.metadata?.timecodes.first { $0.source == source }?.value
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .frame(width: gridWidth(valueWidth: valueWidth), alignment: .leading)
+
+            if expanded {
+                VStack(alignment: .leading, spacing: 0) {
+                    if section.rows.isEmpty, let message = section.emptyMessage {
+                        Text(message)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, rowPadding)
+                            .padding(.vertical, 8)
+                            .frame(width: gridWidth(valueWidth: valueWidth), alignment: .leading)
+                    }
+                    ForEach(Array(section.rows.enumerated()), id: \.element.id) { index, row in
+                        rowView(row, striped: index.isMultiple(of: 2), valueWidth: valueWidth)
+                    }
+                    if section.id == "c2pa", anyItemHasC2PA {
+                        c2paDisclosureView
+                            .padding(.horizontal, rowPadding)
+                            .padding(.vertical, 8)
+                            .frame(width: gridWidth(valueWidth: valueWidth), alignment: .leading)
+                    }
+                }
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(nsColor: .controlBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.primary.opacity(0.08))
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func rowView(_ row: MetadataTableRow, striped: Bool, valueWidth: CGFloat) -> some View {
+        let isHeader = row.kind == .streamHeader
+        HStack(alignment: .firstTextBaseline, spacing: columnSpacing) {
+            Text(highlighted(row.label))
+                .font(isHeader ? .callout.weight(.semibold) : .callout)
+                .foregroundStyle(isHeader ? .primary : .secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(width: labelColumnWidth, alignment: .leading)
+
+            ForEach(Array(row.values.enumerated()), id: \.offset) { _, value in
+                valueText(value, isHeader: isHeader)
+                    .frame(width: valueWidth, alignment: .leading)
+                    .background(conflictHighlight(for: value, in: row))
+            }
+        }
+        .padding(.horizontal, rowPadding)
+        .padding(.top, isHeader ? 10 : 5)
+        .padding(.bottom, 5)
+        .background(isHeader ? Color.primary.opacity(0.06) : (striped ? Color.primary.opacity(0.025) : Color.clear))
+        .contextMenu {
+            Button("Copy \"\(row.label.isEmpty ? "Value" : row.label)\"") {
+                copyToPasteboard(row.values.map { $0 ?? "—" }.joined(separator: "\t"))
+            }
+            if row.values.count > 1 {
+                ForEach(Array(row.values.enumerated()), id: \.offset) { index, value in
+                    if let value {
+                        Button("Copy Value from \(displayItems[safe: index]?.name ?? "File \(index + 1)")") {
+                            copyToPasteboard(value)
+                        }
                     }
                 }
             }
-            comparisonRow("Description") { item in
-                item.metadata?.description
-            }
-            comparisonRow("Comment") { item in
-                item.metadataComment
-            }
-            // Warnings: emit one row per unique warning text; items that don't
-            // carry that warning show a dash.
-            let allWarnings = uniqueWarnings()
-            ForEach(allWarnings.indices, id: \.self) { idx in
-                comparisonRow(idx == 0 ? "Warnings" : "") { item in
-                    let warning = allWarnings[idx]
-                    return item.metadata?.warnings.contains(warning) == true ? warning : nil
-                }
-            }
         }
     }
 
-    private func uniqueTimecodeSources() -> [TimecodeSource] {
-        var seen: Set<TimecodeSource> = []
-        var ordered: [TimecodeSource] = []
-        for item in displayItems {
-            for entry in item.metadata?.timecodes ?? [] {
-                if seen.insert(entry.source).inserted {
-                    ordered.append(entry.source)
-                }
-            }
-        }
-        return ordered
-    }
-
-    private func uniqueWarnings() -> [String] {
-        var seen: Set<String> = []
-        var ordered: [String] = []
-        for item in displayItems {
-            for warning in item.metadata?.warnings ?? [] {
-                if seen.insert(warning).inserted {
-                    ordered.append(warning)
-                }
-            }
-        }
-        return ordered
-    }
-
-    // MARK: - C2PA Section
-
-    private var c2paSection: some View {
-        sectionView(title: "CONTENT AUTHENTICITY (C2PA)") {
-            comparisonRow("Content Credentials") { item in
-                c2paStatusValue(for: item)
-            }
-            if anyItemHasC2PA {
-                c2paDisclosureView
-                comparisonRow("Signature") { item in
-                    guard let c2pa = c2paMetadata(for: item) else { return nil }
-                    return c2pa.hasSignature ? "Present" : "Not found"
-                }
-                comparisonRow("Claim Generator Info Name") { item in
-                    c2paMetadata(for: item)?.claimGeneratorInfoName
-                }
-                comparisonRow("Claim Generator") { item in
-                    c2paMetadata(for: item)?.claimGenerator
-                }
-                comparisonRow("Actions Action") { item in
-                    c2paMetadata(for: item)?.actionsAction
-                }
-                comparisonRow("Actions Digital Source Type") { item in
-                    c2paMetadata(for: item)?.actionsDigitalSourceType
-                }
-                comparisonRow("Manifest Store") { item in
-                    c2paMetadata(for: item)?.manifestStore
-                }
-                comparisonRow("Assertions") { item in
-                    guard let assertions = c2paMetadata(for: item)?.assertions else { return nil }
-                    return assertions.joined(separator: ", ")
-                }
-            }
+    @ViewBuilder
+    private func valueText(_ value: String?, isHeader: Bool) -> some View {
+        if let value {
+            Text(highlighted(value))
+                .font(isHeader ? .callout.weight(.medium) : .callout.monospacedDigit())
+                .foregroundStyle(isHeader ? .secondary : .primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        } else {
+            Text("—")
+                .font(.callout)
+                .foregroundStyle(.tertiary)
         }
     }
+
+    /// Tints values that disagree with another file's value.
+    @ViewBuilder
+    private func conflictHighlight(for value: String?, in row: MetadataTableRow) -> some View {
+        if row.kind == .field, row.hasConflictingValues, value != nil {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.accentColor.opacity(0.12))
+                .padding(.horizontal, -4)
+                .padding(.vertical, -2)
+        }
+    }
+
+    private func highlighted(_ text: String) -> AttributedString {
+        var attributed = AttributedString(text)
+        for range in MetadataTableFilter.matchRanges(in: text, query: searchText) {
+            guard let attributedRange = Range(range, in: attributed) else { continue }
+            attributed[attributedRange].backgroundColor = Color.yellow.opacity(0.45)
+        }
+        return attributed
+    }
+
+    private var noResultsView: some View {
+        Group {
+            if isSearching {
+                ContentUnavailableView.search(text: searchText)
+            } else {
+                ContentUnavailableView(
+                    "No Differences",
+                    systemImage: "equal.circle",
+                    description: Text("Every field has the same value in all displayed files.")
+                )
+            }
+        }
+        .padding(.top, 24)
+    }
+
+    // MARK: - C2PA Disclosure
 
     /// True when any displayed item carries C2PA content credentials.
     private var anyItemHasC2PA: Bool {
         displayItems.contains { c2paMetadata(for: $0)?.hasContentCredentials == true }
     }
 
-    /// Full-width disclosure note + verification links shown only when at least
-    /// one displayed item has content credentials.
+    /// Signed thumbnails, disclosure note and verification links, shown only when at
+    /// least one displayed item has content credentials.
     private var c2paDisclosureView: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Presence only. This app does not verify C2PA signatures.")
+            c2paThumbnails
+
+            Text("Signer details are read from the signing certificate. This app does not verify C2PA signatures or check signers against a trust list; use one of the services below for that.")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             Text("Verification Resources")
                 .font(.subheadline.weight(.semibold))
@@ -330,11 +532,46 @@ struct ComparisonMetadataView: View {
             ForEach(verificationLinks, id: \.title) { link in
                 Link(link.title, destination: link.url)
                     .font(.subheadline)
-                    .foregroundColor(.accentColor)
             }
         }
-        .frame(width: totalRowWidth, alignment: .leading)
-        .padding(.vertical, 4)
+    }
+
+    /// The preview images embedded in each file's credentials (what the signer saw).
+    @ViewBuilder
+    private var c2paThumbnails: some View {
+        let thumbnails: [(name: String, claim: NSImage?, ingredient: NSImage?)] = displayItems.compactMap { item in
+            guard let c2pa = c2paMetadata(for: item) else { return nil }
+            let claim = c2pa.claimThumbnail.flatMap(NSImage.init(data:))
+            let ingredient = c2pa.ingredientThumbnail.flatMap(NSImage.init(data:))
+            return claim == nil && ingredient == nil ? nil : (item.name, claim, ingredient)
+        }
+        if !thumbnails.isEmpty {
+            Text("Signed Thumbnails")
+                .font(.subheadline.weight(.semibold))
+            HStack(alignment: .top, spacing: 16) {
+                ForEach(thumbnails, id: \.name) { entry in
+                    HStack(alignment: .top, spacing: 8) {
+                        if let claim = entry.claim { c2paThumbnail(claim, caption: displayItems.count > 1 ? entry.name : "This file") }
+                        if let ingredient = entry.ingredient { c2paThumbnail(ingredient, caption: "Ingredient") }
+                    }
+                }
+            }
+            .padding(.bottom, 6)
+        }
+    }
+
+    private func c2paThumbnail(_ image: NSImage, caption: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Image(nsImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: 160, maxHeight: 100, alignment: .leading)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+            Text(caption)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
     }
 
     private var verificationLinks: [(title: String, url: URL)] {
@@ -345,368 +582,43 @@ struct ComparisonMetadataView: View {
         ]
     }
 
-    // MARK: - Camera Section
+    // MARK: - Copy & Export
 
-    private var cameraSection: some View {
-        sectionView(title: "CAMERA") {
-            comparisonRow("Status") { item in
-                cameraStatusValue(for: item)
-            }
-            comparisonRow("Manufacturer") { item in
-                cameraMetadata(for: item)?.deviceManufacturer
-            }
-            comparisonRow("Model") { item in
-                cameraMetadata(for: item)?.deviceModelName
-            }
-            comparisonRow("Serial Number") { item in
-                cameraMetadata(for: item)?.deviceSerialNumber
-            }
-            comparisonRow("Lens") { item in
-                cameraMetadata(for: item)?.lensModelName
-            }
-            comparisonRow("Time Zone") { item in
-                cameraMetadata(for: item)?.timeZone
-            }
-            comparisonRow("Gamma/Color Profile") { item in
-                cameraMetadata(for: item)?.captureGammaEquation
-            }
-            comparisonRow("Recording Mode") { item in
-                cameraMetadata(for: item)?.recordingModeType
-            }
-            comparisonRow("Capture FPS") { item in
-                cameraMetadata(for: item)?.captureFps
-            }
-            comparisonRow("Clip Creation") { item in
-                guard let date = cameraMetadata(for: item)?.creationDate else { return nil }
-                return Self.dateFormatter.string(from: date)
-            }
-            comparisonRow("User Metadata") { item in
-                guard let entries = cameraMetadata(for: item)?.userDescriptiveMetadata,
-                      !entries.isEmpty else { return nil }
-                return entries.map { "\($0.name): \($0.content)" }.joined(separator: "\n")
-            }
+    private func copyAsText(sections: [MetadataTableSection]) {
+        copyToPasteboard(MetadataTableTextExporter.text(for: sections, fileNames: displayItems.map(\.name)))
+    }
+
+    private func copyToPasteboard(_ string: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(string, forType: .string)
+    }
+
+    /// Exports the selected source file, including lazily loaded C2PA and camera metadata.
+    private func export(_ format: MetadataExporter.Format) {
+        guard items.count == 1, var item = items.first else { return }
+        item.c2paMetadata = c2paMetadata(for: item)
+        item.cameraMetadata = cameraMetadata(for: item)
+        do {
+            try MetadataExporter.exportWithSavePanel(item: item, format: format)
+        } catch {
+            exportErrorMessage = error.localizedDescription
         }
     }
 
-    // MARK: - Video Section
+    // MARK: - Layout
 
-    private var videoSection: some View {
-        sectionView(title: "VIDEO") {
-            // Find max number of video streams across all items
-            let maxStreams = displayItems.compactMap { $0.metadata?.videoStreams.count }.max() ?? 0
-
-            if maxStreams == 0 {
-                comparisonRow("") { _ in "No video stream detected." }
-            } else {
-                ForEach(0..<maxStreams, id: \.self) { streamIndex in
-                    if maxStreams > 1 {
-                        videoStreamHeader(streamIndex + 1)
-                    }
-
-                    videoStreamRows(streamIndex: streamIndex)
-                }
-            }
-        }
+    /// Value columns share the window width, bounded so a single file's values don't
+    /// stretch into hard-to-read lines and many files scroll horizontally instead of squeezing.
+    private func valueColumnWidth(forAvailableWidth width: CGFloat) -> CGFloat {
+        let count = CGFloat(max(1, displayItems.count))
+        let available = width - contentPadding * 2 - rowPadding * 2 - labelColumnWidth - columnSpacing * count
+        return min(maxValueColumnWidth, max(minValueColumnWidth, available / count))
     }
 
-    private func videoStreamHeader(_ streamNumber: Int) -> some View {
-        HStack(spacing: columnSpacing) {
-            Text("")
-                .frame(width: labelColumnWidth, alignment: .leading)
-
-            ForEach(displayItems, id: \.id) { item in
-                let hasStream = (item.metadata?.videoStreams.count ?? 0) >= streamNumber
-                Text(hasStream ? "Stream \(streamNumber)" : "—")
-                    .font(.body)
-                    .fontWeight(.bold)
-                    .foregroundColor(.secondary)
-                    .frame(width: valueColumnWidth, alignment: .leading)
-            }
-        }
-        .padding(.top, streamNumber > 1 ? 12 : 0)
-        .padding(.bottom, 2)
-    }
-
-    @ViewBuilder
-    private func videoStreamRows(streamIndex: Int) -> some View {
-        comparisonRow("Codec") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            let stream = streams[streamIndex]
-            return stream.codecLongName ?? stream.codec
-        }
-        comparisonRow("Profile") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].profile
-        }
-        comparisonRow("Track Title") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].title
-        }
-        comparisonRow("Resolution") { item in
-            if streamIndex == 0 {
-                return item.videoResolutionDescription
-            }
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count,
-                  let width = streams[streamIndex].width,
-                  let height = streams[streamIndex].height else { return nil }
-            return "\(width) × \(height)"
-        }
-        comparisonRow("Display Aspect") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].displayAspectRatio?.stringValue
-        }
-        comparisonRow("Pixel Aspect") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].pixelAspectRatio?.stringValue
-        }
-        comparisonRow("Frame Rate") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            return formattedFrameRate(streams[streamIndex].frameRate)
-        }
-        if streamIndex == 0 {
-            comparisonRow("Frame Count") { item in
-                item.metadata?.frameCount.map(String.init)
-            }
-        }
-        comparisonRow("Bit Depth") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].bitDepth.map { "\($0)-bit" }
-        }
-        comparisonRow("Bit Rate") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            return formatBitRate(streams[streamIndex].bitRate)
-        }
-        comparisonRow("Chroma Subsampling") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].chromaSubsampling
-        }
-        comparisonRow("Chroma Resolution") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].chromaResolutionDescription
-        }
-        comparisonRow("Pixel Format") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].pixelFormat
-        }
-        comparisonRow("Alpha Channel") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].hasAlpha ? "Yes" : "No"
-        }
-        comparisonRow("Color Primaries") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].colorPrimaries
-        }
-        comparisonRow("Color Transfer") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].colorTransfer
-        }
-        comparisonRow("Color Space") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].colorSpace
-        }
-        comparisonRow("Color Range") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].colorRange
-        }
-        comparisonRow("Chroma Location") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].chromaLocation
-        }
-        comparisonRow("Scan Type") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            return formattedScanType(streams[streamIndex])
-        }
-        comparisonRow("Field Order") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            return formattedFieldOrder(streams[streamIndex])
-        }
-        comparisonRow("Default") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].isDefault ? "Yes" : nil
-        }
-        comparisonRow("Forced") { item in
-            guard let streams = item.metadata?.videoStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].isForced ? "Yes" : nil
-        }
-    }
-
-    // MARK: - Audio Section
-
-    private var audioSection: some View {
-        sectionView(title: "AUDIO") {
-            // Find max number of audio streams across all items
-            let maxStreams = displayItems.compactMap { $0.metadata?.audioStreams.count }.max() ?? 0
-
-            if maxStreams == 0 {
-                comparisonRow("") { _ in "No audio stream detected." }
-            } else {
-                ForEach(0..<maxStreams, id: \.self) { streamIndex in
-                    if maxStreams > 1 {
-                        streamHeader(streamIndex + 1)
-                    }
-
-                    audioStreamRows(streamIndex: streamIndex)
-                }
-            }
-        }
-    }
-
-    private func streamHeader(_ streamNumber: Int) -> some View {
-        HStack(spacing: columnSpacing) {
-            Text("")
-                .frame(width: labelColumnWidth, alignment: .leading)
-
-            ForEach(displayItems, id: \.id) { item in
-                let hasStream = (item.metadata?.audioStreams.count ?? 0) >= streamNumber
-                Text(hasStream ? "Stream \(streamNumber)" : "—")
-                    .font(.body)
-                    .fontWeight(.bold)
-                    .foregroundColor(.secondary)
-                    .frame(width: valueColumnWidth, alignment: .leading)
-            }
-        }
-        .padding(.top, streamNumber > 1 ? 12 : 0)
-        .padding(.bottom, 2)
-    }
-
-    @ViewBuilder
-    private func audioStreamRows(streamIndex: Int) -> some View {
-        comparisonRow("Codec") { item in
-            guard let streams = item.metadata?.audioStreams,
-                  streamIndex < streams.count else { return nil }
-            let stream = streams[streamIndex]
-            return stream.codecLongName ?? stream.codec
-        }
-        comparisonRow("Language") { item in
-            guard let streams = item.metadata?.audioStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].languageCode?.uppercased()
-        }
-        comparisonRow("Profile") { item in
-            guard let streams = item.metadata?.audioStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].profile
-        }
-        comparisonRow("Sample Rate") { item in
-            guard let streams = item.metadata?.audioStreams,
-                  streamIndex < streams.count else { return nil }
-            return formatSampleRate(streams[streamIndex].sampleRate)
-        }
-        comparisonRow("Channels") { item in
-            guard let streams = item.metadata?.audioStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].channels.map(String.init)
-        }
-        comparisonRow("Channel Layout") { item in
-            guard let streams = item.metadata?.audioStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].channelLayout
-        }
-        comparisonRow("Bit Depth") { item in
-            guard let streams = item.metadata?.audioStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].bitDepth.map { "\($0)-bit" }
-        }
-        comparisonRow("Bit Rate") { item in
-            guard let streams = item.metadata?.audioStreams,
-                  streamIndex < streams.count else { return nil }
-            return formatBitRate(streams[streamIndex].bitRate)
-        }
-    }
-
-    // MARK: - Subtitle Section
-
-    private var subtitleSection: some View {
-        sectionView(title: "SUBTITLE") {
-            let maxStreams = displayItems.compactMap { $0.metadata?.subtitleStreams.count }.max() ?? 0
-
-            if maxStreams == 0 {
-                comparisonRow("") { _ in "No subtitle stream detected." }
-            } else {
-                ForEach(0..<maxStreams, id: \.self) { streamIndex in
-                    if maxStreams > 1 {
-                        subtitleStreamHeader(streamIndex + 1)
-                    }
-
-                    subtitleStreamRows(streamIndex: streamIndex)
-                }
-            }
-        }
-    }
-
-    private func subtitleStreamHeader(_ streamNumber: Int) -> some View {
-        HStack(spacing: columnSpacing) {
-            Text("")
-                .frame(width: labelColumnWidth, alignment: .leading)
-
-            ForEach(displayItems, id: \.id) { item in
-                let hasStream = (item.metadata?.subtitleStreams.count ?? 0) >= streamNumber
-                Text(hasStream ? "Stream \(streamNumber)" : "—")
-                    .font(.body)
-                    .fontWeight(.bold)
-                    .foregroundColor(.secondary)
-                    .frame(width: valueColumnWidth, alignment: .leading)
-            }
-        }
-        .padding(.top, streamNumber > 1 ? 12 : 0)
-        .padding(.bottom, 2)
-    }
-
-    @ViewBuilder
-    private func subtitleStreamRows(streamIndex: Int) -> some View {
-        comparisonRow("Codec") { item in
-            guard let streams = item.metadata?.subtitleStreams,
-                  streamIndex < streams.count else { return nil }
-            let stream = streams[streamIndex]
-            return stream.codecLongName ?? stream.codec
-        }
-        comparisonRow("Language") { item in
-            guard let streams = item.metadata?.subtitleStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].languageCode?.uppercased()
-        }
-        comparisonRow("Title") { item in
-            guard let streams = item.metadata?.subtitleStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].title
-        }
-        comparisonRow("Default") { item in
-            guard let streams = item.metadata?.subtitleStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].isDefault ? "Yes" : nil
-        }
-        comparisonRow("Forced") { item in
-            guard let streams = item.metadata?.subtitleStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].isForced ? "Yes" : nil
-        }
-        comparisonRow("Hearing Impaired (SDH)") { item in
-            guard let streams = item.metadata?.subtitleStreams,
-                  streamIndex < streams.count else { return nil }
-            return streams[streamIndex].isHearingImpaired ? "Yes" : nil
-        }
+    /// Total width of a grid row (label column + all value columns + row padding).
+    private func gridWidth(valueWidth: CGFloat) -> CGFloat {
+        let count = CGFloat(max(1, displayItems.count))
+        return labelColumnWidth + rowPadding * 2 + (valueWidth + columnSpacing) * count
     }
 
     // MARK: - C2PA Helpers
@@ -840,179 +752,10 @@ struct ComparisonMetadataView: View {
         }
     }
 
-    // MARK: - Layout Helpers
+}
 
-    @ViewBuilder
-    private func sectionView<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Span the full grid width (label + all value columns) so long
-            // titles like "CONTENT AUTHENTICITY (C2PA)" don't wrap into the
-            // 140pt label column.
-            Text(title)
-                .font(.headline)
-                .fontWeight(.bold)
-                .foregroundColor(.primary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(width: totalRowWidth, alignment: .leading)
-                .padding(.bottom, 6)
-
-            content()
-        }
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
-
-    /// Total width of the aligned grid (label column + all value columns with their spacing).
-    private var totalRowWidth: CGFloat {
-        let valueCount = max(1, displayItems.count)
-        return labelColumnWidth
-            + columnSpacing
-            + (valueColumnWidth * CGFloat(valueCount))
-            + columnSpacing * CGFloat(max(0, valueCount - 1))
-    }
-
-    @ViewBuilder
-    private func comparisonRow(_ label: String, value: (VideoItem) -> String?) -> some View {
-        let values = displayItems.map { value($0) }
-        let hasAnyValue = values.contains { $0?.isEmpty == false }
-
-        if hasAnyValue {
-            HStack(alignment: .top, spacing: columnSpacing) {
-                Text(label)
-                    .font(.subheadline.weight(.semibold))
-                    .frame(width: labelColumnWidth, alignment: .leading)
-
-                ForEach(Array(zip(displayItems, values).enumerated()), id: \.element.0.id) { _, itemValuePair in
-                    let (_, itemValue) = itemValuePair
-                    let displayValue = itemValue ?? "—"
-
-                    Text(displayValue)
-                        .textSelection(.enabled)
-                        .font(.system(.subheadline, design: .monospaced))
-                        .foregroundColor(itemValue == nil ? .secondary : .primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(width: valueColumnWidth, alignment: .leading)
-                        .padding(.vertical, 2)
-                        .background(highlightBackground(for: itemValue, in: values))
-                }
-            }
-            .padding(.vertical, 2)
-        }
-    }
-
-    /// Highlights values that differ from others
-    @ViewBuilder
-    private func highlightBackground(for value: String?, in allValues: [String?]) -> some View {
-        let uniqueValues = Set(allValues.compactMap { $0 })
-        if uniqueValues.count > 1, let value, !value.isEmpty {
-            // Multiple different values - highlight to show difference
-            RoundedRectangle(cornerRadius: 4)
-                .fill(Color.accentColor.opacity(0.1))
-                .padding(.horizontal, -4)
-                .padding(.vertical, -2)
-        }
-    }
-
-    // MARK: - Formatters
-
-    private func formattedSize(for item: VideoItem) -> String? {
-        let bytes = item.metadata?.sizeBytes ?? item.size
-        return Self.byteFormatter.string(fromByteCount: bytes)
-    }
-
-    private func formattedCreationDate(for item: VideoItem) -> String? {
-        if let containerDate = item.metadata?.containerCreationDate {
-            return Self.dateFormatter.string(from: containerDate)
-        }
-        guard let resourceValues = try? item.url.resourceValues(forKeys: [.creationDateKey]),
-              let creationDate = resourceValues.creationDate else {
-            return nil
-        }
-        return Self.dateFormatter.string(from: creationDate)
-    }
-
-    private func formattedModificationDate(for item: VideoItem) -> String? {
-        if let containerDate = item.metadata?.containerModificationDate {
-            return Self.dateFormatter.string(from: containerDate)
-        }
-        guard let resourceValues = try? item.url.resourceValues(forKeys: [.contentModificationDateKey]),
-              let modificationDate = resourceValues.contentModificationDate else {
-            return nil
-        }
-        return Self.dateFormatter.string(from: modificationDate)
-    }
-
-    private func formattedGPS(for item: VideoItem) -> String? {
-        guard let lat = item.metadata?.gpsLatitude, let lon = item.metadata?.gpsLongitude else { return nil }
-        return String(format: "%.6f, %.6f", lat, lon)
-    }
-
-    private func formattedGPSAltitude(for item: VideoItem) -> String? {
-        guard let alt = item.metadata?.gpsAltitude else { return nil }
-        return String(format: "%.1f m", alt)
-    }
-
-    private func formatBitRate(_ value: Int64?) -> String? {
-        guard let value, value > 0 else { return nil }
-        if value >= 1_000_000 {
-            return String(format: "%.2f Mbps", Double(value) / 1_000_000)
-        } else if value >= 1_000 {
-            return String(format: "%.1f kbps", Double(value) / 1_000)
-        } else {
-            return "\(value) bps"
-        }
-    }
-
-    private func formattedFrameRate(_ frameRate: VideoMetadata.FrameRate?) -> String? {
-        guard let frameRate else { return nil }
-        if let value = frameRate.value {
-            return String(format: "%.3f fps", value)
-        }
-        return frameRate.stringValue
-    }
-
-    private func formatSampleRate(_ sampleRate: Int?) -> String? {
-        guard let sampleRate else { return nil }
-        return Self.numberFormatter.string(from: NSNumber(value: sampleRate))?.appending(" Hz")
-    }
-
-    private func formattedScanType(_ stream: VideoMetadata.VideoStream?) -> String? {
-        guard let stream else { return nil }
-        guard let isInterlaced = stream.isInterlaced else { return stream.fieldOrder }
-        return isInterlaced ? "Interlaced" : "Progressive"
-    }
-
-    /// Maps the ffprobe-style `fieldOrder` string ("progressive", "tt", "bb",
-    /// "unknown") to a reader-friendly label. Returns nil for progressive
-    /// sources so the row hides — the Scan Type row already says "Progressive"
-    /// and a duplicate row adds no information.
-    private func formattedFieldOrder(_ stream: VideoMetadata.VideoStream) -> String? {
-        guard let order = stream.fieldOrder else { return nil }
-        switch order {
-        case "tt": return "Top Field First (TFF)"
-        case "bb": return "Bottom Field First (BFF)"
-        case "progressive": return nil
-        case "unknown": return nil
-        default: return order
-        }
-    }
-
-    private static let byteFormatter: ByteCountFormatter = {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        return formatter
-    }()
-
-    private static let numberFormatter: NumberFormatter = {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.groupingSeparator = Locale.current.groupingSeparator
-        formatter.maximumFractionDigits = 0
-        return formatter
-    }()
-
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .medium
-        return formatter
-    }()
 }
