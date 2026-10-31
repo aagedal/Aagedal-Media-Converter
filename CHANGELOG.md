@@ -105,6 +105,7 @@
 
 - Folders can be imported by dropping them on the queue or a group, or choosing them with Import. The media files inside are added, including from subfolders, and image sequences are found in any subfolder; the Import panel used to find only image sequences, and dropped folders were ignored. Hidden files and packages such as apps and libraries are skipped, and a sequence's soundtrack isn't added again as a separate file.
 - Files dropped together are added in the order they were dropped.
+- Video without colour tags no longer changes colour when it's scaled between SD and HD sizes (for example a 640×360 clip exported as 1080p, or an HD clip exported as a 540p proxy). Players read untagged SD and HD video with different colour standards, so the same picture came out with shifted yellows, cyans and skin tones. Such exports are now converted where needed and tagged as BT.709.
 - Dragging only unsupported files onto the empty queue shows the "can't drop" cursor instead of highlighting the queue and then doing nothing.
 - The Force Merge dialog shows exact frame rates (29.97 fps instead of 30 fps), so you can tell which clips need frame-rate conversion.
 - Double-clicking a preset in Select Preset (⌘P) applies it.
