@@ -80,7 +80,7 @@
 ### MKV
 
 - MKV exports that keep subtitles now also keep the fonts attached to the source, so styled ASS subtitles and karaoke no longer shift when a player falls back to another font. This works with metadata stripped too (#64).
-- Updated SwiftMediaMetadata to 3.1.0, which reads Matroska font attachments.
+- Updated SwiftMediaMetadata to 3.1.1, which reads Matroska font attachments and tells opaque ProRes 4444 apart from ProRes 4444 with alpha.
 
 ### Timecode
 
