@@ -475,40 +475,57 @@ struct VideoFileListView: View {
     /// Imports a list of concrete file URLs into the main queue. Used by the
     /// NSTableView's external-file-drop handler, which already has resolved URLs
     /// (the NSItemProvider path is only used by SwiftUI's outer .onDrop).
+    /// Folders are searched, including subfolders, for media files and image
+    /// sequences, like folders chosen in the import panel.
     @MainActor
     private func importURLs(_ urls: [URL]) async {
+        let (fileURLs, sequences) = await FolderImportScanner.expandWithImageSequences(urls)
+        guard !Task.isCancelled else { return }
+
         let supported = AppConstants.supportedVideoExtensions
-        for url in urls {
+        for url in fileURLs {
             let hadAccess = url.startAccessingSecurityScopedResource()
             await self.processFileURL(url, supportedExtensions: supported, hasSecurityAccess: hadAccess)
         }
+
+        guard !sequences.isEmpty else { return }
+        let outputFolder = UserDefaults.standard.string(forKey: "outputFolder")
+            ?? AppConstants.defaultOutputDirectory.path
+        let naming = VideoImportNamingSettings(preset: preset)
+        for config in sequences {
+            let isQueued = droppedFiles.contains { item in
+                guard let existing = item.imageSequenceConfig else { return false }
+                return existing.pattern == config.pattern
+                    && existing.directory.standardizedFileURL == config.directory.standardizedFileURL
+            }
+            guard !isQueued else { continue }
+            _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: config.directory)
+            droppedFiles.append(VideoFileUtils.makePlaceholderItem(
+                fromImageSequence: config, outputFolder: outputFolder, preset: preset, namingSettings: naming
+            ))
+        }
+        onQueueSync?()
     }
 
+    /// Resolves the dropped items' URLs in drop order, then imports them
+    /// together (each provider loads asynchronously, so importing from each
+    /// callback could add items out of order).
     @MainActor
     private func importProviders(_ providers: [NSItemProvider]) async {
-        let supportedExtensions = AppConstants.supportedVideoExtensions
         let logger = Self.logger
-
-        for provider in providers {
-            // Use the proper API to load file URLs
-            if provider.canLoadObject(ofClass: URL.self) {
+        var urls: [URL] = []
+        for provider in providers where provider.canLoadObject(ofClass: URL.self) {
+            let url: URL? = await withCheckedContinuation { continuation in
                 _ = provider.loadObject(ofClass: URL.self) { url, error in
                     if let error = error {
                         logger.error("Error loading URL: \(error.localizedDescription, privacy: .public)")
-                        return
                     }
-                    if let url = url {
-                        // For drag and drop, the URL already has temporary access
-                        // We need to start accessing the security-scoped resource immediately
-                        let hasAccess = url.startAccessingSecurityScopedResource()
-
-                        Task { @MainActor in
-                            await self.processFileURL(url, supportedExtensions: supportedExtensions, hasSecurityAccess: hasAccess)
-                        }
-                    }
+                    continuation.resume(returning: url)
                 }
             }
+            if let url, url.isFileURL { urls.append(url) }
         }
+        await importURLs(urls)
     }
 
     @MainActor

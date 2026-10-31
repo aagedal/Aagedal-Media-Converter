@@ -47,6 +47,35 @@
 - A Waiting button appears next to Watch Mode while files are still copying. It lists each file with its size and whether it's copying, settling (with a countdown), being checked, or can't be read yet.
 - Files you add to the queue by hand from the watch folder, and outputs saved into the watch folder, are no longer picked up when they leave the queue, and automatic cleanup never moves a queued item's output to the Trash.
 
+### Timecode
+
+- Choosing Disable in the timecode window now sticks. Reopening the window no longer switches the item back to the default timecode mode.
+- Drop-frame timecode (`;`) is only accepted for 29.97 and 59.94 fps sources, so a manual timecode no longer makes the conversion fail at other frame rates. Frame numbers that drop-frame skips are flagged and corrected instead of being written as a timecode two frames earlier.
+- The ±1 and ±10 frame buttons count drop-frame timecode correctly and stop at 23:59:59 instead of wrapping to midnight.
+- Fixed a crash when stepping frames on a file whose frame rate couldn't be read.
+
+### Screen capture
+
+- Escape, Return and the Shift, Option and Space drag modifiers work in the region selector opened from Capture Mode. Previously they went to the app underneath, and the overlay couldn't be closed before drawing a region.
+- A saved recording region is kept inside the screen after switching to a smaller display, and resizing a region below the minimum size snaps back instead of producing an invalid recording size.
+- The region selector closes if its display is disconnected or changes resolution.
+- Escape and Return work normally in the main window after the record overlay closes, and the crosshair cursor no longer lingers.
+
+### Progress
+
+- The Dock icon shows the same overall progress as the main window, including Shortcuts and agent jobs, and no longer flickers between files.
+- The progress bar shows an estimate for the whole queue next to the overall percentage, and labels the per-file estimate as This file.
+
+### Other fixes
+
+- Folders can be imported by dropping them on the queue or a group, or choosing them with Import. The media files inside are added, including from subfolders, and image sequences are found in any subfolder; the Import panel used to find only image sequences, and dropped folders were ignored. Hidden files and packages such as apps and libraries are skipped, and a sequence's soundtrack isn't added again as a separate file.
+- Files dropped together are added in the order they were dropped.
+- Dragging only unsupported files onto the empty queue shows the "can't drop" cursor instead of highlighting the queue and then doing nothing.
+- The Force Merge dialog shows exact frame rates (29.97 fps instead of 30 fps), so you can tell which clips need frame-rate conversion.
+- Double-clicking a preset in Select Preset (⌘P) applies it.
+- Settings › Shortcuts and KeyboardShortcuts.md list the new fullscreen trim, mute and volume keys, metadata search, slow J/L playback, clearing both trim points (⌥X) and Shift-dragging in crop mode.
+- Text added in this release, including the metadata window, watch folder, DCP validator, waveform and live-recording options, is translated into all supported languages, as are the timecode window and the update banner. VoiceOver labels the remaining icon-only buttons in Select Preset, the update banner and the Force Merge dialog.
+
 # v.4.6.0
 
 ### Downloads

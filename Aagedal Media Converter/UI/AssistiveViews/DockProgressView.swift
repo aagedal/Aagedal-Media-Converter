@@ -125,7 +125,6 @@ class DockProgressView: NSView {
 @MainActor
 class DockProgressUpdater {
     private var progressView: DockProgressView?
-    private var progressTask: Task<Void, Never>?
     private var originalContentView: NSView?
     private var isShowingProgress = false
     
@@ -167,20 +166,11 @@ class DockProgressUpdater {
             setupDockTile()
         }
         
+        // The tile stays up until the caller resets it when conversion ends.
+        // At exactly 0 or 1 the view draws just the app icon.
         let clampedProgress = min(max(progress, 0.0), 1.0)
         progressView?.updateProgress(clampedProgress)
         NSApp.dockTile.display()
-        
-        // If progress is 0 or 1, reset the dock tile after a short delay
-        // but only if we're actually showing progress (not just initializing)
-        if isShowingProgress && (clampedProgress == 0.0 || clampedProgress == 1.0) {
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-                if !Task.isCancelled && (clampedProgress == 0.0 || clampedProgress == 1.0) {
-                    reset()
-                }
-            }
-        }
     }
     
     func reset() {
@@ -194,15 +184,5 @@ class DockProgressUpdater {
         
         // Force redraw
         NSApp.dockTile.display()
-    }
-    
-    deinit {
-        progressTask?.cancel()
-        // Schedule reset to run on the main thread
-        DispatchQueue.main.async { [weak self] in
-            Task { @MainActor in
-                self?.reset()
-            }
-        }
     }
 }

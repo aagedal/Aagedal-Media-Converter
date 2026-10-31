@@ -16,6 +16,7 @@ struct PresetQuickSelectOverlay: View {
     var onSelect: (ExportPreset) -> Void
 
     @State private var selection: ExportPreset?
+    @State private var hasConfirmed = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -38,6 +39,7 @@ struct PresetQuickSelectOverlay: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Close")
                 .keyboardShortcut(.escape, modifiers: [])
             }
             .padding(.horizontal, 20)
@@ -58,6 +60,12 @@ struct PresetQuickSelectOverlay: View {
                 }
             }
             .listStyle(.plain)
+            // Double-clicking a row applies it (mouse users have no visible confirm button).
+            .contextMenu(forSelectionType: ExportPreset.self, menu: { _ in EmptyView() }) { items in
+                if let preset = items.first {
+                    confirmSelection(preset)
+                }
+            }
             .frame(height: min(CGFloat(presets.count) * 44, 320))
             .scrollContentBackground(.hidden)
 
@@ -112,6 +120,10 @@ struct PresetQuickSelectOverlay: View {
     }
 
     private func confirmSelection(_ preset: ExportPreset) {
+        // Return can reach both the list's primary action and the hidden
+        // Confirm button; apply the preset only once.
+        guard !hasConfirmed else { return }
+        hasConfirmed = true
         onSelect(preset)
         isPresented = false
     }

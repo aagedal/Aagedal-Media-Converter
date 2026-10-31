@@ -100,7 +100,8 @@ struct RegionSelectionOverlayView: View {
             .gesture(mainDragGesture())
             .onAppear {
                 if let initialRegion {
-                    selectionRect = initialRegion
+                    // The saved region may come from a different (larger) display — keep it on this screen.
+                    selectionRect = clampToScreen(initialRegion, in: screenSize, ratio: nil)
                     phase = .refining
                 }
             }
@@ -829,6 +830,11 @@ struct RegionSelectionOverlayView: View {
                 selectionRect = nil
                 phase = .drawing
             }
+        } else if let rect = selectionRect, let startRect = dragStartRect,
+                  rect.width < minimumSize || rect.height < minimumSize {
+            // A resize collapsed the region below the minimum size; restore the pre-drag region
+            // instead of leaving a sliver that Confirm would silently treat as Cancel.
+            selectionRect = startRect
         }
 
         dragMode = .none
@@ -941,6 +947,17 @@ private struct KeyEventHandlingView: NSViewRepresentable {
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            if let window {
+                // Closing the panel does not detach this view from it, so viewWillMove(toWindow: nil)
+                // is not guaranteed — tear the monitor down when the window closes as well, or it would
+                // keep swallowing Escape / Return / Space in the app's other windows.
+                NotificationCenter.default.addObserver(
+                    self,
+                    selector: #selector(hostWindowWillClose(_:)),
+                    name: NSWindow.willCloseNotification,
+                    object: window
+                )
+            }
             if window != nil, eventMonitor == nil {
                 let mask: NSEvent.EventTypeMask = [.keyDown, .keyUp, .flagsChanged]
                 eventMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
@@ -952,7 +969,20 @@ private struct KeyEventHandlingView: NSViewRepresentable {
 
         override func viewWillMove(toWindow newWindow: NSWindow?) {
             super.viewWillMove(toWindow: newWindow)
-            if newWindow == nil, let monitor = eventMonitor {
+            if let window {
+                NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: window)
+            }
+            if newWindow == nil {
+                removeMonitor()
+            }
+        }
+
+        @objc private func hostWindowWillClose(_ notification: Notification) {
+            removeMonitor()
+        }
+
+        private func removeMonitor() {
+            if let monitor = eventMonitor {
                 NSEvent.removeMonitor(monitor)
                 eventMonitor = nil
             }

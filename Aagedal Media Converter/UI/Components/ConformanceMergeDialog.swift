@@ -96,6 +96,7 @@ struct ConformanceMergeDialog: View {
             HStack(spacing: 10) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(isSelected ? .blue : .secondary)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.name)
@@ -106,7 +107,10 @@ struct ConformanceMergeDialog: View {
                             Text("\(v.width ?? 0)x\(v.height ?? 0)")
                             Text(v.codec ?? "?")
                             if let fr = v.frameRate?.value {
-                                Text("\(Int(fr.rounded()))fps")
+                                // Keep fractional rates (29.97, 23.976) visible: rounding
+                                // made 29.97 and 30 fps clips look identical here even
+                                // though the merge plan treats them as a mismatch.
+                                Text(verbatim: "\(fr.formatted(.number.precision(.fractionLength(0...3))))fps")
                             }
                         }
                         if let a = audio {
@@ -131,6 +135,7 @@ struct ConformanceMergeDialog: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // MARK: - Step 2: Confirmation

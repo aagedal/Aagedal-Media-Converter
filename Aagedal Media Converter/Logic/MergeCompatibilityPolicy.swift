@@ -60,7 +60,7 @@ enum MergeCompatibilityPolicy {
             var parts: [String] = []
             parts.append("\(width)x\(height)")
             parts.append(videoCodec)
-            if let fr = frameRate { parts.append("\(Int(fr.rounded()))fps") }
+            if let fr = frameRate { parts.append("\(fr.formatted(.number.precision(.fractionLength(0...3))))fps") }
             if let ac = audioCodec, let ch = audioChannels {
                 let sr = audioSampleRate.map { " \($0 / 1000)kHz" } ?? ""
                 parts.append("\(ch)ch \(ac)\(sr)")

@@ -61,13 +61,16 @@ struct FileDropBackstop: NSViewRepresentable {
         weak var coordinator: Coordinator?
 
         override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-            guard hasFileURL(sender) else { return [] }
+            // Refuse drags with nothing the queue can import (e.g. only unsupported
+            // file types) so the user gets the standard "can't drop" feedback
+            // instead of a highlight followed by nothing happening.
+            guard !supportedFileURLs(sender).isEmpty else { return [] }
             DispatchQueue.main.async { [weak self] in self?.coordinator?.setHovering(true) }
             return .copy
         }
 
         override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
-            hasFileURL(sender) ? .copy : []
+            supportedFileURLs(sender).isEmpty ? [] : .copy
         }
 
         override func draggingExited(_ sender: (any NSDraggingInfo)?) {
@@ -79,19 +82,30 @@ struct FileDropBackstop: NSViewRepresentable {
         }
 
         override func prepareForDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-            hasFileURL(sender)
+            !supportedFileURLs(sender).isEmpty
         }
 
         override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
             DispatchQueue.main.async { [weak self] in self?.coordinator?.setHovering(false) }
-            let urls = (sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL]) ?? []
+            let urls = supportedFileURLs(sender)
             guard !urls.isEmpty else { return false }
             coordinator?.parent.onDropURLs(urls)
             return true
         }
 
-        private func hasFileURL(_ sender: any NSDraggingInfo) -> Bool {
-            sender.draggingPasteboard.types?.contains(.fileURL) == true
+        /// Folders and supported files on the drag pasteboard, in pasteboard
+        /// order. Folders are searched on import; a folder without media
+        /// simply adds nothing.
+        private func supportedFileURLs(_ sender: any NSDraggingInfo) -> [URL] {
+            guard sender.draggingPasteboard.types?.contains(.fileURL) == true else { return [] }
+            let urls = (sender.draggingPasteboard.readObjects(
+                forClasses: [NSURL.self],
+                options: [.urlReadingFileURLsOnly: true]
+            ) as? [URL]) ?? []
+            let supported = AppConstants.supportedVideoExtensions
+            return urls.filter {
+                supported.contains($0.pathExtension.lowercased()) || FolderImportScanner.isImportableFolder($0)
+            }
         }
     }
 }

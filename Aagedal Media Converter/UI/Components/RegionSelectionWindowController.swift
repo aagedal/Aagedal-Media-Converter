@@ -14,6 +14,11 @@ final class RegionSelectionWindowController: NSObject, NSWindowDelegate {
     private var hostingView: NSHostingView<RegionSelectionOverlayView>?
     private var onRegionConfirmed: ((CGRect?) -> Void)?
 
+    // The display the overlay was laid out for. If it disappears or changes size while the
+    // overlay is open, the selection coordinates no longer match the screen, so we cancel.
+    private var overlayDisplayID: CGDirectDisplayID?
+    private var overlayScreenFrame: CGRect = .zero
+
     private override init() {
         super.init()
     }
@@ -33,7 +38,9 @@ final class RegionSelectionWindowController: NSObject, NSWindowDelegate {
         let screenFrame = screen.frame
         let scaleFactor = screen.backingScaleFactor
 
-        let panel = NSPanel(
+        // CaptureRegionPanel overrides canBecomeKey: a plain borderless NSPanel can never become
+        // key, so Escape / Return / Shift / Option / Space would go to the previously active app.
+        let panel = CaptureRegionPanel(
             contentRect: screenFrame,
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -71,12 +78,24 @@ final class RegionSelectionWindowController: NSObject, NSWindowDelegate {
 
         self.overlayPanel = panel
         self.hostingView = hosting
+        self.overlayDisplayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
+        self.overlayScreenFrame = screenFrame
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screenParametersDidChange(_:)),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
 
         // Hide the app so the user can see the full screen underneath
         NSApp.hide(nil)
 
         // Small delay to let the hide animation complete before showing the overlay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            // Skip if this panel was dismissed or replaced during the delay — otherwise a closed,
+            // untracked overlay would be ordered back on screen and cover the display.
+            guard let self, self.overlayPanel === panel else { return }
             panel.makeKeyAndOrderFront(nil)
         }
     }
@@ -85,6 +104,7 @@ final class RegionSelectionWindowController: NSObject, NSWindowDelegate {
         let callback = onRegionConfirmed
         onRegionConfirmed = nil
 
+        NotificationCenter.default.removeObserver(self, name: NSApplication.didChangeScreenParametersNotification, object: nil)
         overlayPanel?.close()
         overlayPanel = nil
         hostingView = nil
@@ -99,9 +119,21 @@ final class RegionSelectionWindowController: NSObject, NSWindowDelegate {
         }
     }
 
+    @objc private func screenParametersDidChange(_ notification: Notification) {
+        guard overlayPanel != nil else { return }
+        let screenStillMatches = NSScreen.screens.contains { screen in
+            (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) == overlayDisplayID
+                && screen.frame == overlayScreenFrame
+        }
+        if !screenStillMatches {
+            dismissOverlay(confirmed: false)
+        }
+    }
+
     // MARK: - NSWindowDelegate
 
     func windowWillClose(_ notification: Notification) {
+        NotificationCenter.default.removeObserver(self, name: NSApplication.didChangeScreenParametersNotification, object: nil)
         overlayPanel = nil
         hostingView = nil
         let callback = onRegionConfirmed

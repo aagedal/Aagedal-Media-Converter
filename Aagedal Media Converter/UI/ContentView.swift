@@ -1045,6 +1045,12 @@ struct ContentView: View {
                     totalCount: totalActiveFileCount,
                     currentFileETA: currentConvertingItem?.eta
                 )
+                // The Dock badge mirrors this bar so the two never disagree,
+                // and it goes away together with the bar.
+                .onChange(of: computedOverallProgress, initial: true) { _, progress in
+                    dockProgressUpdater.updateProgress(progress)
+                }
+                .onDisappear { dockProgressUpdater.reset() }
             }
         }
         .overlay {
@@ -1903,6 +1909,11 @@ struct ContentView: View {
     /// and skips files already present in the group or in the ungrouped queue.
     @MainActor
     private func addURLsToGroup(groupID: UUID, urls: [URL]) async {
+        // Folders add the media files inside them (image sequences only go to
+        // the main queue). Scan first: the group index below must not cross an await.
+        let fileURLs = await Task.detached(priority: .userInitiated) {
+            FolderImportScanner.expand(urls).fileURLs
+        }.value
         guard let groupIndex = encodingGroups.firstIndex(where: { $0.id == groupID }) else { return }
 
         let supported = AppConstants.supportedVideoExtensions
@@ -1919,7 +1930,7 @@ struct ContentView: View {
             return urls
         }()
 
-        for url in urls {
+        for url in fileURLs {
             guard supported.contains(url.pathExtension.lowercased()) else { continue }
             guard !existingURLs.contains(url) else { continue }
 
@@ -1963,38 +1974,33 @@ struct ContentView: View {
     // Handle file selection from file picker
     private func handleFileSelection(result: Result<[URL], Error>) async {
         switch result {
-        case .success(let urls):
+        case .success(let selectedURLs):
             let importPreset = selectedPreset
             let importFolder = outputFolder
             let importSettings = VideoImportSettings()
             let naming = VideoImportNamingSettings(preset: importPreset)
+
+            // Chosen folders are searched, including subfolders, for media files
+            // and image sequences; files pass through unchanged.
+            for url in selectedURLs where FolderImportScanner.isImportableFolder(url) {
+                _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
+            }
+            let (urls, folderSequences) = await FolderImportScanner.expandWithImageSequences(selectedURLs)
+            guard !Task.isCancelled else { return }
+            for config in folderSequences {
+                guard !containsImageSequence(config) else { continue }
+                let item = VideoFileUtils.makePlaceholderItem(
+                    fromImageSequence: config,
+                    outputFolder: importFolder,
+                    preset: importPreset, settings: importSettings, namingSettings: naming
+                )
+                droppedFiles.append(item)
+                queueOrder.append(item.id)
+            }
+
             for url in urls {
                 // Check for duplicates before creating placeholder
                 guard !droppedFiles.contains(where: { $0.url == url }) else {
-                    continue
-                }
-
-                // Check if URL is a directory — detect image sequences
-                var isDirectory: ObjCBool = false
-                if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue {
-                    let hasAccess = url.startAccessingSecurityScopedResource()
-                    let sequences = await ImageSequenceDetector.detectSequences(
-                        inFolder: url,
-                        securityScopedAccessURL: url
-                    )
-                    _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
-                    if hasAccess { url.stopAccessingSecurityScopedResource() }
-                    guard !Task.isCancelled else { return }
-                    for config in sequences {
-                        guard !containsImageSequence(config) else { continue }
-                        let item = VideoFileUtils.makePlaceholderItem(
-                            fromImageSequence: config,
-                            outputFolder: importFolder,
-                            preset: importPreset, settings: importSettings, namingSettings: naming
-                        )
-                        droppedFiles.append(item)
-                        queueOrder.append(item.id)
-                    }
                     continue
                 }
 
@@ -2069,7 +2075,7 @@ struct ContentView: View {
             // converting. Guard on a non-empty selection so cancelling is a no-op.
             if pendingConvertAfterImport {
                 pendingConvertAfterImport = false
-                if !urls.isEmpty {
+                if !selectedURLs.isEmpty {
                     Task { await startConversionWithValidation() }
                 }
             }
@@ -2337,7 +2343,6 @@ struct ContentView: View {
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
                     overallProgress = progress
-                    dockProgressUpdater.updateProgress(progress)
                 }
             }
         }
