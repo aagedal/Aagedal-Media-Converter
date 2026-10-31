@@ -89,6 +89,12 @@ final class DCPValidatorTests: XCTestCase {
         XCTAssertEqual(DCPAudioCarrier.isdcfAudioCode(sourceChannels: 0), "MOS")
         XCTAssertEqual(DCPAudioCarrier.isdcfAudioCode(sourceChannels: 6), "51")
         XCTAssertEqual(DCPAudioCarrier(frameCount: 30, frameRate: .fps24).duration, 1.25, accuracy: 1e-9)
+        // 5 frames at 24 fps is 0.208333 s; millisecond rounding would give 9,984 samples.
+        XCTAssertEqual(DCPAudioCarrier(frameCount: 5, frameRate: .fps24).sampleCount, 10_000)
+        XCTAssertEqual(
+            DCPAudioCarrier(frameCount: 5, frameRate: .fps24).lengthFilter,
+            "apad=whole_len=10000,atrim=end_sample=10000"
+        )
     }
 
     // MARK: - Validator

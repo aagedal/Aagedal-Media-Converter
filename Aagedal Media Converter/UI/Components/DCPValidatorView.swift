@@ -99,7 +99,9 @@ struct DCPValidatorView: View {
                     .font(.title2)
                 VStack(alignment: .leading) {
                     Text(report.directory.lastPathComponent).font(.headline).lineLimit(1).truncationMode(.middle)
-                    Text(report.cancelled ? "Cancelled — partial results" : report.summaryLine)
+                    Text(report.cancelled
+                         ? String(localized: "Cancelled — partial results", comment: "DCP validator summary when the user stopped validation early.")
+                         : report.summaryLine)
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -116,11 +118,14 @@ struct DCPValidatorView: View {
 
     private func compositionLine(_ composition: DCPCompositionSummary) -> String {
         var parts = ["\(composition.title) — \(composition.standard) \(composition.contentKind)",
-                     "\(composition.reelCount) reel(s)",
-                     "\(composition.durationFrames) frames @ \(composition.editRate)"]
+                     String(format: String(localized: "Reels: %lld", comment: "DCP validator composition line: number of reels."), composition.reelCount),
+                     String(format: String(localized: "%1$lld frames @ %2$@", comment: "DCP validator composition line: duration in frames at an edit rate such as 24/1."),
+                            composition.durationFrames, composition.editRate)]
         if let size = composition.pictureSize { parts.append(size) }
-        if let channels = composition.soundChannels { parts.append("\(channels) ch") }
-        if composition.encrypted { parts.append("encrypted") }
+        if let channels = composition.soundChannels {
+            parts.append(String(format: String(localized: "%lld ch", comment: "DCP validator composition line: number of sound channels."), channels))
+        }
+        if composition.encrypted { parts.append(String(localized: "encrypted", comment: "DCP validator composition line: the composition is encrypted.")) }
         return parts.joined(separator: " · ")
     }
 

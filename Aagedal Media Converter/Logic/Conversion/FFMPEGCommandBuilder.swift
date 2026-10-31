@@ -803,6 +803,21 @@ enum FFMPEGCommandBuilder {
                 arguments += ["-metadata:c:\(index)", "title=\(title)"]
             }
         }
+        if !isImageSequenceInput, visualSourceURL == nil, customInputArguments == nil,
+           UntaggedColorPlan.appliesTo(preset),
+           let stream = sourceMetadata?.primaryVideoStream,
+           let geometry = await sourceGeometry(for: inputURL, sourceMetadata: sourceMetadata, probeMetadataIfNeeded: false),
+           let plan = UntaggedColorPlan(
+               sourceColorSpace: stream.colorSpace,
+               sourcePixelFormat: stream.pixelFormat,
+               sourceCodec: stream.codec,
+               sourceWidth: geometry.width,
+               sourceHeight: geometry.height,
+               sourcePixelAspectRatio: geometry.pixelAspectRatio ?? 1,
+               arguments: arguments
+           ) {
+            plan.apply(to: &arguments, inputPath: inputURL.path)
+        }
         arguments.append(outputFileURL.path)
 
         let effectiveDuration = trimPlan.effectiveDuration
@@ -902,9 +917,9 @@ extension FFMPEGCommandBuilder {
         let subtitlePlan = SubtitleMappingPlan(keepSubtitles: keepSubtitles, outputExtension: outputExtension)
         guard subtitlePlan == .copy else { return [] }
         let stripsStreamMetadata = SubtitleAttachmentPlan.stripsStreamMetadata(outputArguments)
-        var attachmentCount = sourceMetadata?.attachmentCount
+        var attachmentCount = sourceMetadata?.attachmentStreamCount
         if stripsStreamMetadata, sourceMetadata == nil {
-            attachmentCount = try? await BoundedVideoMetadataProbe.metadata(for: inputURL).attachmentCount
+            attachmentCount = try? await BoundedVideoMetadataProbe.metadata(for: inputURL).attachmentStreamCount
         }
         return SubtitleAttachmentPlan(
             subtitlePlan: subtitlePlan,
@@ -2543,7 +2558,7 @@ extension FFMPEGCommandBuilder {
 
     /// Splits a linear FFmpeg filter chain without treating quoted or escaped commas
     /// as stage boundaries. Incomplete expressions remain opaque to automatic edits.
-    private static func splitVideoFilterStages(_ chain: String) -> [String]? {
+    fileprivate static func splitVideoFilterStages(_ chain: String) -> [String]? {
         var segments: [String] = []
         var start = chain.startIndex
         var quoted = false
@@ -2797,4 +2812,157 @@ extension FFMPEGCommandBuilder {
         return args
     }
 
+}
+
+/// Untagged YUV video is read by players as BT.601 below HD and BT.709 from HD up
+/// (mpv's `mp_csp_guess_colorspace`; QuickTime and browsers guess the same way).
+/// Scaling across that line without a conversion makes the same pixel values decode
+/// to different colours. When the source has no matrix tag and the output changes
+/// class, this tags the input with the standard players assume for it and the output
+/// as BT.709. FFmpeg's filter negotiation then converts SD → HD to BT.709; HD → SD
+/// keeps its BT.709 pixels and gains the tag.
+///
+/// The output size is only predicted for the filters the app generates. Anything
+/// else (custom filters, explicit colour options) leaves the command unchanged.
+struct UntaggedColorPlan: Equatable, Sendable {
+    let inputOptions: [String]
+    let outputOptions: [String]
+
+    static func appliesTo(_ preset: ExportPreset) -> Bool {
+        switch preset {
+        case .dcp, .imfJ2K, .imfProRes, .streamCopy, .imageSequence, .animatedStill, .audioOnly, .av2:
+            return false
+        default:
+            return preset.outputsVideoTrack
+        }
+    }
+
+    /// The class players assume for untagged video of this pixel size.
+    static func isHD(width: Int, height: Int) -> Bool {
+        width >= 1280 || height > 576
+    }
+
+    init?(
+        sourceColorSpace: String?,
+        sourcePixelFormat: String?,
+        sourceCodec: String? = nil,
+        sourceWidth: Int,
+        sourceHeight: Int,
+        sourcePixelAspectRatio: Double,
+        arguments: [String]
+    ) {
+        guard sourceColorSpace == nil,
+              Self.isYUV(pixelFormat: sourcePixelFormat?.lowercased(), codec: sourceCodec?.lowercased()),
+              sourceWidth > 0, sourceHeight > 0,
+              !arguments.contains(where: Self.colorOptions.contains),
+              !arguments.contains("-s"),
+              !arguments.contains("-filter_complex"), !arguments.contains("-lavfi"),
+              !arguments.contains("-filter_complex_script") else { return nil }
+
+        // No primary video filter means the output keeps the source size.
+        guard let filterIndex = PrimaryVideoFilterPlan(arguments: arguments).filterOptionIndex,
+              filterIndex + 1 < arguments.count,
+              let output = Self.predictedOutputSize(
+                  filterChain: arguments[filterIndex + 1],
+                  width: sourceWidth, height: sourceHeight, pixelAspectRatio: sourcePixelAspectRatio
+              ) else { return nil }
+
+        let sourceIsHD = Self.isHD(width: sourceWidth, height: sourceHeight)
+        guard sourceIsHD != Self.isHD(width: output.width, height: output.height) else { return nil }
+
+        if sourceIsHD {
+            inputOptions = ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"]
+        } else {
+            // 625-line sources use EBU primaries; everything else SD uses SMPTE C.
+            let standard = sourceHeight == 576 ? "bt470bg" : "smpte170m"
+            inputOptions = ["-colorspace", standard, "-color_primaries", standard, "-color_trc", "bt709"]
+        }
+        // Primaries are not converted, so they keep following the frames' tag.
+        outputOptions = ["-colorspace", "bt709", "-color_trc", "bt709"]
+    }
+
+    /// Inserts the hints before the source's `-i` and the tags at the end of the output options.
+    func apply(to arguments: inout [String], inputPath: String) {
+        guard let inputIndex = arguments.indices.first(where: {
+            arguments[$0] == "-i" && $0 + 1 < arguments.count && arguments[$0 + 1] == inputPath
+        }) else { return }
+        arguments.append(contentsOf: outputOptions)
+        arguments.insert(contentsOf: inputOptions, at: inputIndex)
+    }
+
+    private static let colorOptions: Set<String> = [
+        "-colorspace", "-color_primaries", "-color_trc", "-color_range",
+        "-colorspace:v", "-color_primaries:v", "-color_trc:v",
+    ]
+
+    /// Codecs that store RGB, for sources whose pixel format the metadata reader didn't report.
+    private static let rgbCodecs: Set<String> = [
+        "png", "qtrle", "rle ", "r210", "r10k", "gif", "bmp", "tiff", "dpx", "exr", "rgba", "raw ",
+    ]
+
+    private static func isYUV(pixelFormat: String?, codec: String?) -> Bool {
+        guard let pixelFormat else { return codec.map { !rgbCodecs.contains($0) } ?? false }
+        return pixelFormat.hasPrefix("yuv") || pixelFormat.hasPrefix("nv") || pixelFormat.hasPrefix("p0")
+            || pixelFormat.hasPrefix("p2") || pixelFormat.hasPrefix("p4") || pixelFormat.hasPrefix("uyvy")
+            || pixelFormat.hasPrefix("yuyv") || pixelFormat.hasPrefix("v210")
+    }
+
+    /// Filters that leave the frame size alone.
+    private static let sizeNeutralFilters: Set<String> = [
+        "fps", "format", "setfield", "fieldorder", "yadif", "bwdif", "setpts", "null",
+        "interlace", "hqdn3d", "setdar",
+    ]
+
+    /// Output pixel size of a linear chain of app-generated filters, or nil when any
+    /// stage is not understood.
+    static func predictedOutputSize(
+        filterChain: String, width: Int, height: Int, pixelAspectRatio: Double
+    ) -> (width: Int, height: Int)? {
+        guard let stages = FFMPEGCommandBuilder.splitVideoFilterStages(filterChain) else { return nil }
+        var w = Double(width), h = Double(height)
+        var sar = pixelAspectRatio > 0 && pixelAspectRatio.isFinite ? pixelAspectRatio : 1
+        func even(_ value: Double) -> Double { (value / 2).rounded(.down) * 2 }
+
+        for raw in stages {
+            let stage = raw.trimmingCharacters(in: .whitespaces)
+            let name = stage.split(separator: "=", maxSplits: 1).first.map(String.init) ?? stage
+            let value = stage.contains("=") ? String(stage.drop(while: { $0 != "=" }).dropFirst()) : ""
+            switch name {
+            case _ where sizeNeutralFilters.contains(name):
+                continue
+            case "setsar":
+                guard value == "1/1" || value == "1" else { return nil }
+                sar = 1
+            case "scale" where value == "'trunc(ih*dar/2)*2:trunc(ih/2)*2'" || value == "trunc(ih*dar/2)*2:trunc(ih/2)*2":
+                let dar = w * sar / h
+                w = even(h * dar)
+                h = even(h)
+            case "scale" where value.hasPrefix("w='if(lte(iw,ih),"):
+                // Short-edge target: scale=w='if(lte(iw,ih),N,-2)':h='if(lte(iw,ih),-2,N)'
+                let digits = value.dropFirst("w='if(lte(iw,ih),".count).prefix(while: \.isNumber)
+                guard let edge = Double(digits), edge > 0 else { return nil }
+                if w <= h {
+                    (w, h) = (edge, even(h * edge / w))
+                } else {
+                    (w, h) = (even(w * edge / h), edge)
+                }
+            case "scale", "pad", "crop":
+                let fields = value.split(separator: ":").map(String.init)
+                guard fields.count >= 2, let targetW = Double(fields[0]), let targetH = Double(fields[1]),
+                      targetW > 0, targetH > 0 else { return nil }
+                if name == "scale", let mode = fields.dropFirst(2).first(where: { $0.hasPrefix("force_original_aspect_ratio=") }) {
+                    let factor = mode.hasSuffix("=decrease") ? min(targetW / w, targetH / h)
+                        : mode.hasSuffix("=increase") ? max(targetW / w, targetH / h) : nil
+                    guard let factor else { return nil }
+                    (w, h) = ((w * factor).rounded(), (h * factor).rounded())
+                } else {
+                    guard fields.dropFirst(2).allSatisfy({ name != "scale" || $0.hasPrefix("flags=") }) else { return nil }
+                    (w, h) = (targetW, targetH)
+                }
+            default:
+                return nil
+            }
+        }
+        return (Int(w), Int(h))
+    }
 }

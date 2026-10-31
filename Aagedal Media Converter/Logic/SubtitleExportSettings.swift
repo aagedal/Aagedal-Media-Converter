@@ -68,6 +68,17 @@ enum SubtitleAttachmentPlan: Equatable, Sendable {
         self = .copyRestoringTags(count: attachmentCount)
     }
 
+    /// MIME prefixes FFmpeg's Matroska demuxer turns into attached pictures
+    /// (`mkv_image_mime_tags` in matroskadec.c) rather than `t` streams.
+    private static let ffmpegAttachedPictureMIMEPrefixes = ["image/gif", "image/jpeg", "image/png", "image/tiff"]
+
+    /// Number of `t:<n>` streams FFmpeg exposes for Matroska attachments with these MIME types.
+    static func ffmpegAttachmentStreamCount(mimeTypes: [String]) -> Int {
+        mimeTypes.filter { mime in
+            !ffmpegAttachedPictureMIMEPrefixes.contains { mime.hasPrefix($0) }
+        }.count
+    }
+
     /// Whether `arguments` (already carrying the metadata policy) disable
     /// FFmpeg's automatic per-stream tag copy.
     static func stripsStreamMetadata(_ arguments: some Collection<String>) -> Bool {

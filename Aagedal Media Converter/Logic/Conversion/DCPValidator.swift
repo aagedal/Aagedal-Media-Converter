@@ -21,10 +21,10 @@ struct DCPValidationIssue: Identifiable, Hashable, Sendable {
 
         var label: String {
             switch self {
-            case .error: return "Error"
-            case .warning: return "Warning"
+            case .error: return String(localized: "Error", comment: "DCP validator finding severity.")
+            case .warning: return String(localized: "Warning", comment: "DCP validator finding severity.")
             case .bv21: return "Bv2.1"
-            case .info: return "Info"
+            case .info: return String(localized: "Info", comment: "DCP validator finding severity.")
             }
         }
     }
@@ -60,7 +60,11 @@ struct DCPValidationReport: Sendable {
     }
 
     var summaryLine: String {
-        "\(count(.error)) error(s), \(count(.warning)) warning(s), \(count(.bv21)) Bv2.1 note(s)"
+        let format = String(
+            localized: "Errors: %1$lld · Warnings: %2$lld · Bv2.1 notes: %3$lld",
+            comment: "DCP validator summary counts."
+        )
+        return String(format: format, count(.error), count(.warning), count(.bv21))
     }
 
     /// Plain-text rendering for the clipboard or a log.

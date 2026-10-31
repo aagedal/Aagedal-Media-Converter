@@ -1829,6 +1829,16 @@ actor FFMPEGConverter {
                                     Self.logger.warning("DCP validation \(issue.severity.label, privacy: .public) \(issue.code, privacy: .public): \(issue.message, privacy: .public)")
                                 }
                                 Self.logger.info("DCP validation: \(report.summaryLine, privacy: .public)")
+                                // Errors break playback or ingest. Keep the package for inspection,
+                                // but don't report it as a finished export.
+                                if let firstError = report.issues.first(where: { $0.severity == .error }) {
+                                    let format = String(
+                                        localized: "The DCP failed validation: %@ Check it with File › Validate DCP… for all findings.",
+                                        comment: "Shown when a just-exported DCP fails the built-in validator. The argument is the first error message."
+                                    )
+                                    errorReason = String(format: format, firstError.message)
+                                    success = false
+                                }
                             }
                         }
 
@@ -4601,7 +4611,7 @@ actor FFMPEGConverter {
             logger.info("DCP audio: source has no audio, writing a silent 5.1 track")
             let args = ["-y", "-nostdin",
                         "-f", "lavfi", "-i", "anullsrc=r=48000:cl=5.1",
-                        "-t", FFMPEGCommandBuilder.ffmpegTimeString(from: dcpCarrier.duration),
+                        "-af", dcpCarrier.lengthFilter,
                         "-c:a", "pcm_s24le", audioWavURL.path]
             return await runPCMWAVExtraction(
                 args: args, ffmpegPath: ffmpegPath, inputURL: inputURL, outputFolder: outputFolder,
@@ -4648,10 +4658,9 @@ actor FFMPEGConverter {
 
         args.append(contentsOf: audioInput.arguments)
 
-        // Apply trim duration. DCP audio instead runs exactly as long as the picture.
-        if let dcpCarrier {
-            args.append(contentsOf: ["-t", FFMPEGCommandBuilder.ffmpegTimeString(from: dcpCarrier.duration)])
-        } else if let durationArgs = FFMPEGCommandBuilder.trimDurationArgument(start: normalizedStart, end: FFMPEGCommandBuilder.normalizedTrimPoint(trimEnd)) {
+        // Apply trim duration. DCP audio instead runs exactly as long as the picture,
+        // which its sample-exact length filter enforces.
+        if dcpCarrier == nil, let durationArgs = FFMPEGCommandBuilder.trimDurationArgument(start: normalizedStart, end: FFMPEGCommandBuilder.normalizedTrimPoint(trimEnd)) {
             args.append(contentsOf: durationArgs)
         }
 
@@ -4703,7 +4712,7 @@ actor FFMPEGConverter {
             : (audioStreams.indices.contains(selectedStreamIndices[0]) ? audioStreams[selectedStreamIndices[0]].channels : nil)
         // DCP: place the source in the 5.1 carrier and pad short audio to the picture length.
         let dcpFilter = dcpCarrier.map {
-            "\(DCPAudioCarrier.channelMapFilter(sourceChannels: sourceChannels)),apad=whole_dur=\(FFMPEGCommandBuilder.ffmpegTimeString(from: $0.duration))"
+            "\(DCPAudioCarrier.channelMapFilter(sourceChannels: sourceChannels)),\($0.lengthFilter)"
         }
         if merged {
             var filterInputs = ""

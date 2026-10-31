@@ -186,8 +186,11 @@ struct VideoMetadata: Equatable, Sendable {
     let comment: String?
     var description: String? = nil
     var sourceURL: String? = nil
-    /// Matroska attached files (typically ASS subtitle fonts), in ffmpeg `t:<n>` order.
+    /// Matroska attached files (typically ASS subtitle fonts), including cover art.
     var attachmentCount = 0
+    /// Attachments FFmpeg exposes as `t:<n>` streams. Its Matroska demuxer turns
+    /// image attachments (cover art) into attached-picture video streams instead.
+    var attachmentStreamCount = 0
     var chapters: [Chapter] = []
     /// Human-readable labels for non-AV tracks (timecode, metadata, GPMF, …).
     var dataTracks: [String] = []
@@ -747,6 +750,9 @@ actor VideoMetadataService {
         )
         result.description = textMetadata.description
         result.attachmentCount = meta.attachments.count
+        result.attachmentStreamCount = SubtitleAttachmentPlan.ffmpegAttachmentStreamCount(
+            mimeTypes: meta.attachments.map(\.mimeType)
+        )
         result.chapters = meta.chapters.map {
             VideoMetadata.Chapter(startTime: $0.startTime, endTime: $0.endTime, title: $0.title)
         }

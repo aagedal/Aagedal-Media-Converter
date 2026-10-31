@@ -4475,10 +4475,11 @@ final class ApplicationJobContractTests: XCTestCase {
         let sourceURL = directory.appendingPathComponent("source.mov")
         let destinationURL = directory.appendingPathComponent("outputs", isDirectory: true)
         try FileManager.default.createDirectory(at: destinationURL, withIntermediateDirectories: true)
+        // One second is the shortest reel the post-export DCP validation accepts.
         try runBundledFFmpeg([
             "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=24:duration=0.125",
-            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=0.125",
+            "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=24:duration=1",
+            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=1",
             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
             "-shortest", sourceURL.path
         ])

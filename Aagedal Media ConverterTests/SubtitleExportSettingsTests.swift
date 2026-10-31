@@ -37,6 +37,14 @@ final class SubtitleExportSettingsTests: XCTestCase {
         for plan in [SubtitleMappingPlan.omit, .quickTimeText] {
             XCTAssertEqual(SubtitleAttachmentPlan(subtitlePlan: plan, stripsStreamMetadata: false, attachmentCount: 3), .omit)
         }
+        // FFmpeg demuxes cover art as an attached-picture video stream, so `0:t:N` must skip it.
+        XCTAssertEqual(
+            SubtitleAttachmentPlan.ffmpegAttachmentStreamCount(
+                mimeTypes: ["image/jpeg", "application/x-truetype-font", "image/png", "font/otf", "application/vnd.ms-opentype"]
+            ),
+            3
+        )
+        XCTAssertEqual(SubtitleAttachmentPlan.ffmpegAttachmentStreamCount(mimeTypes: ["image/jpeg"]), 0)
         XCTAssertTrue(SubtitleAttachmentPlan.stripsStreamMetadata(["-c:v", "libx265", "-map_metadata", "-1"]))
         XCTAssertTrue(SubtitleAttachmentPlan.stripsStreamMetadata(["-map_metadata:s", "-1"]))
         XCTAssertFalse(SubtitleAttachmentPlan.stripsStreamMetadata(["-map_metadata", "0", "-map_metadata:g", "-1"]))
@@ -56,6 +64,7 @@ final class SubtitleExportSettingsTests: XCTestCase {
             videoStreams: [], audioStreams: [], subtitleStreams: []
         )
         metadata.attachmentCount = 1
+        metadata.attachmentStreamCount = 1
         let codecSettings = try XCTUnwrap(CodecExportSettings(preset: .h265, defaults: defaults))
         let command = await FFMPEGCommandBuilder.buildCommand(
             inputURL: URL(fileURLWithPath: "/source/episode.mkv"),

@@ -3467,7 +3467,14 @@ struct ContentView: View {
                     },
                     excludedFolders: {
                         // With subfolders watched, never descend into where outputs are written.
-                        Set(allConversionItems.compactMap { $0.outputURL?.deletingLastPathComponent() })
+                        // An output saved next to its source shares that folder with clips still
+                        // being copied (e.g. a camera card), so it is only protected per file above.
+                        Set(allConversionItems.compactMap { item -> URL? in
+                            guard let outputFolder = item.outputURL?.deletingLastPathComponent() else { return nil }
+                            let sourceFolder = item.url.deletingLastPathComponent()
+                            return outputFolder.standardizedFileURL.path == sourceFolder.standardizedFileURL.path
+                                ? nil : outputFolder
+                        })
                             .union(outputFolder.isEmpty ? [] : [URL(fileURLWithPath: outputFolder)])
                     }
                 )

@@ -278,3 +278,160 @@ final class CropEditorTests: XCTestCase {
         )
     }
 }
+
+final class UntaggedColorPlanTests: XCTestCase {
+    private let videoLoopChain = "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1,scale=w='if(lte(iw,ih),1080,-2)':h='if(lte(iw,ih),-2,1080)'"
+
+    func testPredictsAppGeneratedScaleChains() throws {
+        let loop = try XCTUnwrap(UntaggedColorPlan.predictedOutputSize(
+            filterChain: videoLoopChain, width: 320, height: 180, pixelAspectRatio: 1
+        ))
+        XCTAssertEqual(loop.width, 1920)
+        XCTAssertEqual(loop.height, 1080)
+
+        // Anamorphic PAL desqueezed and letterboxed to broadcast HD.
+        let tv = try XCTUnwrap(UntaggedColorPlan.predictedOutputSize(
+            filterChain: "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1,scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:-1:-1:color=black",
+            width: 720, height: 576, pixelAspectRatio: 64.0 / 45.0
+        ))
+        XCTAssertEqual(tv.width, 1920)
+        XCTAssertEqual(tv.height, 1080)
+
+        let crop = try XCTUnwrap(UntaggedColorPlan.predictedOutputSize(
+            filterChain: "crop=1280:720:0:0,fps=25", width: 1920, height: 1080, pixelAspectRatio: 1
+        ))
+        XCTAssertEqual(crop.width, 1280)
+        XCTAssertEqual(crop.height, 720)
+
+        XCTAssertNil(UntaggedColorPlan.predictedOutputSize(
+            filterChain: "scale=iw/2:ih/2", width: 1920, height: 1080, pixelAspectRatio: 1
+        ))
+        XCTAssertNil(UntaggedColorPlan.predictedOutputSize(
+            filterChain: "unsharp,scale=640:360", width: 1920, height: 1080, pixelAspectRatio: 1
+        ))
+    }
+
+    func testTagsOnlyUntaggedSourcesThatChangeClass() throws {
+        let args = ["-i", "/in.mp4", "-c:v", "libx264", "-vf", videoLoopChain]
+        let upscale = try XCTUnwrap(plan(colorSpace: nil, width: 320, height: 180, arguments: args))
+        XCTAssertEqual(upscale.inputOptions, ["-colorspace", "smpte170m", "-color_primaries", "smpte170m", "-color_trc", "bt709"])
+        XCTAssertEqual(upscale.outputOptions, ["-colorspace", "bt709", "-color_trc", "bt709"])
+
+        let pal = try XCTUnwrap(plan(colorSpace: nil, width: 720, height: 576, arguments: args))
+        XCTAssertEqual(pal.inputOptions.prefix(2), ["-colorspace", "bt470bg"])
+
+        let proxyArgs = ["-i", "/in.mp4", "-vf", "scale=w='if(lte(iw,ih),540,-2)':h='if(lte(iw,ih),-2,540)'"]
+        let downscale = try XCTUnwrap(plan(colorSpace: nil, width: 1920, height: 1080, arguments: proxyArgs))
+        XCTAssertEqual(downscale.inputOptions, ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"])
+
+        XCTAssertNil(plan(colorSpace: "bt709", width: 320, height: 180, arguments: args), "Tagged sources are left alone")
+        XCTAssertNil(plan(colorSpace: nil, width: 1920, height: 1080, arguments: args), "No class change")
+        XCTAssertNil(plan(colorSpace: nil, width: 320, height: 180, arguments: ["-i", "/in.mp4"]), "No scaling")
+        XCTAssertNil(plan(colorSpace: nil, width: 320, height: 180, arguments: args + ["-colorspace", "bt709"]))
+        XCTAssertNil(plan(colorSpace: nil, width: 320, height: 180, pixelFormat: "rgb24", arguments: args))
+        XCTAssertNotNil(UntaggedColorPlan(
+            sourceColorSpace: nil, sourcePixelFormat: nil, sourceCodec: "mp4v",
+            sourceWidth: 320, sourceHeight: 180, sourcePixelAspectRatio: 1, arguments: args
+        ), "An unreported pixel format of a YUV codec still counts")
+        XCTAssertNil(UntaggedColorPlan(
+            sourceColorSpace: nil, sourcePixelFormat: nil, sourceCodec: "png",
+            sourceWidth: 320, sourceHeight: 180, sourcePixelAspectRatio: 1, arguments: args
+        ))
+    }
+
+    func testVideoLoopCommandTagsUpscaledUntaggedSource() async throws {
+        let stream = VideoMetadata.VideoStream(
+            codec: "mpeg4", codecLongName: nil, profile: nil, width: 320, height: 180,
+            pixelFormat: "yuv420p", hasAlpha: false,
+            pixelAspectRatio: VideoMetadata.Ratio(numerator: 1, denominator: 1),
+            displayAspectRatio: VideoMetadata.Ratio(numerator: 16, denominator: 9),
+            frameRate: nil, bitDepth: 8, bitRate: nil, duration: 1,
+            chromaSubsampling: "4:2:0", colorPrimaries: nil, colorTransfer: nil,
+            colorSpace: nil, colorRange: nil, chromaLocation: nil,
+            fieldOrder: nil, isInterlaced: false, title: nil, isDefault: true, isForced: false
+        )
+        let metadata = VideoMetadata(
+            duration: 1, formatName: "mov", containerLongName: nil, sizeBytes: nil,
+            bitRate: nil, comment: nil, timecode: nil, timecodes: [], frameCount: nil,
+            containerCreationDate: nil, containerModificationDate: nil, title: nil, artist: nil,
+            gpsLatitude: nil, gpsLongitude: nil, gpsAltitude: nil, warnings: [],
+            videoStreams: [stream], audioStreams: [], subtitleStreams: []
+        )
+        let input = "/source/clip.mp4"
+        let command = await FFMPEGCommandBuilder.buildCommand(
+            inputURL: URL(fileURLWithPath: input),
+            outputFileURL: URL(fileURLWithPath: "/output/clip_loop.mp4"),
+            preset: .videoLoop, comment: "", includeDateTag: false, trimStart: nil, trimEnd: nil,
+            sourceMetadata: metadata
+        )
+        let args = command.arguments
+        let inputIndex = try XCTUnwrap(args.indices.first { args[$0] == "-i" && args[$0 + 1] == input })
+        XCTAssertEqual(Array(args[(inputIndex - 6)..<inputIndex]),
+                       ["-colorspace", "smpte170m", "-color_primaries", "smpte170m", "-color_trc", "bt709"])
+        XCTAssertEqual(Array(args.suffix(5)), ["-colorspace", "bt709", "-color_trc", "bt709", "/output/clip_loop.mp4"])
+    }
+
+    /// Same pixels decode to the same colours: the SD source read as BT.601 and the
+    /// upscaled output read through its BT.709 tag agree on a saturated yellow bar.
+    func testBundledFFmpegConvertsUpscaledUntaggedSourceToTaggedBT709() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("untagged-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let source = folder.appendingPathComponent("source.mp4")
+        let output = folder.appendingPathComponent("source_loop.mp4")
+        _ = try runFFmpeg(ffmpeg, ["-v", "error", "-y", "-f", "lavfi", "-i", "smptebars=s=320x180:d=0.5",
+                                   "-c:v", "mpeg4", "-q:v", "2", "-pix_fmt", "yuv420p", source.path])
+
+        let metadata = try await BoundedVideoMetadataProbe.metadata(for: source)
+        XCTAssertNil(metadata.primaryVideoStream?.colorSpace)
+        let command = await FFMPEGCommandBuilder.buildCommand(
+            inputURL: source, outputFileURL: output, preset: .videoLoop,
+            comment: "", includeDateTag: false, trimStart: nil, trimEnd: nil, sourceMetadata: metadata
+        )
+        XCTAssertTrue(command.arguments.contains("smpte170m"), "\(command.arguments)")
+        _ = try runFFmpeg(ffmpeg, command.arguments.filter { $0 != "-progress" && $0 != "pipe:2" })
+
+        let outputMetadata = try await BoundedVideoMetadataProbe.metadata(for: output)
+        XCTAssertEqual(outputMetadata.primaryVideoStream?.colorSpace, "bt709")
+        // Second bar (yellow) as RGB, decoding each file with the matrix its player uses.
+        func yellow(_ url: URL, matrix: String) throws -> [Int] {
+            let data = try runFFmpeg(ffmpeg, ["-v", "error", "-i", url.path, "-frames:v", "1",
+                "-vf", "scale=320:180:in_color_matrix=\(matrix),crop=4:4:60:40,format=rgb24",
+                "-f", "rawvideo", "-"])
+            let pixels = Array(data)
+            return (0..<3).map { channel in
+                stride(from: channel, to: pixels.count, by: 3).map { Int(pixels[$0]) }.reduce(0, +) / (pixels.count / 3)
+            }
+        }
+        let sourceRGB = try yellow(source, matrix: "bt601")
+        let outputRGB = try yellow(output, matrix: "bt709")
+        for (a, b) in zip(sourceRGB, outputRGB) {
+            XCTAssertEqual(a, b, accuracy: 4, "source \(sourceRGB) vs output \(outputRGB)")
+        }
+    }
+
+    @discardableResult
+    private func runFFmpeg(_ ffmpeg: String, _ arguments: [String]) throws -> Data {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: ffmpeg)
+        process.arguments = arguments
+        let stdout = Pipe()
+        process.standardOutput = stdout
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        let data = stdout.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        XCTAssertEqual(process.terminationStatus, 0, "ffmpeg \(arguments.joined(separator: " "))")
+        return data
+    }
+
+    private func plan(
+        colorSpace: String?, width: Int, height: Int, pixelFormat: String = "yuv420p", arguments: [String]
+    ) -> UntaggedColorPlan? {
+        UntaggedColorPlan(
+            sourceColorSpace: colorSpace, sourcePixelFormat: pixelFormat,
+            sourceWidth: width, sourceHeight: height, sourcePixelAspectRatio: 1, arguments: arguments
+        )
+    }
+}
