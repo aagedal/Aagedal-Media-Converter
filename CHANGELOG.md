@@ -11,7 +11,7 @@
 
 ### Trim
 
-- Trim handles and range drags snap to frames instead of a fixed 0.1-second grid, so any frame can be an in or out point. Points within half a frame of the start or end count as untrimmed.
+- Trim handles, range drags and the I and O keys snap to frames instead of a fixed 0.1-second grid, so any frame can be an in or out point. Points within half a frame of the start or end count as untrimmed.
 - Setting an in-point after the out-point (I), or an out-point before the in-point (O), now clears the other point instead of leaving an empty range.
 - Shift-dragging the range keeps its length exactly, and Option-dragging a handle stays centered when one side reaches the start or end of the file.
 - Dragging trim handles sends fewer seeks to the player, which keeps MPV previews responsive. The drag mode (scrub, ⌘ range select, ⇧ slide) is chosen when you press the mouse button and no longer changes if you press or release a key mid-drag; ⇧-dragging outside the range now scrubs.
@@ -49,7 +49,7 @@
 
 ### Live streams
 
-- Scheduled live streams and premieres no longer fail. The download waits for the stream to start, and the row shows that it's waiting, the announced start time, the title and the thumbnail. Stopping a row that is still waiting cancels it.
+- Scheduled live streams and premieres no longer fail. The download waits for the stream to start, and the row shows that it's waiting, the announced start time, the title and the thumbnail. Stopping a row that is still waiting cancels it. The Mac stays awake while waiting; turn off Keep Mac awake while waiting for scheduled streams in Settings › Downloads to let it sleep until an hour before the announced start.
 - Stopping a recording lets yt-dlp finish cleanly, so recordings from the start of the stream are merged into one playable file with metadata. Stopping again forces it. If a recording is cut off anyway, the recovered file gets a `.ts` extension when it is an MPEG transport stream.
 - New setting: Record live streams as growing files. The stream is written to one QuickTime `.mov` that DaVinci Resolve and Premiere Pro can import while it is still recording. The queue row's Finder, copy-path and drag buttons point at the growing file during the recording.
 - A recording that stalls or fails keeps what it has recorded instead of starting over, so footage isn't lost once a stream's rewind window has passed.
@@ -103,7 +103,7 @@
 
 ### Other fixes
 
-- Folders can be imported by dropping them on the queue or a group, or choosing them with Import. The media files inside are added, including from subfolders, and image sequences are found in any subfolder; the Import panel used to find only image sequences, and dropped folders were ignored. Hidden files and packages such as apps and libraries are skipped, and a sequence's soundtrack isn't added again as a separate file.
+- Folders can be imported by dropping them on the queue or a group, or choosing them with Import. The media files inside are added, including from subfolders, and image sequences are found in any subfolder; the Import panel used to find only image sequences, and dropped folders were ignored. Hidden files and packages such as apps and libraries are skipped, and a sequence's soundtrack isn't added again as a separate file. A few files are inspected at a time, so a large folder no longer starts a metadata probe for every file at once.
 - Files dropped together are added in the order they were dropped.
 - Video without colour tags no longer changes colour when it's scaled between SD and HD sizes (for example a 640×360 clip exported as 1080p, or an HD clip exported as a 540p proxy). Players read untagged SD and HD video with different colour standards, so the same picture came out with shifted yellows, cyans and skin tones. Such exports are now converted where needed and tagged as BT.709.
 - Dragging only unsupported files onto the empty queue shows the "can't drop" cursor instead of highlighting the queue and then doing nothing.

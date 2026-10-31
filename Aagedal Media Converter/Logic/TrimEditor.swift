@@ -56,10 +56,18 @@ struct TrimEditor: Sendable {
     /// Grows (positive) or shrinks (negative) both ends by the same snapped amount. Growth stops
     /// when either end reaches the media bounds, so the range stays centered on the original.
     func symmetric(start: Double, end: Double, growth: Double) -> (start: Double, end: Double) {
-        let maxGrowth = max(0, min(start, duration - end))
-        let minGrowth = min(0, (minimumLength - (end - start)) / 2)
+        // Limits are whole steps, so a range on the grid stays on it when it hits a limit.
+        let maxGrowth = wholeSteps(in: min(start, duration - end))
+        let minGrowth = -wholeSteps(in: ((end - start) - minimumLength) / 2)
         let applied = min(max(snap(growth), minGrowth), maxGrowth)
         return (start - applied, end + applied)
+    }
+
+    /// The longest whole number of steps that fits in `length`; zero for negative lengths.
+    private func wholeSteps(in length: Double) -> Double {
+        guard length > 0 else { return 0 }
+        // Tolerate rounding error so an exact multiple of the step is not cut short.
+        return (length / step + 1e-9).rounded(.down) * step
     }
 
     /// Moves the whole range by a snapped offset, keeping its length exactly.

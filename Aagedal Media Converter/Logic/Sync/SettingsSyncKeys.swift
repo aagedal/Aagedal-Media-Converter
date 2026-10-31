@@ -278,6 +278,7 @@ enum SettingsSyncKeys {
         AppConstants.ytdlpZenProfileKey,
         AppConstants.ytdlpLiveFromStartKey,
         AppConstants.ytdlpGrowingFileKey,
+        AppConstants.ytdlpKeepAwakeWhileWaitingKey,
         AppConstants.ytdlpAudioOnlyKey,
         AppConstants.ytdlpDownloadPlaylistKey,
         AppConstants.ytdlpFilenameRestrictionModeKey,

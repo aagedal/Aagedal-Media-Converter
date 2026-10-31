@@ -63,6 +63,7 @@ struct YTDLPSettingsView: View {
     @AppStorage(AppConstants.ffmpegBinarySourceKey) private var ffmpegBinarySource = BinarySourceSelection.app.rawValue
     @AppStorage(AppConstants.autoEncodeAfterDownloadKey) private var autoEncodeAfterDownload = false
     @AppStorage(AppConstants.autoUploadAfterDownloadKey) private var autoUploadAfterDownload = false
+    @AppStorage(AppConstants.ytdlpKeepAwakeWhileWaitingKey) private var keepAwakeWhileWaiting = AppConstants.defaultYTDLPKeepAwakeWhileWaiting
     @AppStorage(AppConstants.ytdlpCookiesBrowserKey) private var cookiesBrowser = ""
     @AppStorage(AppConstants.ytdlpHeliumProfileKey) private var heliumProfile = "Default"
     @AppStorage(AppConstants.ytdlpHeliumNeoProfileKey) private var heliumNeoProfile = "Default"
@@ -874,6 +875,15 @@ struct YTDLPSettingsView: View {
                             .foregroundColor(.orange)
                     }
                 }
+
+                Divider()
+
+                Toggle("Keep Mac awake while waiting for scheduled streams", isOn: $keepAwakeWhileWaiting)
+                    .toggleStyle(SwitchToggleStyle())
+
+                Text("When enabled, the Mac stays awake while a download waits for a scheduled live stream or premiere to start, so the recording can't be missed. When disabled, the Mac can sleep until an hour before the announced start time; if it is asleep then, the start of the stream is missed.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
             .padding(8)
         }

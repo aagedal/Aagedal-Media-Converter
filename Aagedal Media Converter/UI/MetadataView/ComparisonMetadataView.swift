@@ -17,6 +17,8 @@ struct ComparisonMetadataView: View {
     @State private var c2paByID: [UUID: C2PAMetadata] = [:]
     @State private var c2paCheckedIDs: Set<UUID> = []
     @State private var c2paLoadingIDs: Set<UUID> = []
+    /// Signed thumbnails decoded once per item, so redraws (e.g. typing a search) don't decode again.
+    @State private var c2paThumbnailsByID: [UUID: C2PAThumbnailImages] = [:]
 
     @State private var cameraByID: [UUID: CameraMetadata] = [:]
     @State private var cameraCheckedIDs: Set<UUID> = []
@@ -135,6 +137,7 @@ struct ComparisonMetadataView: View {
             c2paByID = c2paByID.filter { keepIDs.contains($0.key) }
             c2paCheckedIDs = c2paCheckedIDs.intersection(keepIDs)
             c2paLoadingIDs = c2paLoadingIDs.intersection(keepIDs)
+            c2paThumbnailsByID = c2paThumbnailsByID.filter { keepIDs.contains($0.key) }
             cameraByID = cameraByID.filter { keepIDs.contains($0.key) }
             cameraCheckedIDs = cameraCheckedIDs.intersection(keepIDs)
             cameraLoadingIDs = cameraLoadingIDs.intersection(keepIDs)
@@ -210,9 +213,9 @@ struct ComparisonMetadataView: View {
     }
 
     private var headerTitle: String {
-        if isSourceOutputComparison { return "Source vs Output" }
-        if items.count > 1 { return "Metadata Comparison" }
-        return "Metadata"
+        if isSourceOutputComparison { return String(localized: "Source vs Output") }
+        if items.count > 1 { return String(localized: "Metadata Comparison") }
+        return String(localized: "Metadata")
     }
 
     private var searchField: some View {
@@ -284,9 +287,9 @@ struct ComparisonMetadataView: View {
 
             HStack(spacing: 6) {
                 if let c2pa = c2paMetadata(for: item), c2pa.hasContentCredentials {
-                    badge("Content Credentials", systemImage: "checkmark.seal.fill", tint: .green)
+                    badge(String(localized: "Content Credentials"), systemImage: "checkmark.seal.fill", tint: .green)
                     if let sourceType = c2pa.digitalSourceType, C2PAFormatting.isGenerativeAI(sourceType) {
-                        badge("Generative AI", systemImage: "sparkles", tint: .purple)
+                        badge(String(localized: "Generative AI"), systemImage: "sparkles", tint: .purple)
                     }
                 }
                 if let range = item.metadata?.primaryVideoStream?.dynamicRangeDescription, range != "SDR" {
@@ -307,7 +310,8 @@ struct ComparisonMetadataView: View {
 
     @ViewBuilder
     private func thumbnail(for item: VideoItem) -> some View {
-        if let thumbnailData = item.thumbnailData, let nsImage = NSImage(data: thumbnailData) {
+        // The queue keeps decoded row thumbnails; fall back to decoding for exported files.
+        if let nsImage = ThumbnailCache.shared[item.id] ?? item.thumbnailData.flatMap(NSImage.init(data:)) {
             Image(nsImage: nsImage)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
@@ -336,7 +340,7 @@ struct ComparisonMetadataView: View {
 
     private func roleLabel(for index: Int) -> String? {
         guard isSourceOutputComparison else { return nil }
-        return index == 0 ? "SOURCE" : "OUTPUT"
+        return index == 0 ? String(localized: "SOURCE") : String(localized: "OUTPUT")
     }
 
     // MARK: - Sections
@@ -539,20 +543,18 @@ struct ComparisonMetadataView: View {
     /// The preview images embedded in each file's credentials (what the signer saw).
     @ViewBuilder
     private var c2paThumbnails: some View {
-        let thumbnails: [(name: String, claim: NSImage?, ingredient: NSImage?)] = displayItems.compactMap { item in
-            guard let c2pa = c2paMetadata(for: item) else { return nil }
-            let claim = c2pa.claimThumbnail.flatMap(NSImage.init(data:))
-            let ingredient = c2pa.ingredientThumbnail.flatMap(NSImage.init(data:))
-            return claim == nil && ingredient == nil ? nil : (item.name, claim, ingredient)
+        let thumbnails: [(id: UUID, name: String, claim: NSImage?, ingredient: NSImage?)] = displayItems.compactMap { item in
+            guard let images = c2paThumbnailsByID[item.id], images.claim != nil || images.ingredient != nil else { return nil }
+            return (item.id, item.name, images.claim, images.ingredient)
         }
         if !thumbnails.isEmpty {
             Text("Signed Thumbnails")
                 .font(.subheadline.weight(.semibold))
             HStack(alignment: .top, spacing: 16) {
-                ForEach(thumbnails, id: \.name) { entry in
+                ForEach(thumbnails, id: \.id) { entry in
                     HStack(alignment: .top, spacing: 8) {
-                        if let claim = entry.claim { c2paThumbnail(claim, caption: displayItems.count > 1 ? entry.name : "This file") }
-                        if let ingredient = entry.ingredient { c2paThumbnail(ingredient, caption: "Ingredient") }
+                        if let claim = entry.claim { c2paThumbnail(claim, caption: displayItems.count > 1 ? entry.name : String(localized: "This file")) }
+                        if let ingredient = entry.ingredient { c2paThumbnail(ingredient, caption: String(localized: "Ingredient")) }
                     }
                 }
             }
@@ -629,12 +631,12 @@ struct ComparisonMetadataView: View {
 
     private func c2paStatusValue(for item: VideoItem) -> String? {
         if let c2pa = c2paMetadata(for: item) {
-            return c2pa.hasContentCredentials ? "Present" : "No"
+            return c2pa.hasContentCredentials ? String(localized: "Present") : String(localized: "No")
         }
         if c2paLoadingIDs.contains(item.id) {
-            return "Checking..."
+            return String(localized: "Checking...")
         }
-        return "Not available"
+        return String(localized: "Not available")
     }
 
     // MARK: - Camera Helpers
@@ -645,13 +647,13 @@ struct ComparisonMetadataView: View {
 
     private func cameraStatusValue(for item: VideoItem) -> String? {
         if let camera = cameraMetadata(for: item), camera.hasAnyData {
-            return "Present"
+            return String(localized: "Present")
         }
         if cameraLoadingIDs.contains(item.id) {
-            return "Checking..."
+            return String(localized: "Checking...")
         }
         if cameraCheckedIDs.contains(item.id) {
-            return "Not available"
+            return String(localized: "Not available")
         }
         return nil
     }
@@ -660,6 +662,7 @@ struct ComparisonMetadataView: View {
 
     private func loadC2PAIfNeeded() async {
         await loadC2PAMetadata()
+        await decodeC2PAThumbnails()
         await loadCameraMetadata()
     }
 
@@ -717,6 +720,22 @@ struct ComparisonMetadataView: View {
         }
     }
 
+    /// Decodes each item's signed thumbnails once, off the main thread.
+    private func decodeC2PAThumbnails() async {
+        for item in displayItems where c2paThumbnailsByID[item.id] == nil {
+            guard let c2pa = c2paMetadata(for: item) else { continue }
+            let claimData = c2pa.claimThumbnail
+            let ingredientData = c2pa.ingredientThumbnail
+            let images = await Task.detached(priority: .userInitiated) {
+                C2PAThumbnailImages(
+                    claim: claimData.flatMap(ThumbnailDecoder.decodeSync(data:)),
+                    ingredient: ingredientData.flatMap(ThumbnailDecoder.decodeSync(data:))
+                )
+            }.value
+            c2paThumbnailsByID[item.id] = images
+        }
+    }
+
     private func loadCameraMetadata() async {
         let itemsToLoad = displayItems.filter { item in
             item.cameraMetadata == nil
@@ -758,4 +777,10 @@ private extension Array {
     subscript(safe index: Int) -> Element? {
         indices.contains(index) ? self[index] : nil
     }
+}
+
+/// A file's decoded Content Credentials thumbnails.
+private struct C2PAThumbnailImages: @unchecked Sendable {
+    let claim: NSImage?
+    let ingredient: NSImage?
 }

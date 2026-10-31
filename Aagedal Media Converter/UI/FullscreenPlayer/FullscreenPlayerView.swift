@@ -1162,8 +1162,9 @@ struct FullscreenPlayerView: View {
         if clearToStart {
             itemState.trimStart = nil
         } else {
-            (itemState.trimStart, itemState.trimEnd) = trimEditor.settingIn(
-                controller.currentPlaybackTime, end: itemState.trimEnd
+            let editor = trimEditor
+            (itemState.trimStart, itemState.trimEnd) = editor.settingIn(
+                editor.snap(controller.currentPlaybackTime), end: itemState.trimEnd
             )
         }
         trimDidChange()
@@ -1173,8 +1174,9 @@ struct FullscreenPlayerView: View {
         if clearToEnd {
             itemState.trimEnd = nil
         } else {
-            (itemState.trimStart, itemState.trimEnd) = trimEditor.settingOut(
-                controller.currentPlaybackTime, start: itemState.trimStart
+            let editor = trimEditor
+            (itemState.trimStart, itemState.trimEnd) = editor.settingOut(
+                editor.snap(controller.currentPlaybackTime), start: itemState.trimStart
             )
         }
         trimDidChange()

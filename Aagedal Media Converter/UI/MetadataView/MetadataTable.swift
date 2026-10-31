@@ -49,11 +49,12 @@ struct MetadataTableBuilder {
     let items: [VideoItem]
     var c2pa: (VideoItem) -> C2PAMetadata? = { $0.c2paMetadata }
     var c2paStatus: (VideoItem) -> String? = { item in
-        item.c2paMetadata.map { $0.hasContentCredentials ? "Present" : "No" } ?? "Not available"
+        item.c2paMetadata.map { $0.hasContentCredentials ? String(localized: "Present") : String(localized: "No") }
+            ?? String(localized: "Not available")
     }
     var camera: (VideoItem) -> CameraMetadata? = { $0.cameraMetadata }
     var cameraStatus: (VideoItem) -> String? = { item in
-        item.cameraMetadata?.hasAnyData == true ? "Present" : nil
+        item.cameraMetadata?.hasAnyData == true ? String(localized: "Present") : nil
     }
 
     func build() -> [MetadataTableSection] {
@@ -133,7 +134,7 @@ struct MetadataTableBuilder {
             }
         }
 
-        return MetadataTableSection(id: "general", title: "General", systemImage: "doc", rows: rows.rows)
+        return MetadataTableSection(id: "general", title: String(localized: "General"), systemImage: "doc", rows: rows.rows)
     }
 
     private func videoSection() -> MetadataTableSection {
@@ -144,7 +145,7 @@ struct MetadataTableBuilder {
                 item.metadata?.videoStreams[safe: index]
             }
             if streamCount > 1 {
-                rows.header("Video \(index + 1)", group: index) { item in
+                rows.header(String(localized: "Video \(index + 1)"), group: index) { item in
                     stream(item).map(Self.videoSummary)
                 }
             }
@@ -178,7 +179,7 @@ struct MetadataTableBuilder {
             rows.add("Chroma Subsampling") { stream($0)?.chromaSubsampling }
             rows.add("Chroma Resolution") { stream($0)?.chromaResolutionDescription }
             rows.add("Pixel Format") { stream($0)?.pixelFormat }
-            rows.add("Alpha Channel") { item in stream(item).map { $0.hasAlpha ? "Yes" : "No" } }
+            rows.add("Alpha Channel") { item in stream(item).map { $0.hasAlpha ? String(localized: "Yes") : String(localized: "No") } }
             rows.add("Dynamic Range") { stream($0)?.dynamicRangeDescription }
             rows.add("Color Primaries") { stream($0)?.colorPrimaries }
             rows.add("Color Transfer") { stream($0)?.colorTransfer }
@@ -189,12 +190,12 @@ struct MetadataTableBuilder {
             rows.add("Content Light Level") { stream($0)?.hdr?.contentLightLevel }
             rows.add("Dolby Vision") { stream($0)?.hdr?.dolbyVision }
             rows.add("Closed Captions") { stream($0)?.hasClosedCaptions == true ? "Embedded (CEA-608/708)" : nil }
-            rows.add("Default") { stream($0)?.isDefault == true ? "Yes" : nil }
-            rows.add("Forced") { stream($0)?.isForced == true ? "Yes" : nil }
+            rows.add("Default") { stream($0)?.isDefault == true ? String(localized: "Yes") : nil }
+            rows.add("Forced") { stream($0)?.isForced == true ? String(localized: "Yes") : nil }
         }
         return MetadataTableSection(
-            id: "video", title: "Video", systemImage: "film", rows: rows.rows,
-            emptyMessage: "No video stream detected."
+            id: "video", title: String(localized: "Video"), systemImage: "film", rows: rows.rows,
+            emptyMessage: String(localized: "No video stream detected.")
         )
     }
 
@@ -206,7 +207,7 @@ struct MetadataTableBuilder {
                 item.metadata?.audioStreams[safe: index]
             }
             if streamCount > 1 {
-                rows.header("Audio \(index + 1)", group: index) { item in
+                rows.header(String(localized: "Audio \(index + 1)"), group: index) { item in
                     stream(item).map(Self.audioSummary)
                 }
             }
@@ -223,11 +224,11 @@ struct MetadataTableBuilder {
             rows.add("Bit Depth") { stream($0)?.bitDepth.map { "\($0)-bit" } }
             rows.add("Bit Rate") { Self.formatBitRate(stream($0)?.bitRate) }
             rows.add("Duration") { Self.formatStreamDuration(stream($0)?.duration) }
-            rows.add("Default") { stream($0)?.isDefault == true ? "Yes" : nil }
+            rows.add("Default") { stream($0)?.isDefault == true ? String(localized: "Yes") : nil }
         }
         return MetadataTableSection(
-            id: "audio", title: "Audio", systemImage: "waveform", rows: rows.rows,
-            emptyMessage: "No audio stream detected."
+            id: "audio", title: String(localized: "Audio"), systemImage: "waveform", rows: rows.rows,
+            emptyMessage: String(localized: "No audio stream detected.")
         )
     }
 
@@ -239,7 +240,7 @@ struct MetadataTableBuilder {
                 item.metadata?.subtitleStreams[safe: index]
             }
             if streamCount > 1 {
-                rows.header("Subtitle \(index + 1)", group: index) { item in
+                rows.header(String(localized: "Subtitle \(index + 1)"), group: index) { item in
                     stream(item).map { stream in
                         [stream.codec?.uppercased(), stream.languageCode.map(Self.languageName), stream.title]
                             .compactMap { $0 }.joined(separator: " · ")
@@ -251,13 +252,13 @@ struct MetadataTableBuilder {
             rows.add("Language") { stream($0)?.languageCode.map(Self.languageName) }
             rows.add("Title") { stream($0)?.title }
             rows.add("Duration") { Self.formatStreamDuration(stream($0)?.duration) }
-            rows.add("Default") { stream($0)?.isDefault == true ? "Yes" : nil }
-            rows.add("Forced") { stream($0)?.isForced == true ? "Yes" : nil }
-            rows.add("Hearing Impaired (SDH)") { stream($0)?.isHearingImpaired == true ? "Yes" : nil }
+            rows.add("Default") { stream($0)?.isDefault == true ? String(localized: "Yes") : nil }
+            rows.add("Forced") { stream($0)?.isForced == true ? String(localized: "Yes") : nil }
+            rows.add("Hearing Impaired (SDH)") { stream($0)?.isHearingImpaired == true ? String(localized: "Yes") : nil }
         }
         return MetadataTableSection(
-            id: "subtitle", title: "Subtitles", systemImage: "captions.bubble", rows: rows.rows,
-            emptyMessage: "No subtitle stream detected."
+            id: "subtitle", title: String(localized: "Subtitles"), systemImage: "captions.bubble", rows: rows.rows,
+            emptyMessage: String(localized: "No subtitle stream detected.")
         )
     }
 
@@ -272,7 +273,7 @@ struct MetadataTableBuilder {
                 return chapter.title.map { "\(start)  \($0)" } ?? start
             }
         }
-        return MetadataTableSection(id: "chapters", title: "Chapters", systemImage: "list.bullet.rectangle", rows: rows.rows)
+        return MetadataTableSection(id: "chapters", title: String(localized: "Chapters"), systemImage: "list.bullet.rectangle", rows: rows.rows)
     }
 
     /// Omitted for files without camera metadata, which is most of them; the section
@@ -294,7 +295,7 @@ struct MetadataTableBuilder {
             guard let entries = camera(item)?.userDescriptiveMetadata, !entries.isEmpty else { return nil }
             return entries.map { "\($0.name): \($0.content)" }.joined(separator: "\n")
         }
-        return MetadataTableSection(id: "camera", title: "Camera", systemImage: "camera", rows: rows.rows)
+        return MetadataTableSection(id: "camera", title: String(localized: "Camera"), systemImage: "camera", rows: rows.rows)
     }
 
     private func c2paSection() -> MetadataTableSection {
@@ -303,14 +304,14 @@ struct MetadataTableBuilder {
         // Detail rows only add noise when no file carries credentials ("Signature: Not found").
         guard items.contains(where: { c2pa($0)?.hasContentCredentials == true }) else {
             return MetadataTableSection(
-                id: "c2pa", title: "Content Authenticity (C2PA)", systemImage: "checkmark.seal", rows: rows.rows
+                id: "c2pa", title: String(localized: "Content Authenticity (C2PA)"), systemImage: "checkmark.seal", rows: rows.rows
             )
         }
         for field in C2PADisplayField.allCases {
             rows.add(field.label) { c2pa($0)?.displayValue(for: field) }
         }
         return MetadataTableSection(
-            id: "c2pa", title: "Content Authenticity (C2PA)", systemImage: "checkmark.seal", rows: rows.rows
+            id: "c2pa", title: String(localized: "Content Authenticity (C2PA)"), systemImage: "checkmark.seal", rows: rows.rows
         )
     }
 
@@ -432,8 +433,11 @@ private struct RowCollector {
     mutating func add(_ label: String, id: String? = nil, value: (VideoItem) -> String?) {
         let values = items.map { item in value(item).flatMap { $0.isEmpty ? nil : $0 } }
         guard values.contains(where: { $0 != nil }) else { return }
+        // IDs keep the English label so they don't change with the app language.
         let rowID = [section, group.map(String.init), id ?? label].compactMap { $0 }.joined(separator: ".")
-        rows.append(MetadataTableRow(id: rowID, label: label, values: values, group: group))
+        rows.append(MetadataTableRow(
+            id: rowID, label: String(localized: String.LocalizationValue(label)), values: values, group: group
+        ))
     }
 
     mutating func header(_ label: String, group: Int, summary: (VideoItem) -> String?) {

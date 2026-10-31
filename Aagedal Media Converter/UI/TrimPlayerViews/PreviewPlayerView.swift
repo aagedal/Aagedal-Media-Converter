@@ -219,8 +219,10 @@ struct PreviewPlayerView: View {
             item.trimStart = nil
         } else {
             // I: Set trim start to current playback position. An in-point past the out-point
-            // clears the out-point. Uses currentPlaybackTime so it works during preparation.
-            (item.trimStart, item.trimEnd) = trimEditor.settingIn(currentPlaybackTime, end: item.trimEnd)
+            // clears the out-point. Uses currentPlaybackTime so it works during preparation;
+            // MPV reports times between frames, so snap to the nearest one.
+            let editor = trimEditor
+            (item.trimStart, item.trimEnd) = editor.settingIn(editor.snap(currentPlaybackTime), end: item.trimEnd)
         }
     }
 
@@ -231,7 +233,8 @@ struct PreviewPlayerView: View {
         } else {
             // O: Set trim end to current playback position. An out-point before the in-point
             // clears the in-point.
-            (item.trimStart, item.trimEnd) = trimEditor.settingOut(currentPlaybackTime, start: item.trimStart)
+            let editor = trimEditor
+            (item.trimStart, item.trimEnd) = editor.settingOut(editor.snap(currentPlaybackTime), start: item.trimStart)
         }
     }
 

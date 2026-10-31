@@ -37,9 +37,20 @@ final class TrimEditorTests: XCTestCase {
         XCTAssertEqual(grown.start, 1, accuracy: accuracy)
         XCTAssertEqual(grown.end, 10, accuracy: accuracy)
 
+        // 50 frames can only shrink evenly to 2 frames; 51 frames shrink to 1.
         let shrunk = editor.symmetric(start: 4, end: 6, growth: -5)
-        XCTAssertEqual(shrunk.end - shrunk.start, 0.04, accuracy: accuracy)
-        XCTAssertEqual((shrunk.start + shrunk.end) / 2, 5, accuracy: accuracy)
+        XCTAssertEqual(shrunk.start, 4.96, accuracy: accuracy)
+        XCTAssertEqual(shrunk.end, 5.04, accuracy: accuracy)
+        let shrunkOdd = editor.symmetric(start: 4, end: 6.04, growth: -5)
+        XCTAssertEqual(shrunkOdd.start, 5, accuracy: accuracy)
+        XCTAssertEqual(shrunkOdd.end, 5.04, accuracy: accuracy)
+    }
+
+    func testSymmetricGrowthStaysOnTheGridAtAnOffGridEnd() {
+        let editor = TrimEditor(duration: 10.013, frameRate: 25)
+        let grown = editor.symmetric(start: 2, end: 9, growth: 3)
+        XCTAssertEqual(grown.start, 1, accuracy: accuracy)
+        XCTAssertEqual(grown.end, 10, accuracy: accuracy)
     }
 
     func testSlidingKeepsTheRangeLengthExactly() {
