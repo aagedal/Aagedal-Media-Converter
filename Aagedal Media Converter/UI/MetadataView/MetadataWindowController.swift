@@ -11,6 +11,7 @@ import SwiftUI
 final class MetadataWindowController: NSObject, NSWindowDelegate {
 
     static let shared = MetadataWindowController()
+    private static let frameAutosaveName = "MetadataWindow"
 
     private var currentWindow: NSWindow?
     private var hostingView: NSHostingView<MetadataWindowContent>?
@@ -30,14 +31,14 @@ final class MetadataWindowController: NSObject, NSWindowDelegate {
 
         // Create the window
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 700),
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 760),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
 
         window.title = "Metadata"
-        window.minSize = NSSize(width: 500, height: 400)
+        window.minSize = NSSize(width: 560, height: 400)
         window.isReleasedWhenClosed = false
         window.delegate = self
 
@@ -49,8 +50,11 @@ final class MetadataWindowController: NSObject, NSWindowDelegate {
 
         window.contentView = hostingView
 
-        // Position the window next to the main window
-        positionWindowNextToMainWindow(window)
+        // Restore the user's last frame; otherwise place it next to the main window.
+        if !window.setFrameUsingName(Self.frameAutosaveName) {
+            positionWindowNextToMainWindow(window)
+        }
+        window.setFrameAutosaveName(Self.frameAutosaveName)
 
         // Store references
         self.currentWindow = window

@@ -55,6 +55,31 @@ struct C2PAMetadata: Codable, Sendable, Equatable {
     let manifestStore: String?
     let assertions: [String]?
 
+    // Detail from the active manifest. Optional so older call sites and exports keep working.
+    var claimGeneratorVersion: String? = nil
+    var title: String? = nil
+    /// MIME type the claim was made for, e.g. "video/mp4".
+    var format: String? = nil
+    var authors: [String]? = nil
+    var copyright: String? = nil
+    var actions: [C2PAActionInfo]? = nil
+    var ingredients: [C2PAIngredientInfo]? = nil
+    /// Read from the signing certificate; describes who signed, not whether the signature is valid.
+    var signature: C2PASignatureInfo? = nil
+    var trainingMining: [C2PATrainingPermission]? = nil
+    /// A CAWG identity assertion links the credential to a named person or organisation.
+    var hasIdentityAssertion: Bool? = nil
+    var redactionCount: Int? = nil
+    /// Every manifest in the store, oldest first; the last one is the active manifest.
+    var history: [C2PAManifestSummary]? = nil
+    var claimThumbnail: Data? = nil
+    var ingredientThumbnail: Data? = nil
+
+    /// The IPTC digital source type from the first action that declares one.
+    var digitalSourceType: String? {
+        actions?.lazy.compactMap(\.digitalSourceType).first ?? actionsDigitalSourceType
+    }
+
     static let empty = C2PAMetadata(
         hasContentCredentials: false,
         hasSignature: false,

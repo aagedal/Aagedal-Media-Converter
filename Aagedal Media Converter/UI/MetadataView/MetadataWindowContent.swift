@@ -8,6 +8,8 @@ import SwiftUI
 /// single item view, and comparison view based on selection.
 struct MetadataWindowContent: View {
     @State private var state = MetadataWindowState.shared
+    @State private var searchText = ""
+    @State private var differencesOnly = false
 
     var body: some View {
         Group {
@@ -15,7 +17,11 @@ struct MetadataWindowContent: View {
                 emptyStateView
             } else {
                 // Use comparison view for both single and multiple items
-                ComparisonMetadataView(items: state.selectedItems)
+                ComparisonMetadataView(
+                    items: state.selectedItems,
+                    searchText: $searchText,
+                    differencesOnly: $differencesOnly
+                )
             }
         }
         .frame(minWidth: 500, minHeight: 400)

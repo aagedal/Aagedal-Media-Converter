@@ -3,6 +3,204 @@ import os
 @testable import Aagedal_Media_Converter
 
 final class WatchFolderPollingTests: XCTestCase {
+    /// Polls a folder for `scanCount` scans with no settling delay and returns the imports.
+    private func importsAfterScans(
+        _ scanCount: Int,
+        in folder: URL,
+        settlingInterval: TimeInterval = 0,
+        historyStore: WatchFolderImportHistoryStore = .inMemory,
+        configure: (UserDefaults) -> Void = { _ in },
+        protectedFiles: @escaping @MainActor @Sendable () -> Set<URL> = { [] },
+        excludedFolders: @escaping @MainActor @Sendable () -> Set<URL> = { [] },
+        onPending: @escaping @Sendable ([WatchFolderPendingFile]) -> Void = { _ in },
+        onScan: @escaping @Sendable (Int) -> Void = { _ in }
+    ) async throws -> [URL] {
+        enum PollingFinished: Error { case finished }
+        let name = "WatchFolderPollingTests.\(UUID().uuidString)"
+        defer { UserDefaults(suiteName: name)?.removePersistentDomain(forName: name) }
+        configure(try XCTUnwrap(UserDefaults(suiteName: name)))
+        let finished = expectation(description: "Scans complete")
+        let scans = OSAllocatedUnfairLock(initialState: 0)
+        let imported = OSAllocatedUnfairLock(initialState: [URL]())
+        let manager = WatchFolderManager(defaults: try XCTUnwrap(UserDefaults(suiteName: name)), settlingInterval: settlingInterval, readinessProbe: { _ in true }, pollingWait: {
+            let count = scans.withLock { value in value += 1; return value }
+            onScan(count)
+            if count == scanCount { finished.fulfill(); throw PollingFinished.finished }
+        }, historyStore: historyStore)
+        await manager.startMonitoring(folderPath: folder.path, generation: 1,
+            onNewFiles: { urls in imported.withLock { $0.append(contentsOf: urls) } },
+            protectedFiles: protectedFiles, excludedFolders: excludedFolders, onPendingFilesChanged: onPending)
+        await fulfillment(of: [finished], timeout: 3)
+        await manager.stopMonitoring(generation: 2)
+        return imported.withLock { $0 }
+    }
+
+    private func makeFolder() throws -> URL {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder
+    }
+
+    func testImportedFileIsNotImportedAgainOnLaterScans() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let clip = folder.appendingPathComponent("clip.mov")
+        try Data([1]).write(to: clip)
+
+        let imported = try await importsAfterScans(6, in: folder)
+        XCTAssertEqual(imported, [clip])
+    }
+
+    func testRewrittenFileIsImportedAgain() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let clip = folder.appendingPathComponent("clip.mov")
+        try Data([1]).write(to: clip)
+
+        let imported = try await importsAfterScans(6, in: folder, onScan: { scan in
+            // Replace the file with a different recording after the first import.
+            if scan == 3 { try? Data([1, 2, 3]).write(to: clip) }
+        })
+        XCTAssertEqual(imported, [clip, clip])
+    }
+
+    func testFileQueuedByHandIsNotImportedAfterLeavingQueue() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let clip = folder.appendingPathComponent("clip.mov")
+        try Data([1]).write(to: clip)
+        let queued = OSAllocatedUnfairLock(initialState: true)
+
+        let imported = try await importsAfterScans(6, in: folder, protectedFiles: {
+            queued.withLock { $0 } ? [clip] : []
+        }, onScan: { scan in
+            if scan == 3 { queued.withLock { $0 = false } }
+        })
+        XCTAssertEqual(imported, [])
+    }
+
+    func testImportLedgerMatchesFingerprintAndExpiresAfterFileLeaves() {
+        var ledger = WatchFolderImportLedger()
+        let url = URL(fileURLWithPath: "/watch/clip.mov")
+        let date = Date(timeIntervalSince1970: 100)
+        let day: TimeInterval = 24 * 60 * 60
+        ledger.record(url, size: 10, modifiedAt: date, at: date)
+        XCTAssertTrue(ledger.contains(url, size: 10, modifiedAt: date))
+        XCTAssertFalse(ledger.contains(url, size: 11, modifiedAt: date))
+        XCTAssertFalse(ledger.contains(url, size: 10, modifiedAt: date.addingTimeInterval(1)))
+
+        // Still in the folder after ten days: refreshed, so a week's memory keeps it.
+        XCTAssertTrue(ledger.markSeen([url], at: date.addingTimeInterval(10 * day)))
+        XCTAssertFalse(ledger.expire(retention: 7 * day, now: date.addingTimeInterval(10 * day)))
+        XCTAssertTrue(ledger.contains(url, size: 10, modifiedAt: date))
+
+        // Gone for longer than the memory: forgotten.
+        XCTAssertTrue(ledger.expire(retention: 7 * day, now: date.addingTimeInterval(18 * day)))
+        XCTAssertFalse(ledger.contains(url, size: 10, modifiedAt: date))
+    }
+
+    func testImportHistoryRoundTripsRealModificationDates() throws {
+        let folder = try makeFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let clip = folder.appendingPathComponent("clip.mov")
+        try Data([1, 2]).write(to: clip)
+        let modified = try XCTUnwrap(clip.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
+        let store = WatchFolderImportHistoryStore(fileURL: folder.appendingPathComponent("history/ImportHistory.json"))
+
+        var ledger = WatchFolderImportLedger()
+        ledger.record(clip, size: 2, modifiedAt: modified, at: Date())
+        store.save(ledger)
+        XCTAssertTrue(store.load().contains(clip, size: 2, modifiedAt: modified))
+    }
+
+    func testImportHistorySurvivesNewMonitorAndCanBeForgotten() async throws {
+        let folder = try makeFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let clip = folder.appendingPathComponent("clip.mov")
+        try Data([1]).write(to: clip)
+        let store = WatchFolderImportHistoryStore(fileURL: folder.appendingPathComponent(".history.json"))
+
+        let first = try await importsAfterScans(3, in: folder, historyStore: store)
+        XCTAssertEqual(first, [clip])
+        let afterRelaunch = try await importsAfterScans(3, in: folder, historyStore: store)
+        XCTAssertEqual(afterRelaunch, [], "A relaunch must not re-import files still in the folder")
+
+        let afterForget = try await importsAfterScans(3, in: folder, historyStore: store, configure: { defaults in
+            WatchFolderImportHistoryStore.forgetAll(defaults: defaults, store: store)
+        })
+        XCTAssertEqual(afterForget, [clip])
+    }
+
+    func testSubfoldersAreImportedOnlyWhenEnabledAndSkipExcludedFolders() async throws {
+        let folder = try makeFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let card = folder.appendingPathComponent("Card 1/CLIPS", isDirectory: true)
+        let output = folder.appendingPathComponent("Converted", isDirectory: true)
+        try FileManager.default.createDirectory(at: card, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        let nested = card.appendingPathComponent("C0001.MP4")
+        try Data([1]).write(to: nested)
+        try Data([1]).write(to: output.appendingPathComponent("C0001_web.mp4"))
+
+        let flat = try await importsAfterScans(3, in: folder)
+        XCTAssertEqual(flat, [])
+
+        let recursive = try await importsAfterScans(3, in: folder, configure: { defaults in
+            defaults.set(true, forKey: AppConstants.watchFolderIncludeSubfoldersKey)
+        }, excludedFolders: { [output] })
+        XCTAssertEqual(recursive.map(\.standardizedFileURL), [nested.standardizedFileURL])
+    }
+
+    func testSettlingFilesAreReportedAsPending() async throws {
+        let folder = try makeFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try FileManager.default.createDirectory(at: folder.appendingPathComponent("Card"), withIntermediateDirectories: true)
+        let clip = folder.appendingPathComponent("Card/clip.mov")
+        try Data([1]).write(to: clip)
+        let reports = OSAllocatedUnfairLock(initialState: [[WatchFolderPendingFile]]())
+
+        let imported = try await importsAfterScans(3, in: folder, settlingInterval: 600, configure: { defaults in
+            defaults.set(true, forKey: AppConstants.watchFolderIncludeSubfoldersKey)
+        }, onPending: { files in reports.withLock { $0.append(files) } }, onScan: { scan in
+            if scan == 1 { try? Data([1, 2, 3]).write(to: clip) }
+        })
+
+        XCTAssertEqual(imported, [])
+        let states = reports.withLock { $0 }.compactMap(\.first).map(\.state)
+        XCTAssertEqual(states.first, .settling)
+        XCTAssertTrue(states.contains(.copying), "A file that grew between scans is shown as copying")
+        let lastPending = reports.withLock { $0 }.last { !$0.isEmpty }?.first
+        XCTAssertEqual(lastPending?.relativePath, "Card/clip.mov")
+        XCTAssertEqual(lastPending?.size, 3)
+        XCTAssertEqual(reports.withLock { $0 }.last, [], "Stopping clears the waiting list")
+    }
+
+    func testWakeSignalKeepsEarlySignalAndTimesOut() async {
+        let signal = WatchFolderWakeSignal()
+        await signal.signal()
+        let start = ContinuousClock.now
+        await signal.wait(timeout: .seconds(10))
+        XCTAssertLessThan(ContinuousClock.now - start, .seconds(1))
+        await signal.wait(timeout: .milliseconds(50))
+        XCTAssertLessThan(ContinuousClock.now - start, .seconds(2))
+    }
+
+    func testEventSourceReportsNewFiles() throws {
+        let folder = try makeFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let changed = expectation(description: "FSEvents reports the new file")
+        changed.assertForOverFulfill = false
+        let source = try XCTUnwrap(WatchFolderEventSource(path: folder.resolvingSymlinksInPath().path, latency: 0.1) {
+            changed.fulfill()
+        })
+        defer { source.stop() }
+        try Data([1]).write(to: folder.appendingPathComponent("clip.mov"))
+        wait(for: [changed], timeout: 10)
+    }
+
     func testLegacyCleanupGrantPausesTrashButImportsHealthyFilesAndResumesAfterRenewal() async throws {
         enum PollingFinished: Error { case finished }
         let name = "WatchFolderPollingTests.\(UUID().uuidString)"

@@ -284,6 +284,12 @@ enum AppConstants {
     static let defaultWatchFolderSettlingSeconds: TimeInterval = 10
     static let watchFolderSettlingSecondsValues = [5, 10, 15, 30, 60]
     static let watchFolderKeepAwakeKey = "watchFolderKeepAwake"
+    static let watchFolderIncludeSubfoldersKey = "watchFolderIncludeSubfolders"
+    static let watchFolderImportMemoryDaysKey = "watchFolderImportMemoryDays"
+    static let watchFolderImportMemoryDaysValues = [1, 3, 7, 14, 30, 90]
+    static let defaultWatchFolderImportMemoryDays = 7
+    /// Set when the user forgets imported files; running monitors clear their history.
+    static let watchFolderImportHistoryClearedAtKey = "watchFolderImportHistoryClearedAt"
     static let defaultWatchFolderKeepAwake = false
     static let previewCacheCleanupPolicyKey = "previewCacheCleanupPolicy"
     static let defaultPreviewCacheCleanupPolicyRaw = PreviewCacheCleanupPolicy.purgeOnLaunch.rawValue

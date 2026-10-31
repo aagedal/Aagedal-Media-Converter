@@ -227,16 +227,8 @@ struct MetadataExportView: View {
 
     @ViewBuilder
     private func c2paRows(_ c2pa: C2PAMetadata) -> some View {
-        if c2pa.hasSignature {
-            infoRow("Signature", value: "Present")
-        }
-        infoRow("Claim Generator Info Name", value: c2pa.claimGeneratorInfoName)
-        infoRow("Claim Generator", value: c2pa.claimGenerator)
-        infoRow("Actions Action", value: c2pa.actionsAction)
-        infoRow("Actions Digital Source Type", value: c2pa.actionsDigitalSourceType)
-        infoRow("Manifest Store", value: c2pa.manifestStore)
-        if let assertions = c2pa.assertions, !assertions.isEmpty {
-            infoRow("Assertions", value: assertions.joined(separator: ", "))
+        ForEach(C2PADisplayField.allCases, id: \.self) { field in
+            infoRow(field.label, value: c2pa.displayValue(for: field))
         }
     }
 

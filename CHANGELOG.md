@@ -28,6 +28,25 @@
 - The display no longer dims or sleeps during fullscreen playback of files played through MPV.
 - Typing a timecode for a file whose metadata is still loading no longer jumps to the start, and in and out points set in fullscreen apply to loop playback straight away.
 
+### Metadata window
+
+- Search fields and values with the new search field (⌘F). Matches are highlighted, and a matching stream keeps its header so you can tell which track a hit belongs to. Esc clears the search.
+- When comparing several files, Differences shows only the fields whose values differ.
+- Redesigned for readability: General, Video and Audio now come first, sections can be collapsed (remembered between launches), rows are striped, and value columns use the window's width instead of a fixed 200-point column. Files with several streams get a summary line per stream, such as "AAC · 2 ch · NOR". The window remembers its size and position.
+- Added fields that were read but never shown: dynamic range (SDR, HDR10, PQ, HLG, Dolby Vision), mastering display, content light level and Dolby Vision profile, rotation, embedded closed captions, audio track titles, default tracks, MXF channel labels, audio and subtitle durations, chapters, data tracks (timecode, metadata), attachments, MPEG-TS service names and Live Photo IDs. A Tracks row sums up the streams in each file.
+- Files with Content Credentials or HDR video show a badge under the file name.
+- Copy all metadata as text, or copy a single row from its context menu. Export JSON and Export PDF are back in the window's menu; they had been unreachable since metadata moved to its own window.
+- Camera metadata only appears for files that carry it.
+- Content Credentials (C2PA) are read in much more detail: who signed them (from the signing certificate, with issuer, algorithm, signing time and certificate expiry), the app or camera that made the claim, every action with the tool that performed it, the source type in plain words (e.g. "Digital Capture", "Created Using Generative AI"), ingredients, author and copyright, AI training and mining preferences, CAWG identity assertions, redactions, and the full edit history when a file passed through several apps. The signed thumbnail is shown too, and files that declare generative AI get a badge. Signatures are still not verified; the window links to verification services. JSON and PDF exports include the new fields.
+
+### Watch folder
+
+- Files removed from the queue are no longer imported again a few seconds later. The watch folder remembers what it has imported, across relaunches and turning Watch Mode off and on, for as long as a file stays in the folder and for a set time after it leaves (a week by default, adjustable in Settings). A file that is replaced or rewritten is imported again, and Forget Imported Files in Settings starts over.
+- New files are picked up as soon as they finish copying instead of on a fixed 5-second poll. The folder is watched with file-system events; folders on network drives, which don't report changes made from other computers, are still checked every 5 seconds.
+- Include subfolders imports files from folders inside the watch folder, such as copied camera cards. The output folder is skipped when it sits inside the watch folder.
+- A Waiting button appears next to Watch Mode while files are still copying. It lists each file with its size and whether it's copying, settling (with a countdown), being checked, or can't be read yet.
+- Files you add to the queue by hand from the watch folder, and outputs saved into the watch folder, are no longer picked up when they leave the queue, and automatic cleanup never moves a queued item's output to the Trash.
+
 # v.4.6.0
 
 ### Downloads

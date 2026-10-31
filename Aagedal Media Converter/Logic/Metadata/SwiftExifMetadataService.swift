@@ -92,21 +92,14 @@ actor SwiftExifMetadataService {
         // Only surface C2PA when the container actually carries a C2PA manifest.
         // Sony NRT camera XML (video.camera.userMeta*, video.camera.creationDate) is
         // *not* C2PA — previously it was routed here and produced false positives.
-        guard let manifest = video.c2pa?.activeManifest else { return nil }
+        guard let store = video.c2pa, let manifest = store.activeManifest else { return nil }
 
-        let firstActionAssertion = manifest.assertions.first { assertion in
-            assertion.label.hasPrefix("c2pa.actions")
-        }
-        let firstAction: C2PAAction? = {
-            guard let content = firstActionAssertion?.content,
-                  case .actions(let actions) = content else { return nil }
-            return actions.actions.first
-        }()
-
+        let details = C2PAManifestDetails(manifest)
+        let firstAction = details.actions.first
         let assertionLabels = manifest.assertions.map { $0.label }
         let hasSignature = !manifest.signature.signatureBytes.isEmpty
 
-        return C2PAMetadata(
+        var metadata = C2PAMetadata(
             hasContentCredentials: true,
             hasSignature: hasSignature,
             actionsAction: firstAction?.action,
@@ -115,6 +108,47 @@ actor SwiftExifMetadataService {
             claimGeneratorInfoName: manifest.claim.claimGeneratorInfo?.name,
             manifestStore: manifest.label,
             assertions: assertionLabels.isEmpty ? nil : assertionLabels
+        )
+        metadata.claimGeneratorVersion = manifest.claim.claimGeneratorInfo?.version
+        metadata.title = manifest.claim.title
+        metadata.format = manifest.claim.format
+        metadata.authors = details.authors.isEmpty ? nil : details.authors
+        metadata.copyright = details.copyright
+        metadata.actions = details.actions.isEmpty ? nil : details.actions
+        metadata.ingredients = details.ingredients.isEmpty ? nil : details.ingredients
+        metadata.trainingMining = details.trainingMining.isEmpty ? nil : details.trainingMining
+        metadata.hasIdentityAssertion = details.hasIdentityAssertion
+        metadata.redactionCount = details.redactionCount > 0 ? details.redactionCount : nil
+        metadata.claimThumbnail = details.claimThumbnail
+        metadata.ingredientThumbnail = details.ingredientThumbnail
+        if hasSignature {
+            metadata.signature = makeSignatureInfo(manifest.signature)
+        }
+        metadata.history = store.manifests.map { manifest in
+            let generator = manifest.claim.claimGeneratorInfo.map { info in
+                [info.name, info.version].compactMap { $0 }.joined(separator: " ")
+            } ?? manifest.claim.claimGenerator
+            let signer = C2PACertificateReader.details(fromChain: manifest.signature.certificateChain)
+            return C2PAManifestSummary(
+                label: manifest.label,
+                generator: generator.isEmpty ? nil : generator,
+                signer: signer.organization ?? signer.commonName,
+                actions: C2PAManifestDetails(manifest).actions.map(\.displayName)
+            )
+        }
+        return metadata
+    }
+
+    private static func makeSignatureInfo(_ signature: SwiftMediaMetadata.C2PASignature) -> C2PASignatureInfo {
+        let certificate = C2PACertificateReader.details(fromChain: signature.certificateChain)
+        return C2PASignatureInfo(
+            signer: certificate.commonName,
+            signerOrganization: certificate.organization,
+            issuer: certificate.issuer,
+            algorithm: signature.algorithm?.description,
+            timestamp: signature.timestamp.flatMap(C2PATimestampReader.signingTime(fromToken:)),
+            hasTimestamp: signature.timestamp?.isEmpty == false,
+            certificateExpiry: certificate.expiry
         )
     }
 
@@ -163,5 +197,69 @@ enum SwiftExifMetadataError: Error, LocalizedError {
         case .fileNotFound: return "File not found"
         case .readFailed(let msg): return "SwiftMediaMetadata read failed: \(msg)"
         }
+    }
+}
+
+/// Assertion contents of one manifest, collected in a single pass.
+private struct C2PAManifestDetails {
+    var actions: [C2PAActionInfo] = []
+    var ingredients: [C2PAIngredientInfo] = []
+    var authors: [String] = []
+    var copyright: String?
+    var trainingMining: [C2PATrainingPermission] = []
+    var hasIdentityAssertion = false
+    var redactionCount = 0
+    var claimThumbnail: Data?
+    var ingredientThumbnail: Data?
+
+    init(_ manifest: SwiftMediaMetadata.C2PAManifest) {
+        for assertion in manifest.assertions {
+            switch assertion.content {
+            case .actions(let box):
+                actions += box.actions.map {
+                    C2PAActionInfo(
+                        action: $0.action, softwareAgent: $0.softwareAgent,
+                        digitalSourceType: $0.digitalSourceType, description: $0.description
+                    )
+                }
+            case .ingredient(let ingredient):
+                ingredients.append(C2PAIngredientInfo(
+                    title: ingredient.title, format: ingredient.format, relationship: ingredient.relationship
+                ))
+            case .schemaOrgCreativeWork(let work):
+                authors += work.authors
+                copyright = copyright ?? work.copyrightNotice ?? work.copyrightHolder
+            case .json(let data) where assertion.label.hasPrefix("stds.schema-org.CreativeWork"):
+                // Older writers deliver CreativeWork as JSON rather than CBOR.
+                guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { break }
+                if let list = json["author"] as? [[String: Any]] {
+                    authors += list.compactMap { $0["name"] as? String }
+                } else if let single = json["author"] as? [String: Any], let name = single["name"] as? String {
+                    authors.append(name)
+                }
+                copyright = copyright ?? json["copyrightNotice"] as? String
+            case .iptc(let iptc):
+                authors += iptc.creators
+                copyright = copyright ?? iptc.rights
+            case .trainingMining(let declaration):
+                trainingMining += declaration.entries.map {
+                    C2PATrainingPermission(category: $0.category, use: $0.use, constraintInfo: $0.constraintInfo)
+                }
+            case .identityAssertion:
+                hasIdentityAssertion = true
+            case .redactions(let redactions):
+                redactionCount += redactions.redactions.count
+            case .thumbnail(let data, _):
+                if assertion.label.contains("ingredient") {
+                    ingredientThumbnail = ingredientThumbnail ?? data
+                } else {
+                    claimThumbnail = claimThumbnail ?? data
+                }
+            default:
+                break
+            }
+        }
+        var seen: Set<String> = []
+        authors = authors.filter { !$0.isEmpty && seen.insert($0).inserted }
     }
 }
