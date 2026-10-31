@@ -35,6 +35,9 @@ struct ImageSequenceConfig: Equatable, Sendable {
     /// Associated audio file URL (e.g., matching WAV alongside the image frames)
     var associatedAudioURL: URL? = nil
 
+    /// Whether frame numbers are missing between `startNumber` and `endNumber`.
+    var hasGaps = false
+
     /// Total frame count
     var frameCount: Int { endNumber - startNumber + 1 }
 

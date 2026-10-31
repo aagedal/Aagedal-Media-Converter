@@ -339,6 +339,38 @@ final class UntaggedColorPlanTests: XCTestCase {
         ))
     }
 
+    func testColorPlanSkipsHDRAndClassifiesRotatedSourcesByCodedSize() throws {
+        let proxyArgs = ["-i", "/in.mp4", "-vf", "scale=w='if(lte(iw,ih),540,-2)':h='if(lte(iw,ih),-2,540)'"]
+        XCTAssertNil(UntaggedColorPlan(
+            sourceColorSpace: nil, sourcePixelFormat: "yuv420p10le", sourceTransfer: "arib-std-b67",
+            sourceWidth: 1920, sourceHeight: 1080, sourcePixelAspectRatio: 1, arguments: proxyArgs
+        ), "HLG must not be retagged as BT.709")
+        XCTAssertNil(UntaggedColorPlan(
+            sourceColorSpace: nil, sourcePixelFormat: "yuv420p", sourcePrimaries: "bt2020",
+            sourceWidth: 1920, sourceHeight: 1080, sourcePixelAspectRatio: 1, arguments: proxyArgs
+        ))
+
+        // A 720×480 clip rotated to 480×720 is still SD to players; cropping it to an SD
+        // landscape output keeps the class, so nothing is retagged.
+        let cropArgs = ["-i", "/in.mp4", "-vf", "crop=480:270:0:225"]
+        XCTAssertNil(UntaggedColorPlan(
+            sourceColorSpace: nil, sourcePixelFormat: "yuv420p",
+            sourceWidth: 480, sourceHeight: 720, sourceCodedWidth: 720, sourceCodedHeight: 480,
+            sourcePixelAspectRatio: 1, arguments: cropArgs
+        ))
+        XCTAssertNotNil(UntaggedColorPlan(
+            sourceColorSpace: nil, sourcePixelFormat: "yuv420p",
+            sourceWidth: 480, sourceHeight: 720, sourcePixelAspectRatio: 1, arguments: cropArgs
+        ), "The oriented size alone would classify the source as HD")
+    }
+
+    func testImageSequenceFirstFramePathFillsTheFrameNumber() {
+        let plan = FFMPEGInputPlan.imageSequence(pattern: "/renders/100%/shot_%04d.png", frameRate: "24.000",
+                                                 startNumber: "87", audioPath: nil)
+        XCTAssertEqual(plan.imageSequenceFirstFramePath, "/renders/100%/shot_0087.png")
+        XCTAssertNil(FFMPEGInputPlan.file(URL(fileURLWithPath: "/in.mov")).imageSequenceFirstFramePath)
+    }
+
     func testVideoLoopCommandTagsUpscaledUntaggedSource() async throws {
         let stream = VideoMetadata.VideoStream(
             codec: "mpeg4", codecLongName: nil, profile: nil, width: 320, height: 180,

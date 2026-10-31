@@ -288,7 +288,7 @@ struct ComparisonMetadataView: View {
             HStack(spacing: 6) {
                 if let c2pa = c2paMetadata(for: item), c2pa.hasContentCredentials {
                     badge(String(localized: "Content Credentials"), systemImage: "checkmark.seal.fill", tint: .green)
-                    if let sourceType = c2pa.digitalSourceType, C2PAFormatting.isGenerativeAI(sourceType) {
+                    if c2pa.declaresGenerativeAI {
                         badge(String(localized: "Generative AI"), systemImage: "sparkles", tint: .purple)
                     }
                 }

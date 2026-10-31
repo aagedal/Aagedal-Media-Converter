@@ -75,7 +75,7 @@
 
 - New waveform styles: Halo, Orb, Ridgeline and LED Meter, with gradient palettes and a style preview in Settings.
 - New per-preset option, Export matte sidecar when alpha would be lost (off by default). When a source with transparency is exported to a format that can't keep it, a black-and-white `_matte` file is written next to the export, with the same trim, crop and size. Transparent waveforms get one too.
-- ProRes 4444 and 4444 XQ keep transparency in the file itself.
+- ProRes 4444 and 4444 XQ keep transparency in the file itself, including from PNG, TIFF and other image sequences with alpha. Opaque ProRes 4444 sources are no longer treated as transparent, so they don't gain an empty alpha channel or a white matte, and the metadata window no longer lists them with an alpha channel.
 
 ### MKV
 

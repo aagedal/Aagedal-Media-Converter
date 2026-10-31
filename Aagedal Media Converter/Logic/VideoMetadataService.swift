@@ -542,11 +542,49 @@ actor VideoMetadataService {
             return try await inFlight.value
         }
         let task = Task.detached {
-            try await SwiftExifMediaProbe.readVideo(url)
+            await Self.correctingProRes4444Alpha(in: try await SwiftExifMediaProbe.readVideo(url), url: url)
         }
         inFlightRawVideo[url] = task
         defer { inFlightRawVideo.removeValue(forKey: url) }
         return try await task.value
+    }
+
+    /// SwiftMediaMetadata reports every ProRes 4444 / XQ stream as `yuva444p12le`, but alpha is
+    /// optional in 4444 and most camera and grading masters are opaque. The QuickTime sample
+    /// description's depth tells them apart: 32 carries alpha, 24 doesn't.
+    private static func correctingProRes4444Alpha(
+        in meta: SwiftMediaMetadata.VideoMetadata, url: URL
+    ) async -> SwiftMediaMetadata.VideoMetadata {
+        let candidates = meta.videoStreams.indices.filter {
+            meta.videoStreams[$0].codec == "prores"
+                && meta.videoStreams[$0].pixelFormat?.lowercased() == "yuva444p12le"
+        }
+        guard !candidates.isEmpty else { return meta }
+
+        let asset = AVURLAsset(url: url)
+        guard let tracks = try? await asset.loadTracks(withMediaType: .video) else { return meta }
+        var depths: [Int] = []
+        for track in tracks {
+            guard let descriptions = try? await track.load(.formatDescriptions) else { continue }
+            for description in descriptions {
+                let subtype = CMFormatDescriptionGetMediaSubType(description)
+                guard subtype == kCMVideoCodecType_AppleProRes4444
+                    || subtype == kCMVideoCodecType_AppleProRes4444XQ else { continue }
+                if let depth = CMFormatDescriptionGetExtension(
+                    description, extensionKey: kCMFormatDescriptionExtension_Depth
+                ) as? NSNumber {
+                    depths.append(depth.intValue)
+                }
+            }
+        }
+        // Only clear the flag when every 4444 track reports an opaque depth.
+        guard !depths.isEmpty, depths.allSatisfy({ $0 == 24 }) else { return meta }
+
+        var corrected = meta
+        for index in candidates {
+            corrected.videoStreams[index].pixelFormat = "yuv444p12le"
+        }
+        return corrected
     }
 
     private func performFetchEssentialInfo(for url: URL) async throws -> EssentialVideoInfo {
@@ -1038,7 +1076,6 @@ private func chromaSubsamplingFromPixelFormat(_ pixelFormat: String) -> String? 
 private func hasAlphaChannel(pixelFormat: String) -> Bool {
     let format = pixelFormat.lowercased()
 
-    if format.contains("4444") { return true }
     if format.contains("rgba") || format.contains("bgra") ||
        format.contains("argb") || format.contains("abgr") { return true }
     if format.hasPrefix("yuva") { return true }
