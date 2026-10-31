@@ -411,7 +411,12 @@ struct FullscreenPlayerView: View {
             }
 
             if let player = controller.player {
-                FullscreenAVPlayerView(player: player)
+                if itemState.hasAlphaVideo {
+                    // Sized to the picture, not the screen, so letterbox bars stay black.
+                    CheckerboardBackground()
+                        .aspectRatio(aspectRatio, contentMode: .fit)
+                }
+                FullscreenAVPlayerView(player: player, showsTransparency: itemState.hasAlphaVideo)
                     .opacity(itemState.hasVideoStream ? 1 : 0.001)
             } else if controller.useMPV, let mpvPlayer = controller.mpvPlayer {
                 FullscreenMPVView(player: mpvPlayer)
@@ -420,6 +425,7 @@ struct FullscreenPlayerView: View {
                 Image(nsImage: frame)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
+                    .background(CheckerboardBackground())
             } else if itemState.hasVideoStream {
                 Color.black
             } else {
@@ -1207,18 +1213,21 @@ struct FullscreenPlayerView: View {
 
 private struct FullscreenAVPlayerView: NSViewRepresentable {
     let player: AVPlayer
-    
-    func makeNSView(context: Context) -> AVPlayerView {
-        let playerView = AVPlayerView()
+    let showsTransparency: Bool
+
+    func makeNSView(context: Context) -> TransparentAVPlayerView {
+        let playerView = TransparentAVPlayerView()
         playerView.player = player
+        playerView.showsTransparency = showsTransparency
         playerView.controlsStyle = .none
         playerView.videoGravity = .resizeAspect
         playerView.allowsVideoFrameAnalysis = false
         return playerView
     }
-    
-    func updateNSView(_ nsView: AVPlayerView, context: Context) {
+
+    func updateNSView(_ nsView: TransparentAVPlayerView, context: Context) {
         nsView.player = player
+        nsView.showsTransparency = showsTransparency
     }
 }
 

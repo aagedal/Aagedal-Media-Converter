@@ -114,6 +114,7 @@ struct PreviewPlayerContent: View {
                         player: player,
                         controller: controller,
                         showsPlaybackControls: showsPlaybackControls,
+                        showsTransparency: item.hasAlphaVideo,
                         keyHandler: keyHandler
                     )
                     .aspectRatio(playerAspectRatio, contentMode: .fit)
@@ -335,22 +336,24 @@ struct PreviewPlayerContent: View {
 }
 
 private struct PlayerContainerView: NSViewRepresentable {
-    typealias NSViewType = AVPlayerView
+    typealias NSViewType = TransparentAVPlayerView
 
     let player: AVPlayer
     let controller: PreviewPlayerController
     let showsPlaybackControls: Bool
+    let showsTransparency: Bool
     let keyHandler: (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool
 
-    func makeNSView(context: Context) -> AVPlayerView {
-        let playerView = AVPlayerView()
+    func makeNSView(context: Context) -> TransparentAVPlayerView {
+        let playerView = TransparentAVPlayerView()
         configure(playerView)
         context.coordinator.attach(to: playerView, controller: controller)
         return playerView
     }
 
-    func updateNSView(_ nsView: AVPlayerView, context: Context) {
+    func updateNSView(_ nsView: TransparentAVPlayerView, context: Context) {
         nsView.player = player
+        nsView.showsTransparency = showsTransparency
         nsView.controlsStyle = showsPlaybackControls ? .floating : .none
         nsView.showsFullScreenToggleButton = showsPlaybackControls
         nsView.showsFrameSteppingButtons = showsPlaybackControls
@@ -362,7 +365,7 @@ private struct PlayerContainerView: NSViewRepresentable {
         Coordinator(keyHandler: keyHandler)
     }
 
-    private func configure(_ playerView: AVPlayerView) {
+    private func configure(_ playerView: TransparentAVPlayerView) {
         playerView.controlsStyle = showsPlaybackControls ? .floating : .none
         playerView.showsFullScreenToggleButton = showsPlaybackControls
         playerView.showsFrameSteppingButtons = showsPlaybackControls
@@ -371,6 +374,7 @@ private struct PlayerContainerView: NSViewRepresentable {
         playerView.videoGravity = .resizeAspect
         playerView.allowsVideoFrameAnalysis = false
         playerView.player = player
+        playerView.showsTransparency = showsTransparency
         // Make background transparent so checkerboard shows through
         playerView.wantsLayer = true
         playerView.layer?.backgroundColor = NSColor.clear.cgColor

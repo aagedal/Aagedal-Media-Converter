@@ -104,9 +104,9 @@ struct WaveformSettingsView: View {
     var body: some View {
         Form {
             previewSection
+            rendererSection
             defaultsSection
             outputSection
-            rendererSection
             colorsSection
             resetSection
         }
@@ -138,6 +138,42 @@ struct WaveformSettingsView: View {
                     Text("Live preview is available for the Swift engine only.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+
+                LabeledContent("Engine") {
+                    Picker("", selection: selectedRenderingEngine) {
+                        ForEach(WaveformRenderingEngine.allCases) { engine in
+                            Text(LocalizedStringKey(engine.displayName)).tag(engine)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(maxWidth: 200)
+                    .help("Swift renders frequency visualizers natively (capsules, bars, halo, ridgeline and more). FFmpeg uses classic waveform filters.")
+                }
+
+                LabeledContent("Style") {
+                    if isSwiftEngine {
+                        Picker("", selection: selectedSwiftStyle) {
+                            ForEach(SwiftWaveformStyle.allCases) { style in
+                                Text(LocalizedStringKey(style.displayName)).tag(style)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(maxWidth: 200)
+                        .help("Choose the visual appearance for the native Swift waveform renderer.")
+                    } else {
+                        Picker("", selection: selectedFFmpegStyle) {
+                            ForEach(WaveformStyle.allCases) { style in
+                                Text(LocalizedStringKey(style.displayName)).tag(style)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(maxWidth: 200)
+                        .help("Choose the visual appearance used when rendering waveform videos (FFmpeg engine only).")
+                    }
                 }
             }
             .padding(8)
@@ -209,34 +245,12 @@ struct WaveformSettingsView: View {
         }
     }
 
+    /// Swift-engine tuning; the engine and style pickers live with the preview.
+    @ViewBuilder
     private var rendererSection: some View {
-        Section(header: Text("Renderer")) {
-            VStack(alignment: .leading, spacing: 8) {
-                LabeledContent("Engine") {
-                    Picker("", selection: selectedRenderingEngine) {
-                        ForEach(WaveformRenderingEngine.allCases) { engine in
-                            Text(LocalizedStringKey(engine.displayName)).tag(engine)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .frame(maxWidth: 200)
-                    .help("Swift renders frequency visualizers natively (capsules, bars, halo, ridgeline and more). FFmpeg uses classic waveform filters.")
-                }
-
-                if isSwiftEngine {
-                    LabeledContent("Style") {
-                        Picker("", selection: selectedSwiftStyle) {
-                            ForEach(SwiftWaveformStyle.allCases) { style in
-                                Text(LocalizedStringKey(style.displayName)).tag(style)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(maxWidth: 200)
-                        .help("Choose the visual appearance for the native Swift waveform renderer.")
-                    }
-
+        if isSwiftEngine {
+            Section(header: Text("Renderer")) {
+                VStack(alignment: .leading, spacing: 8) {
                     LabeledContent("Bands") {
                         Picker("", selection: $waveformBandCount) {
                             ForEach([16, 24, 32, 48, 64], id: \.self) { count in
@@ -272,21 +286,9 @@ struct WaveformSettingsView: View {
                         }
                         .help("Controls transparency of the waveform over background images. Lower values let the background show through.")
                     }
-                } else {
-                    LabeledContent("Style") {
-                        Picker("", selection: selectedFFmpegStyle) {
-                            ForEach(WaveformStyle.allCases) { style in
-                                Text(LocalizedStringKey(style.displayName)).tag(style)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(maxWidth: 200)
-                        .help("Choose the visual appearance used when rendering waveform videos (FFmpeg engine only).")
-                    }
                 }
+                .padding(8)
             }
-            .padding(8)
         }
     }
 

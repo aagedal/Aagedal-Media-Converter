@@ -170,7 +170,9 @@ struct PlayheadTrimTimeline: View {
 }
 
 /// Reports mouse-down, drag and mouse-up x positions in its own coordinates.
-private struct TimelineMouseTracker: NSViewRepresentable {
+/// Use instead of a SwiftUI DragGesture on timelines: AppKit drops key-down events
+/// while a DragGesture is active, so I/O and other shortcuts would be lost mid-drag.
+struct TimelineMouseTracker: NSViewRepresentable {
     let began: (CGFloat) -> Void
     let moved: (CGFloat) -> Void
     let ended: (CGFloat) -> Void

@@ -1187,6 +1187,11 @@ struct VideoItem: Identifiable, Equatable, Sendable {
         return raw
     }
 
+    /// Whether the main video stream carries transparency (e.g. ProRes 4444 with alpha).
+    var hasAlphaVideo: Bool {
+        metadata?.primaryVideoStream?.hasAlpha == true
+    }
+
     var videoDisplayAspectRatio: Double? {
         if let ratioValue = metadata?.primaryVideoStream?.displayAspectRatio?.doubleValue {
             return ratioValue

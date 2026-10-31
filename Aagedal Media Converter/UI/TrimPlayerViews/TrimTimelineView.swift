@@ -1205,50 +1205,55 @@ private struct TimelineScrubLayer: View {
 
     var body: some View {
         GeometryReader { geometry in
-            Rectangle()
-                .fill(Color.clear)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            guard duration > 0 else { return }
-                            let width = geometry.size.width
-                            let clickTime = timeForPosition(value.location.x, width: width)
-                            let mode = dragMode ?? beginDrag(at: value.startLocation.x, width: width)
-
-                            switch mode {
-                            case .ignored:
-                                return
-                            case .scrub:
-                                seekThrottle.seek(clickTime, using: onSeek)
-                            case .rangeSelect(let anchor):
-                                selectRange(from: anchor, to: clickTime)
-                                seekThrottle.seek(editor.snap(clickTime), using: onSeek)
-                            case .rangeSlide(let start, let end, let initialClick):
-                                let range = editor.slid(start: start, end: end, by: clickTime - initialClick)
-                                setRange(start: range.start, end: range.end)
-                                seekThrottle.seek(clickTime, using: onSeek)
-                            }
-                        }
-                        .onEnded { value in
-                            defer { dragMode = nil }
-                            guard let mode = dragMode else { return }
-                            if case .ignored = mode { return }
-
-                            // Include the release location even when the last update was throttled.
-                            let releaseTime = timeForPosition(value.location.x, width: geometry.size.width)
-                            if case .rangeSelect(let anchor) = mode {
-                                selectRange(from: anchor, to: releaseTime)
-                            }
-                            seekThrottle.seek(releaseTime, using: onSeek)
-                            seekThrottle.flush()
-                            onEditingChanged(false)
-                        }
-                )
+            // AppKit mouse handling rather than a SwiftUI DragGesture, so I/O and
+            // other key shortcuts still arrive while the playhead is being dragged.
+            TimelineMouseTracker(
+                began: { x in
+                    guard duration > 0 else { return }
+                    let mode = beginDrag(at: x, width: geometry.size.width)
+                    dragChanged(to: x, width: geometry.size.width, mode: mode)
+                },
+                moved: { x in dragChanged(to: x, width: geometry.size.width) },
+                ended: { x in dragEnded(at: x, width: geometry.size.width) }
+            )
         }
         .onDisappear {
             seekThrottle.cancel()
         }
+    }
+
+    private func dragChanged(to x: CGFloat, width: CGFloat, mode: DragMode? = nil) {
+        guard duration > 0, let mode = mode ?? dragMode else { return }
+        let clickTime = timeForPosition(x, width: width)
+
+        switch mode {
+        case .ignored:
+            return
+        case .scrub:
+            seekThrottle.seek(clickTime, using: onSeek)
+        case .rangeSelect(let anchor):
+            selectRange(from: anchor, to: clickTime)
+            seekThrottle.seek(editor.snap(clickTime), using: onSeek)
+        case .rangeSlide(let start, let end, let initialClick):
+            let range = editor.slid(start: start, end: end, by: clickTime - initialClick)
+            setRange(start: range.start, end: range.end)
+            seekThrottle.seek(clickTime, using: onSeek)
+        }
+    }
+
+    private func dragEnded(at x: CGFloat, width: CGFloat) {
+        defer { dragMode = nil }
+        guard let mode = dragMode else { return }
+        if case .ignored = mode { return }
+
+        // Include the release location even when the last update was throttled.
+        let releaseTime = timeForPosition(x, width: width)
+        if case .rangeSelect(let anchor) = mode {
+            selectRange(from: anchor, to: releaseTime)
+        }
+        seekThrottle.seek(releaseTime, using: onSeek)
+        seekThrottle.flush()
+        onEditingChanged(false)
     }
 
     private func beginDrag(at startX: CGFloat, width: CGFloat) -> DragMode {
