@@ -9,7 +9,6 @@
 
 import SwiftUI
 import AppKit
-import AVKit
 import OSLog
 
 struct PreviewPlayerView: View {
@@ -463,107 +462,5 @@ struct PreviewPlayerView: View {
         default:
             return false
         }
-    }
-}
-
-// MARK: - Player Container
-
-private struct PlayerContainerView: NSViewRepresentable {
-    let player: AVPlayer
-    let controller: PreviewPlayerController
-    let showsPlaybackControls: Bool
-    let keyHandler: (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool
-
-    func makeNSView(context: Context) -> ShortcutAwarePlayerView {
-        let view = ShortcutAwarePlayerView()
-        view.configure(
-            player: player,
-            controller: controller,
-            showsPlaybackControls: showsPlaybackControls,
-            keyHandler: keyHandler
-        )
-        return view
-    }
-
-    func updateNSView(_ nsView: ShortcutAwarePlayerView, context: Context) {
-        nsView.update(player: player, showsPlaybackControls: showsPlaybackControls, keyHandler: keyHandler)
-    }
-}
-
-private final class ShortcutAwarePlayerView: AVPlayerView {
-    private var keyHandler: ((String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool)?
-
-    func configure(
-        player: AVPlayer,
-        controller: PreviewPlayerController,
-        showsPlaybackControls: Bool,
-        keyHandler: @escaping (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool
-    ) {
-        self.keyHandler = keyHandler
-        controlsStyle = showsPlaybackControls ? .inline : .none
-        updatesNowPlayingInfoCenter = false
-        showsFullScreenToggleButton = showsPlaybackControls
-        showsFrameSteppingButtons = showsPlaybackControls
-        showsSharingServiceButton = false
-        showsTimecodes = showsPlaybackControls
-        videoGravity = .resizeAspect
-        allowsVideoFrameAnalysis = false
-        self.player = player
-        // Make background transparent so checkerboard shows through
-        wantsLayer = true
-        layer?.backgroundColor = NSColor.clear.cgColor
-
-        Task { @MainActor in
-            controller.playerView = self
-        }
-    }
-
-    func update(player: AVPlayer, showsPlaybackControls: Bool, keyHandler: @escaping (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool) {
-        self.keyHandler = keyHandler
-        if self.player !== player {
-            self.player = player
-        }
-        
-        // Update controls visibility
-        controlsStyle = showsPlaybackControls ? .inline : .none
-        showsFullScreenToggleButton = showsPlaybackControls
-        showsFrameSteppingButtons = showsPlaybackControls
-        showsTimecodes = showsPlaybackControls
-    }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-
-        guard let window else { return }
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
-        window.makeFirstResponder(self)
-    }
-
-    override var acceptsFirstResponder: Bool { true }
-
-    override func keyDown(with event: NSEvent) {
-        guard let characters = event.charactersIgnoringModifiers, !characters.isEmpty else {
-            super.keyDown(with: event)
-            return
-        }
-
-        if keyHandler?(characters, event.modifierFlags, event.specialKey) == true {
-            return
-        }
-
-        super.keyDown(with: event)
-    }
-
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        guard let characters = event.charactersIgnoringModifiers, !characters.isEmpty else {
-            return super.performKeyEquivalent(with: event)
-        }
-
-        if keyHandler?(characters, event.modifierFlags, event.specialKey) == true {
-            return true
-        }
-
-        return super.performKeyEquivalent(with: event)
     }
 }

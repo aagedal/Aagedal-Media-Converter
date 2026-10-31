@@ -15,6 +15,7 @@
 - Setting an in-point after the out-point (I), or an out-point before the in-point (O), now clears the other point instead of leaving an empty range.
 - Shift-dragging the range keeps its length exactly, and Option-dragging a handle stays centered when one side reaches the start or end of the file.
 - Dragging trim handles sends fewer seeks to the player, which keeps MPV previews responsive. The drag mode (scrub, ⌘ range select, ⇧ slide) is chosen when you press the mouse button and no longer changes if you press or release a key mid-drag; ⇧-dragging outside the range now scrubs.
+- I and O (and the other playback shortcuts) work while you drag the playhead, so you can set in and out points mid-scrub. Previously key presses were dropped until the mouse button was released.
 
 ### Fullscreen player
 
@@ -74,6 +75,8 @@
 ### Waveforms and alpha
 
 - New waveform styles: Halo, Orb, Ridgeline and LED Meter, with gradient palettes and a style preview in Settings.
+- In Settings › Audio Waveform, the Engine and Style pickers sit directly under the preview, followed by Bands, Distribution and Opacity, so you can compare styles without scrolling.
+- Video with an alpha channel, such as transparent ProRes 4444 waveform exports, plays over a checkerboard in the Trim view and the fullscreen player instead of black. In fullscreen the checkerboard covers only the picture, so letterbox bars stay black.
 - New per-preset option, Export matte sidecar when alpha would be lost (off by default). When a source with transparency is exported to a format that can't keep it, a black-and-white `_matte` file is written next to the export, with the same trim, crop and size. Transparent waveforms get one too.
 - ProRes 4444 and 4444 XQ keep transparency in the file itself, including from PNG, TIFF and other image sequences with alpha. Opaque ProRes 4444 sources are no longer treated as transparent, so they don't gain an empty alpha channel or a white matte, and the metadata window no longer lists them with an alpha channel.
 
