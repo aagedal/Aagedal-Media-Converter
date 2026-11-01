@@ -106,11 +106,11 @@
       "identity": "swiftmediametadata",
       "path": "SwiftPackages/swiftmediametadata",
       "sourceURL": "https://github.com/aagedal/SwiftMediaMetadata.git",
-      "revision": "9cb98a4068b76cf6edf5766bb6e0f6d16cfa02d5",
+      "revision": "af70dc7af0108c15e991c684e038ce05723c6faf",
       "license": "GPL-3.0-only AND CC-BY-4.0",
       "licenseFile": "Licenses/swiftmediametadata-LICENSE.txt",
       "requiredSourceComponents": [
-        "SwiftMediaMetadata 3.1.1"
+        "SwiftMediaMetadata 3.1.3"
       ]
     }
   ],
@@ -128,10 +128,10 @@
       "sha256": "21bfed7e825222d29eb98eb778431b4f53df007794e4af19b16744f24387e908"
     },
     {
-      "component": "SwiftMediaMetadata 3.1.1",
-      "path": "build/attribution/swiftmediametadata-3.1.1-source.tar.gz",
-      "bytes": 1498318,
-      "sha256": "341a4ba651eacc5e8252bd831c746b4a3ede0c139cec09e13f21cb420a7b33b6"
+      "component": "SwiftMediaMetadata 3.1.3",
+      "path": "build/attribution/swiftmediametadata-3.1.3-source.tar.gz",
+      "bytes": 1503257,
+      "sha256": "c543dcf59ee828e0bd682753048284ba603e1ea320f9c68ca45de4c30148ae69"
     },
     {
       "component": "rclone",
@@ -1313,7 +1313,7 @@
     {
       "path": "Licenses/geonames-LICENSE.txt",
       "bytes": 769,
-      "sha256": "32a7493cd0629143705a35639362108f4173c2884e943a1278f42e74f2ab76ad"
+      "sha256": "32c88284efae9db6b5fb25851544c78eccffbc88daec9ca68d5cd663d597cd69"
     },
     {
       "path": "Licenses/mpv-LICENSE.txt",

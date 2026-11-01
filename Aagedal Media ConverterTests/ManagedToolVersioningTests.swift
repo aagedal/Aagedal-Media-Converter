@@ -379,7 +379,12 @@ final class ManagedToolServiceTests: XCTestCase {
         try writeExecutable("#!/bin/sh\necho yt-dlp-rs \(AppConstants.bundledYTDLPRSVersion)\n", to: bundled)
         let service = YTDLPUpdateService(managedStore: store, bundledYTDLPRSPathProvider: { bundled.path })
 
+        // Off by default while yt-dlp-rs is in beta.
         var path = await service.resolveYTDLPRSPath()
+        XCTAssertNil(path)
+        UserDefaults.standard.set(true, forKey: AppConstants.ytdlpRSEnabledKey)
+
+        path = await service.resolveYTDLPRSPath()
         XCTAssertEqual(path, bundled.path)
 
         // An older download never replaces the bundled baseline.
