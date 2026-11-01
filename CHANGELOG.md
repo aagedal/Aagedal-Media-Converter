@@ -104,6 +104,17 @@
 - The Dock icon shows the same overall progress as the main window, including Shortcuts and agent jobs, and no longer flickers between files.
 - The progress bar shows an estimate for the whole queue next to the overall percentage, and labels the per-file estimate as This file.
 
+### MXF merges
+
+- Stream Copy merges of MXF clips into MXF keep the camera metadata. They are joined with bmxtranswrap instead of FFmpeg, which rewrote the picture descriptor and dropped the ANC track, so Resolve lost the S-Log3/S-Gamut3 colour space, the XAVC codec name and the camera fields. The merged file keeps the first clip's start timecode and maker name, and Sony clips get a merged `<name>M01.XML` beside the output with camera model, serial and lens, the total duration and a timecode entry per clip. If bmx can't join the clips, or would drop a track, the merge falls back to FFmpeg as before.
+- Trimmed MXF merges can keep camera metadata too, with “Keep camera metadata in trimmed MXF merges” in Encoding Groups settings (off by default). Each clip is first copied to a temporary MXF, so it needs about as much free space as the merged output. Trimmed Long GOP clips (XAVC Long GOP, XDCAM MPEG-2), video formats bmx can't copy (such as DNxHR) and merges without enough free space use FFmpeg instead, and the row says why.
+- The camera card import dialog shows the real output extension for Stream Copy.
+
+### Uploads
+
+- Uploads can send sidecar files beside the main file, with one switch per format in Upload settings: Sony `M01.XML` camera metadata, subtitles (.srt) and the clip-marker EDL from merges. All are off by default.
+- When subtitles are uploaded or embedded, the upload waits until they are written. Previously it could read the output while subtitle embedding was replacing it.
+
 ### Other fixes
 
 - Folders can be imported by dropping them on the queue or a group, or choosing them with Import. The media files inside are added, including from subfolders, and image sequences are found in any subfolder; the Import panel used to find only image sequences, and dropped folders were ignored. Hidden files and packages such as apps and libraries are skipped, and a sequence's soundtrack isn't added again as a separate file. A few files are inspected at a time, so a large folder no longer starts a metadata probe for every file at once.

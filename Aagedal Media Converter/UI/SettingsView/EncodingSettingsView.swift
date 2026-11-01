@@ -17,6 +17,11 @@ struct EncodingSettingsView: View {
     @AppStorage(AppConstants.exportStitchMarkersKey)
     private var exportStitchMarkers = AppConstants.exportStitchMarkersDefault
 
+    @AppStorage(AppConstants.nativeMXFTrimmedMergeKey)
+    private var nativeMXFTrimmedMerge = AppConstants.nativeMXFTrimmedMergeDefault
+
+    @State private var temporaryFreeSpace: Int64?
+
     private let presetManager = PresetManager.shared
 
     private var defaultGroupPresetBinding: Binding<ExportPreset> {
@@ -32,6 +37,15 @@ struct EncodingSettingsView: View {
                 Toggle("Export timeline markers", isOn: $exportStitchMarkers)
                 Text("Save cuts and marked notes in a Resolve marker EDL beside stitched files and embed chapters in MOV, MP4, M4V, and MKV. Cut titles include the source timecode at each clip’s trimmed in-point when available. If source chapters exist, ask before replacing them.")
                     .font(.caption).foregroundStyle(.secondary)
+            }
+            Section("MXF Merges") {
+                Toggle("Keep camera metadata in trimmed MXF merges", isOn: $nativeMXFTrimmedMerge)
+                Text("Stream Copy merges of MXF clips keep camera metadata such as S-Log3 colour space, lens and per-frame exposure, so DaVinci Resolve can read it. When clips are trimmed, every clip is first copied to a temporary MXF, which takes a little longer and needs free space for about the size of the merged file, twice that when the output goes to the same disk. Trimmed Long GOP clips, video that bmx can't copy (such as DNxHR) and merges without enough free space fall back to FFmpeg without camera metadata.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if let temporaryFreeSpace {
+                    Text("Free space for temporary files: \(ByteCountFormatter.string(fromByteCount: temporaryFreeSpace, countStyle: .file))")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             Section(header: Text("New Group Defaults")) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -70,6 +84,11 @@ struct EncodingSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .task {
+            let values = try? FileManager.default.temporaryDirectory
+                .resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+            temporaryFreeSpace = values?.volumeAvailableCapacityForImportantUsage
+        }
     }
 }
 

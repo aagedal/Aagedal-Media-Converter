@@ -149442,6 +149442,1166 @@
           }
         }
       }
+    },
+    "MXF Merges" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MXF-sammenslåinger"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MXF-Zusammenführungen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uniones de MXF"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fusions MXF"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unioni MXF"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MXF の結合"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MXF 병합"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mesclagens de MXF"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MXF 合并"
+          }
+        }
+      }
+    },
+    "Keep camera metadata in trimmed MXF merges" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Behold kamerametadata i trimmede MXF-sammenslåinger"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kamerametadaten in getrimmten MXF-Zusammenführungen beibehalten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conservar los metadatos de cámara en uniones de MXF recortadas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserver les métadonnées de caméra dans les fusions MXF découpées"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantieni i metadati della videocamera nelle unioni MXF tagliate"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "トリミングした MXF の結合でカメラメタデータを保持"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "트리밍한 MXF 병합에서 카메라 메타데이터 유지"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manter os metadados da câmera em mesclagens de MXF cortadas"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在剪裁后的 MXF 合并中保留摄像机元数据"
+          }
+        }
+      }
+    },
+    "Stream Copy merges of MXF clips keep camera metadata such as S-Log3 colour space, lens and per-frame exposure, so DaVinci Resolve can read it. When clips are trimmed, every clip is first copied to a temporary MXF, which takes a little longer and needs free space for about the size of the merged file, twice that when the output goes to the same disk. Trimmed Long GOP clips, video that bmx can't copy (such as DNxHR) and merges without enough free space fall back to FFmpeg without camera metadata." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sammenslåinger av MXF-klipp med strømkopiering beholder kamerametadata som S-Log3-fargerom, objektiv og eksponering per bilde, slik at DaVinci Resolve kan lese dem. Når klippene er trimmet, kopieres hvert klipp først til en midlertidig MXF-fil. Det tar litt lengre tid og krever ledig plass omtrent like stor som den sammenslåtte filen, dobbelt så mye når utdataene havner på samme disk. Trimmede Long GOP-klipp, video som bmx ikke kan kopiere (for eksempel DNxHR), og sammenslåinger uten nok ledig plass slås i stedet sammen med FFmpeg, uten kamerametadata."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beim Zusammenführen von MXF-Clips per Stream-Kopie bleiben Kamerametadaten wie der S-Log3-Farbraum, das Objektiv und die Belichtung pro Bild erhalten, sodass DaVinci Resolve sie lesen kann. Bei getrimmten Clips wird jeder Clip zuerst in eine temporäre MXF-Datei kopiert. Das dauert etwas länger und benötigt freien Speicherplatz in etwa der Größe der zusammengeführten Datei, doppelt so viel, wenn die Ausgabe auf demselben Laufwerk liegt. Getrimmte Long-GOP-Clips, Video, das bmx nicht kopieren kann (z. B. DNxHR), und Zusammenführungen ohne genügend freien Speicherplatz werden stattdessen mit FFmpeg ohne Kamerametadaten zusammengeführt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las uniones de clips MXF con copia de flujos conservan los metadatos de cámara, como el espacio de color S-Log3, el objetivo y la exposición de cada fotograma, para que DaVinci Resolve pueda leerlos. Cuando los clips están recortados, cada clip se copia primero a un MXF temporal, lo que tarda un poco más y requiere espacio libre de aproximadamente el tamaño del archivo unido, el doble si la salida va al mismo disco. Los clips Long GOP recortados, el vídeo que bmx no puede copiar (como DNxHR) y las uniones sin espacio libre suficiente se unen con FFmpeg, sin metadatos de cámara."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les fusions de clips MXF en copie des flux conservent les métadonnées de caméra, comme l’espace colorimétrique S-Log3, l’objectif et l’exposition de chaque image, afin que DaVinci Resolve puisse les lire. Lorsque les clips sont découpés, chaque clip est d’abord copié dans un fichier MXF temporaire, ce qui prend un peu plus de temps et nécessite un espace libre équivalent à la taille du fichier fusionné, le double si la sortie se trouve sur le même disque. Les clips Long GOP découpés, les vidéos que bmx ne peut pas copier (comme le DNxHR) et les fusions sans espace libre suffisant sont fusionnés avec FFmpeg, sans métadonnées de caméra."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le unioni di clip MXF con copia dei flussi mantengono i metadati della videocamera, come lo spazio colore S-Log3, l’obiettivo e l’esposizione di ogni fotogramma, così DaVinci Resolve può leggerli. Quando le clip sono tagliate, ogni clip viene prima copiata in un file MXF temporaneo: l’operazione richiede un po’ più di tempo e spazio libero pari circa alle dimensioni del file unito, il doppio se l’output si trova sullo stesso disco. Le clip Long GOP tagliate, i video che bmx non può copiare (come DNxHR) e le unioni senza spazio libero sufficiente vengono unite con FFmpeg, senza metadati della videocamera."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ストリームコピーで MXF クリップを結合すると、S-Log3 の色空間、レンズ、フレームごとの露出などのカメラメタデータが保持され、DaVinci Resolve で読み取れます。クリップをトリミングした場合は、各クリップをまず一時的な MXF にコピーします。少し時間がかかり、結合後のファイルとほぼ同じ空き容量が必要です（出力先が同じディスクの場合はその 2 倍）。トリミングした Long GOP クリップ、bmx でコピーできない映像（DNxHR など）、空き容量が足りない結合は、カメラメタデータなしで FFmpeg により結合されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "스트림 복사로 MXF 클립을 병합하면 S-Log3 색 공간, 렌즈, 프레임별 노출 같은 카메라 메타데이터가 유지되어 DaVinci Resolve에서 읽을 수 있습니다. 클립을 트리밍한 경우 각 클립을 먼저 임시 MXF로 복사하므로 시간이 조금 더 걸리고 병합된 파일 크기 정도의 여유 공간이 필요하며, 출력이 같은 디스크에 저장되면 그 두 배가 필요합니다. 트리밍한 Long GOP 클립, bmx가 복사할 수 없는 비디오(예: DNxHR), 여유 공간이 부족한 병합은 카메라 메타데이터 없이 FFmpeg로 병합됩니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As mesclagens de clipes MXF com cópia de fluxos mantêm os metadados da câmera, como o espaço de cor S-Log3, a lente e a exposição de cada quadro, para que o DaVinci Resolve possa lê-los. Quando os clipes estão cortados, cada clipe é primeiro copiado para um MXF temporário, o que leva um pouco mais de tempo e exige espaço livre de aproximadamente o tamanho do arquivo mesclado, o dobro quando a saída vai para o mesmo disco. Clipes Long GOP cortados, vídeos que o bmx não consegue copiar (como DNxHR) e mesclagens sem espaço livre suficiente são mesclados com o FFmpeg, sem metadados da câmera."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以流复制方式合并 MXF 剪辑时，会保留 S-Log3 色彩空间、镜头和逐帧曝光等摄像机元数据，以便 DaVinci Resolve 读取。剪辑经过剪裁时，每个剪辑会先复制为临时 MXF，这会稍慢一些，并需要大约与合并文件同样大小的可用空间；如果输出位于同一磁盘，则需要两倍空间。剪裁后的 Long GOP 剪辑、bmx 无法复制的视频（如 DNxHR）以及可用空间不足的合并将改用 FFmpeg 合并，不保留摄像机元数据。"
+          }
+        }
+      }
+    },
+    "Free space for temporary files: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ledig plass for midlertidige filer: %@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Freier Speicherplatz für temporäre Dateien: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espacio libre para archivos temporales: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espace libre pour les fichiers temporaires : %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spazio libero per i file temporanei: %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一時ファイル用の空き容量: %@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "임시 파일용 여유 공간: %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espaço livre para arquivos temporários: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "临时文件的可用空间：%@"
+          }
+        }
+      }
+    },
+    "Camera metadata was not kept because clips are trimmed. Turn on “Keep camera metadata in trimmed MXF merges” in the Encoding Groups settings to keep it." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kamerametadata ble ikke beholdt fordi klippene er trimmet. Slå på «Behold kamerametadata i trimmede MXF-sammenslåinger» i innstillingene for Kodingsgrupper for å beholde dem."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Kamerametadaten wurden nicht beibehalten, weil die Clips getrimmt sind. Aktivieren Sie „Kamerametadaten in getrimmten MXF-Zusammenführungen beibehalten“ in den Einstellungen unter „Codierungsgruppen“, um sie zu behalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se conservaron los metadatos de cámara porque los clips están recortados. Activa «Conservar los metadatos de cámara en uniones de MXF recortadas» en los ajustes de Grupos de codificación para conservarlos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les métadonnées de caméra n’ont pas été conservées, car les clips sont découpés. Activez « Conserver les métadonnées de caméra dans les fusions MXF découpées » dans les réglages Groupes d’encodage pour les conserver."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I metadati della videocamera non sono stati mantenuti perché le clip sono tagliate. Attiva “Mantieni i metadati della videocamera nelle unioni MXF tagliate” nelle impostazioni Gruppi di codifica per mantenerli."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "クリップがトリミングされているため、カメラメタデータは保持されませんでした。保持するには、「エンコーディンググループ」設定で「トリミングした MXF の結合でカメラメタデータを保持」をオンにしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "클립이 트리밍되어 카메라 메타데이터가 유지되지 않았습니다. 유지하려면 인코딩 그룹 설정에서 ‘트리밍한 MXF 병합에서 카메라 메타데이터 유지’를 켜세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os metadados da câmera não foram mantidos porque os clipes estão cortados. Ative “Manter os metadados da câmera em mesclagens de MXF cortadas” nos ajustes de Grupos de codificação para mantê-los."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "由于剪辑经过剪裁，未保留摄像机元数据。若要保留，请在“编码组”设置中打开“在剪裁后的 MXF 合并中保留摄像机元数据”。"
+          }
+        }
+      }
+    },
+    "Could not read the MXF tracks of %@." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kunne ikke lese MXF-sporene i %@."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die MXF-Spuren von %@ konnten nicht gelesen werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron leer las pistas MXF de %@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de lire les pistes MXF de %@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile leggere le tracce MXF di %@."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ の MXF トラックを読み取れませんでした。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@의 MXF 트랙을 읽을 수 없습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível ler as faixas MXF de %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取 %@ 的 MXF 轨道。"
+          }
+        }
+      }
+    },
+    "Keeping camera metadata in this trimmed merge needs about %@ of free space, but only %@ is available." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For å beholde kamerametadata i denne trimmede sammenslåingen trengs omtrent %@ ledig plass, men bare %@ er tilgjengelig."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Um die Kamerametadaten in dieser getrimmten Zusammenführung zu behalten, werden etwa %@ freier Speicherplatz benötigt, aber nur %@ sind verfügbar."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Para conservar los metadatos de cámara en esta unión recortada se necesitan unos %@ de espacio libre, pero solo hay %@ disponibles."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserver les métadonnées de caméra dans cette fusion découpée nécessite environ %@ d’espace libre, mais seuls %@ sont disponibles."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Per mantenere i metadati della videocamera in questa unione tagliata servono circa %@ di spazio libero, ma ne sono disponibili solo %@."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このトリミングした結合でカメラメタデータを保持するには約 %@ の空き容量が必要ですが、使用できるのは %@ だけです。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 트리밍한 병합에서 카메라 메타데이터를 유지하려면 약 %@의 여유 공간이 필요하지만 %@만 사용할 수 있습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Para manter os metadados da câmera nesta mesclagem cortada, são necessários cerca de %@ de espaço livre, mas só há %@ disponíveis."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要在这次剪裁后的合并中保留摄像机元数据，大约需要 %@ 的可用空间，但只有 %@ 可用。"
+          }
+        }
+      }
+    },
+    "Merged with FFmpeg instead, without camera metadata." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slått sammen med FFmpeg i stedet, uten kamerametadata."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stattdessen mit FFmpeg ohne Kamerametadaten zusammengeführt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se unió con FFmpeg, sin metadatos de cámara."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fusionné avec FFmpeg à la place, sans métadonnées de caméra."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unito con FFmpeg, senza metadati della videocamera."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "代わりに FFmpeg で結合しました（カメラメタデータなし）。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "대신 FFmpeg로 병합했습니다(카메라 메타데이터 없음)."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mesclado com o FFmpeg, sem metadados da câmera."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已改用 FFmpeg 合并，未保留摄像机元数据。"
+          }
+        }
+      }
+    },
+    "The trim of %@ is shorter than one frame." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trimmingen av %@ er kortere enn ett bilde."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Trim von %@ ist kürzer als ein Bild."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El recorte de %@ dura menos de un fotograma."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le découpage de %@ dure moins d’une image."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il taglio di %@ è più breve di un fotogramma."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ のトリミング範囲が 1 フレームより短くなっています。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@의 트리밍 구간이 한 프레임보다 짧습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O corte de %@ é menor que um quadro."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 的剪裁范围短于一帧。"
+          }
+        }
+      }
+    },
+    "%@ uses Long GOP video, which can only be cut on keyframes." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ bruker Long GOP-video, som bare kan klippes ved nøkkelbilder."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ verwendet Long-GOP-Video, das sich nur an Keyframes schneiden lässt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ usa vídeo Long GOP, que solo se puede cortar en fotogramas clave."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ utilise une vidéo Long GOP, qui ne peut être coupée que sur des images clés."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ usa video Long GOP, che si può tagliare solo sui fotogrammi chiave."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ は Long GOP 映像のため、キーフレームでしかカットできません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@은(는) Long GOP 비디오라서 키프레임에서만 자를 수 있습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ usa vídeo Long GOP, que só pode ser cortado em quadros-chave."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 使用 Long GOP 视频，只能在关键帧处剪切。"
+          }
+        }
+      }
+    },
+    "bmx can't copy the video format of %@." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx kan ikke kopiere videoformatet i %@."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx kann das Videoformat von %@ nicht kopieren."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx no puede copiar el formato de vídeo de %@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx ne peut pas copier le format vidéo de %@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx non può copiare il formato video di %@."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx は %@ の映像形式をコピーできません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx는 %@의 비디오 형식을 복사할 수 없습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O bmx não consegue copiar o formato de vídeo de %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx 无法复制 %@ 的视频格式。"
+          }
+        }
+      }
+    },
+    "bmx could not copy every track of %@." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx kunne ikke kopiere alle sporene i %@."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx konnte nicht alle Spuren von %@ kopieren."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx no pudo copiar todas las pistas de %@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx n’a pas pu copier toutes les pistes de %@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx non è riuscito a copiare tutte le tracce di %@."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx は %@ のすべてのトラックをコピーできませんでした。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx가 %@의 모든 트랙을 복사하지 못했습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O bmx não conseguiu copiar todas as faixas de %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx 未能复制 %@ 的所有轨道。"
+          }
+        }
+      }
+    },
+    "bmx could not rewrap %@." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx kunne ikke pakke om %@."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx konnte %@ nicht neu verpacken."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx no pudo reempaquetar %@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx n’a pas pu réencapsuler %@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx non è riuscito a reincapsulare %@."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx は %@ を再ラップできませんでした。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx가 %@을(를) 다시 래핑하지 못했습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O bmx não conseguiu reempacotar %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx 无法重新封装 %@。"
+          }
+        }
+      }
+    },
+    "DaVinci Resolve reads camera model, serial number and lens from this file." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DaVinci Resolve leser kameramodell, serienummer og objektiv fra denne filen."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DaVinci Resolve liest Kameramodell, Seriennummer und Objektiv aus dieser Datei."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DaVinci Resolve lee de este archivo el modelo de cámara, el número de serie y el objetivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DaVinci Resolve lit le modèle de caméra, le numéro de série et l’objectif dans ce fichier."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DaVinci Resolve legge da questo file il modello della videocamera, il numero di serie e l’obiettivo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DaVinci Resolve はこのファイルからカメラの機種、シリアル番号、レンズを読み取ります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DaVinci Resolve는 이 파일에서 카메라 모델, 일련번호, 렌즈 정보를 읽습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O DaVinci Resolve lê o modelo da câmera, o número de série e a lente deste arquivo."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DaVinci Resolve 会从此文件读取摄像机型号、序列号和镜头。"
+          }
+        }
+      }
+    },
+    "Sidecar Files" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sidefiler"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sidecar-Dateien"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archivos sidecar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fichiers side-car"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File sidecar"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サイドカーファイル"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "사이드카 파일"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arquivos sidecar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "边车文件"
+          }
+        }
+      }
+    },
+    "Upload these files beside the main file when they exist. They keep their file names." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last opp disse filene ved siden av hovedfilen når de finnes. De beholder filnavnene sine."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Dateien werden neben der Hauptdatei hochgeladen, wenn sie vorhanden sind. Sie behalten ihre Dateinamen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sube estos archivos junto al archivo principal cuando existan. Conservan sus nombres de archivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Envoie ces fichiers à côté du fichier principal lorsqu’ils existent. Ils conservent leur nom."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carica questi file accanto al file principale quando esistono. Mantengono il proprio nome."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "これらのファイルが存在する場合は、メインファイルと一緒にアップロードします。ファイル名はそのまま保持されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 파일들이 있으면 기본 파일과 함께 업로드합니다. 파일 이름은 그대로 유지됩니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Envia estes arquivos junto do arquivo principal quando existirem. Eles mantêm os nomes de arquivo."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "如果这些文件存在，则与主文件一起上传，并保留原文件名。"
+          }
+        }
+      }
+    },
+    "When subtitles are generated after conversion, the upload waits until they are finished." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Når undertekster lages etter konverteringen, venter opplastingen til de er ferdige."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn nach der Konvertierung Untertitel erzeugt werden, wartet der Upload, bis sie fertig sind."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Si se generan subtítulos después de la conversión, la subida espera a que terminen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lorsque des sous-titres sont générés après la conversion, l’envoi attend qu’ils soient terminés."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se i sottotitoli vengono generati dopo la conversione, il caricamento attende che siano pronti."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "変換後に字幕を生成する場合は、字幕が完成するまでアップロードを待機します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "변환 후 자막을 생성하는 경우 자막이 완성될 때까지 업로드를 기다립니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quando as legendas são geradas após a conversão, o envio aguarda até que fiquem prontas."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "如果在转换后生成字幕，上传会等到字幕生成完成。"
+          }
+        }
+      }
+    },
+    "Camera metadata XML (Sony M01.XML)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XML med kamerametadata (Sony M01.XML)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kamerametadaten-XML (Sony M01.XML)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XML de metadatos de cámara (Sony M01.XML)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XML de métadonnées de caméra (Sony M01.XML)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XML dei metadati della videocamera (Sony M01.XML)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "カメラメタデータ XML（Sony M01.XML）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "카메라 메타데이터 XML(Sony M01.XML)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XML de metadados da câmera (Sony M01.XML)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "摄像机元数据 XML（Sony M01.XML）"
+          }
+        }
+      }
+    },
+    "Clip-marker EDL (.cuts.edl)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EDL med klippmarkører (.cuts.edl)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clipmarker-EDL (.cuts.edl)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EDL de marcadores de clip (.cuts.edl)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EDL des marqueurs de clips (.cuts.edl)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EDL dei marcatori di clip (.cuts.edl)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "クリップマーカー EDL（.cuts.edl）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "클립 마커 EDL(.cuts.edl)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EDL de marcadores de clipe (.cuts.edl)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "剪辑标记 EDL（.cuts.edl）"
+          }
+        }
+      }
+    },
+    "Subtitles (.srt)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Undertekster (.srt)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Untertitel (.srt)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subtítulos (.srt)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sous-titres (.srt)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sottotitoli (.srt)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字幕（.srt）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "자막(.srt)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legendas (.srt)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字幕（.srt）"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

@@ -781,6 +781,14 @@ actor FFMPEGConverter {
         let conversionID = UUID()
         activeConversionID = conversionID
 
+        if let nativeMerge = request.nativeMXFMerge,
+           await runNativeMXFMerge(
+               nativeMerge, request: request, conversionID: conversionID,
+               progressUpdate: progressUpdate, completion: completion
+           ) {
+            return
+        }
+
         if preset == .imfJ2K || preset == .imfProRes {
             let preflight = dependencyPreflight
             let audioStreamProvider = preflightAudioStreamProvider
@@ -4995,6 +5003,104 @@ actor FFMPEGConverter {
         currentAV2HelperTask = nil
         currentAV2HelperTaskID = nil
         currentAV2PipelineTasks.removeAll()
+        return true
+    }
+
+    /// Rewraps a Stream Copy MXF merge with bmxtranswrap. Returns false when bmx rejected
+    /// the inputs or dropped a track kind, so the caller continues with FFmpeg's concat path.
+    private func runNativeMXFMerge(
+        _ merge: NativeMXFMergeRequest,
+        request: ConversionRequest,
+        conversionID: UUID,
+        progressUpdate: @escaping @Sendable (Double, String?) -> Void,
+        completion: @escaping @Sendable (Bool, String?) -> Void
+    ) async -> Bool {
+        let outputURL = Self.outputReservations.reserveUnique(
+            request.outputURL.appendingPathExtension("mxf"),
+            notOverwriting: request.inputURL,
+            owner: conversionID
+        )
+        FileSafetyUtils.registerCreatedFile(outputURL)
+        request.outputURLResolved?(outputURL)
+        let finish: @Sendable (Bool, String?) -> Void = { success, reason in
+            let ownsOutput = Self.outputReservations.release(outputURL, owner: conversionID)
+            if ownsOutput {
+                if success { FileSafetyUtils.markCompletedOutput(outputURL) } else { Self.cleanupFailedOutput(at: outputURL) }
+            }
+            completion(success, reason)
+        }
+
+        guard await activateBMXOperationIfActiveConversion(conversionID) else {
+            finish(false, "Conversion cancelled")
+            return true
+        }
+
+        var xmlURL: URL?
+        if let xml = merge.nonRealTimeMetaXML {
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("nrt_\(conversionID.uuidString).xml")
+            if (try? xml.write(to: url, atomically: true, encoding: .utf8)) != nil { xmlURL = url }
+        }
+        defer { if let xmlURL { Self.cleanupTempFile(at: xmlURL, label: "NonRealTimeMeta XML") } }
+
+        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
+        // Trimmed segments are rewrapped copies that already start at the trimmed timecode.
+        let firstSegmentInfo: String? = if let first = merge.segmentURLs.first { await bmxService.getMXFInfo(url: first) } else { nil }
+        progressUpdate(0, "Merging MXF…")
+        let result = await bmxService.mergeMXFSequence(
+            inputURLs: merge.segmentURLs,
+            outputURL: outputURL,
+            arguments: NativeMXFMerge.mergeArguments(
+                companyName: merge.companyName,
+                appVersion: appVersion,
+                startTimecode: firstSegmentInfo.flatMap(NativeMXFMerge.startTimecode(fromMXFInfo:)),
+                embeddedXMLURL: xmlURL
+            ),
+            operationID: conversionID,
+            progress: { value in progressUpdate(value, "Merging MXF…") }
+        )
+        let lateCancellation = await bmxService.finishCancellationTracking(operationID: conversionID)
+        clearActiveBMXOperation(if: conversionID)
+        if result.cancelled || lateCancellation || activeConversionID != conversionID {
+            if activeConversionID == conversionID { activeConversionID = nil }
+            finish(false, "Conversion cancelled")
+            return true
+        }
+        var failure: String?
+        if !result.success {
+            failure = result.stderr
+        } else {
+            // bmx's sequence reader silently omits tracks that differ between inputs.
+            let inputKinds = firstSegmentInfo.map(NativeMXFMerge.essenceKinds(fromMXFInfo:)) ?? []
+            let outputKinds = await bmxService.getMXFInfo(url: outputURL).map(NativeMXFMerge.essenceKinds(fromMXFInfo:)) ?? []
+            if inputKinds.isEmpty || Set(inputKinds) != Set(outputKinds) || outputKinds.count < inputKinds.count {
+                failure = "Merged tracks \(outputKinds) do not match source tracks \(inputKinds)"
+            }
+        }
+        // cancelConversion() clears activeConversionID while the probes above run.
+        guard activeConversionID == conversionID else {
+            finish(false, "Conversion cancelled")
+            return true
+        }
+        if let failure {
+            Self.logger.error("bmxtranswrap MXF merge rejected: \(failure, privacy: .public)")
+            _ = Self.outputReservations.release(outputURL, owner: conversionID)
+            Self.cleanupFailedOutput(at: outputURL)
+            Self.logger.warning("Falling back to FFmpeg concat for MXF merge")
+            return false
+        }
+        activeConversionID = nil
+
+        if let xml = merge.nonRealTimeMetaXML {
+            let sidecar = NativeMXFMerge.sidecarURL(for: outputURL)
+            do {
+                try xml.write(to: sidecar, atomically: true, encoding: .utf8)
+                FileSafetyUtils.registerCreatedFile(sidecar)
+            } catch {
+                Self.logger.error("Failed to write NonRealTimeMeta sidecar: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        progressUpdate(1, nil)
+        finish(true, nil)
         return true
     }
 

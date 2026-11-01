@@ -118,6 +118,7 @@ struct VideoGroupImportContext: Sendable {
 struct ConversionPreparationSettings: Sendable {
     let ignoreStitchTimecodeTrimOffset: Bool
     let exportStitchMarkers: Bool
+    let nativeMXFTrimmedMerge: Bool
     let av2: AV2Settings?
     let dcp: DCPSettings?
     let imf: IMFSettings?
@@ -135,6 +136,8 @@ struct ConversionPreparationSettings: Sendable {
     init(preset: ExportPreset, defaults: UserDefaults = .standard) {
         ignoreStitchTimecodeTrimOffset = defaults.bool(forKey: AppConstants.ignoreStitchTimecodeTrimOffsetKey)
         exportStitchMarkers = defaults.object(forKey: AppConstants.exportStitchMarkersKey) as? Bool ?? AppConstants.exportStitchMarkersDefault
+        nativeMXFTrimmedMerge = defaults.object(forKey: AppConstants.nativeMXFTrimmedMergeKey) as? Bool
+            ?? AppConstants.nativeMXFTrimmedMergeDefault
         av2 = preset == .av2 ? AV2Settings(defaults: defaults) : nil
         dcp = preset == .dcp ? DCPSettings(defaults: defaults) : nil
         imf = (preset == .imfJ2K || preset == .imfProRes) ? IMFSettings(defaults: defaults) : nil
