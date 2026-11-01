@@ -1,3 +1,5 @@
+import os
+import SwiftUI
 import XCTest
 @testable import Aagedal_Media_Converter
 
@@ -738,5 +740,172 @@ final class SourceAudioMeterTests: XCTestCase {
         for index in 0..<8 {
             XCTAssertEqual(levels[index], 20 * log10(Float(index + 1) / 10), accuracy: 0.01)
         }
+    }
+}
+
+final class TrimmedStreamCopyMergeTests: XCTestCase {
+    /// A trimmed Stream Copy merge keeps every audio track, and trimming an open GOP
+    /// leaves no backwards timestamps in an FFmpeg-written MPEG-2 MXF. Frames and
+    /// samples at the joins must match the sources.
+    func testTrimmedStreamCopyMXFMergeKeepsAudioTracksAndMonotonicTimestamps() async throws {
+        guard let ffmpeg = BinaryPathResolver.ffmpegPath else { throw XCTSkip("FFmpeg is not bundled") }
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TrimmedStreamCopyMerge-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+
+        // XDCAM HD422-style MPEG-2, open GOP of 12 with two B-frames, 3 s at 25 fps,
+        // and two mono tracks of distinct seeded noise so every sample run is unique.
+        let clips = try (0..<3).map { index in
+            let url = folder.appendingPathComponent("C00\(index).mxf")
+            let result = try Self.run(ffmpeg, [
+                "-f", "lavfi", "-i", "testsrc2=size=1920x1080:rate=25",
+                "-f", "lavfi", "-i", "anoisesrc=sample_rate=48000:seed=\(index * 2 + 1)",
+                "-f", "lavfi", "-i", "anoisesrc=sample_rate=48000:seed=\(index * 2 + 2)",
+                "-map", "0:v", "-map", "1:a", "-map", "2:a", "-t", "3",
+                "-c:v", "mpeg2video", "-pix_fmt", "yuv422p", "-b:v", "50M", "-minrate", "50M", "-maxrate", "50M",
+                "-bufsize", "17825792", "-g", "12", "-bf", "2",
+                "-c:a", "pcm_s24le", "-y", url.path,
+            ])
+            XCTAssertEqual(result.status, 0, result.errors)
+            return url
+        }
+        let output = folder.appendingPathComponent("out", isDirectory: true)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        let suite = "TrimmedStreamCopyMerge.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(false, forKey: AppConstants.exportStitchMarkersKey)
+        defaults.set(false, forKey: AppConstants.saveNextToOriginalKey)
+        let settings = ConversionPreparationSettings(preset: .streamCopy, defaults: defaults)
+        let manager = ConversionManager(preparationSettingsProvider: { _ in settings })
+        var items = clips.map { url in
+            VideoItem(url: url, name: url.lastPathComponent, size: 0, duration: "--:--", status: .waiting,
+                      progress: 0, eta: nil, outputURL: nil)
+        }
+        for index in items.indices { items[index].includeDateTag = false }
+        // Both start trims fall between keyframes, so their GOPs begin with leading B-frames.
+        items[0].trimStart = 17.0 / 25
+        items[0].trimEnd = 63.0 / 25
+        items[2].trimStart = 41.0 / 25
+        let storage = OSAllocatedUnfairLock(initialState: items)
+
+        await manager.convertGroup(
+            items: Self.binding(storage), outputFolder: output.path, preset: .streamCopy,
+            concatEnabled: true, groupName: "trimmed",
+            transcriptionEnabled: false, uploadEnabled: false, analyticsEnabled: false
+        )
+        for _ in 0..<600 where storage.withLock({ $0.contains { $0.status == .converting || $0.status == .waiting } }) {
+            try await Task.sleep(for: .milliseconds(200))
+        }
+        let finished = storage.withLock { $0 }
+        XCTAssertEqual(finished.map(\.status), [.done, .done, .done], finished.compactMap(\.conversionError).joined(separator: "; "))
+        let merged = try XCTUnwrap(finished.first?.outputURL)
+
+        let decode = try Self.run(ffmpeg, ["-i", merged.path, "-map", "0:v", "-map", "0:a", "-f", "null", "-"])
+        XCTAssertEqual(decode.status, 0)
+        XCTAssertEqual(decode.errors, "", "Decoding the merge must not report non-monotonic timestamps")
+        let probe = try Self.run(ffmpeg, ["-v", "info", "-i", merged.path])
+        XCTAssertEqual(probe.errors.components(separatedBy: "Audio: pcm_s24le").count - 1, 2, probe.errors)
+
+        // Each clip contributes one contiguous run of its own frames and samples; the
+        // untrimmed middle clip contributes all of them.
+        let frames = try Self.frameHashes(ffmpeg, merged)
+        let sourceFrames = try clips.map { try Self.frameHashes(ffmpeg, $0) }
+        let frameRuns = Self.contiguousRuns(of: frames, in: sourceFrames, window: 1)
+        XCTAssertEqual(frameRuns.map(\.count).reduce(0, +), frames.count, "\(frameRuns)")
+        XCTAssertEqual(frameRuns.count, 3)
+        XCTAssertEqual(frameRuns.dropFirst().first?.start, 0)
+        XCTAssertEqual(frameRuns.dropFirst().first?.count, sourceFrames[1].count)
+        for track in 0..<2 {
+            let samples = try Self.samples(ffmpeg, merged, track: track)
+            let sourceSamples = try clips.map { try Self.samples(ffmpeg, $0, track: track) }
+            let runs = Self.contiguousRuns(of: samples, in: sourceSamples, window: 16)
+            XCTAssertEqual(runs.map(\.count).reduce(0, +), samples.count, "track \(track): \(runs)")
+            XCTAssertEqual(runs.count, 3, "track \(track)")
+            XCTAssertEqual(runs.dropFirst().first?.count, sourceSamples[1].count, "track \(track)")
+        }
+    }
+
+    func testRenumberingLeavesNonMPEG2AndClosedGOPMXFUntouched() throws {
+        guard let ffmpeg = BinaryPathResolver.ffmpegPath else { throw XCTSkip("FFmpeg is not bundled") }
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MXFRenumbering-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        for (name, codec) in [("dnx.mxf", ["-c:v", "dnxhd", "-profile:v", "dnxhr_sq", "-pix_fmt", "yuv422p"]),
+                              ("mpeg2.mxf", ["-c:v", "mpeg2video", "-pix_fmt", "yuv422p", "-b:v", "50M", "-g", "12", "-bf", "2"])] {
+            let url = folder.appendingPathComponent(name)
+            let result = try Self.run(ffmpeg, ["-f", "lavfi", "-i", "testsrc2=size=1920x1080:rate=25", "-t", "1"] + codec + ["-y", url.path])
+            XCTAssertEqual(result.status, 0, result.errors)
+            let before = try Data(contentsOf: url)
+            XCTAssertFalse(try MXFMPEG2LeadingGOPRenumbering.renumberFirstGOP(at: url), name)
+            XCTAssertEqual(try Data(contentsOf: url), before, name)
+        }
+    }
+
+    private struct Run: CustomStringConvertible {
+        let source: Int
+        let start: Int
+        let count: Int
+        var description: String { "source \(source) from \(start) × \(count)" }
+    }
+
+    /// Splits `merged` into maximal runs that each continue one source in order. A run
+    /// starts where the source matches the next `window` values, which must not be
+    /// longer than the shortest run.
+    private static func contiguousRuns<T: Equatable>(of merged: [T], in sources: [[T]], window: Int) -> [Run] {
+        var runs: [Run] = []
+        var position = 0
+        for (index, source) in sources.enumerated() where position < merged.count {
+            let window = merged[position..<min(position + window, merged.count)]
+            guard let start = source.indices.first(where: { source[$0...].starts(with: window) }) else { break }
+            var count = 0
+            while position + count < merged.count, start + count < source.count,
+                  merged[position + count] == source[start + count] {
+                count += 1
+            }
+            runs.append(Run(source: index, start: start, count: count))
+            position += count
+        }
+        return runs
+    }
+
+    private static func frameHashes(_ ffmpeg: String, _ url: URL) throws -> [String] {
+        let result = try run(ffmpeg, ["-i", url.path, "-map", "0:v:0", "-f", "framemd5", "-"])
+        return String(decoding: result.output, as: UTF8.self).split(separator: "\n")
+            .filter { !$0.hasPrefix("#") }
+            .compactMap { $0.split(separator: ",").last.map { $0.trimmingCharacters(in: .whitespaces) } }
+    }
+
+    private static func samples(_ ffmpeg: String, _ url: URL, track: Int) throws -> [Int32] {
+        let data = try run(ffmpeg, ["-i", url.path, "-map", "0:a:\(track)", "-f", "s32le", "-"]).output
+        return data.withUnsafeBytes { Array($0.bindMemory(to: Int32.self)) }
+    }
+
+    private static func run(_ ffmpeg: String, _ arguments: [String]) throws -> (status: Int32, output: Data, errors: String) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: ffmpeg)
+        process.arguments = ["-nostdin", "-v", "error"] + arguments
+        let output = Pipe(), errors = Pipe()
+        process.standardOutput = output
+        process.standardError = errors
+        try process.run()
+        // Drain stderr concurrently so neither pipe can fill and stall FFmpeg.
+        let errorData = OSAllocatedUnfairLock(initialState: Data())
+        let drained = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            let data = errors.fileHandleForReading.readDataToEndOfFile()
+            errorData.withLock { $0 = data }
+            drained.signal()
+        }
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        drained.wait()
+        return (process.terminationStatus, data, String(decoding: errorData.withLock { $0 }, as: UTF8.self))
+    }
+
+    private nonisolated static func binding(_ storage: OSAllocatedUnfairLock<[VideoItem]>) -> Binding<[VideoItem]> {
+        Binding(get: { storage.withLock { $0 } }, set: { value in storage.withLock { $0 = value } })
     }
 }

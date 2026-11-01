@@ -112,6 +112,8 @@
 - Dragging only unsupported files onto the empty queue shows the "can't drop" cursor instead of highlighting the queue and then doing nothing.
 - The Force Merge dialog shows exact frame rates (29.97 fps instead of 30 fps), so you can tell which clips need frame-rate conversion.
 - Double-clicking a preset in Select Preset (⌘P) applies it.
+- Stream Copy merges with trimmed clips keep every audio track. Each trimmed clip used to keep only its first audio track, so merging clips with two or more tracks gave a file with one.
+- Stream Copy merges of trimmed XDCAM and other Long GOP MPEG-2 MXF files no longer have timestamps running backwards at the start of a trimmed clip. Decoders could show frames out of order or skip frames there.
 - Settings › Shortcuts and KeyboardShortcuts.md list the new fullscreen trim, mute and volume keys, metadata search, slow J/L playback, clearing both trim points (⌥X) and Shift-dragging in crop mode.
 - Text added in this release, including the metadata window, watch folder, DCP validator, waveform and live-recording options, is translated into all supported languages, as are the timecode window and the update banner. VoiceOver labels the remaining icon-only buttons in Select Preset, the update banner and the Force Merge dialog.
 
