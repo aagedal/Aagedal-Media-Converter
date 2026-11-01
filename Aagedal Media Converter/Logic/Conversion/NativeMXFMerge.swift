@@ -101,6 +101,12 @@ enum NativeMXFMerge {
         return ((parts[0] * 60 + parts[1]) * 60 + parts[2]) * base + parts[3]
     }
 
+    /// The file-source start timecode as written, e.g. `17:10:21:24` (`;` before the
+    /// frames for drop-frame), in the form bmxtranswrap's `-y` accepts.
+    static func startTimecode(fromMXFInfo info: String) -> String? {
+        firstMatch(#"file_source\s*:\s*(\d{2}:\d{2}:\d{2}[:;]\d{2})"#, in: info)
+    }
+
     /// The frames bmx actually kept. Long GOP trims move out to whole GOPs (see
     /// `segmentRewrapArguments`), so the start and length are read back from the copy.
     static func keptRange(requested: FrameRange, sourceInfo: String, segmentInfo: String) -> FrameRange {
@@ -185,6 +191,7 @@ enum NativeMXFMerge {
     static func mergeArguments(
         companyName: String,
         appVersion: String,
+        startTimecode: String? = nil,
         embeddedXMLURL: URL?
     ) -> [String] {
         var arguments = [
@@ -194,6 +201,8 @@ enum NativeMXFMerge {
             "--no-reorder",
             "--prod-info", companyName, productName, productVersion(appVersion), appVersion, productUID,
         ]
+        // The sequence reader starts discontinuous inputs at 00:00:00:00; keep the first clip's.
+        if let startTimecode { arguments += ["-y", startTimecode] }
         if let embeddedXMLURL {
             arguments += [
                 "--xml-scheme-id", sonyNRTSchemeID,

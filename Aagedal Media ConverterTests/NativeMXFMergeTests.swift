@@ -131,6 +131,24 @@ final class NativeMXFMergeTests: XCTestCase {
         XCTAssertEqual(NativeMXFMerge.productVersion("4.5.1.2.9"), "4.5.1.2.0")
     }
 
+    func testMergeKeepsFirstClipStartTimecode() {
+        let info = """
+              Packages:
+                Material Package:
+                  start_timecodes:
+                    material        : 00:00:00:00
+                File Source Package:
+                  start_timecodes:
+                    file_source     : 17:10:21:24
+            """
+        XCTAssertEqual(NativeMXFMerge.startTimecode(fromMXFInfo: info), "17:10:21:24")
+        XCTAssertEqual(NativeMXFMerge.startTimecode(fromMXFInfo: "file_source : 01:00:00;02"), "01:00:00;02")
+        XCTAssertNil(NativeMXFMerge.startTimecode(fromMXFInfo: "material : 01:00:00:00"))
+        let args = NativeMXFMerge.mergeArguments(companyName: "Sony", appVersion: "4.7", startTimecode: "17:10:21:24", embeddedXMLURL: nil)
+        XCTAssertEqual(args.firstIndex(of: "-y").map { args[$0 + 1] }, "17:10:21:24")
+        XCTAssertFalse(NativeMXFMerge.mergeArguments(companyName: "Sony", appVersion: "4.7", embeddedXMLURL: nil).contains("-y"))
+    }
+
     func testCompanyNameComesFromFirstIdentification() {
         let info = """
             Identifications: (2)

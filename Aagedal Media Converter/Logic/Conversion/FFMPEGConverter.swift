@@ -5043,12 +5043,17 @@ actor FFMPEGConverter {
         defer { if let xmlURL { Self.cleanupTempFile(at: xmlURL, label: "NonRealTimeMeta XML") } }
 
         let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
+        // Trimmed segments are rewrapped copies that already start at the trimmed timecode.
+        let firstSegmentInfo: String? = if let first = merge.segmentURLs.first { await bmxService.getMXFInfo(url: first) } else { nil }
         progressUpdate(0, "Merging MXF…")
         let result = await bmxService.mergeMXFSequence(
             inputURLs: merge.segmentURLs,
             outputURL: outputURL,
             arguments: NativeMXFMerge.mergeArguments(
-                companyName: merge.companyName, appVersion: appVersion, embeddedXMLURL: xmlURL
+                companyName: merge.companyName,
+                appVersion: appVersion,
+                startTimecode: firstSegmentInfo.flatMap(NativeMXFMerge.startTimecode(fromMXFInfo:)),
+                embeddedXMLURL: xmlURL
             ),
             operationID: conversionID,
             progress: { value in progressUpdate(value, "Merging MXF…") }
@@ -5063,9 +5068,9 @@ actor FFMPEGConverter {
         var failure: String?
         if !result.success {
             failure = result.stderr
-        } else if let first = merge.segmentURLs.first {
+        } else {
             // bmx's sequence reader silently omits tracks that differ between inputs.
-            let inputKinds = await bmxService.getMXFInfo(url: first).map(NativeMXFMerge.essenceKinds(fromMXFInfo:)) ?? []
+            let inputKinds = firstSegmentInfo.map(NativeMXFMerge.essenceKinds(fromMXFInfo:)) ?? []
             let outputKinds = await bmxService.getMXFInfo(url: outputURL).map(NativeMXFMerge.essenceKinds(fromMXFInfo:)) ?? []
             if inputKinds.isEmpty || Set(inputKinds) != Set(outputKinds) || outputKinds.count < inputKinds.count {
                 failure = "Merged tracks \(outputKinds) do not match source tracks \(inputKinds)"
