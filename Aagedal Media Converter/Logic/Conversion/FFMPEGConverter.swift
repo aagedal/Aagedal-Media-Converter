@@ -127,6 +127,7 @@ actor FFMPEGConverter {
     private var currentPackageWrapperTaskID: UUID?
     private var currentAVCIntraPreprocessingTask: Task<AVCIntraAudioPreprocessingResult, Never>?
     private var currentAVCIntraPreprocessingTaskID: UUID?
+    private var currentEndCutListingTask: Task<PackageWrapperResult, Never>?
     private var currentAV2HelperTask: Task<AV2HelperRunResult, Never>?
     private var currentAV2HelperTaskID: UUID?
     private var currentMCALabelTask: Task<URL?, Never>?
@@ -458,6 +459,30 @@ actor FFMPEGConverter {
             cleanupPartialOutput()
             return .failed(status: nil, reason: "failed to start tool", diagnostic: output)
         }
+    }
+
+    /// Lists the trim's video packets and picks its clean end. Nil when cancelled.
+    private func findStreamCopyEndCut(
+        conversionID: UUID, ffmpegPath: String, inputURL: URL, seek: [String], end: Double
+    ) async -> StreamCopyEndCut.Cut? {
+        let listURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("trim_packets_\(UUID().uuidString).txt")
+        defer { Self.cleanupTempFile(at: listURL, label: "trim packet list") }
+        let arguments = ["-v", "error"]
+            + StreamCopyEndCut.listingArguments(inputURL: inputURL, seek: seek, end: end, listURL: listURL)
+        let runner = subprocessRunner
+        let task = Task {
+            await Self.runPackageWrapper(
+                executablePath: ffmpegPath, arguments: arguments, outputURL: listURL, subprocessRunner: runner
+            )
+        }
+        currentEndCutListingTask?.cancel()
+        currentEndCutListingTask = task
+        let result = await task.value
+        if currentEndCutListingTask == task { currentEndCutListingTask = nil }
+        guard activeConversionID == conversionID else { return nil }
+        guard case .success = result else { return .unknown }
+        return StreamCopyEndCut.cut(fromListing: try? String(contentsOf: listURL, encoding: .utf8), end: end)
     }
 
     /// Lists the merge inputs' video packets and writes their temporal offsets into
@@ -800,6 +825,8 @@ actor FFMPEGConverter {
         currentAVCIntraPreprocessingTask?.cancel()
         currentAVCIntraPreprocessingTask = nil
         currentAVCIntraPreprocessingTaskID = nil
+        currentEndCutListingTask?.cancel()
+        currentEndCutListingTask = nil
         currentAV2HelperTask?.cancel()
         currentAV2HelperTask = nil
         currentAV2HelperTaskID = nil
@@ -1323,6 +1350,31 @@ actor FFMPEGConverter {
             Self.logger.info("AV2 decode front-end: avmdec → ffmpeg for \(inputURL.lastPathComponent, privacy: .public)\(av2IsMatroska ? " (Matroska + audio)" : "")")
         }
 
+        // FFmpeg ends a Stream Copy cut by decode time, which can keep a picture from
+        // after the end and drop B-frames before it (see `StreamCopyEndCut`).
+        var trimEnd = tempAudioURL != nil ? nil : request.trimEnd
+        var additionalOutputArguments = request.additionalOutputArguments
+        if preset == .streamCopy, tempAudioURL == nil, trimEnd != nil,
+           request.waveformRequest == nil, request.synthesizedVideoRequest == nil,
+           case .file = FFMPEGInputPlan(inputURL: effectiveInputURL, customArguments: effectiveCustomInputArguments) {
+            let trimPlan = FFMPEGTrimPlan(start: request.trimStart, end: trimEnd)
+            if trimPlan.preparationError == nil, let end = trimPlan.end {
+                let start = trimPlan.start ?? 0
+                guard let cut = await findStreamCopyEndCut(
+                    conversionID: conversionID, ffmpegPath: ffmpegPath, inputURL: effectiveInputURL,
+                    seek: trimPlan.seekArguments, end: end - start
+                ) else {
+                    finish(false, "Conversion cancelled")
+                    return
+                }
+                trimEnd = cut.duration(requested: end - start).map { start + $0 }
+                if let drop = cut.droppedVideo {
+                    additionalOutputArguments = (additionalOutputArguments ?? [])
+                        + ["-bsf:v", "noise=amount=0:drop='\(drop)'"]
+                }
+            }
+        }
+
         // Build FFmpeg arguments
         let command = await FFMPEGCommandBuilder.buildCommand(
             inputURL: effectiveInputURL,
@@ -1339,7 +1391,7 @@ actor FFMPEGConverter {
             writeEmptyComment: request.metadataEditorSettings?.writesComment == true,
             includeDateTag: request.includeDateTag,
             trimStart: tempAudioURL != nil ? nil : request.trimStart,  // Trim already applied in pre-processing
-            trimEnd: tempAudioURL != nil ? nil : request.trimEnd,
+            trimEnd: trimEnd,
             audioRoutingConfig: tempAudioURL != nil ? nil : request.audioRoutingConfig,  // Audio already processed
             cropConfig: request.cropConfig,
             timecodeConfig: request.timecodeConfig,
@@ -1354,8 +1406,8 @@ actor FFMPEGConverter {
             visualSourceURL: request.visualSourceURL,
             customInputArguments: effectiveCustomInputArguments,
             additionalOutputArguments: avcStreamCopyPicture.map {
-                (request.additionalOutputArguments ?? []) + AVCMXFStreamCopy.frameRateArguments(editRate: $0.editRate)
-            } ?? request.additionalOutputArguments,
+                (additionalOutputArguments ?? []) + AVCMXFStreamCopy.frameRateArguments(editRate: $0.editRate)
+            } ?? additionalOutputArguments,
             chapterMetadataURL: request.chapterMetadataURL,
             chapterMetadataTitles: request.chapterMetadataTitles,
             isMuted: request.isMuted
@@ -4974,6 +5026,8 @@ actor FFMPEGConverter {
         currentAVCIntraPreprocessingTask?.cancel()
         currentAVCIntraPreprocessingTask = nil
         currentAVCIntraPreprocessingTaskID = nil
+        currentEndCutListingTask?.cancel()
+        currentEndCutListingTask = nil
         currentAV2HelperTask?.cancel()
         currentAV2HelperTask = nil
         currentAV2HelperTaskID = nil

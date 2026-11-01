@@ -460,6 +460,60 @@ enum FrameCRC {
 /// the clip ends on a frame from past the cut, with a gap before it. Ending where every
 /// picture shown before the cut is also decoded before it keeps the clip contiguous.
 enum StreamCopyEndCut {
+    enum Cut: Equatable {
+        /// Video shown from `end` on is dropped; `frame` is a picture interval. Both are
+        /// seconds on the trim's timeline, which starts at its seek.
+        case at(end: Double, frame: Double)
+        /// No clean point before the source ends, so the clip keeps the rest of it.
+        case endOfFile
+        /// FFmpeg's own cut applies.
+        case unknown
+
+        /// Seconds of the trim's timeline to keep; nil keeps the rest of the source.
+        func duration(requested: Double) -> Double? {
+            switch self {
+            case .at(let end, _): end
+            case .endOfFile: nil
+            case .unknown: requested
+            }
+        }
+
+        /// Noise filter term dropping video shown from the cut on.
+        var droppedVideo: String? {
+            guard case .at(let end, let frame) = self else { return nil }
+            // `-t` keeps every packet decoded before the end, including reference
+            // pictures shown after it. Nothing kept depends on them at a clean end.
+            return String(format: "not(eq(pts,nopts))*gte(pts*tb,%.9f)", end - frame / 2)
+        }
+    }
+
+    private static let lookAhead = 3.0
+
+    /// Lists the video packets a trim reads up to `end` (seconds after the seek) and a
+    /// little beyond. The listing must seek exactly like the trim: FFmpeg rounds a seek
+    /// offset to whole time-base units, so any other seek can shift the timeline by a frame.
+    static func listingArguments(inputURL: URL, seek: [String], end: Double, listURL: URL) -> [String] {
+        ["-y"] + seek + [
+            "-i", inputURL.path, "-map", "0:v:0", "-c", "copy",
+            "-t", FFMPEGCommandBuilder.ffmpegTimeString(from: end + lookAhead),
+            "-f", "framecrc", listURL.path,
+        ]
+    }
+
+    /// The first clean end at or after `end` in a listing from `listingArguments`.
+    static func cut(fromListing text: String?, end: Double) -> Cut {
+        guard let text, let (timeBase, packets) = FrameCRC.packets(from: text) else { return .unknown }
+        if let cut = cleanEnd(packets: packets, timeBase: timeBase, requestedEnd: end) {
+            // Pictures are at least one time-base unit apart.
+            let pictureTimes = Set(packets.map(\.pts)).sorted()
+            let interval = zip(pictureTimes, pictureTimes.dropFirst()).map { $1 - $0 }.min() ?? 1
+            return .at(end: Double(cut) * timeBase, frame: Double(max(interval, 1)) * timeBase)
+        }
+        // Packets stopping well short of the listed span mean the source ended.
+        let lastDecode = Double(packets.map(\.dts).max() ?? 0) * timeBase
+        return lastDecode < end + lookAhead - 1 ? .endOfFile : .unknown
+    }
+
     /// The earliest presentation timestamp at or after `requestedEnd` (seconds) where
     /// the packets before it in decode order are exactly the pictures shown before it.
     /// Nil when the packets hold no such point.
@@ -1182,27 +1236,18 @@ actor ConversionManager: Sendable {
 
         arguments.append(contentsOf: ["-i", item.url.path])
 
-        // Stream Copy timestamps start at the seek point; the end cut drops video
-        // shown from `streamCopyEnd.time` on.
-        var streamCopyEnd: (time: Double, frame: Double)?
-        var cutsAtEnd = hasEndTrim
+        // Stream Copy timestamps start at the seek point. Its end cut keeps every
+        // picture shown before the requested end (see `StreamCopyEndCut`).
+        var endCut = StreamCopyEndCut.Cut.unknown
         if hasEndTrim && !decodeTrim {
-            switch await findStreamCopyEndCut(
+            guard let cut = await findStreamCopyEndCut(
                 for: item, ffmpegPath: ffmpegPath, seek: seek,
                 end: start + duration - (seek.flatMap(Double.init) ?? 0), batchID: batchID
-            ) {
-            case .at(let end, let frame):
-                streamCopyEnd = (end, frame)
-            case .endOfFile:
-                cutsAtEnd = false
-            case .unknown:
-                break
-            case .cancelled:
-                return nil
-            }
+            ) else { return nil }
+            endCut = cut
         }
-        if cutsAtEnd {
-            arguments.append(contentsOf: ["-t", FFMPEGCommandBuilder.ffmpegTimeString(from: streamCopyEnd?.time ?? duration)])
+        if hasEndTrim, let keptDuration = endCut.duration(requested: duration) {
+            arguments.append(contentsOf: ["-t", FFMPEGCommandBuilder.ffmpegTimeString(from: keptDuration)])
         }
 
         if decodeTrim {
@@ -1238,10 +1283,8 @@ actor ConversionManager: Sendable {
             // contents, subsequent B-frame reordering, and all audio packets.
             droppedVideo.append("not(eq(pts,nopts))*lt(pts,startpts)")
         }
-        if let streamCopyEnd {
-            // `-t` keeps every packet decoded before the end, including reference
-            // pictures shown after it. Nothing kept depends on them at a clean end.
-            droppedVideo.append(String(format: "not(eq(pts,nopts))*gte(pts*tb,%.9f)", streamCopyEnd.time - streamCopyEnd.frame / 2))
+        if let endDrop = endCut.droppedVideo {
+            droppedVideo.append(endDrop)
         }
         if !droppedVideo.isEmpty {
             arguments.append(contentsOf: ["-bsf:v", "noise=amount=0:drop='\(droppedVideo.joined(separator: "+"))'"])
@@ -1305,55 +1348,27 @@ actor ConversionManager: Sendable {
         return remuxed ? remuxURL : nil
     }
 
-    private enum StreamCopyEndCutResult {
-        /// Video shown from `end` on is dropped; `frame` is a picture interval. Both are
-        /// seconds on the trim's timeline, which starts at its seek.
-        case at(end: Double, frame: Double)
-        /// No clean point before the source ends, so the clip keeps the rest of it.
-        case endOfFile
-        /// FFmpeg's own cut applies.
-        case unknown
-        case cancelled
-    }
-
     /// Lists the trim's video packets and picks the first clean end at or after the
-    /// requested one (see `StreamCopyEndCut`). The listing seeks exactly like the trim:
-    /// FFmpeg rounds a seek offset to whole time-base units, so any other seek can shift
-    /// the timeline by a frame.
+    /// requested one (see `StreamCopyEndCut`). Nil when cancelled.
     private func findStreamCopyEndCut(
         for item: VideoItem, ffmpegPath: String, seek: String?, end: Double, batchID: UUID
-    ) async -> StreamCopyEndCutResult {
-        let lookAhead = 3.0
+    ) async -> StreamCopyEndCut.Cut? {
         let listURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("trim_packets_\(UUID().uuidString).txt")
         defer { try? FileManager.default.removeItem(at: listURL) }
-        var arguments = ["-y"]
-        if let seek { arguments.append(contentsOf: ["-ss", seek]) }
-        arguments.append(contentsOf: [
-            "-i", item.url.path, "-map", "0:v:0", "-c", "copy",
-            "-t", FFMPEGCommandBuilder.ffmpegTimeString(from: end + lookAhead),
-            "-f", "framecrc", listURL.path,
-        ])
         let listed = await runMergePreparationFFmpeg(
-            at: ffmpegPath, arguments: arguments, outputURL: listURL,
-            itemID: item.id, batchID: batchID, context: "list packets of \(item.name)"
+            at: ffmpegPath,
+            arguments: StreamCopyEndCut.listingArguments(
+                inputURL: item.url, seek: seek.map { ["-ss", $0] } ?? [], end: end, listURL: listURL
+            ),
+            outputURL: listURL, itemID: item.id, batchID: batchID, context: "list packets of \(item.name)"
         )
-        guard isMergePreparationActive(batchID) else { return .cancelled }
-        guard listed, let text = try? String(contentsOf: listURL, encoding: .utf8),
-              let (timeBase, packets) = FrameCRC.packets(from: text) else { return .unknown }
-        if let cut = StreamCopyEndCut.cleanEnd(packets: packets, timeBase: timeBase, requestedEnd: end) {
-            let cutTime = Double(cut) * timeBase
-            if cutTime - end >= timeBase {
-                mergeLogger.info("\(item.name, privacy: .public): Stream Copy trim ends \(cutTime - end, privacy: .public) s after the requested end so no kept frame loses a reference")
-            }
-            // Pictures are at least one time-base unit apart.
-            let pictureTimes = Set(packets.map(\.pts)).sorted()
-            let interval = zip(pictureTimes, pictureTimes.dropFirst()).map { $1 - $0 }.min() ?? 1
-            return .at(end: cutTime, frame: Double(max(interval, 1)) * timeBase)
+        guard isMergePreparationActive(batchID) else { return nil }
+        let cut = StreamCopyEndCut.cut(fromListing: listed ? try? String(contentsOf: listURL, encoding: .utf8) : nil, end: end)
+        if case .at(let cutEnd, let frame) = cut, cutEnd - end >= frame / 2 {
+            mergeLogger.info("\(item.name, privacy: .public): Stream Copy trim ends \(cutEnd - end, privacy: .public) s after the requested end so no kept frame loses a reference")
         }
-        // Packets stopping well short of the listed span mean the source ended.
-        let lastDecode = Double(packets.map(\.dts).max() ?? 0) * timeBase
-        return lastDecode < end + lookAhead - 1 ? .endOfFile : .unknown
+        return cut
     }
 
     private func runMergePreparationFFmpeg(

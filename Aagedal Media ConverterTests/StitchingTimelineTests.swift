@@ -888,6 +888,52 @@ final class TrimmedStreamCopyMergeTests: XCTestCase {
         Self.assertRun(runs.last, covers: 10..<62)
     }
 
+    /// Single-file Stream Copy exports end the same clean way as merged clips.
+    func testStreamCopyExportEndTrimOfHEVCMOVEndsOnContiguousSourceFrames() async throws {
+        guard let ffmpeg = BinaryPathResolver.ffmpegPath else { throw XCTSkip("FFmpeg is not bundled") }
+        let folder = try Self.temporaryFolder("TrimmedHEVCExport")
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        let source = folder.appendingPathComponent("C000.mov")
+        let result = try Self.run(ffmpeg, [
+            "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=25",
+            "-f", "lavfi", "-i", "anoisesrc=sample_rate=48000:seed=1", "-t", "4",
+            "-c:v", "libx265", "-x265-params", "keyint=50:bframes=4:b-pyramid=1:log-level=error", "-tag:v", "hvc1",
+            "-c:a", "pcm_s24le", "-y", source.path,
+        ])
+        XCTAssertEqual(result.status, 0, result.errors)
+        let sourceFrames = try Self.frameHashes(ffmpeg, source)
+        // Ends between the clean points of a four-B-frame pyramid, with and without a start trim.
+        for (start, end) in [(nil, 50.0 / 25), (10.0 / 25, 62.0 / 25)] as [(Double?, Double)] {
+            let output = folder.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+            let suite = "StreamCopyExport.\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            defaults.set(false, forKey: AppConstants.saveNextToOriginalKey)
+            let settings = ConversionPreparationSettings(preset: .streamCopy, defaults: defaults)
+            let manager = ConversionManager(preparationSettingsProvider: { _ in settings })
+            var item = VideoItem(url: source, name: source.lastPathComponent, size: 0, duration: "--:--",
+                                 status: .waiting, progress: 0, eta: nil, outputURL: nil)
+            item.includeDateTag = false
+            item.trimStart = start
+            item.trimEnd = end
+            let storage = OSAllocatedUnfairLock(initialState: [item])
+            await manager.convertGroup(
+                items: Self.binding(storage), outputFolder: output.path, preset: .streamCopy, concatEnabled: false,
+                transcriptionEnabled: false, uploadEnabled: false, analyticsEnabled: false
+            )
+            for _ in 0..<600 where storage.withLock({ $0.contains { $0.status == .converting || $0.status == .waiting } }) {
+                try await Task.sleep(for: .milliseconds(200))
+            }
+            let finished = try XCTUnwrap(storage.withLock { $0.first })
+            XCTAssertEqual(finished.status, .done, finished.conversionError ?? "")
+            let frames = try Self.frameHashes(ffmpeg, try XCTUnwrap(finished.outputURL))
+            let runs = Self.contiguousRuns(of: frames, in: [sourceFrames], window: 1)
+            XCTAssertEqual(runs.map(\.count).reduce(0, +), frames.count, "\(runs)")
+            Self.assertRun(runs.first, covers: Int(((start ?? 0) * 25).rounded())..<Int((end * 25).rounded()))
+        }
+    }
+
     func testStreamCopyEndCutWaitsForEveryPictureShownBeforeIt() throws {
         // I0 P4 B2 B1 B3 P8 B6 B5 B7: every picture before 5 and 9 is decoded first.
         let order: [Int64] = [0, 4, 2, 1, 3, 8, 6, 5, 7, 12, 10, 9, 11]
