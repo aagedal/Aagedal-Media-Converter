@@ -49,7 +49,24 @@ enum NativeMXFMerge {
             && !hasGeneratedVideo && !audioRoutingCustomized && !hasManualTimecode
     }
 
+    /// mxf2raw names picture essence it can't parse just "Picture" (e.g. DNxHR), and
+    /// bmxtranswrap drops such tracks instead of copying them.
+    static func isReadablePicture(essenceType: String) -> Bool {
+        !["", "PICTURE", "UNKNOWN"].contains(essenceType.uppercased())
+    }
+
     // MARK: - Trimmed merges
+
+    /// bmx cuts on edit units, so only intra-coded pictures can start on any frame.
+    /// Long GOP essence (XAVC-L, MPEG-2 422 LongGOP) keeps the FFmpeg path: open GOPs
+    /// make bmx's sequence reader reject a trimmed first clip and corrupt the leading
+    /// B-frames of later ones.
+    static func isIntraCoded(essenceType: String) -> Bool {
+        let type = essenceType.uppercased()
+        if type.contains("INTRA") { return true }
+        return ["AVCI", "D10", "DV", "VC3", "DNXHD", "UNC", "JPEG2000", "J2C", "RDD36", "VC2"]
+            .contains { type.hasPrefix($0) }
+    }
 
     struct PictureTrack: Equatable, Sendable {
         let essenceType: String
@@ -107,8 +124,8 @@ enum NativeMXFMerge {
         firstMatch(#"file_source\s*:\s*(\d{2}:\d{2}:\d{2}[:;]\d{2})"#, in: info)
     }
 
-    /// The frames bmx actually kept. Long GOP trims move out to whole GOPs (see
-    /// `segmentRewrapArguments`), so the start and length are read back from the copy.
+    /// The frames bmx actually kept, read back from the copy so the merged XML and the
+    /// row's trim points describe what was written.
     static func keptRange(requested: FrameRange, sourceInfo: String, segmentInfo: String) -> FrameRange {
         guard let picture = pictureTrack(fromMXFInfo: segmentInfo), let count = picture.duration else { return requested }
         guard let sourceStart = startTimecodeFrames(fromMXFInfo: sourceInfo, editRate: picture.editRate),
@@ -134,10 +151,9 @@ enum NativeMXFMerge {
     }
 
     /// Rewraps one clip unchanged apart from the trim. Every clip goes through this,
-    /// trimmed or not, so all segments share bmx's descriptor layout. For Long GOP,
-    /// `--no-precharge` moves the start back to include the keyframe before the in-point
-    /// and `--no-rollout` extends the end until the last frame decodes: a few frames too
-    /// many rather than too few. Intra-coded essence needs neither and is unaffected.
+    /// trimmed or not, so all segments share bmx's descriptor layout. Only intra-coded
+    /// clips get here (see `isIntraCoded`); `--no-precharge`/`--no-rollout` keep bmx from
+    /// writing precharge or rollout regions the sequence reader can't join.
     static func segmentRewrapArguments(range: FrameRange) -> [String] {
         var arguments = ["-t", "op1a", "--pass-anc", "all", "--no-precharge", "--no-rollout"]
         if range.start > 0 { arguments += ["--start", String(range.start)] }

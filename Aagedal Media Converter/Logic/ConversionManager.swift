@@ -596,6 +596,19 @@ actor ConversionManager: Sendable {
         frameRanges: [UUID: NativeMXFMerge.FrameRange]? = nil
     ) async -> NativeMXFMergeRequest? {
         guard let first = items.first else { return nil }
+        var firstInfo: String?
+        for item in items {
+            // Trimmed clips were checked before rewrapping. bmx would drop video it can't
+            // parse (e.g. DNxHR), so those merges take the FFmpeg path without a bmx pass.
+            guard frameRanges == nil || item.id == first.id else { continue }
+            let info = await BMXService.shared.getMXFInfo(url: item.url)
+            if item.id == first.id { firstInfo = info }
+            if frameRanges == nil, let picture = info.flatMap(NativeMXFMerge.pictureTrack(fromMXFInfo:)),
+               !NativeMXFMerge.isReadablePicture(essenceType: picture.essenceType) {
+                mergeLogger.notice("bmx can't copy the video of \(item.name, privacy: .public); merging with FFmpeg")
+                return nil
+            }
+        }
         var xmlSegments: [NativeMXFMerge.XMLSegment] = []
         for item in items {
             let metadata = lastMergeMetadata[item.id]
@@ -610,7 +623,7 @@ actor ConversionManager: Sendable {
         }
         let mergedXML = xmlSegments.contains { $0.xml == nil || $0.frameCount <= 0 }
             ? nil : NativeMXFMerge.mergedNonRealTimeMeta(segments: xmlSegments)
-        let company = await BMXService.shared.getMXFInfo(url: first.url).flatMap(NativeMXFMerge.companyName(fromMXFInfo:))
+        let company = firstInfo.flatMap(NativeMXFMerge.companyName(fromMXFInfo:))
             ?? (mergedXML != nil ? "Sony" : NativeMXFMerge.fallbackCompanyName)
         return NativeMXFMergeRequest(
             segmentURLs: segments.map(\.preparedURL),
@@ -643,6 +656,12 @@ actor ConversionManager: Sendable {
             guard let info = await BMXService.shared.getMXFInfo(url: item.url),
                   let picture = NativeMXFMerge.pictureTrack(fromMXFInfo: info) else {
                 return .unavailable(String(localized: "Could not read the MXF tracks of \(item.name).") + " " + fallback)
+            }
+            guard NativeMXFMerge.isReadablePicture(essenceType: picture.essenceType) else {
+                return .unavailable(String(localized: "bmx can't copy the video format of \(item.name).") + " " + fallback)
+            }
+            guard NativeMXFMerge.isIntraCoded(essenceType: picture.essenceType) else {
+                return .unavailable(String(localized: "\(item.name) uses Long GOP video, which can only be cut on keyframes.") + " " + fallback)
             }
             let trimmed = hasActiveTrim(item)
             guard let range = NativeMXFMerge.frameRange(
@@ -701,12 +720,25 @@ actor ConversionManager: Sendable {
                 return .unavailable(String(localized: "bmx could not rewrap \(item.name).") + " " + fallback)
             }
             temporaryFiles.append(tempURL)
+            // bmx drops tracks it can't copy; the merge would then check against the copy.
+            let segmentInfo = await BMXService.shared.getMXFInfo(url: tempURL)
+            guard isMergePreparationActive(batchID) else {
+                cleanupTemporaryFiles(temporaryFiles)
+                return .cancelled
+            }
+            let sourceKinds = sourceInfos[item.id].map(NativeMXFMerge.essenceKinds(fromMXFInfo:)) ?? []
+            let segmentKinds = segmentInfo.map(NativeMXFMerge.essenceKinds(fromMXFInfo:)) ?? []
+            guard !sourceKinds.isEmpty, segmentKinds.sorted() == sourceKinds.sorted() else {
+                cleanupTemporaryFiles(temporaryFiles)
+                mergeLogger.error("bmx rewrap of \(item.name, privacy: .public) has tracks \(segmentKinds, privacy: .public), source has \(sourceKinds, privacy: .public)")
+                return .unavailable(String(localized: "bmx could not copy every track of \(item.name).") + " " + fallback)
+            }
             var trimStart = item.trimStart
             var trimEnd = item.trimEnd
             var duration = resolveSegmentDuration(for: item, baseDuration: durationLookup[item.id], hasTrim: hasActiveTrim(item))
-            // Long GOP trims grow to whole GOPs; describe what the copy really holds.
+            // Describe what the copy really holds if bmx moved a cut.
             if let sourceInfo = sourceInfos[item.id],
-               let segmentInfo = await BMXService.shared.getMXFInfo(url: tempURL),
+               let segmentInfo,
                let editRate = NativeMXFMerge.pictureTrack(fromMXFInfo: segmentInfo)?.editRate {
                 let kept = NativeMXFMerge.keptRange(requested: range, sourceInfo: sourceInfo, segmentInfo: segmentInfo)
                 ranges[item.id] = kept

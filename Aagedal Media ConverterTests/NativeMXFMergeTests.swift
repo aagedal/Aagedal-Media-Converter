@@ -131,6 +131,18 @@ final class NativeMXFMergeTests: XCTestCase {
         XCTAssertEqual(NativeMXFMerge.productVersion("4.5.1.2.9"), "4.5.1.2.0")
     }
 
+    func testOnlyIntraCodedReadableVideoIsTrimmedWithBMX() {
+        // Essence types as mxf2raw reports them for the test clips.
+        for type in ["AVC_High_422_Intra", "AVCI_50_1080i", "AVCI_100_1080p"] {
+            XCTAssertTrue(NativeMXFMerge.isIntraCoded(essenceType: type), type)
+        }
+        for type in ["AVC_High_422", "MPEG_2_Long_GOP_422P_HL_1080p"] {
+            XCTAssertFalse(NativeMXFMerge.isIntraCoded(essenceType: type), type)
+        }
+        XCTAssertFalse(NativeMXFMerge.isReadablePicture(essenceType: "Picture"), "DNxHR is listed only as Picture")
+        XCTAssertTrue(NativeMXFMerge.isReadablePicture(essenceType: "AVC_High_422"))
+    }
+
     func testMergeKeepsFirstClipStartTimecode() {
         let info = """
               Packages:
@@ -253,9 +265,10 @@ final class NativeMXFMergeTests: XCTestCase {
         XCTAssertEqual(NativeMXFMerge.checkSpace(temporaryBytes: 10, temporaryAvailable: 15, outputAvailable: 10, sameVolume: false), .sufficient)
     }
 
-    /// Trimming Long GOP must keep the keyframe before the in-point and every frame of
-    /// the selection, so the clip grows to whole GOPs instead of falling back to FFmpeg.
-    func testTrimmedLongGOPMergeKeepsKeyframeBeforeInPoint() async throws {
+    /// Trimmed Long GOP merges take the FFmpeg path before any rewrapping: open GOPs make
+    /// bmx's sequence reader reject a trimmed first clip and corrupt the leading B-frames
+    /// of later ones. The row says why camera metadata was not kept.
+    func testTrimmedLongGOPMergeFallsBackToFFmpeg() async throws {
         guard let ffmpeg = BinaryPathResolver.ffmpegPath else { throw XCTSkip("FFmpeg is not bundled") }
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("NativeMXFLongGOP-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -307,16 +320,12 @@ final class NativeMXFMergeTests: XCTestCase {
         }
         let finished = storage.withLock { $0 }
         XCTAssertEqual(finished.map(\.status), [.done, .done])
-        XCTAssertNil(finished[0].conversionError, "Expected the bmx path without a fallback notice")
+        XCTAssertTrue(finished[0].conversionError?.contains("Long GOP") ?? false, finished[0].conversionError ?? "no notice")
         let merged = try XCTUnwrap(finished.first?.outputURL)
         let probed = await BMXService.shared.getMXFInfo(url: merged)
         let info = try XCTUnwrap(probed)
-        XCTAssertTrue(info.contains("Aagedal Media Converter"), "Merged by bmx")
-        let picture = try XCTUnwrap(NativeMXFMerge.pictureTrack(fromMXFInfo: info))
-        let secondFrames = try XCTUnwrap(picture.duration) - 75
-        // At least the selection plus the frames back to keyframe 12, at most one extra GOP each side.
-        XCTAssertGreaterThanOrEqual(secondFrames, 30 + 5)
-        XCTAssertLessThanOrEqual(secondFrames, 30 + 2 * 12)
+        XCTAssertFalse(info.contains("Aagedal Media Converter"), "Merged by FFmpeg, not bmx")
+        XCTAssertEqual(NativeMXFMerge.essenceKinds(fromMXFInfo: info).filter { $0 == "Picture" }.count, 1, "Video must survive")
     }
 
     /// Opt-in: merges real Sony FX9 card clips through the Stream Copy merge path.
