@@ -52,9 +52,10 @@
 
 - Scheduled live streams and premieres no longer fail. The download waits for the stream to start, and the row shows that it's waiting, the announced start time, the title and the thumbnail. Stopping a row that is still waiting cancels it. The Mac stays awake while waiting; turn off Keep Mac awake while waiting for scheduled streams in Settings › Downloads to let it sleep until an hour before the announced start.
 - Stopping a recording lets yt-dlp finish cleanly, so recordings from the start of the stream are merged into one playable file with metadata. Stopping again forces it. If a recording is cut off anyway, the recovered file gets a `.ts` extension when it is an MPEG transport stream.
-- New setting: Record live streams as growing files. The stream is written to one QuickTime `.mov` that DaVinci Resolve and Premiere Pro can import while it is still recording. The queue row's Finder, copy-path and drag buttons point at the growing file during the recording.
+- New setting: Record live streams as growing files. The stream is written to one QuickTime `.mov` that DaVinci Resolve and Premiere Pro can import while it is still recording. It needs yt-dlp-rs turned on. The queue row's Finder, copy-path and drag buttons point at the growing file during the recording.
 - A recording that stalls or fails keeps what it has recorded instead of starting over, so footage isn't lost once a stream's rewind window has passed.
-- Recording from the start of a stream now uses yt-dlp-rs, updated to 0.6. Recorded duration and size are shown while recording.
+- Recording from the start of a stream uses yt-dlp-rs, updated to 0.6, when yt-dlp-rs is turned on. Recorded duration and size are shown while recording.
+- yt-dlp-rs is now off by default while it is in beta, so downloads use yt-dlp. Turn on Use yt-dlp-rs for supported sites in Settings › Downloads to use it. If you already changed the setting, your choice is kept.
 
 ### DCP
 
@@ -83,7 +84,7 @@
 ### MKV
 
 - MKV exports that keep subtitles now also keep the fonts attached to the source, so styled ASS subtitles and karaoke no longer shift when a player falls back to another font. This works with metadata stripped too (#64).
-- Updated SwiftMediaMetadata to 3.1.1, which reads Matroska font attachments and tells opaque ProRes 4444 apart from ProRes 4444 with alpha.
+- Updated SwiftMediaMetadata to 3.1.3, which reads Matroska font attachments, tells opaque ProRes 4444 apart from ProRes 4444 with alpha, and reads the video and audio codec of more MXF files.
 
 ### Timecode
 
@@ -109,6 +110,7 @@
 - Stream Copy merges of MXF clips into MXF keep the camera metadata. They are joined with bmxtranswrap instead of FFmpeg, which rewrote the picture descriptor and dropped the ANC track, so Resolve lost the S-Log3/S-Gamut3 colour space, the XAVC codec name and the camera fields. The merged file keeps the first clip's start timecode and maker name, and Sony clips get a merged `<name>M01.XML` beside the output with camera model, serial and lens, the total duration and a timecode entry per clip. If bmx can't join the clips, or would drop a track, the merge falls back to FFmpeg as before.
 - Trimmed MXF merges can keep camera metadata too, with “Keep camera metadata in trimmed MXF merges” in Encoding Groups settings (off by default). Each clip is first copied to a temporary MXF, so it needs about as much free space as the merged output. Trimmed Long GOP clips (XAVC Long GOP, XDCAM MPEG-2), video formats bmx can't copy (such as DNxHR) and merges without enough free space use FFmpeg instead, and the row says why.
 - The camera card import dialog shows the real output extension for Stream Copy.
+- XAVC Long, XDCAM HD/HD422, D-10, DVCPRO HD, ProRes, DNxHD/DNxHR and JPEG 2000 MXF files report the right video codec in the metadata window and to camera card grouping. XAVC Long and XDCAM HD clips used to show no codec, so card recordings split across several files couldn't be checked for compatibility, and D-10 and DVCPRO HD video was reported as PCM.
 
 ### Uploads
 

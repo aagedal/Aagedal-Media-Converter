@@ -1,7 +1,7 @@
 GeoNames geographical data
 
-Included through SwiftMediaMetadata 3.1.1, revision
-9cb98a4068b76cf6edf5766bb6e0f6d16cfa02d5.
+Included through SwiftMediaMetadata 3.1.3, revision
+af70dc7af0108c15e991c684e038ce05723c6faf.
 The upstream acknowledgement below describes its derived database.
 Aagedal Media Converter packages that database unchanged.
 

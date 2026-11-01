@@ -1613,7 +1613,7 @@ actor YTDLPUpdateService {
     // MARK: - yt-dlp-rs
 
     private var isYTDLPRSEnabled: Bool {
-        UserDefaults.standard.object(forKey: AppConstants.ytdlpRSEnabledKey) as? Bool ?? true
+        UserDefaults.standard.object(forKey: AppConstants.ytdlpRSEnabledKey) as? Bool ?? AppConstants.defaultYTDLPRSEnabled
     }
 
     /// Path of the active yt-dlp-rs executable: the pinned version, otherwise

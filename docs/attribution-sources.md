@@ -47,7 +47,7 @@ pins. Apple SDKs, system libraries and general build tools are not redistributed
   against its `Cargo.lock` checksums. Recreate the archive byte-for-byte with
   `python3 scripts/generate-ytdlp-rs-notices.py <tag>`; see
   `docs/provenance/yt-dlp-rs/README.md`.
-- **SwiftMediaMetadata 3.1.1:** the exact pinned source tree, including the GeoNames
+- **SwiftMediaMetadata 3.1.3:** the exact pinned source tree, including the GeoNames
   database and its upstream acknowledgement. Its source package identifies
   required platform tools and dependencies in `Package.swift`.
 
