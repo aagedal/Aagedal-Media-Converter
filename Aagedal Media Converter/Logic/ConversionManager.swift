@@ -470,7 +470,7 @@ actor ConversionManager: Sendable {
         var usesNativeMXFMerge = nativeMXFMergeEligible(allowsTrimmedMerge: settings.nativeMXFTrimmedMerge)
         var mergeNotice: String?
         if hasTrims, !usesNativeMXFMerge, nativeMXFMergeEligible(allowsTrimmedMerge: true) {
-            mergeNotice = String(localized: "Camera metadata was not kept because clips are trimmed. Turn on “Keep camera metadata in trimmed MXF merges” in Encoding settings to keep it.")
+            mergeNotice = String(localized: "Camera metadata was not kept because clips are trimmed. Turn on “Keep camera metadata in trimmed MXF merges” in the Encoding Groups settings to keep it.")
         }
 
         var nativeFrameRanges: [UUID: NativeMXFMerge.FrameRange]?

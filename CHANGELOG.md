@@ -107,7 +107,7 @@
 ### MXF merges
 
 - Stream Copy merges of MXF clips into MXF keep the camera metadata. They are joined with bmxtranswrap instead of FFmpeg, which rewrote the picture descriptor and dropped the ANC track, so Resolve lost the S-Log3/S-Gamut3 colour space, the XAVC codec name and the camera fields. The merged file keeps the first clip's start timecode and maker name, and Sony clips get a merged `<name>M01.XML` beside the output with camera model, serial and lens, the total duration and a timecode entry per clip. If bmx can't join the clips, or would drop a track, the merge falls back to FFmpeg as before.
-- Trimmed MXF merges can keep camera metadata too, with “Keep camera metadata in trimmed MXF merges” in Encoding settings (off by default). Each clip is first copied to a temporary MXF, so it needs about as much free space as the merged output. Trimmed Long GOP clips (XAVC Long GOP, XDCAM MPEG-2), video formats bmx can't copy (such as DNxHR) and merges without enough free space use FFmpeg instead, and the row says why.
+- Trimmed MXF merges can keep camera metadata too, with “Keep camera metadata in trimmed MXF merges” in Encoding Groups settings (off by default). Each clip is first copied to a temporary MXF, so it needs about as much free space as the merged output. Trimmed Long GOP clips (XAVC Long GOP, XDCAM MPEG-2), video formats bmx can't copy (such as DNxHR) and merges without enough free space use FFmpeg instead, and the row says why.
 - The camera card import dialog shows the real output extension for Stream Copy.
 
 ### Uploads

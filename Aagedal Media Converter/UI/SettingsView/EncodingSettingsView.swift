@@ -40,7 +40,7 @@ struct EncodingSettingsView: View {
             }
             Section("MXF Merges") {
                 Toggle("Keep camera metadata in trimmed MXF merges", isOn: $nativeMXFTrimmedMerge)
-                Text("Stream Copy merges of MXF clips keep camera metadata such as S-Log3 colour space, lens and per-frame exposure, so DaVinci Resolve can read it. When clips are trimmed, every clip is first copied to a temporary MXF, which takes a little longer and needs free space for about the size of the merged file, twice that when the output goes to the same disk. Long GOP clips are cut on whole GOPs, so they may start and end a few frames outside the trim. If there is not enough space, the merge falls back to FFmpeg without camera metadata.")
+                Text("Stream Copy merges of MXF clips keep camera metadata such as S-Log3 colour space, lens and per-frame exposure, so DaVinci Resolve can read it. When clips are trimmed, every clip is first copied to a temporary MXF, which takes a little longer and needs free space for about the size of the merged file, twice that when the output goes to the same disk. Trimmed Long GOP clips, video that bmx can't copy (such as DNxHR) and merges without enough free space fall back to FFmpeg without camera metadata.")
                     .font(.caption).foregroundStyle(.secondary)
                 if let temporaryFreeSpace {
                     Text("Free space for temporary files: \(ByteCountFormatter.string(fromByteCount: temporaryFreeSpace, countStyle: .file))")
