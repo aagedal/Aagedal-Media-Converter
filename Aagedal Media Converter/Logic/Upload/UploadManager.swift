@@ -16,6 +16,7 @@ class UploadManager {
     private let rcloneService: any RcloneUploading
     private let configurationProvider: @MainActor () -> UploadConfig?
     private let rcloneAvailability: @MainActor () -> Bool
+    private let sidecarSettingsProvider: @MainActor () -> UploadSidecarSettings
     @ObservationIgnored private var uploadTasks: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var uploadAttempts: [UUID: UploadAttempt] = [:]
     @ObservationIgnored private var outputUploadTasks: [UUID: (id: UUID, task: Task<Void, Never>)] = [:]
@@ -38,11 +39,13 @@ class UploadManager {
         configurationProvider: @escaping @MainActor () -> UploadConfig? = UploadManager.selectedUploadConfig,
         rcloneAvailability: @escaping @MainActor () -> Bool = {
             RcloneUpdateService.shared.getInstallationStatus().isAvailable
-        }
+        },
+        sidecarSettingsProvider: @escaping @MainActor () -> UploadSidecarSettings = { UploadSidecarSettings() }
     ) {
         self.rcloneService = rcloneService
         self.configurationProvider = configurationProvider
         self.rcloneAvailability = rcloneAvailability
+        self.sidecarSettingsProvider = sidecarSettingsProvider
         refreshConfiguredStatus()
     }
 
@@ -130,8 +133,25 @@ class UploadManager {
                     }
                 }
                 try Task.checkCancellation()
+                var sidecarFailure: String?
+                if result.success {
+                    // Read the row now: sidecars such as subtitles may postdate the attempt.
+                    for sidecar in self?.sidecarFiles(for: attempt) ?? [] {
+                        do {
+                            let sidecarResult = try await rcloneService.upload(localFile: sidecar, config: config) { _, _ in }
+                            if !sidecarResult.success {
+                                sidecarFailure = "\(sidecar.lastPathComponent): \(sidecarResult.errorMessage ?? "Unknown error")"
+                            }
+                        } catch let error where !(error is CancellationError) && !Task.isCancelled {
+                            sidecarFailure = "\(sidecar.lastPathComponent): \(error.localizedDescription)"
+                        }
+                        try Task.checkCancellation()
+                        if sidecarFailure != nil { break }
+                    }
+                }
                 self?.apply(attempt) { item in
-                    item.uploadStatus = result.success ? .uploaded : .failed(result.errorMessage ?? "Unknown error")
+                    item.uploadStatus = !result.success ? .failed(result.errorMessage ?? "Unknown error")
+                        : sidecarFailure.map { .failed("Sidecar \($0)") } ?? .uploaded
                     item.uploadedRemotePath = result.success ? result.remotePath : nil
                     item.uploadSpeed = nil
                     item.uploadOperationID = nil
@@ -201,6 +221,11 @@ class UploadManager {
         for task in tasks.values {
             await task.value
         }
+    }
+
+    private func sidecarFiles(for attempt: UploadAttempt) -> [URL] {
+        guard let items = videoItems?.wrappedValue, let index = attempt.index(in: items) else { return [] }
+        return UploadSidecars.files(for: items[index], settings: sidecarSettingsProvider())
     }
 
     private func begin(_ attempt: UploadAttempt) -> Bool {

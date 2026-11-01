@@ -871,6 +871,7 @@ struct ContentView: View {
             .sheet(item: $cameraCardImportState) { state in
                 CameraCardImportView(
                     clipCount: state.videoURLs.count,
+                    sampleClipURL: state.videoURLs.first,
                     folderName: state.folderURL.lastPathComponent,
                     hasRemovableSources: state.hasRemovableSources,
                     masterName: $cameraCardMasterName,
