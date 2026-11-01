@@ -282,9 +282,43 @@ actor BMXService {
 
     // MARK: - Shared Process Execution
 
-    /// Shared bmxtranswrap execution with input/output validation, progress parsing, and error handling
+    /// Concatenates MXF files in the given order with bmx's sequence reader. Inputs must
+    /// share essence layout; trimming is done beforehand (see `NativeMXFMerge`).
+    func mergeMXFSequence(
+        inputURLs: [URL],
+        outputURL: URL,
+        arguments: [String],
+        operationID: UUID = UUID(),
+        progress: @escaping @Sendable (Double) -> Void
+    ) async -> BMXRewrapResult {
+        await runBMXTranswrap(
+            inputURLs: inputURLs,
+            outputURL: outputURL,
+            extraArguments: arguments,
+            operationID: operationID,
+            progress: progress
+        )
+    }
+
     private func runBMXTranswrap(
         inputURL: URL,
+        outputURL: URL,
+        extraArguments: [String],
+        operationID: UUID,
+        progress: @escaping @Sendable (Double) -> Void
+    ) async -> BMXRewrapResult {
+        await runBMXTranswrap(
+            inputURLs: [inputURL],
+            outputURL: outputURL,
+            extraArguments: extraArguments,
+            operationID: operationID,
+            progress: progress
+        )
+    }
+
+    /// Shared bmxtranswrap execution with input/output validation, progress parsing, and error handling
+    private func runBMXTranswrap(
+        inputURLs: [URL],
         outputURL: URL,
         extraArguments: [String],
         operationID: UUID,
@@ -316,7 +350,10 @@ actor BMXService {
             return BMXRewrapResult(success: false, stderr: "bmxtranswrap binary not found")
         }
 
-        guard FileManager.default.fileExists(atPath: inputURL.path) else {
+        guard !inputURLs.isEmpty else {
+            return BMXRewrapResult(success: false, stderr: "No input files")
+        }
+        for inputURL in inputURLs where !FileManager.default.fileExists(atPath: inputURL.path) {
             logger.error("Input MXF file not found: \(inputURL.path)")
             return BMXRewrapResult(success: false, stderr: "Input file not found: \(inputURL.lastPathComponent)")
         }
@@ -340,7 +377,7 @@ actor BMXService {
 
         var arguments = extraArguments
         arguments.append(contentsOf: ["-o", outputURL.path, "-p"])
-        arguments.append(inputURL.path)
+        arguments.append(contentsOf: inputURLs.map(\.path))
 
         let request = SubprocessRequest(
             executableURL: URL(fileURLWithPath: bmxtranswrapPath),
@@ -350,7 +387,7 @@ actor BMXService {
             standardErrorCaptureLimit: Self.diagnosticCaptureLimit,
             sensitiveArgumentNames: ["--clip"],
             sensitiveValues: Set(
-                [bmxtranswrapPath, inputURL.path, outputURL.path]
+                [bmxtranswrapPath, outputURL.path] + inputURLs.map(\.path)
                     + arguments.filter { $0.hasPrefix("/") }
             )
         )

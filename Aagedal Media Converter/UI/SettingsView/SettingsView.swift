@@ -100,7 +100,9 @@ struct SettingsView: View {
                     String(localized: "New Group Defaults"),
                     String(localized: "Merge clips by default"),
                     String(localized: "Sequential filename numbering by default"),
-                    String(localized: "Merge and sequential naming are mutually exclusive — turning one on switches the other off, both on the card and in these defaults.")
+                    String(localized: "Merge and sequential naming are mutually exclusive — turning one on switches the other off, both on the card and in these defaults."),
+                    String(localized: "MXF Merges"),
+                    String(localized: "Keep camera metadata in trimmed MXF merges")
                 ]
             case .history:
                 return [
@@ -386,6 +388,10 @@ struct SettingsView: View {
                 ]
             case .upload:
                 return [
+                    String(localized: "Sidecar Files"),
+                    String(localized: "Camera metadata XML (Sony M01.XML)"),
+                    String(localized: "Subtitles (.srt)"),
+                    String(localized: "Clip-marker EDL (.cuts.edl)"),
                     String(localized: "Saved upload profiles could not be read. Your saved data has been preserved. Restore a settings backup or repair the saved profiles, then reopen Settings."),
                     String(localized: "Not installed"),
                     String(localized: "Bundled"),
