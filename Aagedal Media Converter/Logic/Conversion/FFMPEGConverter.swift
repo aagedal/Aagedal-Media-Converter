@@ -183,6 +183,12 @@ actor FFMPEGConverter {
         case cancelled
     }
 
+    enum PostProcessingStepResult: Sendable, Equatable {
+        case success
+        case failed(reason: String)
+        case cancelled
+    }
+
     enum AV2HelperRunResult: Sendable, Equatable {
         case success
         case failed(reason: String)
@@ -451,6 +457,40 @@ actor FFMPEGConverter {
             let output = request.redactedDiagnostic(error.localizedDescription)
             cleanupPartialOutput()
             return .failed(status: nil, reason: "failed to start tool", diagnostic: output)
+        }
+    }
+
+    /// Lists the merge inputs' video packets and writes their temporal offsets into
+    /// FFmpeg's index of the merged MXF (see `MXFIndexTemporalOffsets`).
+    private func writeAVCMXFIndexTemporalOffsets(
+        conversionID: UUID, ffmpegPath: String, concatInput: [String], outputURL: URL
+    ) async -> PostProcessingStepResult {
+        let listURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("merge_packets_\(UUID().uuidString).txt")
+        defer { Self.cleanupTempFile(at: listURL, label: "merge packet list") }
+        let result = await runTrackedPackageWrapper(
+            conversionID: conversionID, executablePath: ffmpegPath,
+            arguments: ["-y", "-v", "error"] + concatInput + ["-map", "0:v:0", "-c", "copy", "-f", "framecrc", listURL.path],
+            outputURL: listURL
+        )
+        switch result {
+        case .success:
+            break
+        case .failed(_, let reason, _):
+            return .failed(reason: reason)
+        case .cancelled:
+            return .cancelled
+        }
+        guard let text = try? String(contentsOf: listURL, encoding: .utf8),
+              let (_, packets) = FrameCRC.packets(from: text),
+              let offsets = MXFIndexTemporalOffsets.temporalOffsets(presentationTimes: packets.map(\.pts)) else {
+            return .failed(reason: "The merge inputs' packet timestamps could not be read")
+        }
+        do {
+            return try MXFIndexTemporalOffsets.write(offsets, to: outputURL)
+                ? .success : .failed(reason: "The index doesn't list one entry per packet")
+        } catch {
+            return .failed(reason: error.localizedDescription)
         }
     }
 
@@ -1013,8 +1053,22 @@ actor FFMPEGConverter {
             }
         }
 
-        // For AVC-Intra MXF, FFmpeg outputs to temp file, then bmxtranswrap rewraps to OP1a
-        let needsBMXRewrap = preset == .tvAVCIntra
+        // For AVC-Intra MXF, FFmpeg outputs to temp file, then bmxtranswrap rewraps to OP1a.
+        // Stream Copy of H.264 into MXF also needs a valid index: bmx rewraps a single
+        // clip, and a merge's offsets are read from its inputs (see MXFIndexTemporalOffsets).
+        // A merge's input is its first clip, whose rate and codec the merge shares.
+        var avcStreamCopyPicture: NativeMXFMerge.PictureTrack?
+        if request.waveformRequest == nil, request.synthesizedVideoRequest == nil,
+           AVCMXFStreamCopy.applies(preset: preset, outputExtension: outputFileURL.pathExtension, sourceURL: inputURL) {
+            avcStreamCopyPicture = await bmxService.getMXFInfo(url: inputURL).flatMap(AVCMXFStreamCopy.avcPicture(fromMXFInfo:))
+        }
+        let isAVCMXFStreamCopy = avcStreamCopyPicture != nil
+        var avcIndexConcatInput: [String]?
+        if isAVCMXFStreamCopy,
+           case .concat(let path, let safe) = FFMPEGInputPlan(inputURL: inputURL, customArguments: request.customInputArguments) {
+            avcIndexConcatInput = ["-f", "concat", "-safe", safe, "-i", path]
+        }
+        let needsBMXRewrap = preset == .tvAVCIntra || (isAVCMXFStreamCopy && avcIndexConcatInput == nil)
         var ffmpegOutputURL = outputFileURL
         var tempMXFURL: URL? = nil
 
@@ -1299,7 +1353,9 @@ actor FFMPEGConverter {
             synthesizedVideoUsesSourceMetadataDuration: tempAudioURL == nil,
             visualSourceURL: request.visualSourceURL,
             customInputArguments: effectiveCustomInputArguments,
-            additionalOutputArguments: request.additionalOutputArguments,
+            additionalOutputArguments: avcStreamCopyPicture.map {
+                (request.additionalOutputArguments ?? []) + AVCMXFStreamCopy.frameRateArguments(editRate: $0.editRate)
+            } ?? request.additionalOutputArguments,
             chapterMetadataURL: request.chapterMetadataURL,
             chapterMetadataTitles: request.chapterMetadataTitles,
             isMuted: request.isMuted
@@ -1418,6 +1474,8 @@ actor FFMPEGConverter {
         let capturedTempMXFURL = tempMXFURL
         let capturedFinalOutputURL = outputFileURL
         let capturedNeedsBMXRewrap = needsBMXRewrap
+        let capturedIsAVCMXFStreamCopy = isAVCMXFStreamCopy
+        let capturedAVCIndexConcatInput = avcIndexConcatInput
         let capturedInputBaseName = inputURL.deletingPathExtension().lastPathComponent
         let capturedIsImageSequenceExport = isImageSequenceExport
         let capturedIsDCPExport = isDCPExport
@@ -1489,12 +1547,31 @@ actor FFMPEGConverter {
                     }
                 }
 
-                // Run bmxtranswrap for AVC-Intra to ensure OP1a compliance
+                if success, let concatInput = capturedAVCIndexConcatInput {
+                    progressUpdate(0.97, "Indexing H.264 MXF...")
+                    switch await self?.writeAVCMXFIndexTemporalOffsets(
+                        conversionID: conversionID, ffmpegPath: capturedFfmpegPath,
+                        concatInput: concatInput, outputURL: capturedFinalOutputURL
+                    ) {
+                    case .success?:
+                        break
+                    case .failed(let reason)?:
+                        // The file is still complete; only its frame order is unreliable.
+                        Self.logger.error("Could not index the H.264 MXF merge: \(reason, privacy: .public)")
+                    case .cancelled?, nil:
+                        success = false
+                        errorReason = "Conversion cancelled"
+                    }
+                }
+
+                // Run bmxtranswrap for AVC-Intra to ensure OP1a compliance, and to index
+                // Stream Copied H.264 MXF.
                 if success && capturedNeedsBMXRewrap, let tempMXF = capturedTempMXFURL {
                     Self.logger.info("Running bmxtranswrap to rewrap MXF to OP1a format")
                     progressUpdate(0.95, "Rewrapping to OP1a...")
 
-                    let mcaLabelsFile = await self?.prepareTrackedAVCIntraMCALabelsFile(
+                    // Stream Copy keeps the source's audio layout; labels are an AVC-Intra preset setting.
+                    let mcaLabelsFile = capturedIsAVCMXFStreamCopy ? nil : await self?.prepareTrackedAVCIntraMCALabelsFile(
                         conversionID: conversionID,
                         inputURL: capturedInputURL,
                         audioRoutingConfig: capturedRequest.audioRoutingConfig,

@@ -44,6 +44,50 @@ struct BMXRewrapResult: Sendable {
 }
 
 /// Service for handling BMX tools operations (MXF rewrapping + MCA label extraction)
+/// FFmpeg's MXF muxer can't index Long GOP H.264 (XAVC-L): it writes no temporal
+/// offsets, so even an untrimmed Stream Copy decodes with timestamps running backwards
+/// and dropped frames. bmxtranswrap parses the AVC essence itself, so rewrapping
+/// FFmpeg's output gives a file whose frames match the source.
+enum AVCMXFStreamCopy {
+    /// Only Stream Copy writes MXF from an MXF source with FFmpeg's muxer.
+    static func applies(preset: ExportPreset, outputExtension: String, sourceURL: URL) -> Bool {
+        preset == .streamCopy && outputExtension.lowercased() == "mxf" && sourceURL.pathExtension.lowercased() == "mxf"
+    }
+
+    /// The source's H.264 picture track (Long GOP or Intra) from `mxf2raw --info`. The
+    /// metadata reader doesn't name XAVC Long's coding label, so mxf2raw decides.
+    static func avcPicture(fromMXFInfo info: String) -> NativeMXFMerge.PictureTrack? {
+        guard let picture = NativeMXFMerge.pictureTrack(fromMXFInfo: info),
+              picture.essenceType.uppercased().hasPrefix("AVC") else { return nil }
+        return picture
+    }
+
+    /// FFmpeg takes a field-coded (interlaced XAVC-L) stream's average frame rate as
+    /// half the edit rate, which its MXF muxer rejects ("Unsupported frame rate 25/2").
+    /// Setting the source's edit rate fixes the header without touching timestamps.
+    static func frameRateArguments(editRate: Double) -> [String] {
+        exactFrameRate(editRate).map { ["-r:v", $0] } ?? []
+    }
+
+    /// The MXF edit rate for a measured frame rate: whole, half (12.5) or NTSC (x000/1001)
+    /// rates, which are the only ones FFmpeg's MXF muxer accepts.
+    static func exactFrameRate(_ rate: Double) -> String? {
+        guard rate.isFinite, rate > 0 else { return nil }
+        let tolerance = 0.0005
+        let ntsc = (rate * 1.001).rounded()
+        if abs(rate - rate.rounded()) > tolerance, abs(rate - ntsc / 1.001) < tolerance {
+            return "\(Int(ntsc) * 1000)/1001"
+        }
+        for denominator in [1, 2] {
+            let numerator = (rate * Double(denominator)).rounded()
+            if abs(rate - numerator / Double(denominator)) < tolerance {
+                return denominator == 1 ? "\(Int(numerator))" : "\(Int(numerator))/\(denominator)"
+            }
+        }
+        return nil
+    }
+}
+
 actor BMXService {
     static let shared = BMXService()
 

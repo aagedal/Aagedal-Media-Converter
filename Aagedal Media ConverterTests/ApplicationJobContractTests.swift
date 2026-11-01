@@ -5535,6 +5535,10 @@ final class ApplicationJobContractTests: XCTestCase {
         let merged = try XCTUnwrap(queue.items.first?.outputURL)
         XCTAssertEqual(queue.items.last?.outputURL, merged)
         XCTAssertFalse(record.outputURLs.contains(merged))
+        // Each trim ends at frame 36. In an open GOP, I-frame 36 is decoded before the
+        // B-frames 34 and 35 that reference it, so the clean cut keeps it too.
+        let lastKeptFrame = openGOP ? 36 : 35
+        let mergedFrameCount = longGOP ? 2 * (lastKeptFrame - 11) : 48
         if exportMarkers {
             let media = try await StitchMarkerMedia.read(merged)
             let expectedTitles = sourceTimecodes
@@ -5543,8 +5547,10 @@ final class ApplicationJobContractTests: XCTestCase {
                 : ["Cut: first.mov", "Cut: second.mov"]
             XCTAssertEqual(media.chapters.map(\.title), expectedTitles)
             XCTAssertEqual(try XCTUnwrap(media.chapters.first?.start), 0, accuracy: 0.001)
-            // The chapter and concat boundary include compressed packet tails.
-            XCTAssertEqual(try XCTUnwrap(media.chapters.last?.start), 1, accuracy: 2 * 1024.0 / 48_000 + (longGOP ? 4.0 / 24 : 0))
+            // The chapter and concat boundary include compressed packet tails and,
+            // for open GOPs, the I-frame kept after the requested end.
+            XCTAssertEqual(try XCTUnwrap(media.chapters.last?.start), 1,
+                           accuracy: 2 * 1024.0 / 48_000 + (longGOP ? 4.0 / 24 : 0) + (openGOP ? 1.0 / 24 : 0))
             XCTAssertEqual(try XCTUnwrap(media.chapters.last?.end), media.duration, accuracy: 0.001)
             let sidecar = merged.deletingPathExtension().appendingPathExtension("cuts.edl")
             let edl = try String(contentsOf: sidecar, encoding: .utf8)
@@ -5560,7 +5566,7 @@ final class ApplicationJobContractTests: XCTestCase {
             let durationTolerance = (withAudio ? 4.0 * 1024 / 48_000 : 1.0 / 24)
                 + (openGOP ? 16.0 / 24 : (longGOP ? 8.0 / 24 : 0))
             XCTAssertEqual(try XCTUnwrap(metadata.durationSeconds), 2, accuracy: durationTolerance)
-            XCTAssertEqual(metadata.frameCount, longGOP && output == merged ? 52 : 48)
+            XCTAssertEqual(metadata.frameCount, output == merged ? mergedFrameCount : 48)
             if sourceTimecodes && output == merged {
                 XCTAssertEqual(metadata.timecode, "01:00:00:12")
             }
@@ -5575,12 +5581,11 @@ final class ApplicationJobContractTests: XCTestCase {
             func decodedFrames(_ source: URL, name: String, trim: Bool) throws -> Data {
                 let decoded = directory.appendingPathComponent(name + ".yuv")
                 var arguments = ["-v", "error", "-xerror", "-i", source.path, "-map", "0:v:0"]
-                // Both requested starts seek to frame 12. The copy cut retains
-                // the next I-frame (36) and its forward
-                // reference P-frame (39), beyond requested frames 12..<36.
+                // Both requested starts seek to frame 12. The copy ends at the
+                // first clean cut at or after frame 36, with no gap before it.
                 // Decode from the beginning to verify these exact source frames.
                 if trim {
-                    arguments += ["-vf", "select='between(n,12,36)+eq(n,39)'"]
+                    arguments += ["-vf", "select='between(n,12,\(lastKeptFrame))'"]
                 }
                 try runBundledFFmpeg(arguments + [
                     "-fps_mode", "passthrough", "-pix_fmt", "yuv420p", "-f", "rawvideo", decoded.path
@@ -5590,9 +5595,9 @@ final class ApplicationJobContractTests: XCTestCase {
             let expectedFirst = try decodedFrames(sources[0], name: "expected-first", trim: true)
             let expectedSecond = try decodedFrames(sources[1], name: "expected-second", trim: true)
             let actual = try decodedFrames(merged, name: "actual", trim: false)
-            XCTAssertEqual(actual.count, 52 * 64 * 48 * 3 / 2)
+            XCTAssertEqual(actual.count, mergedFrameCount * 64 * 48 * 3 / 2)
             XCTAssertTrue(actual == expectedFirst + expectedSecond,
-                          "Long-GOP stitching must preserve source frames, including known reference-frame tails")
+                          "Long-GOP stitching must keep contiguous source frames up to a clean cut")
         }
         if withAudio {
             let decoded = directory.appendingPathComponent("merged-audio.pcm")
@@ -5610,9 +5615,10 @@ final class ApplicationJobContractTests: XCTestCase {
             let frameCount = samples.count / audioChannels
             XCTAssertGreaterThanOrEqual(frameCount, 96_000)
             // Reordering and preroll can extend copied audio by two frame
-            // intervals per closed GOP clip, or four for these open GOP clips.
+            // intervals per closed GOP clip, or five for these open GOP clips,
+            // whose audio also runs to the video cut one frame after the end.
             // This characterizes bounded tails, not exact trim behavior.
-            let videoTailSamples = openGOP ? 2 * 4 * 48_000 / 24 : (longGOP ? 2 * 2 * 48_000 / 24 : 0)
+            let videoTailSamples = openGOP ? 2 * 5 * 48_000 / 24 : (longGOP ? 2 * 2 * 48_000 / 24 : 0)
             XCTAssertLessThanOrEqual(frameCount, 96_000 + 4 * 1024 + videoTailSamples)
             guard frameCount >= 96_000 else { return }
             for channel in 0..<audioChannels {
