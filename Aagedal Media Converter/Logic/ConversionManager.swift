@@ -318,6 +318,168 @@ enum MXFMPEG2LeadingGOPRenumbering {
     }
 }
 
+/// FFmpeg's MXF muxer writes a zero temporal offset for every H.264 picture, so
+/// readers show Long GOP frames in decode order (XAVC-L decodes with timestamps
+/// running backwards and frames dropped). bmxtranswrap can rebuild the index of a
+/// single clip, but rejects merges whose later clips start on a non-IDR I-frame. The
+/// stream copy keeps every picture in order, so the offsets FFmpeg reads from the
+/// merge's inputs are the ones its output needs.
+enum MXFIndexTemporalOffsets {
+    private static let indexTableSegmentKey: [UInt8] = [
+        0x06, 0x0E, 0x2B, 0x34, 0x02, 0x53, 0x01, 0x01, 0x0D, 0x01, 0x02, 0x01, 0x01, 0x10, 0x01, 0x00,
+    ]
+    private static let maximumSegmentLength: UInt64 = 64 * 1024 * 1024
+
+    /// Each displayed picture's offset to its stored position, from packet presentation
+    /// times in decode order. Nil when an offset doesn't fit the index's signed byte.
+    static func temporalOffsets(presentationTimes: [Int64]) -> [Int8]? {
+        let displayOrder = presentationTimes.indices.sorted {
+            (presentationTimes[$0], $0) < (presentationTimes[$1], $1)
+        }
+        var offsets: [Int8] = []
+        offsets.reserveCapacity(displayOrder.count)
+        for (display, stored) in displayOrder.enumerated() {
+            guard let offset = Int8(exactly: stored - display) else { return nil }
+            offsets.append(offset)
+        }
+        return offsets
+    }
+
+    /// Writes `offsets` into every index entry of the file's picture index. Returns
+    /// `false`, leaving the file untouched, unless the entries cover exactly the
+    /// offsets given.
+    static func write(_ offsets: [Int8], to url: URL) throws -> Bool {
+        let handle = try FileHandle(forUpdating: url)
+        defer { try? handle.close() }
+        let fileSize = try handle.seekToEnd()
+        // File offsets of each edit unit's TemporalOffset bytes (segments can repeat).
+        var entryOffsets: [Int: [UInt64]] = [:]
+        var offset: UInt64 = 0
+        while offset + 17 <= fileSize {
+            try handle.seek(toOffset: offset)
+            guard let header = try handle.read(upToCount: 25), header.count >= 17 else { return false }
+            let bytes = [UInt8](header)
+            guard bytes.starts(with: [0x06, 0x0E, 0x2B, 0x34]) else { return false }
+            let length: UInt64
+            let lengthSize: Int
+            if bytes[16] < 0x80 {
+                length = UInt64(bytes[16])
+                lengthSize = 1
+            } else {
+                let count = Int(bytes[16] & 0x7F)
+                guard (1...8).contains(count), bytes.count >= 17 + count else { return false }
+                length = bytes[17..<(17 + count)].reduce(0) { $0 << 8 | UInt64($1) }
+                lengthSize = 1 + count
+            }
+            let valueOffset = offset + 16 + UInt64(lengthSize)
+            guard length <= fileSize - min(valueOffset, fileSize) else { return false }
+            if bytes.starts(with: indexTableSegmentKey) {
+                guard length <= maximumSegmentLength else { return false }
+                try handle.seek(toOffset: valueOffset)
+                guard let data = try handle.read(upToCount: Int(length)), data.count == Int(length) else { return false }
+                guard readEntries(of: [UInt8](data), at: valueOffset, into: &entryOffsets) else { return false }
+            }
+            offset = valueOffset + length
+        }
+        guard entryOffsets.count == offsets.count,
+              entryOffsets.keys.allSatisfy({ (0..<offsets.count).contains($0) }) else { return false }
+        for (editUnit, fileOffsets) in entryOffsets {
+            for entryOffset in fileOffsets {
+                try handle.seek(toOffset: entryOffset)
+                try handle.write(contentsOf: [UInt8(bitPattern: offsets[editUnit])])
+            }
+        }
+        return true
+    }
+
+    /// Records the TemporalOffset byte of each entry in one index table segment.
+    private static func readEntries(of value: [UInt8], at valueOffset: UInt64, into entryOffsets: inout [Int: [UInt64]]) -> Bool {
+        var startPosition: Int64?
+        var entryArray: (offset: Int, count: Int, length: Int)?
+        var index = 0
+        while index + 4 <= value.count {
+            let tag = UInt16(value[index]) << 8 | UInt16(value[index + 1])
+            let length = Int(value[index + 2]) << 8 | Int(value[index + 3])
+            let item = index + 4
+            guard item + length <= value.count else { return false }
+            switch tag {
+            case 0x3F0C where length == 8: // IndexStartPosition
+                startPosition = value[item..<(item + 8)].reduce(0) { $0 << 8 | Int64($1) }
+            case 0x3F0A where length >= 8: // IndexEntryArray: count, entry length, entries
+                let count = value[item..<(item + 4)].reduce(0) { $0 << 8 | Int($1) }
+                let entryLength = value[(item + 4)..<(item + 8)].reduce(0) { $0 << 8 | Int($1) }
+                guard entryLength >= 11, count * entryLength == length - 8 else { return false }
+                entryArray = (item + 8, count, entryLength)
+            default:
+                break
+            }
+            index = item + length
+        }
+        // Segments without entries (e.g. constant byte count) leave nothing to patch.
+        guard let entryArray else { return true }
+        guard let startPosition, startPosition >= 0 else { return false }
+        for entry in 0..<entryArray.count {
+            entryOffsets[Int(startPosition) + entry, default: []].append(valueOffset + UInt64(entryArray.offset + entry * entryArray.length))
+        }
+        return true
+    }
+}
+
+/// Video packet timestamps listed by FFmpeg's `framecrc` muxer.
+enum FrameCRC {
+    struct Packet: Equatable {
+        let dts: Int64
+        let pts: Int64
+    }
+
+    /// The first stream's packets in decode order, and its time base in seconds.
+    static func packets(from text: String) -> (timeBase: Double, packets: [Packet])? {
+        var timeBase: Double?
+        var packets: [Packet] = []
+        for line in text.split(separator: "\n") {
+            if line.hasPrefix("#tb 0:") {
+                let parts = line.dropFirst(6).trimmingCharacters(in: .whitespaces).split(separator: "/")
+                guard parts.count == 2, let num = Double(parts[0]), let den = Double(parts[1]), den > 0 else { return nil }
+                timeBase = num / den
+                continue
+            }
+            guard !line.hasPrefix("#") else { continue }
+            let fields = line.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            guard fields.count >= 3, fields[0] == "0" else { continue }
+            // Packets without timestamps can't be ordered.
+            guard let dts = Int64(fields[1]), let pts = Int64(fields[2]) else { return nil }
+            packets.append(Packet(dts: dts, pts: pts))
+        }
+        guard let timeBase, !packets.isEmpty else { return nil }
+        return (timeBase, packets)
+    }
+}
+
+/// FFmpeg ends a Stream Copy `-t` cut by decode time. With B-frames that keeps a
+/// reference picture shown after the trim end but drops B-frames shown before it, so
+/// the clip ends on a frame from past the cut, with a gap before it. Ending where every
+/// picture shown before the cut is also decoded before it keeps the clip contiguous.
+enum StreamCopyEndCut {
+    /// The earliest presentation timestamp at or after `requestedEnd` (seconds) where
+    /// the packets before it in decode order are exactly the pictures shown before it.
+    /// Nil when the packets hold no such point.
+    static func cleanEnd(packets: [FrameCRC.Packet], timeBase: Double, requestedEnd: Double) -> Int64? {
+        guard packets.count > 1 else { return nil }
+        var suffixMinimum = Array(repeating: Int64.max, count: packets.count + 1)
+        for index in packets.indices.reversed() {
+            suffixMinimum[index] = min(packets[index].pts, suffixMinimum[index + 1])
+        }
+        var prefixMaximum = Int64.min
+        for index in packets.indices.dropLast() {
+            prefixMaximum = max(prefixMaximum, packets[index].pts)
+            let next = suffixMinimum[index + 1]
+            guard prefixMaximum < next else { continue }
+            if Double(next) * timeBase >= requestedEnd - 1e-9 { return next }
+        }
+        return nil
+    }
+}
+
 actor ConversionManager: Sendable {
     @MainActor static let shared = ConversionManager(executionGate: .shared)
     private let mergePreparationSubprocess: MergePreparationSubprocess
@@ -1004,21 +1166,43 @@ actor ConversionManager: Sendable {
             return nil
         }
 
+        let isMXF = !decodeTrim && fileExtension.lowercased() == "mxf"
+        let avcPicture = isMXF ? await BMXService.shared.getMXFInfo(url: item.url).flatMap(AVCMXFStreamCopy.avcPicture(fromMXFInfo:)) : nil
+
         var arguments = ["-y"]
-        if hasStartTrim {
-            // A millisecond-rounded seek can land just before a fractional-rate
-            // keyframe that the timeline snapped to (for example 10/23.976 fps).
-            // Stream copy must seek at or just after that point so FFmpeg chooses
-            // the intended preceding sync sample rather than the previous GOP.
-            let seek = decodeTrim ? FFMPEGCommandBuilder.ffmpegTimeString(from: start)
-                : String(format: "%.6f", ceil(start * 1_000_000) / 1_000_000)
+        // A millisecond-rounded seek can land just before a fractional-rate
+        // keyframe that the timeline snapped to (for example 10/23.976 fps).
+        // Stream copy must seek at or just after that point so FFmpeg chooses
+        // the intended preceding sync sample rather than the previous GOP.
+        let seek = !hasStartTrim ? nil : decodeTrim ? FFMPEGCommandBuilder.ffmpegTimeString(from: start)
+            : String(format: "%.6f", ceil(start * 1_000_000) / 1_000_000)
+        if let seek {
             arguments.append(contentsOf: ["-ss", seek])
         }
 
         arguments.append(contentsOf: ["-i", item.url.path])
 
-        if hasEndTrim {
-            arguments.append(contentsOf: ["-t", FFMPEGCommandBuilder.ffmpegTimeString(from: duration)])
+        // Stream Copy timestamps start at the seek point; the end cut drops video
+        // shown from `streamCopyEnd.time` on.
+        var streamCopyEnd: (time: Double, frame: Double)?
+        var cutsAtEnd = hasEndTrim
+        if hasEndTrim && !decodeTrim {
+            switch await findStreamCopyEndCut(
+                for: item, ffmpegPath: ffmpegPath, seek: seek,
+                end: start + duration - (seek.flatMap(Double.init) ?? 0), batchID: batchID
+            ) {
+            case .at(let end, let frame):
+                streamCopyEnd = (end, frame)
+            case .endOfFile:
+                cutsAtEnd = false
+            case .unknown:
+                break
+            case .cancelled:
+                return nil
+            }
+        }
+        if cutsAtEnd {
+            arguments.append(contentsOf: ["-t", FFMPEGCommandBuilder.ffmpegTimeString(from: streamCopyEnd?.time ?? duration)])
         }
 
         if decodeTrim {
@@ -1040,7 +1224,11 @@ actor ConversionManager: Sendable {
                 arguments.append(contentsOf: ["-map", "0:s?"])
             }
             arguments.append(contentsOf: ["-c", "copy"])
+            if let avcPicture {
+                arguments.append(contentsOf: AVCMXFStreamCopy.frameRateArguments(editRate: avcPicture.editRate))
+            }
         }
+        var droppedVideo: [String] = []
         if hasStartTrim && !decodeTrim {
             // Open GOPs can carry leading pictures after the first copied
             // keyframe in decode order, but before it in presentation order.
@@ -1048,9 +1236,15 @@ actor ConversionManager: Sendable {
             // they can decode against the preceding clip and produce corrupt
             // frames. Remove only that leading video preroll; preserve packet
             // contents, subsequent B-frame reordering, and all audio packets.
-            arguments.append(contentsOf: [
-                "-bsf:v", "noise=amount=0:drop='not(eq(pts,nopts))*lt(pts,startpts)'"
-            ])
+            droppedVideo.append("not(eq(pts,nopts))*lt(pts,startpts)")
+        }
+        if let streamCopyEnd {
+            // `-t` keeps every packet decoded before the end, including reference
+            // pictures shown after it. Nothing kept depends on them at a clean end.
+            droppedVideo.append(String(format: "not(eq(pts,nopts))*gte(pts*tb,%.9f)", streamCopyEnd.time - streamCopyEnd.frame / 2))
+        }
+        if !droppedVideo.isEmpty {
+            arguments.append(contentsOf: ["-bsf:v", "noise=amount=0:drop='\(droppedVideo.joined(separator: "+"))'"])
         }
         arguments.append(contentsOf: ["-avoid_negative_ts", "make_zero", tempURL.path])
 
@@ -1063,7 +1257,27 @@ actor ConversionManager: Sendable {
             context: "trim \(item.name)"
         )
         guard success else { return nil }
-        guard hasStartTrim && !decodeTrim && fileExtension.lowercased() == "mxf" else { return tempURL }
+        if avcPicture != nil {
+            // FFmpeg can't index Long GOP H.264 in MXF; the concat merge would read
+            // this clip with timestamps running backwards. bmx rebuilds the index.
+            let rewrapURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("trimmed_\(UUID().uuidString).mxf")
+            let result = await runMergePreparationBMX(
+                inputURL: tempURL, outputURL: rewrapURL,
+                arguments: ["-t", "op1a", "--use-avc-subdesc"],
+                itemID: item.id, batchID: batchID
+            )
+            try? FileManager.default.removeItem(at: tempURL)
+            guard result.success, !result.cancelled, isMergePreparationActive(batchID) else {
+                if !result.cancelled {
+                    mergeLogger.error("bmx could not reindex the trimmed H.264 MXF of \(item.name, privacy: .public): \(result.stderr, privacy: .public)")
+                }
+                try? FileManager.default.removeItem(at: rewrapURL)
+                return nil
+            }
+            return rewrapURL
+        }
+        guard hasStartTrim && isMXF else { return tempURL }
 
         // Dropping leading B-frames leaves MPEG-2 temporal references that FFmpeg's
         // MXF muxer turns into an invalid index. Renumber them, then remux so this
@@ -1089,6 +1303,57 @@ actor ConversionManager: Sendable {
         )
         try? FileManager.default.removeItem(at: tempURL)
         return remuxed ? remuxURL : nil
+    }
+
+    private enum StreamCopyEndCutResult {
+        /// Video shown from `end` on is dropped; `frame` is a picture interval. Both are
+        /// seconds on the trim's timeline, which starts at its seek.
+        case at(end: Double, frame: Double)
+        /// No clean point before the source ends, so the clip keeps the rest of it.
+        case endOfFile
+        /// FFmpeg's own cut applies.
+        case unknown
+        case cancelled
+    }
+
+    /// Lists the trim's video packets and picks the first clean end at or after the
+    /// requested one (see `StreamCopyEndCut`). The listing seeks exactly like the trim:
+    /// FFmpeg rounds a seek offset to whole time-base units, so any other seek can shift
+    /// the timeline by a frame.
+    private func findStreamCopyEndCut(
+        for item: VideoItem, ffmpegPath: String, seek: String?, end: Double, batchID: UUID
+    ) async -> StreamCopyEndCutResult {
+        let lookAhead = 3.0
+        let listURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("trim_packets_\(UUID().uuidString).txt")
+        defer { try? FileManager.default.removeItem(at: listURL) }
+        var arguments = ["-y"]
+        if let seek { arguments.append(contentsOf: ["-ss", seek]) }
+        arguments.append(contentsOf: [
+            "-i", item.url.path, "-map", "0:v:0", "-c", "copy",
+            "-t", FFMPEGCommandBuilder.ffmpegTimeString(from: end + lookAhead),
+            "-f", "framecrc", listURL.path,
+        ])
+        let listed = await runMergePreparationFFmpeg(
+            at: ffmpegPath, arguments: arguments, outputURL: listURL,
+            itemID: item.id, batchID: batchID, context: "list packets of \(item.name)"
+        )
+        guard isMergePreparationActive(batchID) else { return .cancelled }
+        guard listed, let text = try? String(contentsOf: listURL, encoding: .utf8),
+              let (timeBase, packets) = FrameCRC.packets(from: text) else { return .unknown }
+        if let cut = StreamCopyEndCut.cleanEnd(packets: packets, timeBase: timeBase, requestedEnd: end) {
+            let cutTime = Double(cut) * timeBase
+            if cutTime - end >= timeBase {
+                mergeLogger.info("\(item.name, privacy: .public): Stream Copy trim ends \(cutTime - end, privacy: .public) s after the requested end so no kept frame loses a reference")
+            }
+            // Pictures are at least one time-base unit apart.
+            let pictureTimes = Set(packets.map(\.pts)).sorted()
+            let interval = zip(pictureTimes, pictureTimes.dropFirst()).map { $1 - $0 }.min() ?? 1
+            return .at(end: cutTime, frame: Double(max(interval, 1)) * timeBase)
+        }
+        // Packets stopping well short of the listed span mean the source ended.
+        let lastDecode = Double(packets.map(\.dts).max() ?? 0) * timeBase
+        return lastDecode < end + lookAhead - 1 ? .endOfFile : .unknown
     }
 
     private func runMergePreparationFFmpeg(

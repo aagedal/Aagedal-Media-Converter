@@ -770,37 +770,8 @@ final class TrimmedStreamCopyMergeTests: XCTestCase {
             XCTAssertEqual(result.status, 0, result.errors)
             return url
         }
-        let output = folder.appendingPathComponent("out", isDirectory: true)
-        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
-        let suite = "TrimmedStreamCopyMerge.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        defaults.set(false, forKey: AppConstants.exportStitchMarkersKey)
-        defaults.set(false, forKey: AppConstants.saveNextToOriginalKey)
-        let settings = ConversionPreparationSettings(preset: .streamCopy, defaults: defaults)
-        let manager = ConversionManager(preparationSettingsProvider: { _ in settings })
-        var items = clips.map { url in
-            VideoItem(url: url, name: url.lastPathComponent, size: 0, duration: "--:--", status: .waiting,
-                      progress: 0, eta: nil, outputURL: nil)
-        }
-        for index in items.indices { items[index].includeDateTag = false }
         // Both start trims fall between keyframes, so their GOPs begin with leading B-frames.
-        items[0].trimStart = 17.0 / 25
-        items[0].trimEnd = 63.0 / 25
-        items[2].trimStart = 41.0 / 25
-        let storage = OSAllocatedUnfairLock(initialState: items)
-
-        await manager.convertGroup(
-            items: Self.binding(storage), outputFolder: output.path, preset: .streamCopy,
-            concatEnabled: true, groupName: "trimmed",
-            transcriptionEnabled: false, uploadEnabled: false, analyticsEnabled: false
-        )
-        for _ in 0..<600 where storage.withLock({ $0.contains { $0.status == .converting || $0.status == .waiting } }) {
-            try await Task.sleep(for: .milliseconds(200))
-        }
-        let finished = storage.withLock { $0 }
-        XCTAssertEqual(finished.map(\.status), [.done, .done, .done], finished.compactMap(\.conversionError).joined(separator: "; "))
-        let merged = try XCTUnwrap(finished.first?.outputURL)
+        let merged = try await Self.merge(clips, in: folder, trims: [(17.0 / 25, 63.0 / 25), nil, (41.0 / 25, nil)])
 
         let decode = try Self.run(ffmpeg, ["-i", merged.path, "-map", "0:v", "-map", "0:a", "-f", "null", "-"])
         XCTAssertEqual(decode.status, 0)
@@ -844,6 +815,154 @@ final class TrimmedStreamCopyMergeTests: XCTestCase {
         }
     }
 
+    /// FFmpeg can't index Long GOP H.264 in MXF, so its Stream Copy output decoded with
+    /// backwards timestamps and lost frames. Trimmed clips and the merge are rewrapped by bmx.
+    func testTrimmedStreamCopyH264MXFMergeKeepsEveryFrame() async throws {
+        guard let ffmpeg = BinaryPathResolver.ffmpegPath, let bmx = BinaryPathResolver.bmxtranswrapPath else {
+            throw XCTSkip("FFmpeg or bmxtranswrap is not bundled")
+        }
+        let folder = try Self.temporaryFolder("TrimmedH264MXFMerge")
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+
+        // XAVC Long-style 4:2:2 10-bit H.264 with B-frames, wrapped by bmx like a camera file.
+        let clips = try (0..<3).map { index in
+            let ffmpegURL = folder.appendingPathComponent("ffmpeg\(index).mxf")
+            let result = try Self.run(ffmpeg, [
+                "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=25",
+                "-f", "lavfi", "-i", "anoisesrc=sample_rate=48000:seed=\(index * 2 + 1)",
+                "-f", "lavfi", "-i", "anoisesrc=sample_rate=48000:seed=\(index * 2 + 2)",
+                "-map", "0:v", "-map", "1:a", "-map", "2:a", "-t", "3",
+                "-c:v", "libx264", "-pix_fmt", "yuv422p10le", "-g", "12", "-bf", "3", "-x264-params", "b-pyramid=normal",
+                "-c:a", "pcm_s24le", "-y", ffmpegURL.path,
+            ])
+            XCTAssertEqual(result.status, 0, result.errors)
+            let url = folder.appendingPathComponent("C00\(index).mxf")
+            let wrap = try Self.run(bmx, ["-t", "op1a", "-o", url.path, ffmpegURL.path], tool: true)
+            XCTAssertEqual(wrap.status, 0, wrap.errors)
+            return url
+        }
+        let merged = try await Self.merge(clips, in: folder, trims: [(17.0 / 25, 63.0 / 25), nil, (41.0 / 25, 70.0 / 25)])
+
+        let decode = try Self.run(ffmpeg, ["-i", merged.path, "-map", "0:v", "-map", "0:a", "-f", "null", "-"])
+        XCTAssertEqual(decode.status, 0)
+        XCTAssertEqual(decode.errors, "", "Decoding the merge must not report non-monotonic timestamps")
+        let probe = try Self.run(ffmpeg, ["-v", "info", "-i", merged.path])
+        XCTAssertEqual(probe.errors.components(separatedBy: "Audio: pcm_s24le").count - 1, 2, probe.errors)
+
+        let frames = try Self.frameHashes(ffmpeg, merged)
+        let sourceFrames = try clips.map { try Self.frameHashes(ffmpeg, $0) }
+        let runs = Self.contiguousRuns(of: frames, in: sourceFrames, window: 1)
+        XCTAssertEqual(runs.map(\.count).reduce(0, +), frames.count, "\(runs)")
+        XCTAssertEqual(runs.count, 3, "\(runs)")
+        XCTAssertEqual(runs.dropFirst().first?.count, sourceFrames[1].count)
+        Self.assertRun(runs.first, covers: 17..<63)
+        Self.assertRun(runs.last, covers: 41..<70)
+    }
+
+    /// FFmpeg's `-t` ends a Stream Copy by decode time, which kept a reference picture
+    /// from past an HEVC end trim and dropped the B-frames before it.
+    func testStreamCopyEndTrimOfHEVCMOVEndsOnContiguousSourceFrames() async throws {
+        guard let ffmpeg = BinaryPathResolver.ffmpegPath else { throw XCTSkip("FFmpeg is not bundled") }
+        let folder = try Self.temporaryFolder("TrimmedHEVCMerge")
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        let clips = try (0..<2).map { index in
+            let url = folder.appendingPathComponent("C00\(index).mov")
+            let result = try Self.run(ffmpeg, [
+                "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=25",
+                "-f", "lavfi", "-i", "anoisesrc=sample_rate=48000:seed=\(index + 1)", "-t", "4",
+                "-c:v", "libx265", "-x265-params", "keyint=50:bframes=4:b-pyramid=1:log-level=error", "-tag:v", "hvc1",
+                "-c:a", "pcm_s24le", "-y", url.path,
+            ])
+            XCTAssertEqual(result.status, 0, result.errors)
+            return url
+        }
+        // Ends between the clean points of a four-B-frame pyramid.
+        let merged = try await Self.merge(clips, in: folder, trims: [(nil, 50.0 / 25), (10.0 / 25, 62.0 / 25)])
+
+        let frames = try Self.frameHashes(ffmpeg, merged)
+        let sourceFrames = try clips.map { try Self.frameHashes(ffmpeg, $0) }
+        let runs = Self.contiguousRuns(of: frames, in: sourceFrames, window: 1)
+        XCTAssertEqual(runs.map(\.count).reduce(0, +), frames.count, "\(runs)")
+        XCTAssertEqual(runs.count, 2, "\(runs)")
+        Self.assertRun(runs.first, covers: 0..<50)
+        Self.assertRun(runs.last, covers: 10..<62)
+    }
+
+    func testStreamCopyEndCutWaitsForEveryPictureShownBeforeIt() throws {
+        // I0 P4 B2 B1 B3 P8 B6 B5 B7: every picture before 5 and 9 is decoded first.
+        let order: [Int64] = [0, 4, 2, 1, 3, 8, 6, 5, 7, 12, 10, 9, 11]
+        let packets = order.enumerated().map { FrameCRC.Packet(dts: Int64($0.offset) - 1, pts: $0.element) }
+        XCTAssertEqual(StreamCopyEndCut.cleanEnd(packets: packets, timeBase: 1, requestedEnd: 2), 5)
+        XCTAssertEqual(StreamCopyEndCut.cleanEnd(packets: packets, timeBase: 1, requestedEnd: 5), 5)
+        XCTAssertEqual(StreamCopyEndCut.cleanEnd(packets: packets, timeBase: 1, requestedEnd: 5.5), 9)
+        XCTAssertNil(StreamCopyEndCut.cleanEnd(packets: packets, timeBase: 1, requestedEnd: 10))
+
+        let text = "#tb 0: 1/12800\n#media_type 0: video\n0,      -1024,          0,      512,    97488, 0xad06a3f8\n0,       -512,       2048,      512,    77251, 0xec7b2872, F=0x0\n"
+        let parsed = try XCTUnwrap(FrameCRC.packets(from: text))
+        XCTAssertEqual(parsed.timeBase, 1.0 / 12800)
+        XCTAssertEqual(parsed.packets, [.init(dts: -1024, pts: 0), .init(dts: -512, pts: 2048)])
+    }
+
+    func testAVCMXFStreamCopyUsesExactEditRates() {
+        XCTAssertEqual(AVCMXFStreamCopy.exactFrameRate(25), "25")
+        XCTAssertEqual(AVCMXFStreamCopy.exactFrameRate(29.97), "30000/1001")
+        XCTAssertEqual(AVCMXFStreamCopy.exactFrameRate(59.94), "60000/1001")
+        XCTAssertEqual(AVCMXFStreamCopy.exactFrameRate(23.976), "24000/1001")
+        XCTAssertEqual(AVCMXFStreamCopy.exactFrameRate(12.5), "25/2")
+        XCTAssertNil(AVCMXFStreamCopy.exactFrameRate(17.3))
+    }
+
+    /// The run starts at or before `frames` and ends at or after it, within one mini-GOP.
+    private static func assertRun(_ run: Run?, covers frames: Range<Int>, file: StaticString = #filePath, line: UInt = #line) {
+        guard let run else { return XCTFail("missing run", file: file, line: line) }
+        XCTAssertLessThanOrEqual(run.start, frames.lowerBound, "\(run)", file: file, line: line)
+        XCTAssertGreaterThanOrEqual(run.start + run.count, frames.upperBound, "\(run)", file: file, line: line)
+        XCTAssertLessThan(run.start + run.count, frames.upperBound + 8, "\(run)", file: file, line: line)
+    }
+
+    private static func temporaryFolder(_ name: String) throws -> URL {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(name)-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder
+    }
+
+    /// Runs a Stream Copy merge of `clips` with the given (start, end) trims and returns its output.
+    private static func merge(_ clips: [URL], in folder: URL, trims: [(Double?, Double?)?]) async throws -> URL {
+        let output = folder.appendingPathComponent("out", isDirectory: true)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        let suite = "TrimmedStreamCopyMerge.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(false, forKey: AppConstants.exportStitchMarkersKey)
+        defaults.set(false, forKey: AppConstants.saveNextToOriginalKey)
+        let settings = ConversionPreparationSettings(preset: .streamCopy, defaults: defaults)
+        let manager = ConversionManager(preparationSettingsProvider: { _ in settings })
+        var items = clips.map { url in
+            VideoItem(url: url, name: url.lastPathComponent, size: 0, duration: "--:--", status: .waiting,
+                      progress: 0, eta: nil, outputURL: nil)
+        }
+        for (index, trim) in trims.enumerated() {
+            items[index].includeDateTag = false
+            items[index].trimStart = trim?.0
+            items[index].trimEnd = trim?.1
+        }
+        let storage = OSAllocatedUnfairLock(initialState: items)
+
+        await manager.convertGroup(
+            items: binding(storage), outputFolder: output.path, preset: .streamCopy,
+            concatEnabled: true, groupName: "trimmed",
+            transcriptionEnabled: false, uploadEnabled: false, analyticsEnabled: false
+        )
+        for _ in 0..<600 where storage.withLock({ $0.contains { $0.status == .converting || $0.status == .waiting } }) {
+            try await Task.sleep(for: .milliseconds(200))
+        }
+        let finished = storage.withLock { $0 }
+        XCTAssertEqual(finished.map(\.status), Array(repeating: .done, count: clips.count),
+                       finished.compactMap(\.conversionError).joined(separator: "; "))
+        return try XCTUnwrap(finished.first?.outputURL)
+    }
+
     private struct Run: CustomStringConvertible {
         let source: Int
         let start: Int
@@ -883,10 +1002,10 @@ final class TrimmedStreamCopyMergeTests: XCTestCase {
         return data.withUnsafeBytes { Array($0.bindMemory(to: Int32.self)) }
     }
 
-    private static func run(_ ffmpeg: String, _ arguments: [String]) throws -> (status: Int32, output: Data, errors: String) {
+    private static func run(_ executable: String, _ arguments: [String], tool: Bool = false) throws -> (status: Int32, output: Data, errors: String) {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: ffmpeg)
-        process.arguments = ["-nostdin", "-v", "error"] + arguments
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = tool ? arguments : ["-nostdin", "-v", "error"] + arguments
         let output = Pipe(), errors = Pipe()
         process.standardOutput = output
         process.standardError = errors
