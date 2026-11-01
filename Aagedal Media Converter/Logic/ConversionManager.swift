@@ -225,6 +225,99 @@ struct MergePreparationSubprocess: Sendable {
     }
 }
 
+/// FFmpeg's MXF muxer builds the index table's temporal offsets for MPEG-2 from each
+/// picture header's `temporal_reference`, not from packet timestamps. When a Stream
+/// Copy start trim drops an open GOP's leading B-frames, the first GOP's remaining
+/// pictures still count from the dropped ones, so the index points at missing
+/// pictures and the file decodes with timestamps running backwards. Renumbering that
+/// GOP from zero lets the next MXF mux write a valid index.
+enum MXFMPEG2LeadingGOPRenumbering {
+    private static let maximumPictureElements = 1024
+    private static let maximumElementLength: UInt64 = 64 * 1024 * 1024
+
+    /// Returns `true` when the file was changed. Files that are not frame-wrapped
+    /// MPEG-2 in KLV, or whose first GOP already counts from zero, are left untouched.
+    static func renumberFirstGOP(at url: URL) throws -> Bool {
+        let handle = try FileHandle(forUpdating: url)
+        defer { try? handle.close() }
+        let fileSize = try handle.seekToEnd()
+        // File offset of each first-GOP picture header's temporal_reference, its value,
+        // and the following byte, which also holds the picture coding type.
+        var pictures: [(offset: UInt64, reference: Int, trailingByte: UInt8)] = []
+        var gopHeaders = 0
+        var pictureElements = 0
+        var offset: UInt64 = 0
+
+        scan: while offset + 17 <= fileSize {
+            try handle.seek(toOffset: offset)
+            guard let header = try handle.read(upToCount: 25), header.count >= 17 else { return false }
+            let bytes = [UInt8](header)
+            guard bytes.starts(with: [0x06, 0x0E, 0x2B, 0x34]) else { return false }
+            let length: UInt64
+            let lengthSize: Int
+            if bytes[16] < 0x80 {
+                length = UInt64(bytes[16])
+                lengthSize = 1
+            } else {
+                let count = Int(bytes[16] & 0x7F)
+                guard (1...8).contains(count), bytes.count >= 17 + count else { return false }
+                length = bytes[17..<(17 + count)].reduce(0) { $0 << 8 | UInt64($1) }
+                lengthSize = 1 + count
+            }
+            let valueOffset = offset + 16 + UInt64(lengthSize)
+            guard length <= fileSize - min(valueOffset, fileSize) else { return false }
+
+            if isPictureElement(bytes) {
+                pictureElements += 1
+                guard pictureElements <= maximumPictureElements, length <= maximumElementLength else { return false }
+                try handle.seek(toOffset: valueOffset)
+                guard let data = try handle.read(upToCount: Int(length)), data.count == Int(length) else { return false }
+                let value = [UInt8](data)
+                // Only MPEG-2 starts its first picture with a sequence header.
+                if pictureElements == 1 && !value.starts(with: [0x00, 0x00, 0x01, 0xB3]) { return false }
+                var index = 0
+                while index + 5 < value.count {
+                    guard value[index] == 0, value[index + 1] == 0, value[index + 2] == 1 else {
+                        index += 1
+                        continue
+                    }
+                    switch value[index + 3] {
+                    case 0xB8:
+                        gopHeaders += 1
+                        if gopHeaders > 1 { break scan }
+                    case 0x00 where gopHeaders == 1:
+                        let reference = Int(value[index + 4]) << 2 | Int(value[index + 5]) >> 6
+                        pictures.append((valueOffset + UInt64(index + 4), reference, value[index + 5]))
+                    default:
+                        break
+                    }
+                    index += 3
+                }
+                if gopHeaders == 0 { return false }
+            }
+            offset = valueOffset + length
+        }
+
+        guard let first = pictures.map(\.reference).min(), first > 0 else { return false }
+        for picture in pictures {
+            let reference = picture.reference - first
+            try handle.seek(toOffset: picture.offset)
+            try handle.write(contentsOf: [
+                UInt8(reference >> 2),
+                UInt8((reference & 0x03) << 6) | (picture.trailingByte & 0x3F),
+            ])
+        }
+        return true
+    }
+
+    /// Frame-wrapped essence element of a Generic Container (0x15) or SDTI-CP (0x05) picture item.
+    private static func isPictureElement(_ key: [UInt8]) -> Bool {
+        key[4] == 0x01 && key[5] == 0x02 && key[6] == 0x01
+            && key[8] == 0x0D && key[9] == 0x01 && key[10] == 0x03 && key[11] == 0x01
+            && (key[12] == 0x15 || key[12] == 0x05)
+    }
+}
+
 actor ConversionManager: Sendable {
     @MainActor static let shared = ConversionManager(executionGate: .shared)
     private let mergePreparationSubprocess: MergePreparationSubprocess
@@ -938,6 +1031,14 @@ actor ConversionManager: Sendable {
                 "-fps_mode:v", "passthrough"
             ])
         } else {
+            // Without -map, FFmpeg keeps one stream per type and drops every audio
+            // track after the first. Carry the streams the Stream Copy merge keeps:
+            // all video and audio, plus subtitles only where MP4/MOV merges map them.
+            // Data streams (tmcd, MXF ANC) are dropped by the merge and can fail here.
+            arguments.append(contentsOf: ["-map", "0:v?", "-map", "0:a?"])
+            if ["mp4", "mov", "m4v"].contains(fileExtension.lowercased()) {
+                arguments.append(contentsOf: ["-map", "0:s?"])
+            }
             arguments.append(contentsOf: ["-c", "copy"])
         }
         if hasStartTrim && !decodeTrim {
@@ -961,7 +1062,33 @@ actor ConversionManager: Sendable {
             batchID: batchID,
             context: "trim \(item.name)"
         )
-        return success ? tempURL : nil
+        guard success else { return nil }
+        guard hasStartTrim && !decodeTrim && fileExtension.lowercased() == "mxf" else { return tempURL }
+
+        // Dropping leading B-frames leaves MPEG-2 temporal references that FFmpeg's
+        // MXF muxer turns into an invalid index. Renumber them, then remux so this
+        // clip's own index matches before the concat merge reads its timestamps.
+        let renumbered: Bool
+        do {
+            renumbered = try MXFMPEG2LeadingGOPRenumbering.renumberFirstGOP(at: tempURL)
+        } catch {
+            mergeLogger.error("Failed to renumber trimmed MPEG-2 pictures for \(item.name, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            try? FileManager.default.removeItem(at: tempURL)
+            return nil
+        }
+        guard renumbered else { return tempURL }
+        let remuxURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("trimmed_\(UUID().uuidString).mxf")
+        let remuxed = await runMergePreparationFFmpeg(
+            at: ffmpegPath,
+            arguments: ["-y", "-i", tempURL.path, "-map", "0", "-c", "copy", remuxURL.path],
+            outputURL: remuxURL,
+            itemID: item.id,
+            batchID: batchID,
+            context: "reindex \(item.name)"
+        )
+        try? FileManager.default.removeItem(at: tempURL)
+        return remuxed ? remuxURL : nil
     }
 
     private func runMergePreparationFFmpeg(
