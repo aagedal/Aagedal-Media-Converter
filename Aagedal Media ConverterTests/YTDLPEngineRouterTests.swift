@@ -113,6 +113,106 @@ final class YTDLPEngineRouterTests: XCTestCase {
         XCTAssertNotNil(YTDLPProgressParser.parse(line))
     }
 
+    /// Lines captured 2026-11-02 from yt-dlp-rs 0.8.0-beta.1 and yt-dlp 2026.10.21 (both
+    /// print the same) downloading a local MP4 with `downloadProgressTemplate`.
+    func testDownloadStatusParsing() throws {
+        let prefix = YTDLPProgressParser.downloadStatusPrefix
+        let downloading = try XCTUnwrap(YTDLPProgressParser.parseDownloadStatus(
+            prefix + #"{"status": "downloading", "downloaded_bytes": 7168, "total_bytes": 7897258, "eta": 4, "speed": 1861113.375765749, "filename": "clip.mp4", "tmpfilename": "clip.mp4.part"}"#
+        ))
+        XCTAssertFalse(downloading.isFinished)
+        XCTAssertEqual(downloading.filename, "clip.mp4")
+        XCTAssertEqual(try XCTUnwrap(downloading.fraction), 7168.0 / 7897258.0, accuracy: 1e-9)
+        XCTAssertEqual(downloading.speedText, "1.77MiB/s")
+
+        let finished = try XCTUnwrap(YTDLPProgressParser.parseDownloadStatus(
+            prefix + #"{"status": "finished", "downloaded_bytes": 7897258, "total_bytes": 7897258, "speed": 2092169.295093156, "filename": "clip.mp4"}"#
+        ))
+        XCTAssertTrue(finished.isFinished)
+        XCTAssertEqual(finished.fraction, 1)
+
+        // HLS/DASH: the estimate stands in for the total; fragments without sizes.
+        let estimate = try XCTUnwrap(YTDLPProgressParser.parseDownloadStatus(
+            prefix + #"{"status": "downloading", "downloaded_bytes": 250, "total_bytes_estimate": 1000.0, "fragment_index": 1, "fragment_count": 8}"#
+        ))
+        XCTAssertEqual(estimate.fraction, 0.25)
+        let fragments = try XCTUnwrap(YTDLPProgressParser.parseDownloadStatus(
+            prefix + #"{"status": "downloading", "fragment_index": 3, "fragment_count": 4}"#
+        ))
+        XCTAssertEqual(fragments.fraction, 0.75)
+
+        // A live stream has no size or fragment count; a growing file reports its recorded time.
+        let live = try XCTUnwrap(YTDLPProgressParser.parseDownloadStatus(
+            prefix + #"{"status": "downloading", "downloaded_bytes": 1593835, "speed": 512, "filename": "Live.mov", "tmpfilename": "Live.mov", "recorded_seconds": 15}"#
+        ))
+        XCTAssertNil(live.fraction)
+        XCTAssertEqual(live.recordedSeconds, 15)
+        XCTAssertEqual(live.speedText, "512.00B/s")
+
+        XCTAssertNil(YTDLPProgressParser.parseDownloadStatus(prefix + "NA"))
+        XCTAssertNil(YTDLPProgressParser.parseDownloadStatus(prefix + #"{"downloaded_bytes": 1}"#))
+        XCTAssertNil(YTDLPProgressParser.parseDownloadStatus(#"{"status": "downloading"}"#))
+    }
+
+    func testDownloadUsesProgressTemplateAndIgnoresHeuristicsAfterIt() async throws {
+        let folder = try makeTemporaryFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let prefix = YTDLPProgressParser.downloadStatusPrefix
+        let runner = EngineScriptedRunner { _, output in
+            func out(_ text: String) { output?(SubprocessOutputChunk(stream: .standardOutput, data: Data((text + "\n").utf8))) }
+            func err(_ text: String) { output?(SubprocessOutputChunk(stream: .standardError, data: Data((text + "\n").utf8))) }
+            err("[youtube] abc: Downloading webpage")
+            out(prefix + #"{"status": "downloading", "downloaded_bytes": 400, "total_bytes": 1000, "speed": 2048, "filename": "Clip.f137.mp4", "tmpfilename": "Clip.f137.mp4.part"}"#)
+            out(prefix + #"{"status": "finished", "downloaded_bytes": 1000, "total_bytes": 1000, "filename": "Clip.f137.mp4"}"#)
+            // Between the formats of a merge: a setup line must not move progress back.
+            err("[hlsnative] Downloading m3u8 manifest")
+            out(prefix + #"{"status": "downloading", "downloaded_bytes": 50, "total_bytes": 100, "filename": "Clip.f140.m4a", "tmpfilename": "Clip.f140.m4a.part"}"#)
+            let final = folder.appendingPathComponent("Clip.mp4")
+            try Data("video".utf8).write(to: final)
+            out(final.path)
+            return .result()
+        }
+        let service = YTDLPService(updateService: EngineStubUpdater(), subprocessRunner: runner,
+                                   engineFailures: YTDLPEngineFailureMemory())
+        let reports = LockedProgress()
+        let result = try await service.download(
+            url: "https://www.youtube.com/watch?v=abc", outputFolder: folder,
+            progress: { value, speed, _ in reports.append(value, speed) }
+        )
+        XCTAssertEqual(result.outputURL.lastPathComponent, "Clip.mp4")
+        let arguments = try XCTUnwrap(runner.requests.last?.arguments)
+        let template = try XCTUnwrap(arguments.firstIndex(of: "--progress-template"))
+        XCTAssertEqual(arguments[template + 1], YTDLPProgressParser.downloadProgressTemplate)
+        // The setup line before the first status still shows activity; after it only
+        // the statuses count, and `finished` leaves the bar to the next status.
+        XCTAssertEqual(reports.values.map(\.value), [0.05, 0.4, 0.5, 1.0])
+        XCTAssertEqual(reports.values[1].speed, "2.00KiB/s")
+    }
+
+    /// `--growing-file` adds `recorded_seconds` to the JSON status (yt-dlp-rs 0.8+).
+    func testGrowingRecordingReportsRecordedTimeFromDownloadStatus() async throws {
+        let folder = try makeTemporaryFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appendingPathComponent("Live.mov")
+        let prefix = YTDLPProgressParser.downloadStatusPrefix
+        let runner = EngineScriptedRunner { _, output in
+            func out(_ text: String) { output?(SubprocessOutputChunk(stream: .standardOutput, data: Data((text + "\n").utf8))) }
+            out("\(YTDLPProgressParser.liveStatusPrefix)is_live")
+            try Data("growing".utf8).write(to: file)
+            out(prefix + #"{"status": "downloading", "downloaded_bytes": 2048, "speed": 512, "filename": "Live.mov", "tmpfilename": "Live.mov", "recorded_seconds": 15.5}"#)
+            out(file.path)
+            return .result()
+        }
+        let service = YTDLPService(updateService: EngineStubUpdater(), subprocessRunner: runner,
+                                   engineFailures: YTDLPEngineFailureMemory())
+        let updates = LockedUpdates()
+        _ = try await service.download(
+            url: "https://www.youtube.com/watch?v=x", outputFolder: folder, growingFile: true,
+            progress: { _, _, _ in }, liveUpdate: { updates.append($0) }
+        )
+        XCTAssertEqual(updates.values, [.growingFile(file), .recording(duration: 15.5, bytes: 2048)])
+    }
+
     func testGrowingRecordingTagSetsClearsAndSweeps() throws {
         let folder = try makeTemporaryFolder()
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -471,6 +571,13 @@ private final class LockedUpdates: @unchecked Sendable {
     private var recorded: [YTDLPLiveUpdate] = []
     var values: [YTDLPLiveUpdate] { lock.withLock { recorded } }
     func append(_ update: YTDLPLiveUpdate) { lock.withLock { recorded.append(update) } }
+}
+
+private final class LockedProgress: @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [(value: Double, speed: String?)] = []
+    var values: [(value: Double, speed: String?)] { lock.withLock { recorded } }
+    func append(_ value: Double, _ speed: String?) { lock.withLock { recorded.append((value, speed)) } }
 }
 
 private final class EngineScriptedRunner: SubprocessRunning, @unchecked Sendable {

@@ -4,7 +4,10 @@ Audited against yt-dlp-rs `a812a8f` (README, `src/main.rs` clap options,
 `docs/COMPATIBILITY.md`) and the `v0.3.0-beta.1` aarch64 binary, 2026-10-24;
 clip options re-checked against `v0.4.0-beta.1`, 2026-10-25; live recording
 (`--live-from-start`, `--growing-file`, SIGINT/SIGTERM stops, upcoming-stream
-probes) checked against `v0.6.0-beta.1` on YouTube live streams, 2026-10-28.
+probes) checked against `v0.6.0-beta.1` on YouTube live streams, 2026-10-28;
+JSON progress (`--progress-template`, the 1.0 CLI contract in yt-dlp-rs
+`docs/CLI_CONTRACT.md`) checked against `v0.8.0-beta.1` and yt-dlp 2026.10.21
+on a local HTTP download, 2026-11-02.
 Code: `Logic/YTDLP/YTDLPEngineRouter.swift` (routing, session failure memory,
 cleanup) and `YTDLPService.withEngineFallback`.
 
@@ -58,7 +61,7 @@ and every other site.
 | `--embed-metadata --no-embed-info-json --no-embed-chapters` | supported | rs |
 | `--windows-filenames`, `--restrict-filenames`, `--trim-filenames 200` | supported | rs |
 | `--no-overwrites`/`--force-overwrites`, "has already been downloaded" | supported, same message | rs |
-| `--newline --progress --verbose`, `[download] NN.N% of … at … ETA …` | same format/printers as upstream | rs |
+| `--newline --progress --verbose --progress-template download:__AMC_PROGRESS__=%(progress.{…})j` (`YTDLPProgressParser.downloadProgressTemplate`) | one JSON status per line on stdout, null keys left out, identical to yt-dlp; with the template neither engine prints `[download] NN.N% of …` lines. Progress is `downloaded_bytes / (total_bytes or total_bytes_estimate)`, else fragments, else indeterminate (live); `filename` replaces `Destination:`; `recorded_seconds` (0.8+) carries a growing file's recorded time. The human lines are parsed only until the first status | rs and yt-dlp |
 | `--print before_dl:…%(live_status)s / %(duration)s`, `after_move:filepath` | supported; `after_move` prints the absolute path | rs |
 | `[download] Destination:`, `[Merger] Merging formats into "…"` | same lines | rs |
 | `-o` templates (`%(title)s [%(id)s].%(ext)s`, clip label) | supported | rs |

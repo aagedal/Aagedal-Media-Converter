@@ -14,6 +14,18 @@
   },
   {
     "name": "aes",
+    "version": "0.8.4",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/RustCrypto/block-ciphers",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
+    "name": "aes",
     "version": "0.9.3",
     "license": "MIT OR Apache-2.0",
     "repository": "https://github.com/RustCrypto/block-ciphers",
@@ -144,6 +156,20 @@
     ]
   },
   {
+    "name": "base64ct",
+    "version": "1.8.3",
+    "license": "Apache-2.0 OR MIT",
+    "repository": "https://github.com/RustCrypto/formats",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [
+      "alloc"
+    ],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
     "name": "bitflags",
     "version": "2.13.2",
     "license": "MIT OR Apache-2.0",
@@ -159,7 +185,31 @@
   },
   {
     "name": "block-buffer",
+    "version": "0.10.4",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/RustCrypto/utils",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
+    "name": "block-buffer",
     "version": "0.12.1",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/RustCrypto/utils",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
+    "name": "block-padding",
+    "version": "0.3.3",
     "license": "MIT OR Apache-2.0",
     "repository": "https://github.com/RustCrypto/utils",
     "source": "registry+https://github.com/rust-lang/crates.io-index",
@@ -208,6 +258,21 @@
     ],
     "notice_files": [
       "LICENSE"
+    ]
+  },
+  {
+    "name": "cbc",
+    "version": "0.1.2",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/RustCrypto/block-modes",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [
+      "block-padding",
+      "default"
+    ],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
     ]
   },
   {
@@ -269,6 +334,20 @@
     "source": "registry+https://github.com/rust-lang/crates.io-index",
     "features": [
       "rng"
+    ],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
+    "name": "cipher",
+    "version": "0.4.4",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/RustCrypto/traits",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [
+      "block-padding"
     ],
     "notice_files": [
       "LICENSE-APACHE",
@@ -380,6 +459,18 @@
     ]
   },
   {
+    "name": "const-oid",
+    "version": "0.9.6",
+    "license": "Apache-2.0 OR MIT",
+    "repository": "https://github.com/RustCrypto/formats/tree/master/const-oid",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
     "name": "cookie",
     "version": "0.18.2",
     "license": "MIT OR Apache-2.0",
@@ -425,6 +516,18 @@
   },
   {
     "name": "cpufeatures",
+    "version": "0.2.17",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/RustCrypto/utils",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
+    "name": "cpufeatures",
     "version": "0.3.1",
     "license": "MIT OR Apache-2.0",
     "repository": "https://github.com/RustCrypto/utils",
@@ -444,6 +547,18 @@
     "features": [
       "std"
     ],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
+    "name": "crypto-common",
+    "version": "0.1.7",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/RustCrypto/traits",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [],
     "notice_files": [
       "LICENSE-APACHE",
       "LICENSE-MIT"
@@ -499,6 +614,24 @@
     ]
   },
   {
+    "name": "der",
+    "version": "0.7.10",
+    "license": "Apache-2.0 OR MIT",
+    "repository": "https://github.com/RustCrypto/formats/tree/master/der",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [
+      "alloc",
+      "oid",
+      "pem",
+      "std",
+      "zeroize"
+    ],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
     "name": "deranged",
     "version": "0.5.9",
     "license": "MIT OR Apache-2.0",
@@ -541,6 +674,24 @@
     ],
     "notice_files": [
       "LICENSE"
+    ]
+  },
+  {
+    "name": "digest",
+    "version": "0.10.7",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/RustCrypto/traits",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [
+      "block-buffer",
+      "core-api",
+      "default",
+      "mac",
+      "subtle"
+    ],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
     ]
   },
   {
@@ -856,6 +1007,19 @@
     ]
   },
   {
+    "name": "generic-array",
+    "version": "0.14.7",
+    "license": "MIT",
+    "repository": "https://github.com/fizyk20/generic-array.git",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [
+      "more_lengths"
+    ],
+    "notice_files": [
+      "LICENSE"
+    ]
+  },
+  {
     "name": "getrandom",
     "version": "0.2.17",
     "license": "MIT OR Apache-2.0",
@@ -904,6 +1068,18 @@
     "version": "0.5.0",
     "license": "MIT OR Apache-2.0",
     "repository": "https://github.com/withoutboats/heck",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
+    "name": "hmac",
+    "version": "0.12.1",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/RustCrypto/MACs",
     "source": "registry+https://github.com/rust-lang/crates.io-index",
     "features": [],
     "notice_files": [
@@ -1180,6 +1356,20 @@
     "repository": "https://github.com/indexmap-rs/indexmap",
     "source": "registry+https://github.com/rust-lang/crates.io-index",
     "features": [],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
+    "name": "inout",
+    "version": "0.1.4",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/RustCrypto/utils",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [
+      "block-padding"
+    ],
     "notice_files": [
       "LICENSE-APACHE",
       "LICENSE-MIT"
@@ -1485,6 +1675,35 @@
     ]
   },
   {
+    "name": "pbkdf2",
+    "version": "0.12.2",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/RustCrypto/password-hashes/tree/master/pbkdf2",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [
+      "default",
+      "hmac"
+    ],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
+    "name": "pem-rfc7468",
+    "version": "0.7.0",
+    "license": "Apache-2.0 OR MIT",
+    "repository": "https://github.com/RustCrypto/formats/tree/master/pem-rfc7468",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [
+      "alloc"
+    ],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
     "name": "percent-encoding",
     "version": "2.3.2",
     "license": "MIT OR Apache-2.0",
@@ -1570,6 +1789,40 @@
     "repository": "https://github.com/taiki-e/pin-project-lite",
     "source": "registry+https://github.com/rust-lang/crates.io-index",
     "features": [],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
+    "name": "pkcs5",
+    "version": "0.7.1",
+    "license": "Apache-2.0 OR MIT",
+    "repository": "https://github.com/RustCrypto/formats/tree/master/pkcs5",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [
+      "alloc",
+      "pbes2"
+    ],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
+    "name": "pkcs8",
+    "version": "0.10.2",
+    "license": "Apache-2.0 OR MIT",
+    "repository": "https://github.com/RustCrypto/formats/tree/master/pkcs8",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [
+      "alloc",
+      "encryption",
+      "pem",
+      "pkcs5",
+      "rand_core",
+      "std"
+    ],
     "notice_files": [
       "LICENSE-APACHE",
       "LICENSE-MIT"
@@ -2058,6 +2311,18 @@
     ]
   },
   {
+    "name": "salsa20",
+    "version": "0.10.2",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/RustCrypto/stream-ciphers",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
     "name": "scopeguard",
     "version": "1.2.0",
     "license": "MIT OR Apache-2.0",
@@ -2078,6 +2343,18 @@
     "features": [],
     "notice_files": [
       "LICENSE"
+    ]
+  },
+  {
+    "name": "scrypt",
+    "version": "0.11.0",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/RustCrypto/password-hashes/tree/master/scrypt",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
     ]
   },
   {
@@ -2215,6 +2492,18 @@
     ]
   },
   {
+    "name": "sha2",
+    "version": "0.10.9",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/RustCrypto/hashes",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
     "name": "shlex",
     "version": "2.0.1",
     "license": "MIT OR Apache-2.0",
@@ -2308,6 +2597,22 @@
     "source": "registry+https://github.com/rust-lang/crates.io-index",
     "features": [
       "all"
+    ],
+    "notice_files": [
+      "LICENSE-APACHE",
+      "LICENSE-MIT"
+    ]
+  },
+  {
+    "name": "spki",
+    "version": "0.7.3",
+    "license": "Apache-2.0 OR MIT",
+    "repository": "https://github.com/RustCrypto/formats/tree/master/spki",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "features": [
+      "alloc",
+      "pem",
+      "std"
     ],
     "notice_files": [
       "LICENSE-APACHE",

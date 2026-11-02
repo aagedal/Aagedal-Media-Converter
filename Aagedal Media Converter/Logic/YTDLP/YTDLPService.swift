@@ -1274,6 +1274,7 @@ actor YTDLPService {
             "--progress",
             "--verbose",  // Enable verbose output to ensure we get stderr
             forceOverwrite ? "--force-overwrites" : "--no-overwrites",
+            "--progress-template", YTDLPProgressParser.downloadProgressTemplate,
             "--print", "before_dl:\(YTDLPProgressParser.liveStatusPrefix)%(live_status)s",
             "--print", "before_dl:\(YTDLPProgressParser.sourceDurationPrefix)%(duration)s",
             "--print", "after_move:filepath",
@@ -1316,6 +1317,9 @@ actor YTDLPService {
             var firstStdoutLogged: Bool = false
             var firstStderrLogged: Bool = false
             var firstProgressLogged: Bool = false
+            /// A `--progress-template` status arrived; the human-readable progress
+            /// heuristics are then ignored.
+            var sawDownloadStatus: Bool = false
             /// Timestamp of the last non-empty line seen on stdout/stderr.
             /// The stall watchdog compares against this to decide whether yt-dlp
             /// has gone silent.
@@ -1372,6 +1376,58 @@ actor YTDLPService {
         // Capture logger for use in @Sendable closures and local functions
         let logger = self.logger
 
+        /// Reports a `--growing-file` recording's file (once) and its recorded time.
+        @Sendable func reportGrowingFile(time: Double, bytes: Int64?) {
+            let (newFile, shouldReport) = parsedState.read { state -> (URL?, Bool) in
+                var newFile: URL?
+                if state.growingFileURL == nil, let path = state.outputPath {
+                    let url = path.hasPrefix("/")
+                        ? URL(fileURLWithPath: path) : outputFolder.appendingPathComponent(path)
+                    state.growingFileURL = url
+                    newFile = url
+                }
+                guard Date().timeIntervalSince(state.lastLiveStatsReport) >= 1 else { return (newFile, false) }
+                state.lastLiveStatsReport = Date()
+                return (newFile, true)
+            }
+            if let newFile {
+                logger.info("Recording growing file: \(newFile.lastPathComponent, privacy: .public)")
+                // yt-dlp-rs removes its recording tag when it ends, but not if it is
+                // killed; remember the file for the launch sweep.
+                GrowingRecordingTag.register(newFile.path)
+                liveUpdate(.growingFile(newFile))
+            }
+            if shouldReport {
+                liveUpdate(.recording(duration: time, bytes: bytes))
+            }
+        }
+
+        /// Handles a `--progress-template` status (see `YTDLPProgressParser.downloadProgressTemplate`).
+        @Sendable func handleDownloadStatus(_ status: YTDLPProgressParser.DownloadStatus) {
+            let isFirst = parsedState.read { state -> Bool in
+                defer { state.sawDownloadStatus = true }
+                return !state.sawDownloadStatus
+            }
+            if isFirst {
+                let delta = Date().timeIntervalSince(processStartBox.value)
+                logger.debug("First download status after \(String(format: "%.3f", delta))s")
+            }
+            // Replaces `[download] Destination:`; during a merge each format's
+            // `NAME.fID.EXT` file is reported in turn.
+            if let filename = status.filename {
+                control.recordOutputPath(filename, in: outputFolder)
+                parsedState.read { $0.outputPath = filename }
+            }
+            if growingFile, let recorded = status.recordedSeconds {
+                reportGrowingFile(time: recorded, bytes: status.downloadedBytes.flatMap { Int64(exactly: $0.rounded()) })
+            }
+            // Section downloads run through ffmpeg, which reports only `finished`;
+            // their progress comes from ffmpeg's stats line.
+            guard section == nil, !status.isFinished else { return }
+            // Without a size or fragment count (live streams) progress is indeterminate.
+            progress(status.fraction ?? 0.5, status.speedText, false)
+        }
+
         // Helper to process a line of output
         @Sendable func processLine(_ trimmed: String, isStderr: Bool) {
             guard !trimmed.isEmpty else { return }
@@ -1414,31 +1470,15 @@ actor YTDLPService {
                 }
             }
 
+            if let status = YTDLPProgressParser.parseDownloadStatus(trimmed) {
+                handleDownloadStatus(status)
+                return
+            }
+
             // A growing file's progress line carries the recorded time; the line only
             // appears for --growing-file recordings, at the reported destination.
             if growingFile, let recorded = YTDLPProgressParser.parseGrowingFileProgress(trimmed) {
-                let (newFile, shouldReport) = parsedState.read { state -> (URL?, Bool) in
-                    var newFile: URL?
-                    if state.growingFileURL == nil, let path = state.outputPath {
-                        let url = path.hasPrefix("/")
-                            ? URL(fileURLWithPath: path) : outputFolder.appendingPathComponent(path)
-                        state.growingFileURL = url
-                        newFile = url
-                    }
-                    guard Date().timeIntervalSince(state.lastLiveStatsReport) >= 1 else { return (newFile, false) }
-                    state.lastLiveStatsReport = Date()
-                    return (newFile, true)
-                }
-                if let newFile {
-                    logger.info("Recording growing file: \(newFile.lastPathComponent, privacy: .public)")
-                    // yt-dlp-rs removes its recording tag when it ends, but not if it is
-                    // killed; remember the file for the launch sweep.
-                    GrowingRecordingTag.register(newFile.path)
-                    liveUpdate(.growingFile(newFile))
-                }
-                if shouldReport {
-                    liveUpdate(.recording(duration: recorded.time, bytes: recorded.bytes))
-                }
+                reportGrowingFile(time: recorded.time, bytes: recorded.bytes)
             }
 
             // Live HLS recordings run through ffmpeg; its stats line carries the
@@ -1474,8 +1514,9 @@ actor YTDLPService {
                 }
             }
 
-            // Parse progress from either stream
-            if let progressInfo = YTDLPProgressParser.parse(trimmed) {
+            // Human-readable progress, for a downloader that ignored the progress template.
+            if !parsedState.read({ $0.sawDownloadStatus }),
+               let progressInfo = YTDLPProgressParser.parse(trimmed) {
                 logger.debug("Progress parsed: \(progressInfo.progress * 100)%, isLive: \(progressInfo.isLiveStream)")
                 if parsedState.markFirstProgress() {
                     let delta = Date().timeIntervalSince(processStartBox.value)

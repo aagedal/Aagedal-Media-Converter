@@ -8,6 +8,81 @@ import Foundation
 struct YTDLPProgressParser: Sendable {
     static let liveStatusPrefix = "__AMC_LIVE_STATUS__="
     static let sourceDurationPrefix = "__AMC_SOURCE_DURATION__="
+    static let downloadStatusPrefix = "__AMC_PROGRESS__="
+
+    /// `--progress-template` printing one JSON object per download status on stdout.
+    /// yt-dlp-rs documents it as its stable CLI contract (docs/CLI_CONTRACT.md) and
+    /// yt-dlp prints the same, so both engines share this parser. The dict subset
+    /// leaves out null and missing keys. With a template, neither engine prints
+    /// the human `[download]  45.2% of …` lines any more.
+    static let downloadProgressTemplate = "download:\(downloadStatusPrefix)"
+        + "%(progress.{status,downloaded_bytes,total_bytes,total_bytes_estimate,"
+        + "fragment_index,fragment_count,speed,filename,tmpfilename,recorded_seconds})j"
+
+    /// One `--progress-template` download status.
+    struct DownloadStatus: Sendable, Equatable {
+        /// One `finished` follows each downloaded file (each format of a merge).
+        let isFinished: Bool
+        let downloadedBytes: Double?
+        /// `total_bytes`, else the HLS/DASH `total_bytes_estimate`.
+        let totalBytes: Double?
+        let fragmentIndex: Int?
+        let fragmentCount: Int?
+        /// Bytes per second.
+        let speed: Double?
+        /// Final name of the file being downloaded, relative to the working directory.
+        let filename: String?
+        /// yt-dlp-rs `--growing-file` recordings only.
+        let recordedSeconds: Double?
+
+        /// Nil when neither a size nor a fragment count is known (live streams).
+        var fraction: Double? {
+            if isFinished { return 1 }
+            if let totalBytes, totalBytes > 0, let downloadedBytes {
+                return min(max(downloadedBytes / totalBytes, 0), 1)
+            }
+            if let fragmentCount, fragmentCount > 0, let fragmentIndex {
+                return min(max(Double(fragmentIndex) / Double(fragmentCount), 0), 1)
+            }
+            return nil
+        }
+
+        /// "1.78MiB/s", in yt-dlp's binary units.
+        var speedText: String? {
+            guard let speed, speed.isFinite, speed >= 0 else { return nil }
+            let units = ["B", "KiB", "MiB", "GiB", "TiB"]
+            var value = speed
+            var unit = 0
+            while value >= 1024, unit < units.count - 1 {
+                value /= 1024
+                unit += 1
+            }
+            return String(format: "%.2f%@/s", value, units[unit])
+        }
+    }
+
+    /// Parses a line printed by `downloadProgressTemplate`.
+    static func parseDownloadStatus(_ line: String) -> DownloadStatus? {
+        guard line.hasPrefix(downloadStatusPrefix),
+              let object = try? JSONSerialization.jsonObject(
+                  with: Data(line.dropFirst(downloadStatusPrefix.count).utf8)
+              ) as? [String: Any],
+              let status = object["status"] as? String else { return nil }
+        func number(_ key: String) -> Double? {
+            guard let value = (object[key] as? NSNumber)?.doubleValue, value.isFinite else { return nil }
+            return value
+        }
+        return DownloadStatus(
+            isFinished: status == "finished",
+            downloadedBytes: number("downloaded_bytes"),
+            totalBytes: number("total_bytes") ?? number("total_bytes_estimate"),
+            fragmentIndex: number("fragment_index").flatMap { Int(exactly: $0) },
+            fragmentCount: number("fragment_count").flatMap { Int(exactly: $0) },
+            speed: number("speed"),
+            filename: (object["filename"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+            recordedSeconds: number("recorded_seconds")
+        )
+    }
 
     struct ProgressInfo: Sendable {
         let progress: Double      // 0.0 to 1.0 (0.5 for downloads with unknown total)
