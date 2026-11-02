@@ -14,10 +14,10 @@
       "sha256": "21bfed7e825222d29eb98eb778431b4f53df007794e4af19b16744f24387e908"
     },
     {
-      "component": "SwiftMediaMetadata 3.1.1",
-      "path": "build/attribution/swiftmediametadata-3.1.1-source.tar.gz",
-      "bytes": 1498318,
-      "sha256": "341a4ba651eacc5e8252bd831c746b4a3ede0c139cec09e13f21cb420a7b33b6"
+      "component": "SwiftMediaMetadata 3.1.3",
+      "path": "build/attribution/swiftmediametadata-3.1.3-source.tar.gz",
+      "bytes": 1503257,
+      "sha256": "c543dcf59ee828e0bd682753048284ba603e1ea320f9c68ca45de4c30148ae69"
     },
     {
       "component": "rclone",

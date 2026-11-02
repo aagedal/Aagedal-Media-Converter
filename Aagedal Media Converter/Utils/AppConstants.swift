@@ -748,8 +748,11 @@ enum AppConstants {
     static let denoCustomPathKey = "denoCustomPath"
 
     // yt-dlp-rs (bundled; newer releases can be downloaded into ytdlpToolsDirectory)
-    /// Use yt-dlp-rs for supported sites, falling back to yt-dlp. Default true.
+    /// Use yt-dlp-rs for supported sites, falling back to yt-dlp.
     static let ytdlpRSEnabledKey = "ytdlpRSEnabled"
+    /// Off until yt-dlp-rs reaches 1.0: downloads use yt-dlp unless the user opts in.
+    /// Users who changed the setting keep their choice.
+    static let defaultYTDLPRSEnabled = false
     static let ytdlpRSLastUpdateCheckKey = "ytdlpRSLastUpdateCheck"
     /// Includes pre-releases: yt-dlp-rs is in beta.
     static let ytdlpRSGitHubReleasesURL = "https://api.github.com/repos/aagedal/yt-dlp-rs/releases?per_page=20"

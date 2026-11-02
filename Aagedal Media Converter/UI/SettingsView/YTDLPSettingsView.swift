@@ -48,7 +48,7 @@ struct YTDLPSettingsView: View {
     @State private var denoDownloadError: String?
     @State private var denoDownloadInfo: String?
 
-    @AppStorage(AppConstants.ytdlpRSEnabledKey) private var ytdlpRSEnabled = true
+    @AppStorage(AppConstants.ytdlpRSEnabledKey) private var ytdlpRSEnabled = AppConstants.defaultYTDLPRSEnabled
     @AppStorage(AppConstants.ytdlpGrowingFileKey) private var growingFileRecording = false
     @State private var ytdlpRSSnapshot: ManagedToolSnapshot?
     @State private var isDownloadingYTDLPRS = false
