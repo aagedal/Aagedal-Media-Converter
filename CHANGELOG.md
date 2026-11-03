@@ -58,6 +58,9 @@
 - yt-dlp-rs is now off by default while it is in beta, so downloads use yt-dlp. Turn on Use yt-dlp-rs for supported sites in Settings › Downloads to use it. If you already changed the setting, your choice is kept.
 - Updated yt-dlp-rs to 0.8.0-beta.1. Stopping a yt-dlp-rs recording no longer waits up to 20 seconds when the server has stopped sending data.
 - Download progress, speed and the file being written are read from structured output that yt-dlp and yt-dlp-rs print the same way, instead of from their on-screen progress text.
+- Stopping an ordinary download with yt-dlp-rs keeps a playable file of what was downloaded, with sound. Previously a video downloaded as separate picture and sound streams kept only the picture.
+- Cancelling a download removes the partial files it left in the output folder, for both yt-dlp and yt-dlp-rs. Cancelling a live recording still keeps what was recorded.
+- If yt-dlp-rs rejects the app's options, for example an older pinned version, downloads use yt-dlp until the app is relaunched.
 
 ### DCP
 
