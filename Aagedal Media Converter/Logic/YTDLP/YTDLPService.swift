@@ -722,7 +722,8 @@ actor YTDLPService {
         onAttempt: (YTDLPEngine, String?) -> Void = { _, _ in },
         _ body: (YTDLPEngine, String) async throws -> T
     ) async throws -> (value: T, engine: YTDLPEngine, fallbackReason: String?) {
-        let rsPath = await updateService.resolveYTDLPRSPath()
+        let rsDisabled = await engineFailures.isDisabled
+        let rsPath = rsDisabled ? nil : await updateService.resolveYTDLPRSPath()
         let rsVersion = rsPath == nil ? nil : await updateService.getCurrentYTDLPRSVersion()
         let decision = YTDLPEngineRouter.decide(
             url: url, operation: operation, rsAvailable: rsPath != nil,
@@ -737,9 +738,14 @@ actor YTDLPService {
                 return (try await body(.ytdlpRS, rsPath), .ytdlpRS, nil)
             } catch {
                 guard YTDLPEngineRouter.shouldFallBack(after: error), !Task.isCancelled else { throw error }
-                let failures = await engineFailures.recordFailure(url: url)
                 let reason = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
-                logger.warning("[Engine] yt-dlp-rs failed (\(failures, privacy: .public) this session for this site), retrying with yt-dlp: \(reason, privacy: .public)")
+                if case YTDLPError.invalidArguments = error {
+                    await engineFailures.disable()
+                    logger.error("[Engine] yt-dlp-rs rejected its arguments; using yt-dlp for the rest of the session: \(reason, privacy: .public)")
+                } else {
+                    let failures = await engineFailures.recordFailure(url: url)
+                    logger.warning("[Engine] yt-dlp-rs failed (\(failures, privacy: .public) this session for this site), retrying with yt-dlp: \(reason, privacy: .public)")
+                }
                 guard let ytdlpPath = await updateService.resolveYTDLPPath() else { throw error }
                 beforeFallback()
                 onAttempt(.ytdlp, reason)
@@ -771,6 +777,11 @@ actor YTDLPService {
     /// Generous enough to cover slow Python startup and post-processing lulls.
     private static let stallThresholdSeconds: TimeInterval = 300
     private static let stallCheckIntervalNanos: UInt64 = 30_000_000_000 // 30s
+    /// A merge after SIGTERM copies about 1.7 GB/s on an internal SSD (559 MB in 0.3 s).
+    private static let keepPartialTerminationGracePeriod: Duration = .seconds(10)
+    /// Download statuses can arrive ~60 times a second (live DASH fragments); each one
+    /// becomes a main-actor row update.
+    private static let progressReportInterval: TimeInterval = 0.2
 
     private final class DateBox: @unchecked Sendable {
         var value: Date
@@ -870,6 +881,9 @@ actor YTDLPService {
             }
             if control?.reason(id: executionID) != nil {
                 throw YTDLPError.cancelled
+            }
+            if result.isUsageError {
+                throw YTDLPError.invalidArguments(request.redactedDiagnostic(result.usageErrorMessage))
             }
             return ProbeResult(
                 subprocess: result,
@@ -1110,6 +1124,11 @@ actor YTDLPService {
         let rsVersion = await updateService.getCurrentYTDLPRSVersion()
         let growingFile = growingFile && section == nil && !audioOnly
             && YTDLPEngineRouter.supportsLiveRecording(version: rsVersion)
+        // yt-dlp-rs 0.8 extension: Stop keeps a playable file (fragments so far, or the
+        // streams so far merged). It stops a --live-from-start recording without merging
+        // its formats, so that recording keeps the ordinary SIGINT finish.
+        let keepPartialOnStop = !liveFromStart
+            && YTDLPEngineRouter.supportsKeepPartialOnStop(version: rsVersion)
         // Files present before the yt-dlp-rs attempt are never removed by its cleanup.
         let preexisting = YTDLPAttemptCleanup.snapshot(of: outputFolder)
         let outcome = try await withEngineFallback(url: url, operation: operation, beforeFallback: { [logger] in
@@ -1123,8 +1142,10 @@ actor YTDLPService {
             try await runDownload(
                 engine: engine, executablePath: executablePath, url: url, outputFolder: outputFolder,
                 forceOverwrite: forceOverwrite, liveFromStart: liveFromStart,
-                growingFile: growingFile && engine == .ytdlpRS, audioOnly: audioOnly,
-                section: section, waitForStream: waitForStream, hasFFprobe: ffprobeExists, control: control,
+                growingFile: growingFile && engine == .ytdlpRS,
+                keepPartialOnStop: keepPartialOnStop && engine == .ytdlpRS, audioOnly: audioOnly,
+                section: section, waitForStream: waitForStream, hasFFprobe: ffprobeExists,
+                preexisting: preexisting, control: control,
                 progress: progress, titleUpdate: titleUpdate, liveUpdate: liveUpdate
             )
         }
@@ -1142,10 +1163,12 @@ actor YTDLPService {
         forceOverwrite: Bool,
         liveFromStart: Bool,
         growingFile: Bool,
+        keepPartialOnStop: Bool,
         audioOnly: Bool,
         section: DownloadSection?,
         waitForStream: Bool,
         hasFFprobe: Bool,
+        preexisting: Set<String>,
         control: YTDLPDownloadControl,
         progress: @escaping @Sendable (Double, String?, Bool) -> Void,
         titleUpdate: @escaping @Sendable (String) -> Void,
@@ -1223,6 +1246,12 @@ actor YTDLPService {
             logger.info("[YTDLPService] Recording live streams as growing files")
         }
 
+        if keepPartialOnStop {
+            // On SIGINT (Stop) yt-dlp-rs keeps what was downloaded at the final name and
+            // prints its after_move path; it exits 1 with "Interrupted by user".
+            args.append("--keep-partial-on-stop")
+        }
+
         if waitForStream {
             // Re-check at most every 10 minutes before the scheduled start (yt-dlp waits
             // until the announced time when it is sooner), then every 30s until it is live.
@@ -1295,6 +1324,9 @@ actor YTDLPService {
             arguments: configuration.arguments,
             environment: configuration.environment,
             currentDirectoryURL: outputFolder,
+            // With --keep-partial-on-stop, Cancel's SIGTERM also makes yt-dlp-rs merge what
+            // it has; let it finish and remove its private files before SIGKILL.
+            terminationGracePeriod: keepPartialOnStop ? Self.keepPartialTerminationGracePeriod : .seconds(2),
             sensitiveArgumentNames: ["--cookies", "--cookies-from-browser"],
             signalHandle: signalHandle
         )
@@ -1320,6 +1352,9 @@ actor YTDLPService {
             /// A `--progress-template` status arrived; the human-readable progress
             /// heuristics are then ignored.
             var sawDownloadStatus: Bool = false
+            /// Last download status passed on as progress, for throttling.
+            var lastStatusReport: Date = .distantPast
+            var lastStatusProgress: Double = -1
             /// Timestamp of the last non-empty line seen on stdout/stderr.
             /// The stall watchdog compares against this to decide whether yt-dlp
             /// has gone silent.
@@ -1375,6 +1410,7 @@ actor YTDLPService {
 
         // Capture logger for use in @Sendable closures and local functions
         let logger = self.logger
+        let progressReportInterval = Self.progressReportInterval
 
         /// Reports a `--growing-file` recording's file (once) and its recorded time.
         @Sendable func reportGrowingFile(time: Double, bytes: Int64?) {
@@ -1425,7 +1461,18 @@ actor YTDLPService {
             // their progress comes from ffmpeg's stats line.
             guard section == nil, !status.isFinished else { return }
             // Without a size or fragment count (live streams) progress is indeterminate.
-            progress(status.fraction ?? 0.5, status.speedText, false)
+            let value = status.fraction ?? 0.5
+            // Pass on a status a few times a second, or sooner when the bar moves by 1%.
+            let shouldReport = parsedState.read { state -> Bool in
+                guard Date().timeIntervalSince(state.lastStatusReport) >= progressReportInterval
+                        || abs(value - state.lastStatusProgress) >= 0.01 else { return false }
+                state.lastStatusReport = Date()
+                state.lastStatusProgress = value
+                return true
+            }
+            if shouldReport {
+                progress(value, status.speedText, false)
+            }
         }
 
         // Helper to process a line of output
@@ -1664,6 +1711,18 @@ actor YTDLPService {
             switch reason {
             case .userRequested:
                 logger.info("Download cancelled")
+                // Cancel discards the download. The process has exited, so nothing is still
+                // writing: remove this attempt's new files (the kept file of
+                // --keep-partial-on-stop, .part, .ytdl, -FragN and per-format files). A live
+                // recording keeps its footage; a growing file may already be in a timeline.
+                if !parsedState.read({ $0.isLive }) {
+                    let removed = YTDLPAttemptCleanup.removeLeftovers(
+                        in: outputFolder, reportedPaths: control.takeReportedPaths(), preexisting: preexisting
+                    )
+                    if !removed.isEmpty {
+                        logger.info("Removed \(removed.count, privacy: .public) file(s) of the cancelled download")
+                    }
+                }
                 throw YTDLPError.cancelled
             case .liveRecordingStop:
                 logger.info("Live stream recording stopped")
@@ -1747,6 +1806,10 @@ actor YTDLPService {
             throw YTDLPError.liveRecordingStopped
         }
 
+        if subprocessResult.isUsageError {
+            throw YTDLPError.invalidArguments(request.redactedDiagnostic(subprocessResult.usageErrorMessage))
+        }
+
         // Check exit status
         guard terminationStatus == 0 else {
             if !waitForStream, let firstError, YTDLPProgressParser.isStreamNotStartedError(firstError) {
@@ -1818,6 +1881,8 @@ enum YTDLPError: Error, LocalizedError {
     case stalled
     /// A scheduled live stream or premiere that has not started yet.
     case streamNotStarted(String)
+    /// The downloader rejected its options (exit 2: unknown option, bad value).
+    case invalidArguments(String)
 
     var errorDescription: String? {
         switch self {
@@ -1839,6 +1904,21 @@ enum YTDLPError: Error, LocalizedError {
             return "Download stalled — no activity for several minutes"
         case .streamNotStarted(let message):
             return message
+        case .invalidArguments(let message):
+            return "The downloader rejected its options: \(message)"
         }
+    }
+}
+
+private extension SubprocessResult {
+    /// yt-dlp and yt-dlp-rs exit 2 only for usage errors (yt-dlp-rs docs/CLI_CONTRACT.md).
+    var isUsageError: Bool {
+        termination == .exited && terminationStatus == 2
+    }
+
+    /// "yt-dlp-rs: error: no such option: --x" rather than the usage line before it.
+    var usageErrorMessage: String {
+        standardErrorText.split(separator: "\n").last { $0.contains(": error: ") }.map(String.init)
+            ?? standardErrorText
     }
 }

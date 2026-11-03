@@ -249,6 +249,7 @@ final class YTDLPEngineRouterTests: XCTestCase {
             YTDLPError.metadataFetchFailed("Unsupported URL: x"),
             YTDLPError.downloadFailed("Requested format is not available"),
             YTDLPError.outputNotFound, YTDLPError.stalled, YTDLPError.binaryNotFound,
+            YTDLPError.invalidArguments("yt-dlp-rs: error: no such option: --x"),
             URLError(.badServerResponse),
         ]
         for error in fallback {
@@ -419,6 +420,164 @@ final class YTDLPEngineRouterTests: XCTestCase {
         XCTAssertEqual(runner.executables, [EngineStubUpdater.rsPath])
     }
 
+    /// Exit 2 is a usage error; captured from v0.8.0-beta.1 given an unknown option.
+    func testUsageErrorFallsBackAndTurnsRSOffForTheSession() async throws {
+        let runner = EngineScriptedRunner { request, _ in
+            request.executableURL.path == EngineStubUpdater.rsPath
+                ? .result(status: 2, stderr: "\nUsage: yt-dlp-rs [OPTIONS] URL [URL...]\n\nyt-dlp-rs: error: no such option: --keep-partial-on-stop\n")
+                : .result(stdout: #"{"title":"ok","formats":[{"url":"https://example.invalid/a"}]}"#)
+        }
+        let service = YTDLPService(updateService: EngineStubUpdater(), subprocessRunner: runner,
+                                   engineFailures: YTDLPEngineFailureMemory(limit: 2))
+        _ = try await service.fetchMetadata(url: "https://www.youtube.com/watch?v=a")
+        _ = try await service.fetchMetadata(url: "https://www.tiktok.com/@a/video/1")
+        XCTAssertEqual(runner.executables, [
+            EngineStubUpdater.rsPath, EngineStubUpdater.ytdlpPath, EngineStubUpdater.ytdlpPath,
+        ])
+    }
+
+    // MARK: - Stop and cancel
+
+    func testKeepPartialOnStopIsPassedOnlyToCapableRSOutsideLiveFromStart() async throws {
+        func request(rsVersion: String? = AppConstants.bundledYTDLPRSVersion, liveFromStart: Bool = false,
+                     url: String = "https://www.youtube.com/watch?v=x") async throws -> SubprocessRequest {
+            let folder = try makeTemporaryFolder()
+            defer { try? FileManager.default.removeItem(at: folder) }
+            let runner = EngineScriptedRunner { _, output in
+                let final = folder.appendingPathComponent("Clip.mp4")
+                try Data("video".utf8).write(to: final)
+                output?(SubprocessOutputChunk(stream: .standardOutput, data: Data("\(final.path)\n".utf8)))
+                return .result()
+            }
+            let service = YTDLPService(updateService: EngineStubUpdater(rsVersion: rsVersion), subprocessRunner: runner,
+                                       engineFailures: YTDLPEngineFailureMemory())
+            _ = try await service.download(url: url, outputFolder: folder, liveFromStart: liveFromStart,
+                                           progress: { _, _, _ in })
+            return try XCTUnwrap(runner.requests.last)
+        }
+        let rs = try await request()
+        XCTAssertTrue(rs.arguments.contains("--keep-partial-on-stop"))
+        XCTAssertEqual(rs.terminationGracePeriod, .seconds(10))
+        let liveFromStart = try await request(liveFromStart: true)
+        XCTAssertFalse(liveFromStart.arguments.contains("--keep-partial-on-stop"))
+        XCTAssertEqual(liveFromStart.terminationGracePeriod, .seconds(2))
+        let oldRS = try await request(rsVersion: "0.7.0-beta.1")
+        XCTAssertFalse(oldRS.arguments.contains("--keep-partial-on-stop"))
+        let ytdlp = try await request(url: "https://www.dailymotion.com/video/x1")
+        XCTAssertFalse(ytdlp.arguments.contains("--keep-partial-on-stop"))
+    }
+
+    /// v0.8.0-beta.1 with --keep-partial-on-stop, stopped with SIGINT during a YouTube
+    /// merge, 2026-11-03 (trimmed): the kept file is the after_move path, exit 1.
+    func testStoppedRSDownloadKeepsTheMergedFile() async throws {
+        let folder = try makeTemporaryFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let final = folder.appendingPathComponent("Clip.mp4")
+        let signals = LockedSignals()
+        let prefix = YTDLPProgressParser.downloadStatusPrefix
+        let runner = EngineScriptedRunner { request, output in
+            func out(_ text: String) { output?(SubprocessOutputChunk(stream: .standardOutput, data: Data((text + "\n").utf8))) }
+            func err(_ text: String) { output?(SubprocessOutputChunk(stream: .standardError, data: Data((text + "\n").utf8))) }
+            out("\(YTDLPProgressParser.liveStatusPrefix)not_live")
+            out(prefix + #"{"status": "finished", "downloaded_bytes": 300, "total_bytes": 300, "filename": "Clip.f258.m4a"}"#)
+            out(prefix + #"{"status": "downloading", "downloaded_bytes": 200, "total_bytes": 700, "filename": "Clip.f401.mp4", "tmpfilename": "Clip.f401.mp4.part"}"#)
+            request.signalHandle?.attach { signals.append($0); return true }
+            signals.markAttached()
+            while !signals.values.contains(SIGINT) { try await Task.sleep(for: .milliseconds(10)) }
+            err("[Merger] Merging formats into \"Clip.mp4\"")
+            try Data("merged".utf8).write(to: final)
+            out(final.path)
+            err("[download] Download stopped; keeping the partial file")
+            err("")
+            err("ERROR: Interrupted by user")
+            return .result(status: 1)
+        }
+        let service = YTDLPService(updateService: EngineStubUpdater(), subprocessRunner: runner,
+                                   engineFailures: YTDLPEngineFailureMemory())
+        let control = YTDLPDownloadControl()
+        let task = Task {
+            try await service.download(url: "https://www.youtube.com/watch?v=x", outputFolder: folder,
+                                       control: control, progress: { _, _, _ in })
+        }
+        // Stopping before the process runs would force-stop it instead of sending SIGINT.
+        while !signals.attached { try await Task.sleep(for: .milliseconds(10)) }
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertTrue(control.stopLiveRecording())
+        do {
+            _ = try await task.value
+            XCTFail("Expected liveRecordingStopped")
+        } catch YTDLPError.liveRecordingStopped {
+        }
+        XCTAssertEqual(signals.values, [SIGINT])
+        XCTAssertEqual(runner.executables, [EngineStubUpdater.rsPath])
+        // DownloadManager adopts this file as the finished download.
+        XCTAssertEqual(control.partialFile(in: folder)?.lastPathComponent, final.lastPathComponent)
+    }
+
+    func testCancelRemovesTheDownloadsNewFilesButKeepsLiveFootage() async throws {
+        func cancelledDownload(liveStatus: String) async throws -> Set<String> {
+            let folder = try makeTemporaryFolder()
+            defer { try? FileManager.default.removeItem(at: folder) }
+            for name in ["Clip.description", "Other.mp4.part"] {
+                try Data("old".utf8).write(to: folder.appendingPathComponent(name))
+            }
+            let prefix = YTDLPProgressParser.downloadStatusPrefix
+            let runner = EngineScriptedRunner { _, output in
+                func out(_ text: String) { output?(SubprocessOutputChunk(stream: .standardOutput, data: Data((text + "\n").utf8))) }
+                out("\(YTDLPProgressParser.liveStatusPrefix)\(liveStatus)")
+                for name in ["Clip.f401.mp4.part", "Clip.mp4.part-Frag6.part", "Clip.mp4.ytdl"] {
+                    try Data("new".utf8).write(to: folder.appendingPathComponent(name))
+                }
+                out(prefix + #"{"status": "downloading", "downloaded_bytes": 1, "filename": "Clip.f401.mp4", "tmpfilename": "Clip.f401.mp4.part"}"#)
+                try await Task.sleep(for: .seconds(30))
+                return .result()
+            }
+            let service = YTDLPService(updateService: EngineStubUpdater(), subprocessRunner: runner,
+                                       engineFailures: YTDLPEngineFailureMemory())
+            let control = YTDLPDownloadControl()
+            let task = Task {
+                try await service.download(url: "https://www.youtube.com/watch?v=x", outputFolder: folder,
+                                           control: control, progress: { _, _, _ in })
+            }
+            while control.reportedFiles(in: folder).isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+            _ = control.cancel()
+            do {
+                _ = try await task.value
+                XCTFail("Expected cancellation")
+            } catch YTDLPError.cancelled {
+            }
+            return Set(YTDLPAttemptCleanup.snapshot(of: folder))
+        }
+        let vod = try await cancelledDownload(liveStatus: "not_live")
+        XCTAssertEqual(vod, ["Clip.description", "Other.mp4.part"])
+        let live = try await cancelledDownload(liveStatus: "is_live")
+        XCTAssertTrue(live.contains("Clip.f401.mp4.part"))
+    }
+
+    func testFrequentDownloadStatusesAreThrottled() async throws {
+        let folder = try makeTemporaryFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let prefix = YTDLPProgressParser.downloadStatusPrefix
+        let runner = EngineScriptedRunner { _, output in
+            func out(_ text: String) { output?(SubprocessOutputChunk(stream: .standardOutput, data: Data((text + "\n").utf8))) }
+            for bytes in 1...100 {
+                out(prefix + #"{"status": "downloading", "downloaded_bytes": \#(bytes), "total_bytes": 100000, "filename": "Clip.mp4", "tmpfilename": "Clip.mp4.part"}"#)
+            }
+            let final = folder.appendingPathComponent("Clip.mp4")
+            try Data("video".utf8).write(to: final)
+            out(final.path)
+            return .result()
+        }
+        let service = YTDLPService(updateService: EngineStubUpdater(), subprocessRunner: runner,
+                                   engineFailures: YTDLPEngineFailureMemory())
+        let reports = LockedProgress()
+        _ = try await service.download(url: "https://www.youtube.com/watch?v=x", outputFolder: folder,
+                                       progress: { value, speed, _ in reports.append(value, speed) })
+        // The first status, maybe one after the interval, and the final 100%.
+        XCTAssertLessThanOrEqual(reports.values.count, 4)
+        XCTAssertEqual(reports.values.last?.value, 1.0)
+    }
+
     // MARK: - Growing files
 
     func testGrowingFileIsPassedOnlyToCapableRSForWholeVideoDownloads() async throws {
@@ -571,6 +730,16 @@ private final class LockedUpdates: @unchecked Sendable {
     private var recorded: [YTDLPLiveUpdate] = []
     var values: [YTDLPLiveUpdate] { lock.withLock { recorded } }
     func append(_ update: YTDLPLiveUpdate) { lock.withLock { recorded.append(update) } }
+}
+
+private final class LockedSignals: @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [Int32] = []
+    private var isAttached = false
+    var values: [Int32] { lock.withLock { recorded } }
+    var attached: Bool { lock.withLock { isAttached } }
+    func append(_ signal: Int32) { lock.withLock { recorded.append(signal) } }
+    func markAttached() { lock.withLock { isAttached = true } }
 }
 
 private final class LockedProgress: @unchecked Sendable {
