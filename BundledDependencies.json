@@ -872,8 +872,8 @@
     },
     {
       "path": "Aagedal Media Converter/Binaries/ffmpeg",
-      "bytes": 60144496,
-      "sha256": "c4cd2362fd3147a9f0b30d42f2c894337bc947ad95ad4e33f72c024e1d6661a0",
+      "bytes": 60211280,
+      "sha256": "21f5d3fbea60883e280b54bcff32670d672ac8f49c996e330df34b4a7d471484",
       "mode": "0755",
       "architectures": [
         "arm64"
