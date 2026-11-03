@@ -761,6 +761,8 @@ enum AppConstants {
     /// Oldest yt-dlp-rs that records `--live-from-start` (stopped with SIGINT) and
     /// supports `--growing-file`. A pinned older update keeps those on yt-dlp.
     static let ytdlpRSLiveRecordingMinimumVersion = "0.6.0-beta.1"
+    /// Oldest yt-dlp-rs with `--keep-partial-on-stop`; older versions reject it (exit 2).
+    static let ytdlpRSKeepPartialMinimumVersion = "0.8.0-beta.1"
 
     // Managed tool versions (yt-dlp, deno, yt-dlp-rs). Auto-update keys default to true.
     static let ytdlpAutoUpdateKey = "ytdlpAutoUpdate"

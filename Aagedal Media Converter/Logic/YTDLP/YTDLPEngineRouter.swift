@@ -58,7 +58,8 @@ enum YTDLPEngineRouter {
     }
 
     /// yt-dlp-rs 0.3.0+ sites ported against upstream without caveats the app relies on.
-    /// Dailymotion is excluded: it needs browser impersonation, which yt-dlp-rs lacks.
+    /// Dailymotion is excluded: 0.8 often misses its top-quality variant (see
+    /// docs/ytdlp-rs-integration.md), and a lower-quality success never falls back.
     static let supportedSites: [Site] = [
         Site(id: "youtube", hosts: ["youtu.be"],
              domains: ["youtube.com", "youtube-nocookie.com"], supportsListing: true),
@@ -130,8 +131,17 @@ enum YTDLPEngineRouter {
     /// Whether a yt-dlp-rs version records `--live-from-start` and supports
     /// `--growing-file`. An unknown version does not.
     static func supportsLiveRecording(version: String?) -> Bool {
+        isAtLeast(AppConstants.ytdlpRSLiveRecordingMinimumVersion, version: version)
+    }
+
+    /// Whether a yt-dlp-rs version has `--keep-partial-on-stop`. An unknown version does not.
+    static func supportsKeepPartialOnStop(version: String?) -> Bool {
+        isAtLeast(AppConstants.ytdlpRSKeepPartialMinimumVersion, version: version)
+    }
+
+    private static func isAtLeast(_ minimum: String, version: String?) -> Bool {
         guard let version, ManagedToolVersion(version) != nil else { return false }
-        return !ManagedToolPolicy.isNewer(AppConstants.ytdlpRSLiveRecordingMinimumVersion, than: version)
+        return !ManagedToolPolicy.isNewer(minimum, than: version)
     }
 
     private static func isInstagramPost(_ url: String) -> Bool {
@@ -147,7 +157,10 @@ enum YTDLPEngineRouter {
         switch error {
         case .cancelled, .liveRecordingStopped, .fileAlreadyExists, .streamNotStarted:
             return false
-        case .binaryNotFound, .metadataFetchFailed, .downloadFailed, .outputNotFound, .stalled:
+        // yt-dlp gets only its own options, so it can run what yt-dlp-rs rejected
+        // (e.g. a pinned older yt-dlp-rs without an extension the app passes).
+        case .binaryNotFound, .metadataFetchFailed, .downloadFailed, .outputNotFound, .stalled,
+             .invalidArguments:
             return true
         }
     }
@@ -159,9 +172,16 @@ actor YTDLPEngineFailureMemory {
 
     private let limit: Int
     private var failures: [String: Int] = [:]
+    /// yt-dlp-rs rejected the app's arguments (exit 2). That depends on its version,
+    /// not the site, so the rest of the session uses yt-dlp everywhere.
+    private(set) var isDisabled = false
 
     init(limit: Int = YTDLPEngineRouter.sessionFailureLimit) {
         self.limit = limit
+    }
+
+    func disable() {
+        isDisabled = true
     }
 
     func isSkipped(url: String) -> Bool {

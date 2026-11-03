@@ -7,7 +7,9 @@ clip options re-checked against `v0.4.0-beta.1`, 2026-10-25; live recording
 probes) checked against `v0.6.0-beta.1` on YouTube live streams, 2026-10-28;
 JSON progress (`--progress-template`, the 1.0 CLI contract in yt-dlp-rs
 `docs/CLI_CONTRACT.md`) checked against `v0.8.0-beta.1` and yt-dlp 2026.10.21
-on a local HTTP download, 2026-11-02.
+on a local HTTP download, 2026-11-02; JSON progress, `--keep-partial-on-stop`,
+exit codes and Dailymotion re-checked against `v0.8.0-beta.1` on YouTube (VOD and
+Sky News live), Twitch, SoundCloud and Dailymotion, 2026-11-03.
 Code: `Logic/YTDLP/YTDLPEngineRouter.swift` (routing, session failure memory,
 cleanup) and `YTDLPService.withEngineFallback`.
 
@@ -36,8 +38,11 @@ Site list (host suffix match on label boundaries, so `www.`, `m.`, `music.`,
 | SoundCloud | soundcloud.com | no (tracks only) |
 | Bandcamp | bandcamp.com | no (tracks only) |
 
-Excluded: Dailymotion (needs browser impersonation, unavailable in yt-dlp-rs),
-and every other site.
+Excluded: Dailymotion, and every other site. 0.8 ships impersonation and downloads
+Dailymotion, but its manifest requests get 403 until the Firefox retry, which on 3 of
+4 tested videos lacked the top variant (480p instead of yt-dlp's 576p/720p). A
+successful lower-quality download never falls back, so the site stays on yt-dlp
+([yt-dlp-rs#74](https://github.com/aagedal/yt-dlp-rs/issues/74)).
 
 ## App feature → yt-dlp-rs support → routing
 
@@ -62,6 +67,8 @@ and every other site.
 | `--windows-filenames`, `--restrict-filenames`, `--trim-filenames 200` | supported | rs |
 | `--no-overwrites`/`--force-overwrites`, "has already been downloaded" | supported, same message | rs |
 | `--newline --progress --verbose --progress-template download:__AMC_PROGRESS__=%(progress.{…})j` (`YTDLPProgressParser.downloadProgressTemplate`) | one JSON status per line on stdout, null keys left out, identical to yt-dlp; with the template neither engine prints `[download] NN.N% of …` lines. Progress is `downloaded_bytes / (total_bytes or total_bytes_estimate)`, else fragments, else indeterminate (live); `filename` replaces `Destination:`; `recorded_seconds` (0.8+) carries a growing file's recorded time. The human lines are parsed only until the first status | rs and yt-dlp |
+| `--keep-partial-on-stop` (rs extension, 0.8+; `AppConstants.ytdlpRSKeepPartialMinimumVersion`) | On SIGINT/SIGTERM the received data becomes a playable file at the final name (whole HLS/DASH fragments; a merge of the streams so far, audio fetched first), `after_move` prints it, exit 1 `Interrupted by user`, within 0.1–0.3 s for a 559 MB merge on an SSD. A stop before any data leaves nothing. With `--live-from-start` it exits 1 without merging the per-format files, so it is not passed there ([yt-dlp-rs#73](https://github.com/aagedal/yt-dlp-rs/issues/73)); growing files and live HLS through ffmpeg ignore it | rs only, not with `--live-from-start`. Stop (SIGINT) adopts the `after_move` file through `partialFile`. Cancel's SIGTERM keeps a file too, so rs gets a 10 s SIGKILL grace period and Cancel removes the attempt's new files (`YTDLPAttemptCleanup`), for both engines, except for live recordings |
+| Exit 2 (usage error: unknown option or bad value) | both engines, `PROG: error: MESSAGE` on stderr | `YTDLPError.invalidArguments`; after yt-dlp-rs, falls back (yt-dlp gets only its own options) and turns yt-dlp-rs off for the rest of the session |
 | `--print before_dl:…%(live_status)s / %(duration)s`, `after_move:filepath` | supported; `after_move` prints the absolute path | rs |
 | `[download] Destination:`, `[Merger] Merging formats into "…"` | same lines | rs |
 | `-o` templates (`%(title)s [%(id)s].%(ext)s`, clip label) | supported | rs |
@@ -82,6 +89,7 @@ results are also treated as failures when `-j` has no formats or a listing has n
 entries. Before a download retry, files created during the yt-dlp-rs attempt
 that share a reported destination's stem (`Title.f137.mp4.part`, `Title.mp4`, …)
 are removed; pre-existing files are never touched. Each fallback counts towards
-the per-site session limit. The engine and fallback reason are logged
+the per-site session limit, except an exit 2 (usage error), which turns yt-dlp-rs
+off for every site until relaunch. The engine and fallback reason are logged
 (`YTDLPService`, `[Engine]`), and `VideoItem.downloadEngine` records the engine
 that produced the file.
