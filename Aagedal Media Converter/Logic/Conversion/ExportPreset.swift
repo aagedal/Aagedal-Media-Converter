@@ -345,28 +345,29 @@ enum AV1EncodingSpeed: Int, CaseIterable, Identifiable {
 /// Tune mode for AV1 (SVT-AV1)
 enum AV1TuneMode: String, CaseIterable, Identifiable {
     case vq = "Default"
-    case subjective = "Subjective Quality"
     case ssim = "SSIM"
     case psnr = "PSNR"
+
+    /// Stored by builds before SVT-AV1 4, where tune 3 was SVT-AV1-PSY's Subjective SSIM.
+    /// Tune 3 is now still-image only and fails on video, so it maps to VQ.
+    static let legacySubjectiveRawValue = "Subjective Quality"
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
         case .vq: return "Default (VQ)"
-        case .subjective: return "Subjective Quality"
         case .ssim: return "SSIM"
         case .psnr: return "PSNR"
         }
     }
 
-    /// SVT-AV1 tune parameter value, nil for default (VQ, tune=0)
-    var svtav1Value: Int? {
+    /// SVT-AV1 tune parameter value. Always passed: SVT-AV1's own default is PSNR, not VQ.
+    var svtav1Value: Int {
         switch self {
-        case .vq: return nil
+        case .vq: return 0
         case .psnr: return 1
         case .ssim: return 2
-        case .subjective: return 3
         }
     }
 }
@@ -1320,10 +1321,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             ]
 
             // Build consolidated SVT-AV1 params
-            var svtParams: [String] = []
-            if let tuneValue = tune.svtav1Value {
-                svtParams.append("tune=\(tuneValue)")
-            }
+            var svtParams = ["tune=\(tune.svtav1Value)"]
             if filmGrain.value > 0 {
                 svtParams.append("film-grain=\(filmGrain.value)")
                 svtParams.append("film-grain-denoise=\(filmGrainDenoise ? 1 : 0)")

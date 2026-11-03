@@ -65,6 +65,7 @@ struct Aagedal_Media_Converter_App: App {
         let settingsMigration = StartupSettingsMigration()
         settingsMigration.migrateCaptureDisplaySelection()
         settingsMigration.migrateAudioPresets()
+        settingsMigration.migrateLegacyAV1Tune()
         UploadProfileStore.migrateLegacyProfilesIfNeeded()
         applyPreviewCacheCleanupPolicy()
         TesseractService.purgeOrphanTempDirs()

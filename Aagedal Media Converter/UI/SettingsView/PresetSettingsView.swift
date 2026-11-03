@@ -1079,7 +1079,7 @@ struct PresetsSettingsView: View {
                         .pickerStyle(.menu)
                         .fixedSize()
                         .labelsHidden()
-                        .help("Optimizes the encoder for a specific quality goal. Default (VQ) uses the encoder\u{2019}s standard visual quality heuristics and works well for most content. Subjective Quality goes further by applying psychovisual optimizations that prioritize how the video looks to the human eye \u{2014} it may produce slightly lower objective scores but often looks better in practice, and it uses its own Sharpness and Variance Boost values. SSIM and PSNR optimize purely for their respective objective metrics.")
+                        .help("Optimizes the encoder for a specific quality goal. Default (VQ) optimizes for how the video looks to the human eye and works well for most content. SSIM and PSNR optimize for their respective objective metrics, which can score higher in measurements but often look softer.")
                     }
 
                     HStack {
@@ -1101,49 +1101,47 @@ struct PresetsSettingsView: View {
                             .help("When enabled (recommended), the encoder removes existing grain before compressing and recreates it during playback \u{2014} producing smaller files with no visible quality loss. When disabled, the original grain is kept in the encoded bitstream and additional synthesized grain is layered on top, which can look heavier than the original.")
                     }
 
-                    if av1Tune != AV1TuneMode.subjective.rawValue {
+                    HStack {
+                        Text("Sharpness")
+                        Spacer()
+                        Picker("", selection: $av1Sharpness) {
+                            ForEach(AV1Sharpness.allCases) { level in
+                                Text(level.rawValue).tag(level.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .labelsHidden()
+                        .help("Applies adaptive sharpening to counteract the softening that can occur during compression. Higher values increase edge definition and perceived detail. Start with 1\u{2013}2 for subtle enhancement. Avoid high values on already-sharp or noisy content, as it may introduce ringing artifacts.")
+                    }
+
+                    HStack {
+                        Text("Variance Boost")
+                        Spacer()
+                        Picker("", selection: $av1VarianceBoost) {
+                            ForEach(AV1VarianceBoost.allCases) { level in
+                                Text(level.rawValue).tag(level.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .labelsHidden()
+                        .help("Allocates more bits to areas with high detail and texture (like foliage, fabric, or skin), preserving fine detail that would otherwise be smoothed out. Improves visual quality in complex scenes at the cost of slightly larger files. Recommended for detailed or textured content.")
+                    }
+
+                    if AV1VarianceBoost(rawValue: av1VarianceBoost)?.value ?? 0 > 0 {
                         HStack {
-                            Text("Sharpness")
+                            Text("Variance Boost Curve")
                             Spacer()
-                            Picker("", selection: $av1Sharpness) {
-                                ForEach(AV1Sharpness.allCases) { level in
-                                    Text(level.rawValue).tag(level.rawValue)
+                            Picker("", selection: $av1VarianceBoostCurve) {
+                                ForEach(AV1VarianceBoostCurve.allCases) { curve in
+                                    Text(curve.rawValue).tag(curve.rawValue)
                                 }
                             }
                             .pickerStyle(.menu)
                             .fixedSize()
                             .labelsHidden()
-                            .help("Applies adaptive sharpening to counteract the softening that can occur during compression. Higher values increase edge definition and perceived detail. Start with 1\u{2013}2 for subtle enhancement. Avoid high values on already-sharp or noisy content, as it may introduce ringing artifacts.")
-                        }
-
-                        HStack {
-                            Text("Variance Boost")
-                            Spacer()
-                            Picker("", selection: $av1VarianceBoost) {
-                                ForEach(AV1VarianceBoost.allCases) { level in
-                                    Text(level.rawValue).tag(level.rawValue)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .fixedSize()
-                            .labelsHidden()
-                            .help("Allocates more bits to areas with high detail and texture (like foliage, fabric, or skin), preserving fine detail that would otherwise be smoothed out. Improves visual quality in complex scenes at the cost of slightly larger files. Recommended for detailed or textured content.")
-                        }
-
-                        if AV1VarianceBoost(rawValue: av1VarianceBoost)?.value ?? 0 > 0 {
-                            HStack {
-                                Text("Variance Boost Curve")
-                                Spacer()
-                                Picker("", selection: $av1VarianceBoostCurve) {
-                                    ForEach(AV1VarianceBoostCurve.allCases) { curve in
-                                        Text(curve.rawValue).tag(curve.rawValue)
-                                    }
-                                }
-                                .pickerStyle(.menu)
-                                .fixedSize()
-                                .labelsHidden()
-                                .help("Controls how the extra bits from Variance Boost are distributed. Linear applies a uniform boost proportional to detail complexity. Moderate concentrates more of the boost on medium-to-high complexity areas. Aggressive focuses the boost heavily on the most complex areas, which is effective for highly detailed content.")
-                            }
+                            .help("Controls how the extra bits from Variance Boost are distributed. Linear applies a uniform boost proportional to detail complexity. Moderate concentrates more of the boost on medium-to-high complexity areas. Aggressive focuses the boost heavily on the most complex areas, which is effective for highly detailed content.")
                         }
                     }
 

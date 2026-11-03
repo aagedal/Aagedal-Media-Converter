@@ -127,6 +127,8 @@
 ### Other fixes
 
 - Updated FFmpeg with SVT-AV1 4.3.0 and libaom 3.15.3. AV1 encodes are about 5–9% faster at speeds 4–8 (the default is 6), with the same size and quality.
+- The AV1 tune Default (VQ) now actually tunes for visual quality. It used to get SVT-AV1's own default, PSNR.
+- Removed the AV1 tune Subjective Quality, which made every AV1 video encode fail with the current SVT-AV1. If you had it selected, it is now Default (VQ).
 - Folders can be imported by dropping them on the queue or a group, or choosing them with Import. The media files inside are added, including from subfolders, and image sequences are found in any subfolder; the Import panel used to find only image sequences, and dropped folders were ignored. Hidden files and packages such as apps and libraries are skipped, and a sequence's soundtrack isn't added again as a separate file. A few files are inspected at a time, so a large folder no longer starts a metadata probe for every file at once.
 - Files dropped together are added in the order they were dropped.
 - Video without colour tags no longer changes colour when it's scaled between SD and HD sizes (for example a 640×360 clip exported as 1080p, or an HD clip exported as a 540p proxy). Players read untagged SD and HD video with different colour standards, so the same picture came out with shifted yellows, cyans and skin tones. Such exports are now converted where needed and tagged as BT.709.
