@@ -2049,14 +2049,11 @@
     "repository": "https://github.com/rust-lang/regex",
     "source": "registry+https://github.com/rust-lang/crates.io-index",
     "features": [
-      "default",
-      "perf",
       "perf-backtrack",
       "perf-cache",
       "perf-dfa",
       "perf-inline",
       "perf-literal",
-      "perf-onepass",
       "std",
       "unicode",
       "unicode-age",
@@ -2080,7 +2077,6 @@
     "source": "registry+https://github.com/rust-lang/crates.io-index",
     "features": [
       "alloc",
-      "dfa-onepass",
       "hybrid",
       "meta",
       "nfa-backtrack",

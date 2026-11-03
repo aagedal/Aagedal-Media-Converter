@@ -761,6 +761,24 @@ final class CodecExportSettingsTests: XCTestCase {
         }
     }
 
+    func testAV1TuneIsAlwaysPassedSinceSVTAV1DefaultsToPSNR() throws {
+        let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        func svtParams() throws -> String {
+            let args = try XCTUnwrap(CodecExportSettings(preset: .av1, defaults: defaults)).ffmpegArguments
+            let index = try XCTUnwrap(args.firstIndex(of: "-svtav1-params"))
+            return args[index + 1]
+        }
+        XCTAssertEqual(try svtParams(), "tune=0")
+        for (tune, expected) in [(AV1TuneMode.vq, "tune=0"), (.psnr, "tune=1"), (.ssim, "tune=2")] {
+            defaults.set(tune.rawValue, forKey: AppConstants.av1TuneKey)
+            XCTAssertTrue(try svtParams().hasPrefix(expected), "\(tune)")
+        }
+        defaults.set(AV1TuneMode.legacySubjectiveRawValue, forKey: AppConstants.av1TuneKey)
+        XCTAssertEqual(try svtParams(), "tune=0")
+    }
+
     func testOpusFallbackAndHardwareEncodingUseInjectedPreferences() throws {
         let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

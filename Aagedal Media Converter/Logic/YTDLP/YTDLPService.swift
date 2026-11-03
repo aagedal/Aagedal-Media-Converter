@@ -91,9 +91,13 @@ final class YTDLPDownloadControl: @unchecked Sendable {
             : [destination.appendingPathExtension("part"), destination]
         for candidate in candidates {
             let resolved = candidate.standardizedFileURL.resolvingSymlinksInPath()
+            // A stop before the first fragment leaves an empty .part: nothing to recover.
             guard resolved.path.hasPrefix(prefix),
-                  let values = try? candidate.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
-                  values.isRegularFile == true, values.isSymbolicLink != true else { continue }
+                  let values = try? candidate.resourceValues(
+                      forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]
+                  ),
+                  values.isRegularFile == true, values.isSymbolicLink != true,
+                  (values.fileSize ?? 0) > 0 else { continue }
             // With --no-part a live download writes directly to its destination.
             // A pre-existing, unchanged completed file is not evidence of recovery.
             if candidate == destination, !path.hasSuffix(".part"), !finalized,
@@ -1125,8 +1129,8 @@ actor YTDLPService {
         let growingFile = growingFile && section == nil && !audioOnly
             && YTDLPEngineRouter.supportsLiveRecording(version: rsVersion)
         // yt-dlp-rs 0.8 extension: Stop keeps a playable file (fragments so far, or the
-        // streams so far merged). It stops a --live-from-start recording without merging
-        // its formats, so that recording keeps the ordinary SIGINT finish.
+        // streams so far merged). A --live-from-start recording merges its formats on
+        // SIGINT without it, and 0.8 with it left them unmerged (yt-dlp-rs#73).
         let keepPartialOnStop = !liveFromStart
             && YTDLPEngineRouter.supportsKeepPartialOnStop(version: rsVersion)
         // Files present before the yt-dlp-rs attempt are never removed by its cleanup.

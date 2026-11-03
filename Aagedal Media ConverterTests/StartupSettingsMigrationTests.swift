@@ -92,4 +92,21 @@ final class StartupSettingsMigrationTests: XCTestCase {
             XCTAssertNil(defaults.object(forKey: AppConstants.audioOnlyFormatKey))
         }
     }
+
+    func testRemovedSubjectiveAV1TuneBecomesVQAndOtherTunesAreKept() {
+        withStore { defaults, migration in
+            defaults.set(AV1TuneMode.legacySubjectiveRawValue, forKey: AppConstants.av1TuneKey)
+            migration.migrateLegacyAV1Tune()
+            XCTAssertEqual(defaults.string(forKey: AppConstants.av1TuneKey), AV1TuneMode.vq.rawValue)
+        }
+        withStore { defaults, migration in
+            defaults.set(AV1TuneMode.ssim.rawValue, forKey: AppConstants.av1TuneKey)
+            migration.migrateLegacyAV1Tune()
+            XCTAssertEqual(defaults.string(forKey: AppConstants.av1TuneKey), AV1TuneMode.ssim.rawValue)
+        }
+        withStore { defaults, migration in
+            migration.migrateLegacyAV1Tune()
+            XCTAssertNil(defaults.object(forKey: AppConstants.av1TuneKey))
+        }
+    }
 }

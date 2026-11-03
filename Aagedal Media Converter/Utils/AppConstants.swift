@@ -757,12 +757,14 @@ enum AppConstants {
     /// Includes pre-releases: yt-dlp-rs is in beta.
     static let ytdlpRSGitHubReleasesURL = "https://api.github.com/repos/aagedal/yt-dlp-rs/releases?per_page=20"
     /// Version of `Binaries/yt-dlp-rs`; scripts/update-ytdlp-rs.sh keeps it in sync.
-    static let bundledYTDLPRSVersion = "0.8.0-beta.1"
+    static let bundledYTDLPRSVersion = "0.9.0-beta.1"
     /// Oldest yt-dlp-rs that records `--live-from-start` (stopped with SIGINT) and
     /// supports `--growing-file`. A pinned older update keeps those on yt-dlp.
     static let ytdlpRSLiveRecordingMinimumVersion = "0.6.0-beta.1"
     /// Oldest yt-dlp-rs with `--keep-partial-on-stop`; older versions reject it (exit 2).
     static let ytdlpRSKeepPartialMinimumVersion = "0.8.0-beta.1"
+    /// Oldest yt-dlp-rs that gets Dailymotion's top-quality variants (yt-dlp-rs#74).
+    static let ytdlpRSDailymotionMinimumVersion = "0.9.0-beta.1"
 
     // Managed tool versions (yt-dlp, deno, yt-dlp-rs). Auto-update keys default to true.
     static let ytdlpAutoUpdateKey = "ytdlpAutoUpdate"

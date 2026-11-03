@@ -56,11 +56,13 @@
 - A recording that stalls or fails keeps what it has recorded instead of starting over, so footage isn't lost once a stream's rewind window has passed.
 - Recording from the start of a stream uses yt-dlp-rs when yt-dlp-rs is turned on. Recorded duration and size are shown while recording.
 - yt-dlp-rs is now off by default while it is in beta, so downloads use yt-dlp. Turn on Use yt-dlp-rs for supported sites in Settings › Downloads to use it. If you already changed the setting, your choice is kept.
-- Updated yt-dlp-rs to 0.8.0-beta.1. Stopping a yt-dlp-rs recording no longer waits up to 20 seconds when the server has stopped sending data.
+- Updated yt-dlp-rs to 0.9.0-beta.1. Stopping a yt-dlp-rs recording no longer waits up to 20 seconds when the server has stopped sending data.
+- yt-dlp-rs now also downloads from Dailymotion, in the same top quality as yt-dlp. Earlier versions often got only 480p there, so Dailymotion keeps using yt-dlp with a pinned older yt-dlp-rs.
 - Download progress, speed and the file being written are read from structured output that yt-dlp and yt-dlp-rs print the same way, instead of from their on-screen progress text.
 - Stopping an ordinary download with yt-dlp-rs keeps a playable file of what was downloaded, with sound. Previously a video downloaded as separate picture and sound streams kept only the picture.
 - Cancelling a download removes the partial files it left in the output folder, for both yt-dlp and yt-dlp-rs. Cancelling a live recording still keeps what was recorded.
 - If yt-dlp-rs rejects the app's options, for example an older pinned version, downloads use yt-dlp until the app is relaunched.
+- Stopping a download before its first piece has arrived no longer adds an empty file to the queue.
 
 ### DCP
 
@@ -124,6 +126,9 @@
 
 ### Other fixes
 
+- Updated FFmpeg with SVT-AV1 4.3.0 and libaom 3.15.3. AV1 encodes are about 5–9% faster at speeds 4–8 (the default is 6), with the same size and quality.
+- The AV1 tune Default (VQ) now actually tunes for visual quality. It used to get SVT-AV1's own default, PSNR.
+- Removed the AV1 tune Subjective Quality, which made every AV1 video encode fail with the current SVT-AV1. If you had it selected, it is now Default (VQ).
 - Folders can be imported by dropping them on the queue or a group, or choosing them with Import. The media files inside are added, including from subfolders, and image sequences are found in any subfolder; the Import panel used to find only image sequences, and dropped folders were ignored. Hidden files and packages such as apps and libraries are skipped, and a sequence's soundtrack isn't added again as a separate file. A few files are inspected at a time, so a large folder no longer starts a metadata probe for every file at once.
 - Files dropped together are added in the order they were dropped.
 - Video without colour tags no longer changes colour when it's scaled between SD and HD sizes (for example a 640×360 clip exported as 1080p, or an HD clip exported as a 540p proxy). Players read untagged SD and HD video with different colour standards, so the same picture came out with shifted yellows, cyans and skin tones. Such exports are now converted where needed and tagged as BT.709.

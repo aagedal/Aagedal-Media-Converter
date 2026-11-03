@@ -22,6 +22,13 @@ struct StartupSettingsMigration {
         }
     }
 
+    /// Replaces the removed Subjective Quality AV1 tune with VQ. Runs every launch, since
+    /// settings sync can bring the old value back from a Mac still on an older build.
+    func migrateLegacyAV1Tune() {
+        guard defaults.string(forKey: AppConstants.av1TuneKey) == AV1TuneMode.legacySubjectiveRawValue else { return }
+        defaults.set(AV1TuneMode.vq.rawValue, forKey: AppConstants.av1TuneKey)
+    }
+
     /// One-time migration: consolidate 3 audio presets into unified Audio Only preset
     func migrateAudioPresets() {
         let migrationKey = "audioPresetMigrationV1"

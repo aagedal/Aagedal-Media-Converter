@@ -368,6 +368,16 @@ final class DownloadPartialFileOwnershipTests: XCTestCase {
         XCTAssertEqual(control.partialFile(in: folder), completed)
     }
 
+    func testEmptyPartialFromAStopBeforeTheFirstFragmentIsNotRecovered() throws {
+        let partial = folder.appendingPathComponent("Recording.mp4.part")
+        try Data().write(to: partial)
+        let control = YTDLPDownloadControl()
+        control.recordOutputPath("Recording.mp4", in: folder)
+        XCTAssertNil(control.partialFile(in: folder))
+        try Data("fragment".utf8).write(to: partial)
+        XCTAssertEqual(control.partialFile(in: folder), partial)
+    }
+
     func testEscapingPathsSymlinksAndDirectoriesCannotBeRecovered() throws {
         let outside = folder.deletingLastPathComponent().appendingPathComponent(UUID().uuidString + ".mp4")
         try Data("outside".utf8).write(to: outside)

@@ -736,7 +736,7 @@
       "path": "build/attribution/yt-dlp-rs-mpl-crate-sources.tar.gz",
       "bytes": 136266,
       "sha256": "3c5897760e283aef5c4e294e6fdc510a5193712454559fc54338b48d60cdfa16",
-      "url": "https://github.com/aagedal/yt-dlp-rs/blob/v0.8.0-beta.1/Cargo.lock"
+      "url": "https://github.com/aagedal/yt-dlp-rs/blob/v0.9.0-beta.1/Cargo.lock"
     }
   ],
   "tools": [
@@ -872,8 +872,8 @@
     },
     {
       "path": "Aagedal Media Converter/Binaries/ffmpeg",
-      "bytes": 60144496,
-      "sha256": "c4cd2362fd3147a9f0b30d42f2c894337bc947ad95ad4e33f72c024e1d6661a0",
+      "bytes": 60211280,
+      "sha256": "21f5d3fbea60883e280b54bcff32670d672ac8f49c996e330df34b4a7d471484",
       "mode": "0755",
       "architectures": [
         "arm64"
@@ -1015,8 +1015,8 @@
     },
     {
       "path": "Aagedal Media Converter/Binaries/yt-dlp-rs",
-      "bytes": 30573360,
-      "sha256": "9c3823f261c1b1e0a97f01596a8ca3651c93958dbfc163dbf16ce692faccf952",
+      "bytes": 30721440,
+      "sha256": "6885cba4d4ff4d9648d4b5da1a860245e350ef315fc27270ac3dcc0e9b286f3b",
       "mode": "0755",
       "architectures": [
         "arm64"
@@ -1027,7 +1027,7 @@
         "/usr/lib/libiconv.2.dylib"
       ],
       "component": "yt-dlp-rs",
-      "version": "0.8.0-beta.1",
+      "version": "0.9.0-beta.1",
       "license": "Unlicense AND MIT AND Apache-2.0 AND MPL-2.0 AND ISC AND BSD-3-Clause AND Unicode-3.0 AND Zlib AND CDLA-Permissive-2.0",
       "licenseFile": "Licenses/yt-dlp-rs-LICENSE.txt",
       "requiredSourceComponents": [
@@ -1359,13 +1359,13 @@
     {
       "path": "Licenses/yt-dlp-rs-LICENSE.txt",
       "bytes": 3664814,
-      "sha256": "ff29733b18f8a75d9a4d816fae2a614bcf1bfdc1b13409b09eccdef3f8708a1f"
+      "sha256": "59974c32f896a7c64a37f4e45a7aa31b7e34874a5d965902bb7e4981dad676c6"
     }
   ],
   "summary": {
     "toolCount": 13,
     "libraryCount": 12,
-    "totalBytes": 190457456,
+    "totalBytes": 190672320,
     "entriesMissingLocalLicenseFile": []
   }
 }
