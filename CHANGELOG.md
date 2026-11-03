@@ -54,8 +54,10 @@
 - Stopping a recording lets yt-dlp finish cleanly, so recordings from the start of the stream are merged into one playable file with metadata. Stopping again forces it. If a recording is cut off anyway, the recovered file gets a `.ts` extension when it is an MPEG transport stream.
 - New setting: Record live streams as growing files. The stream is written to one QuickTime `.mov` that DaVinci Resolve and Premiere Pro can import while it is still recording. It needs yt-dlp-rs turned on. The queue row's Finder, copy-path and drag buttons point at the growing file during the recording.
 - A recording that stalls or fails keeps what it has recorded instead of starting over, so footage isn't lost once a stream's rewind window has passed.
-- Recording from the start of a stream uses yt-dlp-rs, updated to 0.6, when yt-dlp-rs is turned on. Recorded duration and size are shown while recording.
+- Recording from the start of a stream uses yt-dlp-rs when yt-dlp-rs is turned on. Recorded duration and size are shown while recording.
 - yt-dlp-rs is now off by default while it is in beta, so downloads use yt-dlp. Turn on Use yt-dlp-rs for supported sites in Settings › Downloads to use it. If you already changed the setting, your choice is kept.
+- Updated yt-dlp-rs to 0.8.0-beta.1. Stopping a yt-dlp-rs recording no longer waits up to 20 seconds when the server has stopped sending data.
+- Download progress, speed and the file being written are read from structured output that yt-dlp and yt-dlp-rs print the same way, instead of from their on-screen progress text.
 
 ### DCP
 
