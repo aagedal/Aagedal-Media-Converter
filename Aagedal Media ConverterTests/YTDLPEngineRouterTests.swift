@@ -27,6 +27,8 @@ final class YTDLPEngineRouterTests: XCTestCase {
             "https://bsky.app/profile/a/post/b": "bluesky",
             "https://soundcloud.com/forss/flickermood": "soundcloud",
             "https://artist.bandcamp.com/track/song": "bandcamp",
+            "https://www.dailymotion.com/video/x7tgad0": "dailymotion",
+            "https://dai.ly/x7tgad0": "dailymotion",
         ]
         for (url, site) in supported {
             XCTAssertEqual(YTDLPEngineRouter.site(for: url)?.id, site, url)
@@ -35,7 +37,6 @@ final class YTDLPEngineRouterTests: XCTestCase {
         let unsupported = [
             "https://notyoutube.com/watch?v=abc",
             "https://youtube.com.evil.example/watch?v=abc",
-            "https://www.dailymotion.com/video/x7tgad0",
             "https://v.redd.it/abc",
             "https://example.com/video.mp4",
             "ftp://youtube.com/video",
@@ -59,7 +60,7 @@ final class YTDLPEngineRouterTests: XCTestCase {
         XCTAssertEqual(engine(youtube, .metadata, available: false), .ytdlp)
         XCTAssertEqual(engine(youtube, .metadata, skipped: true), .ytdlp)
         XCTAssertEqual(engine("https://example.com/a.mp4", .metadata), .ytdlp)
-        XCTAssertEqual(engine("https://www.dailymotion.com/video/x1", .download(.init())), .ytdlp)
+        XCTAssertEqual(engine("https://www.dailymotion.com/video/x1", .download(.init())), .ytdlpRS)
 
         XCTAssertEqual(engine("https://www.youtube.com/playlist?list=PL1", .playlistListing), .ytdlpRS)
         XCTAssertEqual(engine("https://www.twitch.tv/name/videos", .playlistListing), .ytdlpRS)
@@ -79,6 +80,20 @@ final class YTDLPEngineRouterTests: XCTestCase {
         XCTAssertEqual(engine(youtube, .download(.init(audioOnly: true, hasFFprobe: false))), .ytdlp)
         XCTAssertEqual(engine(youtube, .download(.init(audioOnly: true, hasFFprobe: true))), .ytdlpRS)
         XCTAssertEqual(engine(youtube, .download(.init(audioOnly: false, hasFFprobe: false))), .ytdlpRS)
+    }
+
+    func testDailymotionNeedsAVersionWithItsTopVariants() {
+        func engine(version: String?) -> YTDLPEngine {
+            YTDLPEngineRouter.decide(url: "https://www.dailymotion.com/video/x1", operation: .metadata,
+                                     rsAvailable: true, rsVersion: version).engine
+        }
+        XCTAssertEqual(engine(version: AppConstants.bundledYTDLPRSVersion), .ytdlpRS)
+        XCTAssertEqual(engine(version: "0.9.0-beta.1"), .ytdlpRS)
+        XCTAssertEqual(engine(version: "0.8.0-beta.1"), .ytdlp)
+        XCTAssertEqual(engine(version: nil), .ytdlp)
+        // Other sites still use an older yt-dlp-rs.
+        XCTAssertEqual(YTDLPEngineRouter.decide(url: "https://www.youtube.com/watch?v=abc", operation: .metadata,
+                                                rsAvailable: true, rsVersion: "0.8.0-beta.1").engine, .ytdlpRS)
     }
 
     func testLiveFromStartNeedsLiveRecordingVersion() {
@@ -338,7 +353,7 @@ final class YTDLPEngineRouterTests: XCTestCase {
         }
         let service = YTDLPService(updateService: EngineStubUpdater(), subprocessRunner: runner,
                                    engineFailures: YTDLPEngineFailureMemory())
-        _ = try await service.fetchMetadata(url: "https://www.dailymotion.com/video/x1")
+        _ = try await service.fetchMetadata(url: "https://example.com/video.mp4")
         XCTAssertEqual(runner.executables, [EngineStubUpdater.ytdlpPath])
     }
 
@@ -463,7 +478,7 @@ final class YTDLPEngineRouterTests: XCTestCase {
         XCTAssertEqual(liveFromStart.terminationGracePeriod, .seconds(2))
         let oldRS = try await request(rsVersion: "0.7.0-beta.1")
         XCTAssertFalse(oldRS.arguments.contains("--keep-partial-on-stop"))
-        let ytdlp = try await request(url: "https://www.dailymotion.com/video/x1")
+        let ytdlp = try await request(url: "https://example.com/video.mp4")
         XCTAssertFalse(ytdlp.arguments.contains("--keep-partial-on-stop"))
     }
 
@@ -607,7 +622,7 @@ final class YTDLPEngineRouterTests: XCTestCase {
         XCTAssertFalse(audio.contains("--growing-file"))
         let clip = try await arguments(section: DownloadSection(start: 1, end: 5))
         XCTAssertFalse(clip.contains("--growing-file"))
-        let ytdlp = try await arguments(url: "https://www.dailymotion.com/video/x1")
+        let ytdlp = try await arguments(url: "https://example.com/video.mp4")
         XCTAssertFalse(ytdlp.contains("--growing-file"))
     }
 

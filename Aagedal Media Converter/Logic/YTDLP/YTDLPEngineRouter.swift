@@ -55,10 +55,12 @@ enum YTDLPEngineRouter {
         let domains: [String]
         /// Playlist/channel/user listings are ported for this site.
         let supportsListing: Bool
+        /// Oldest yt-dlp-rs whose results match yt-dlp's here; older versions use yt-dlp.
+        var minimumVersion: String? = nil
     }
 
     /// yt-dlp-rs 0.3.0+ sites ported against upstream without caveats the app relies on.
-    /// Dailymotion is excluded: 0.8 often misses its top-quality variant (see
+    /// Before 0.9, Dailymotion often lacked its top-quality variant (see
     /// docs/ytdlp-rs-integration.md), and a lower-quality success never falls back.
     static let supportedSites: [Site] = [
         Site(id: "youtube", hosts: ["youtu.be"],
@@ -73,6 +75,8 @@ enum YTDLPEngineRouter {
         Site(id: "bluesky", hosts: [], domains: ["bsky.app"], supportsListing: false),
         Site(id: "soundcloud", hosts: [], domains: ["soundcloud.com"], supportsListing: false),
         Site(id: "bandcamp", hosts: [], domains: ["bandcamp.com"], supportsListing: false),
+        Site(id: "dailymotion", hosts: ["dai.ly"], domains: ["dailymotion.com"], supportsListing: true,
+             minimumVersion: AppConstants.ytdlpRSDailymotionMinimumVersion),
     ]
 
     /// The supported site for an http(s) URL, matching hosts case-insensitively and
@@ -100,6 +104,9 @@ enum YTDLPEngineRouter {
         guard let site = site(for: url) else { return ytdlp("site is not on the yt-dlp-rs list") }
         guard !rsSkippedForSite else {
             return ytdlp("yt-dlp-rs failed \(sessionFailureLimit)+ times for \(site.id) this session")
+        }
+        if let minimum = site.minimumVersion, !isAtLeast(minimum, version: rsVersion) {
+            return ytdlp("\(site.id) needs yt-dlp-rs \(minimum)+")
         }
         // Carousel probes depend on --ignore-no-formats-error, which yt-dlp-rs accepts
         // but ignores, so posts with photo slides would fail outright.
