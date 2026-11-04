@@ -1,7 +1,9 @@
 name: Validate
 
+# Pull requests are checked locally with scripts/ci-local.sh before pushing.
+# Artifacts count against the account's Actions storage, so they are uploaded
+# only on real failures and kept briefly.
 on:
-  pull_request:
   push:
     branches:
       - main
@@ -76,13 +78,13 @@ jobs:
             CODE_SIGNING_ALLOWED=NO
 
       - name: Upload diagnostics
-        if: ${{ failure() || cancelled() }}
+        if: ${{ failure() }}
         uses: actions/upload-artifact@v7
         with:
           name: debug-xcresults-${{ github.run_attempt }}
           path: ${{ runner.temp }}/*.xcresult
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3
 
   release:
     name: Release build
@@ -121,7 +123,7 @@ jobs:
           name: release-footprint-${{ github.run_attempt }}
           path: ${{ runner.temp }}/Release-Footprint.json
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 3
 
       - name: Upload diagnostics
         if: failure()
@@ -130,4 +132,4 @@ jobs:
           name: release-xcresult-${{ github.run_attempt }}
           path: ${{ runner.temp }}/Release-Build.xcresult
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3
