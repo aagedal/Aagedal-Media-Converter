@@ -723,6 +723,7 @@ struct ContentView: View {
         mainContentView
             .overlay(alignment: .bottom) { updateNotificationOverlay }
             .overlay(alignment: .top) { settingsSyncNoticeOverlay }
+            .overlay(alignment: .bottom) { P2ImportProgressOverlay() }
             .frame(minWidth: 860)
             .modifier(ContentViewSheets(
                 droppedFiles: $droppedFiles,
@@ -1433,14 +1434,17 @@ struct ContentView: View {
             }
             return (urls: urls, hasRemovableSources: hasRemovableSources)
         }.value
+        // P2 cards keep video and each audio channel in separate files; each shot
+        // becomes one rewrapped file before review.
+        let clipURLs = await P2CardImporter.resolveCards(in: scan.urls)
 
         if hasAccess { folderURL.stopAccessingSecurityScopedResource() }
 
-        guard !scan.urls.isEmpty else { return }
+        guard !clipURLs.isEmpty else { return }
 
         cameraCardImportState = CameraCardImportState(
             folderURL: folderURL,
-            videoURLs: scan.urls,
+            videoURLs: clipURLs,
             hasRemovableSources: scan.hasRemovableSources
         )
     }
@@ -1912,9 +1916,7 @@ struct ContentView: View {
     private func addURLsToGroup(groupID: UUID, urls: [URL]) async {
         // Folders add the media files inside them (image sequences only go to
         // the main queue). Scan first: the group index below must not cross an await.
-        let fileURLs = await Task.detached(priority: .userInitiated) {
-            FolderImportScanner.expand(urls).fileURLs
-        }.value
+        let fileURLs = await FolderImportScanner.expandResolvingCards(urls).fileURLs
         guard let groupIndex = encodingGroups.firstIndex(where: { $0.id == groupID }) else { return }
 
         let supported = AppConstants.supportedVideoExtensions

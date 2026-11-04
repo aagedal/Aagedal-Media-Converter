@@ -119,6 +119,17 @@ enum AppConstants {
         return cacheDir
     }()
     
+    // Directory for P2 card clips rewrapped into single files (see P2ClipRewrapper)
+    static let p2ClipsDirectory: URL = {
+        let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
+        let clipsDir = supportDir
+            .appendingPathComponent("AagedalMediaConverter", isDirectory: true)
+            .appendingPathComponent("P2Clips", isDirectory: true)
+        try? FileManager.default.createDirectory(at: clipsDir, withIntermediateDirectories: true)
+        return clipsDir
+    }()
+
     // Supported media file extensions (lowercase)
     static let supportedVideoExtensions: Set<String> = [
         "3g2", "3gp", "3gp2", "3gpp",

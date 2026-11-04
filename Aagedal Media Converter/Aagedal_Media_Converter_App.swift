@@ -68,6 +68,7 @@ struct Aagedal_Media_Converter_App: App {
         settingsMigration.migrateLegacyAV1Tune()
         UploadProfileStore.migrateLegacyProfilesIfNeeded()
         applyPreviewCacheCleanupPolicy()
+        Task.detached(priority: .utility) { P2ClipRewrapper.removeStale() }
         TesseractService.purgeOrphanTempDirs()
         OutputFolderCleanupService.shared.start()
         // Clear the Blackmagic "recording" xattr from any growing-file recording (screen

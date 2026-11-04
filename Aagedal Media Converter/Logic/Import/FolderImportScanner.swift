@@ -81,12 +81,20 @@ enum FolderImportScanner {
         return expansion
     }
 
-    /// `expand(_:)` off the main actor, plus the image sequences in the folders
+    /// `expand(_:)` off the main actor, with the files of P2 cards replaced by one
+    /// rewrapped file per shot (see `P2CardImporter`).
+    static func expandResolvingCards(_ urls: [URL]) async -> Expansion {
+        var expansion = await Task.detached(priority: .userInitiated) { expand(urls) }.value
+        expansion.fileURLs = await P2CardImporter.resolveCards(in: expansion.fileURLs)
+        return expansion
+    }
+
+    /// `expandResolvingCards(_:)`, plus the image sequences in the folders
     /// it found. Audio that a gap-free sequence uses as its soundtrack is left out
     /// of `fileURLs` so it isn't also queued on its own. Numbered stills with gaps
     /// (e.g. a few photos) may not be a real sequence, so their audio is kept.
     static func expandWithImageSequences(_ urls: [URL]) async -> (fileURLs: [URL], sequences: [ImageSequenceConfig]) {
-        let expansion = await Task.detached(priority: .userInitiated) { expand(urls) }.value
+        let expansion = await expandResolvingCards(urls)
         var sequences: [ImageSequenceConfig] = []
         for folder in expansion.imageSequenceFolders {
             guard !Task.isCancelled else { break }
