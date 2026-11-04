@@ -50,6 +50,14 @@ xcodebuild test -project "Aagedal Media Converter.xcodeproj" \
   -only-testing:"Aagedal Media ConverterTests"
 ```
 
+### Local CI (run before pushing or opening a PR)
+GitHub Actions no longer validates pull requests, only `main`, tags, the weekly schedule and manual runs. Run the same checks locally and report the result in the PR's testing notes:
+```bash
+scripts/ci-local.sh            # manifest, script tests, localizations, Debug build, unit tests
+scripts/ci-local.sh --release  # also the Release build and bundle verification
+```
+Logs and `.xcresult` bundles go to `~/Library/Caches/AagedalMediaConverter-CI/Results`.
+
 ## Code Architecture
 
 ### High-Level Structure
