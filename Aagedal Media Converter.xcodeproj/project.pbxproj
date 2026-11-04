@@ -176,6 +176,7 @@
 		8EC017D3E3FDF66B8DE02E57 /* BMXService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DED542D049B53B34DBA25323 /* BMXService.swift */; };
 		A1B2C3D4E5F6A7B8C9D0E1F3 /* NativeMXFMerge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* NativeMXFMerge.swift */; };
 		8EC3DCDD2EF57F0600CD75BC /* RandomTips.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EC3DCDC2EF57F0600CD75BC /* RandomTips.swift */; };
+		P2IMPOVL00000001 /* P2ImportProgressOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = P2IMPOVL00000002 /* P2ImportProgressOverlay.swift */; };
 		8EC9A6F12EC146C00082C67F /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EFBDA932EA58975005ADDCF /* AboutView.swift */; };
 		8EC9A6F72EC149010082C67F /* PreviewTrimControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EC9A6F62EC149010082C67F /* PreviewTrimControls.swift */; };
 		8EC9A6F82EC149010082C67F /* PreviewPlayerFooter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EC9A6F52EC149010082C67F /* PreviewPlayerFooter.swift */; };
@@ -234,6 +235,7 @@
 		A45920000000000000000002 /* SubtitleAgentCoexistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45920000000000000000001 /* SubtitleAgentCoexistenceTests.swift */; };
 		A45921000000000000000011 /* CameraCardRecordingGrouping.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45921000000000000000012 /* CameraCardRecordingGrouping.swift */; };
 		A45921000000000000000013 /* CameraCardRecordingGroupingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45921000000000000000014 /* CameraCardRecordingGroupingTests.swift */; };
+		P2CRDTST00000001 /* P2CardImporterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = P2CRDTST00000002 /* P2CardImporterTests.swift */; };
 		A45922000000000000000101 /* CameraCardRecordingMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45922000000000000000102 /* CameraCardRecordingMetadata.swift */; };
 		A45922000000000000000103 /* CameraCardRecordingMetadataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45922000000000000000104 /* CameraCardRecordingMetadataTests.swift */; };
 		A45922000000000000000105 /* NativePreviewLoadDeadlineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45922000000000000000106 /* NativePreviewLoadDeadlineTests.swift */; };
@@ -336,6 +338,7 @@
 		IMFEXP0000MFW0001 /* IMFManifestWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = IMFEXP0000MFW0002 /* IMFManifestWriter.swift */; };
 		IMFEXP0000UIV0001 /* IMFMetadataView.swift in Sources */ = {isa = PBXBuildFile; fileRef = IMFEXP0000UIV0002 /* IMFMetadataView.swift */; };
 		IMFPKGIMP00000001 /* IMFPackageImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = IMFPKGIMP00000002 /* IMFPackageImporter.swift */; };
+		P2CRDIMP00000001 /* P2CardImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = P2CRDIMP00000002 /* P2CardImporter.swift */; };
 		IMFPKGPAR00000001 /* IMFPackageParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = IMFPKGPAR00000002 /* IMFPackageParser.swift */; };
 		IMGSEQDET00000002 /* ImageSequenceDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = IMGSEQDET00000001 /* ImageSequenceDetector.swift */; };
 		IMGSEQMOD00000002 /* ImageSequenceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = IMGSEQMOD00000001 /* ImageSequenceModels.swift */; };
@@ -611,6 +614,7 @@
 		8EBD10202EBE8B3C00377649 /* Aagedal_Media_Converter_UITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Aagedal_Media_Converter_UITestsLaunchTests.swift; sourceTree = "<group>"; };
 		8EBD10232EBE8B7000377649 /* Aagedal_Media_Converter_Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Aagedal_Media_Converter_Tests.swift; sourceTree = "<group>"; };
 		8EC3DCDC2EF57F0600CD75BC /* RandomTips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RandomTips.swift; sourceTree = "<group>"; };
+		P2IMPOVL00000002 /* P2ImportProgressOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P2ImportProgressOverlay.swift; sourceTree = "<group>"; };
 		8EC9A6F52EC149010082C67F /* PreviewPlayerFooter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewPlayerFooter.swift; sourceTree = "<group>"; };
 		8EC9A6F62EC149010082C67F /* PreviewTrimControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewTrimControls.swift; sourceTree = "<group>"; };
 		8EC9A6FC2EC149140082C67F /* PreviewPlayerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewPlayerController.swift; sourceTree = "<group>"; };
@@ -683,6 +687,7 @@
 		A45920000000000000000001 /* SubtitleAgentCoexistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleAgentCoexistenceTests.swift; sourceTree = "<group>"; };
 		A45921000000000000000012 /* CameraCardRecordingGrouping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCardRecordingGrouping.swift; sourceTree = "<group>"; };
 		A45921000000000000000014 /* CameraCardRecordingGroupingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCardRecordingGroupingTests.swift; sourceTree = "<group>"; };
+		P2CRDTST00000002 /* P2CardImporterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P2CardImporterTests.swift; sourceTree = "<group>"; };
 		A45922000000000000000102 /* CameraCardRecordingMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCardRecordingMetadata.swift; sourceTree = "<group>"; };
 		A45922000000000000000104 /* CameraCardRecordingMetadataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCardRecordingMetadataTests.swift; sourceTree = "<group>"; };
 		A45922000000000000000106 /* NativePreviewLoadDeadlineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePreviewLoadDeadlineTests.swift; sourceTree = "<group>"; };
@@ -797,6 +802,7 @@
 		IMFEXP0000MFW0002 /* IMFManifestWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMFManifestWriter.swift; sourceTree = "<group>"; };
 		IMFEXP0000UIV0002 /* IMFMetadataView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMFMetadataView.swift; sourceTree = "<group>"; };
 		IMFPKGIMP00000002 /* IMFPackageImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMFPackageImporter.swift; sourceTree = "<group>"; };
+		P2CRDIMP00000002 /* P2CardImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P2CardImporter.swift; sourceTree = "<group>"; };
 		IMFPKGPAR00000002 /* IMFPackageParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMFPackageParser.swift; sourceTree = "<group>"; };
 		IMGSEQDET00000001 /* ImageSequenceDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSequenceDetector.swift; sourceTree = "<group>"; };
 		IMGSEQMOD00000001 /* ImageSequenceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSequenceModels.swift; sourceTree = "<group>"; };
@@ -1171,6 +1177,7 @@
 				IMFEXP0000UIV0002 /* IMFMetadataView.swift */,
 				DC0001A1CFM0000100000001 /* ConformanceMergeDialog.swift */,
 				8EC3DCDC2EF57F0600CD75BC /* RandomTips.swift */,
+				P2IMPOVL00000002 /* P2ImportProgressOverlay.swift */,
 				AA1D4C3E2F10B56789000001 /* TrackPickerSheet.swift */,
 				ACBB08166226F6F3A57F015C /* URLInputOverlay.swift */,
 				C11P0000000000000000A003 /* PlayheadTrimTimeline.swift */,
@@ -1288,6 +1295,7 @@
 				A4591900000000000000000E /* StitchMarkerExportTests.swift */,
 				A45919000000000000000005 /* QueueGroupingTests.swift */,
 				A45921000000000000000014 /* CameraCardRecordingGroupingTests.swift */,
+				P2CRDTST00000002 /* P2CardImporterTests.swift */,
 				A45922000000000000000106 /* NativePreviewLoadDeadlineTests.swift */,
 				A45922000000000000000104 /* CameraCardRecordingMetadataTests.swift */,
 				1624627AD00145E0A0897303 /* OutputFolderCleanupServiceTests.swift */,
@@ -1606,6 +1614,7 @@
 				A45921000000000000000012 /* CameraCardRecordingGrouping.swift */,
 				A45922000000000000000102 /* CameraCardRecordingMetadata.swift */,
 				IMFPKGIMP00000002 /* IMFPackageImporter.swift */,
+				P2CRDIMP00000002 /* P2CardImporter.swift */,
 				IMFPKGPAR00000002 /* IMFPackageParser.swift */,
 				IMGSEQDET00000001 /* ImageSequenceDetector.swift */,
 				VIDITEMIDX00000002 /* VideoItemIndex.swift */,
@@ -2015,6 +2024,7 @@
 				8EEE45182EBEA9F00049F017 /* PreviewPlayerView.swift in Sources */,
 				8EEE45312EC139270049F017 /* FFMPEGProgressParser.swift in Sources */,
 				8EC3DCDD2EF57F0600CD75BC /* RandomTips.swift in Sources */,
+				P2IMPOVL00000001 /* P2ImportProgressOverlay.swift in Sources */,
 				AA1D4C3E2F10B56789000002 /* TrackPickerSheet.swift in Sources */,
 				8E4DF26D2ECBACFC007B6277 /* GeneralSettingsView.swift in Sources */,
 				8E09F7422EC27EDA00E129CD /* PreviewCacheCleanupPolicy.swift in Sources */,
@@ -2176,6 +2186,7 @@
 				A45922000000000000000101 /* CameraCardRecordingMetadata.swift in Sources */,
 				IMFPKGPAR00000001 /* IMFPackageParser.swift in Sources */,
 				IMFPKGIMP00000001 /* IMFPackageImporter.swift in Sources */,
+				P2CRDIMP00000001 /* P2CardImporter.swift in Sources */,
 				5DA60AEC78445845148F3FFA /* VideoQueueTableView.swift in Sources */,
 				ANALYTICSMOD00000002 /* AnalyticsModels.swift in Sources */,
 				ANALYTICSSRV00000002 /* AnalyticsService.swift in Sources */,
@@ -2233,6 +2244,7 @@
 				A4591900000000000000000F /* StitchMarkerExportTests.swift in Sources */,
 				A45919000000000000000006 /* QueueGroupingTests.swift in Sources */,
 				A45921000000000000000013 /* CameraCardRecordingGroupingTests.swift in Sources */,
+				P2CRDTST00000001 /* P2CardImporterTests.swift in Sources */,
 				A45922000000000000000105 /* NativePreviewLoadDeadlineTests.swift in Sources */,
 				A45922000000000000000103 /* CameraCardRecordingMetadataTests.swift in Sources */,
 				8742E2B3B67147A68FB45282 /* OutputFolderCleanupServiceTests.swift in Sources */,

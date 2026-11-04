@@ -74,6 +74,12 @@
 - The CPL includes the Bv2.1 composition metadata, and folder names follow the ISDCF naming convention more closely.
 - DCP and IMF export need the bundled FFmpeg; a custom FFmpeg without its JPEG 2000 patches can't produce them.
 
+### P2 cards
+
+- Panasonic P2 cards can be imported with Import Camera Card, by opening the card folder, or by dropping the card (or individual clips from it) on the queue or on a group. Each clip becomes one queue item with its video and every audio channel. Before, a P2 card gave silent video clips, a separate item for each audio channel, and the low-resolution proxies.
+- Recordings that the camera split across several clips, including across cards imported together, are joined into one item.
+- Clips are stream-copied into Matroska files in Application Support (about the size of the card, at disk speed) with their timecode, recording date and field order, so interlaced AVC-Intra is still deinterlaced. Progress shows at the bottom of the window with a Cancel button. Re-importing a card reuses the files, and files not imported for 7 days are removed at launch.
+
 ### IMF
 
 - Audio tracks are labelled as mono, stereo, 5.1 or 7.1 with the item's language and title, both in the MXF and in the CPL.
