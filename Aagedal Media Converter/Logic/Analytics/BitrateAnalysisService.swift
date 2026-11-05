@@ -69,7 +69,6 @@ struct BitrateTimeline: Equatable, Sendable {
         return ((last - first) / Double(keyframeTimes.count - 1)).formatted(.number.precision(.fractionLength(2))) + " s"
     }
 
-    /// The smallest offered window that keeps the chart at or below `maxWindows` points.
     /// The offered windows that keep the chart at or below `maxWindows` points, so a short
     /// window on a long file can't build tens of thousands of chart marks.
     static func windowChoices(duration: Double, maxWindows: Int = 4000) -> [Double] {
@@ -78,6 +77,7 @@ struct BitrateTimeline: Equatable, Sendable {
         return allowed.isEmpty ? [windowChoices[windowChoices.count - 1]] : allowed
     }
 
+    /// The smallest offered window that keeps the chart at or below `maxWindows` points.
     static func automaticWindow(duration: Double, maxWindows: Int = 1000) -> Double {
         guard duration.isFinite, duration > 0 else { return 1 }
         let limit = Double(max(1, maxWindows))
