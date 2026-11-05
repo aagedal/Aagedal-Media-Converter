@@ -140,22 +140,10 @@
       "sha256": "e0fb1eab57712cbfdb3014db08894a7fbe7526f92de35299c64b24c89cb2568e"
     },
     {
-      "component": "FFmpeg 9.0.2 build",
-      "path": "build/attribution/ffmpeg-9.0.2-source.tar.gz",
-      "bytes": 184520633,
-      "sha256": "822c0658ec5dc937ed521db0baf8ef3a1c107680a53de8fbbdc2e038f8065c72"
-    },
-    {
-      "component": "FFmpeg generated inputs",
-      "path": "build/attribution/ffmpeg-9.0.2-generated-inputs.tar.gz",
-      "bytes": 204314,
-      "sha256": "1a7e46f3691bd78478fab71dcd29a1896b109f8f0d29de7d9a1ad1abbea86ce0"
-    },
-    {
-      "component": "FFmpeg 9.0.2 Metal correction",
-      "path": "build/attribution/ffmpeg-9.0.2-metal-source.tar.gz",
-      "bytes": 18015006,
-      "sha256": "883bc2cd83b5f8af0f5fff03396b0caae943210db616554209a434987a2c9bc8"
+      "component": "FFmpeg 9.0.2 build (SVT-AV1 4.3.0)",
+      "path": "build/attribution/ffmpeg-9.0.2-svt-av1-4.3.0-source.tar.gz",
+      "bytes": 184673859,
+      "sha256": "440093396b7a0b39d21ced0b91ea8558ded63ce42cd09ae2d4ce8ee9808125fc"
     },
     {
       "component": "MPVKit: gnutls",
@@ -910,9 +898,7 @@
       "licenseFile": "Licenses/ffmpeg-LICENSE.txt",
       "reportedLicense": "GPL-3.0-or-later",
       "requiredSourceComponents": [
-        "FFmpeg 9.0.2 build",
-        "FFmpeg generated inputs",
-        "FFmpeg 9.0.2 Metal correction"
+        "FFmpeg 9.0.2 build (SVT-AV1 4.3.0)"
       ]
     },
     {
@@ -1308,8 +1294,8 @@
     },
     {
       "path": "Licenses/ffmpeg-LICENSE.txt",
-      "bytes": 628643,
-      "sha256": "94a9c212cebe14b11126cf458e87c6bb259e27bab0d05754c535fccc509b51cf"
+      "bytes": 724777,
+      "sha256": "ee8a0d6f56b0691a81e089fcc081ceb749d5833ce3b300e92612903c05655e00"
     },
     {
       "path": "Licenses/geonames-LICENSE.txt",

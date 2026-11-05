@@ -203,6 +203,8 @@ final class SettingsSyncService {
                 defaults.set(value.propertyListValue, forKey: key)
             }
         }
+        // A Mac on an older build can sync settings this one has migrated away from.
+        StartupSettingsMigration(defaults: defaults).migrateLegacyAV1Tune()
         isApplyingRemote = false
 
         // Treat the applied payload as our baseline so the local-change observer

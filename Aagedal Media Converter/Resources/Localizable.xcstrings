@@ -152318,6 +152318,64 @@
           }
         }
       }
+    },
+    "bmx couldn't merge the MXF clips, so they were merged with FFmpeg and camera metadata was not kept." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx kunne ikke slå sammen MXF-klippene, så de ble slått sammen med FFmpeg, og kamerametadata ble ikke beholdt."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx konnte die MXF-Clips nicht zusammenführen. Sie wurden daher mit FFmpeg zusammengeführt, und die Kamerametadaten wurden nicht beibehalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx no pudo unir los clips MXF, así que se unieron con FFmpeg y no se conservaron los metadatos de cámara."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx n’a pas pu fusionner les clips MXF : ils ont été fusionnés avec FFmpeg et les métadonnées de caméra n’ont pas été conservées."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx non è riuscito a unire le clip MXF, quindi sono state unite con FFmpeg e i metadati della videocamera non sono stati mantenuti."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx で MXF クリップを結合できなかったため、FFmpeg で結合しました。カメラメタデータは保持されませんでした。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx가 MXF 클립을 병합하지 못해 FFmpeg로 병합했으며, 카메라 메타데이터는 유지되지 않았습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O bmx não conseguiu mesclar os clipes MXF, então eles foram mesclados com o FFmpeg e os metadados da câmera não foram mantidos."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bmx 无法合并这些 MXF 剪辑，因此已改用 FFmpeg 合并，未保留摄像机元数据。"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

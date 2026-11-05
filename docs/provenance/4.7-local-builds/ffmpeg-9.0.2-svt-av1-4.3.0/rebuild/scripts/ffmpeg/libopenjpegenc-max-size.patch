@@ -1,0 +1,150 @@
+--- a/libavcodec/libopenjpegenc.c
++++ b/libavcodec/libopenjpegenc.c
+@@ -27,6 +27,7 @@
+ #include "libavutil/common.h"
+ #include "libavutil/imgutils.h"
+ #include "libavutil/intreadwrite.h"
++#include "libavutil/mem.h"
+ #include "libavutil/opt.h"
+ #include "avcodec.h"
+ #include "codec_internal.h"
+@@ -44,6 +45,8 @@
+     int irreversible;
+     int disto_alloc;
+     int fixed_quality;
++    int max_cs_size;
++    int max_comp_size;
+ } LibOpenJPEGContext;
+ 
+ static void error_callback(const char *msg, void *data)
+@@ -342,6 +345,22 @@
+         cinema_parameters(&ctx->enc_params);
+     }
+ 
++    /* Explicit size caps override the fixed cinema_mode values. OpenJPEG
++     * only applies them for the 2K/4K Digital Cinema profiles, where it also
++     * derives the rate from max_cs_size and clamps both to the 24 fps limits. */
++    if (ctx->max_cs_size > 0 || ctx->max_comp_size > 0) {
++        if (ctx->enc_params.rsiz != OPJ_PROFILE_CINEMA_2K &&
++            ctx->enc_params.rsiz != OPJ_PROFILE_CINEMA_4K)
++            av_log(avctx, AV_LOG_WARNING,
++                   "max_cs_size/max_comp_size only apply with a cinema profile or cinema_mode.\n");
++        if (ctx->max_cs_size > 0)
++            ctx->enc_params.max_cs_size = ctx->max_cs_size;
++        if (ctx->max_comp_size > 0)
++            ctx->enc_params.max_comp_size = ctx->max_comp_size;
++        else if (ctx->max_cs_size > 0)
++            ctx->enc_params.max_comp_size = (int)(ctx->max_cs_size / 1.25);
++    }
++
+     return 0;
+ }
+ 
+@@ -552,8 +571,8 @@
+     return 1;
+ }
+ 
+-static int libopenjpeg_encode_frame(AVCodecContext *avctx, AVPacket *pkt,
+-                                    const AVFrame *frame, int *got_packet)
++static int libopenjpeg_encode_attempt(AVCodecContext *avctx, AVPacket *pkt,
++                                      const AVFrame *frame, opj_cparameters_t *params)
+ {
+     LibOpenJPEGContext *ctx = avctx->priv_data;
+     int ret;
+@@ -561,7 +580,7 @@
+     PacketWriter writer     = { 0 };
+     opj_codec_t *compress   = NULL;
+     opj_stream_t *stream    = NULL;
+-    opj_image_t *image      = mj2_create_image(avctx, &ctx->enc_params);
++    opj_image_t *image      = mj2_create_image(avctx, params);
+     const uint8_t *data[4] = { frame->data[0], frame->data[1],
+                                frame->data[2], frame->data[3] };
+     int linesize[4]        = { frame->linesize[0], frame->linesize[1],
+@@ -680,7 +699,7 @@
+         goto done;
+     }
+ 
+-    if (!opj_setup_encoder(compress, &ctx->enc_params, image)) {
++    if (!opj_setup_encoder(compress, params, image)) {
+         av_log(avctx, AV_LOG_ERROR, "Error setting up the compressor\n");
+         ret = AVERROR_EXTERNAL;
+         goto done;
+@@ -709,7 +728,6 @@
+ 
+     av_shrink_packet(pkt, writer.pos);
+ 
+-    *got_packet = 1;
+     ret = 0;
+ 
+ done:
+@@ -719,6 +737,61 @@
+     return ret;
+ }
+ 
++static int libopenjpeg_encode_frame(AVCodecContext *avctx, AVPacket *pkt,
++                                    const AVFrame *frame, int *got_packet)
++{
++    LibOpenJPEGContext *ctx = avctx->priv_data;
++    opj_cparameters_t *params;
++    int limit = 0;
++    int target, attempt, ret;
++
++    if (ctx->max_cs_size > 0 &&
++        (ctx->enc_params.rsiz == OPJ_PROFILE_CINEMA_2K ||
++         ctx->enc_params.rsiz == OPJ_PROFILE_CINEMA_4K))
++        limit = FFMIN(ctx->max_cs_size, OPJ_CINEMA_24_CS);
++
++    if (!limit) {
++        ret = libopenjpeg_encode_attempt(avctx, pkt, frame, &ctx->enc_params);
++        if (ret < 0)
++            return ret;
++        *got_packet = 1;
++        return 0;
++    }
++
++    /* OpenJPEG's rate allocation can overshoot max_cs_size by a few bytes.
++     * Re-encode with a tighter target until the codestream fits the cap.
++     * Each attempt needs fresh parameters and image: OpenJPEG rewrites both. */
++    params = av_malloc(sizeof(*params));
++    if (!params)
++        return AVERROR(ENOMEM);
++
++    target = limit;
++    for (attempt = 0; attempt < 8; attempt++) {
++        memcpy(params, &ctx->enc_params, sizeof(*params));
++        params->max_cs_size = target;
++        ret = libopenjpeg_encode_attempt(avctx, pkt, frame, params);
++        if (ret < 0 || pkt->size <= limit)
++            break;
++        av_log(avctx, AV_LOG_DEBUG, "Codestream of %d bytes exceeds max_cs_size %d, retrying\n",
++               pkt->size, limit);
++        target -= pkt->size - limit + 64;
++        if (target <= 0)
++            break;
++        av_packet_unref(pkt);
++    }
++    av_free(params);
++
++    if (ret < 0)
++        return ret;
++    if (pkt->size > limit) {
++        av_log(avctx, AV_LOG_ERROR, "Could not fit the codestream within max_cs_size %d\n", limit);
++        av_packet_unref(pkt);
++        return AVERROR_EXTERNAL;
++    }
++    *got_packet = 1;
++    return 0;
++}
++
+ #define OFFSET(x) offsetof(LibOpenJPEGContext, x)
+ #define VE AV_OPT_FLAG_VIDEO_PARAM | AV_OPT_FLAG_ENCODING_PARAM
+ static const AVOption options[] = {
+@@ -744,6 +817,8 @@
+     { "irreversible",  NULL,                OFFSET(irreversible),  AV_OPT_TYPE_INT,   { .i64 = 0            }, 0,         1,           VE                },
+     { "disto_alloc",   NULL,                OFFSET(disto_alloc),   AV_OPT_TYPE_INT,   { .i64 = 1            }, 0,         1,           VE                },
+     { "fixed_quality", NULL,                OFFSET(fixed_quality), AV_OPT_TYPE_INT,   { .i64 = 0            }, 0,         1,           VE                },
++    { "max_cs_size",   "Maximum codestream bytes per frame for cinema profiles (0 = cinema_mode/OpenJPEG default)", OFFSET(max_cs_size),   AV_OPT_TYPE_INT, { .i64 = 0 }, 0, INT_MAX, VE },
++    { "max_comp_size", "Maximum bytes per component for cinema profiles (0 = max_cs_size / 1.25 if set)",          OFFSET(max_comp_size), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, INT_MAX, VE },
+     { NULL },
+ };
+ 

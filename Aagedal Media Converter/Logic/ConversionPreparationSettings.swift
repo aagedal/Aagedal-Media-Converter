@@ -183,6 +183,11 @@ struct OutputDestinationSettings: Sendable {
     func resolveFolder(for sourceURL: URL, defaultOutputFolder: String?, presetSuffix: String) -> String? {
         guard saveNextToOriginal else { return defaultOutputFolder }
         var directory = sourceURL.deletingLastPathComponent()
+        // Rewrapped P2 shots live in Application Support; save next to their card.
+        if P2ClipRewrapper.isRewrap(sourceURL) {
+            guard let cardRoot = P2ClipRewrapper.cardRoot(forRewrap: sourceURL) else { return defaultOutputFolder }
+            directory = cardRoot
+        }
         if useSubfolder {
             let name = usePresetSuffix
                 ? String(presetSuffix.dropFirst(presetSuffix.hasPrefix("_") ? 1 : 0))

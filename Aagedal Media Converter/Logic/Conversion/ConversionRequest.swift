@@ -22,6 +22,8 @@ struct ConversionRequest: Sendable {
     var requiredOutputURL: URL? = nil
     /// Reports the collision-safe path actually reserved by the converter.
     var outputURLResolved: (@Sendable (URL) -> Void)? = nil
+    /// Reports that bmx rejected a native MXF merge and FFmpeg's concat merge runs instead.
+    var nativeMXFMergeFellBack: (@Sendable () -> Void)? = nil
     /// Multi-generation exports report their ETA separately from generation status.
     var etaUpdate: (@Sendable (String?) -> Void)? = nil
     var chapterMetadataURL: URL? = nil

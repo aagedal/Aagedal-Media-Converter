@@ -1,0 +1,282 @@
+--- a/libavcodec/libopenjpegenc.c
++++ b/libavcodec/libopenjpegenc.c
+@@ -47,8 +47,33 @@
+     int fixed_quality;
+     int max_cs_size;
+     int max_comp_size;
++    int imf_mainlevel;
++    int imf_sublevel;
+ } LibOpenJPEGContext;
+ 
++#define IS_IMF_PROFILE(p) ((p) == OPJ_PROFILE_IMF_2K   || (p) == OPJ_PROFILE_IMF_4K   || \
++                           (p) == OPJ_PROFILE_IMF_8K   || (p) == OPJ_PROFILE_IMF_2K_R || \
++                           (p) == OPJ_PROFILE_IMF_4K_R || (p) == OPJ_PROFILE_IMF_8K_R)
++
++/* ISO/IEC 15444-1 Table A.53 (as in OpenJPEG's opj_j2k_is_imf_compliant) and
++ * the main/sub level limits from openjpeg.h, index 0 = unspecified. */
++static const int imf_max_sublevel[]    = { 15, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
++static const int imf_mainlevel_msps[]  = {
++    0, OPJ_IMF_MAINLEVEL_1_MSAMPLESEC, OPJ_IMF_MAINLEVEL_2_MSAMPLESEC,
++    OPJ_IMF_MAINLEVEL_3_MSAMPLESEC, OPJ_IMF_MAINLEVEL_4_MSAMPLESEC,
++    OPJ_IMF_MAINLEVEL_5_MSAMPLESEC, OPJ_IMF_MAINLEVEL_6_MSAMPLESEC,
++    OPJ_IMF_MAINLEVEL_7_MSAMPLESEC, OPJ_IMF_MAINLEVEL_8_MSAMPLESEC,
++    OPJ_IMF_MAINLEVEL_9_MSAMPLESEC, OPJ_IMF_MAINLEVEL_10_MSAMPLESEC,
++    OPJ_IMF_MAINLEVEL_11_MSAMPLESEC,
++};
++static const int imf_sublevel_mbps[]   = {
++    0, OPJ_IMF_SUBLEVEL_1_MBITSSEC, OPJ_IMF_SUBLEVEL_2_MBITSSEC,
++    OPJ_IMF_SUBLEVEL_3_MBITSSEC, OPJ_IMF_SUBLEVEL_4_MBITSSEC,
++    OPJ_IMF_SUBLEVEL_5_MBITSSEC, OPJ_IMF_SUBLEVEL_6_MBITSSEC,
++    OPJ_IMF_SUBLEVEL_7_MBITSSEC, OPJ_IMF_SUBLEVEL_8_MBITSSEC,
++    OPJ_IMF_SUBLEVEL_9_MBITSSEC,
++};
++
+ static void error_callback(const char *msg, void *data)
+ {
+     av_log(data, AV_LOG_ERROR, "%s\n", msg);
+@@ -279,6 +304,104 @@
+     return img;
+ }
+ 
++/* Signal an IMF profile (ISO/IEC 15444-1 Amd 8) in Rsiz. OpenJPEG then applies
++ * the IMF coding constraints and checks compliance in opj_setup_encoder().
++ * Unset levels are derived like opj_compress -IMF: the main level from the
++ * component sample rate, the sub level from max_cs_size and the frame rate.
++ * An explicit sub level without max_cs_size sets max_cs_size to its limit. */
++static av_cold int libopenjpeg_imf_setup(AVCodecContext *avctx)
++{
++    LibOpenJPEGContext *ctx = avctx->priv_data;
++    const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(avctx->pix_fmt);
++    AVRational fps = avctx->framerate;
++    int mainlevel  = ctx->imf_mainlevel;
++    int sublevel   = ctx->imf_sublevel;
++    double rate, msamples = 0, mbits = 0;
++    int i;
++
++    if (fps.num <= 0 || fps.den <= 0)
++        fps = av_inv_q(avctx->time_base);
++    rate = fps.num > 0 && fps.den > 0 ? av_q2d(fps) : 0;
++
++    for (i = 0; i < desc->nb_components; i++) {
++        int chroma = i == 1 || i == 2;
++        msamples += (double)AV_CEIL_RSHIFT(avctx->width,  chroma ? desc->log2_chroma_w : 0) *
++                            AV_CEIL_RSHIFT(avctx->height, chroma ? desc->log2_chroma_h : 0);
++    }
++    msamples *= rate / 1e6;
++
++    if (sublevel > 0 && ctx->max_cs_size <= 0) {
++        if (rate <= 0) {
++            av_log(avctx, AV_LOG_ERROR, "imf_sublevel needs a known frame rate.\n");
++            return AVERROR(EINVAL);
++        }
++        ctx->max_cs_size = (int)(imf_sublevel_mbps[sublevel] * (1000.0 * 1000 / 8) / rate);
++    }
++    if (ctx->max_cs_size > 0)
++        mbits = ctx->max_cs_size * 8.0 * rate / 1e6;
++
++    if (sublevel < 0) {
++        sublevel = 0;
++        if (ctx->max_cs_size > 0) {
++            if (rate <= 0) {
++                av_log(avctx, AV_LOG_ERROR,
++                       "Unknown frame rate: set imf_sublevel to derive the IMF sub level.\n");
++                return AVERROR(EINVAL);
++            }
++            for (sublevel = 1; sublevel <= 9 && mbits > imf_sublevel_mbps[sublevel]; sublevel++)
++                ;
++            if (sublevel > 9) {
++                av_log(avctx, AV_LOG_ERROR, "max_cs_size gives %.1f Mbit/s, above the IMF sub level 9 limit.\n",
++                       mbits);
++                return AVERROR(EINVAL);
++            }
++        }
++    } else if (sublevel > 0 && mbits > imf_sublevel_mbps[sublevel]) {
++        av_log(avctx, AV_LOG_ERROR, "max_cs_size gives %.1f Mbit/s, above the IMF sub level %d limit of %d Mbit/s.\n",
++               mbits, sublevel, imf_sublevel_mbps[sublevel]);
++        return AVERROR(EINVAL);
++    }
++
++    if (mainlevel < 0) {
++        if (rate <= 0) {
++            av_log(avctx, AV_LOG_ERROR,
++                   "Unknown frame rate: set imf_mainlevel to derive the IMF main level.\n");
++            return AVERROR(EINVAL);
++        }
++        for (mainlevel = 1; mainlevel <= OPJ_IMF_MAINLEVEL_MAX &&
++                            msamples > imf_mainlevel_msps[mainlevel]; mainlevel++)
++            ;
++        /* A higher main level is a looser bound; raise it to allow the sub level. */
++        while (mainlevel <= OPJ_IMF_MAINLEVEL_MAX && sublevel > imf_max_sublevel[mainlevel])
++            mainlevel++;
++        if (mainlevel > OPJ_IMF_MAINLEVEL_MAX) {
++            av_log(avctx, AV_LOG_ERROR, "%.1f Msamples/s is above the IMF main level 11 limit.\n",
++                   msamples);
++            return AVERROR(EINVAL);
++        }
++    } else if (mainlevel > 0 && rate > 0 && msamples > imf_mainlevel_msps[mainlevel]) {
++        av_log(avctx, AV_LOG_ERROR, "%.1f Msamples/s is above the IMF main level %d limit of %d Msamples/s.\n",
++               msamples, mainlevel, imf_mainlevel_msps[mainlevel]);
++        return AVERROR(EINVAL);
++    }
++    if (sublevel > imf_max_sublevel[mainlevel]) {
++        av_log(avctx, AV_LOG_ERROR, "IMF main level %d allows sub levels up to %d, not %d.\n",
++               mainlevel, imf_max_sublevel[mainlevel], sublevel);
++        return AVERROR(EINVAL);
++    }
++
++    if (!ctx->max_cs_size && (ctx->profile == OPJ_PROFILE_IMF_2K ||
++                              ctx->profile == OPJ_PROFILE_IMF_4K ||
++                              ctx->profile == OPJ_PROFILE_IMF_8K))
++        av_log(avctx, AV_LOG_WARNING,
++               "Lossy IMF profile without max_cs_size or imf_sublevel: the bitrate is not limited.\n");
++
++    ctx->enc_params.rsiz = ctx->profile | (sublevel << 4) | mainlevel;
++    av_log(avctx, AV_LOG_VERBOSE, "IMF Rsiz 0x%04x (main level %d, sub level %d), max_cs_size %d\n",
++           ctx->enc_params.rsiz, mainlevel, sublevel, ctx->max_cs_size);
++    return 0;
++}
++
+ static av_cold int libopenjpeg_encode_init(AVCodecContext *avctx)
+ {
+     LibOpenJPEGContext *ctx = avctx->priv_data;
+@@ -320,6 +443,8 @@
+         ctx->enc_params.rsiz = OPJ_PROFILE_CINEMA_4K;
+         break;
+     }
++    if (IS_IMF_PROFILE(ctx->profile) && ctx->cinema_mode != OPJ_OFF)
++        err = AVERROR(EINVAL);
+ 
+     if (err) {
+         av_log(avctx, AV_LOG_ERROR,
+@@ -327,6 +452,11 @@
+         return err;
+     }
+ 
++    if ((ctx->imf_mainlevel >= 0 || ctx->imf_sublevel >= 0) && !IS_IMF_PROFILE(ctx->profile)) {
++        av_log(avctx, AV_LOG_ERROR, "imf_mainlevel/imf_sublevel need an IMF profile.\n");
++        return AVERROR(EINVAL);
++    }
++
+     if (!ctx->numresolution) {
+         ctx->numresolution = 6;
+         while (FFMIN(avctx->width, avctx->height) >> ctx->numresolution < 1)
+@@ -345,14 +475,26 @@
+         cinema_parameters(&ctx->enc_params);
+     }
+ 
++    if (IS_IMF_PROFILE(ctx->profile)) {
++        /* Lossy IMF profiles use the 9/7 wavelet (OpenJPEG also forces it). */
++        if (ctx->profile == OPJ_PROFILE_IMF_2K || ctx->profile == OPJ_PROFILE_IMF_4K ||
++            ctx->profile == OPJ_PROFILE_IMF_8K)
++            ctx->enc_params.irreversible = 1;
++        err = libopenjpeg_imf_setup(avctx);
++        if (err < 0)
++            return err;
++    }
++
+     /* Explicit size caps override the fixed cinema_mode values. OpenJPEG
+-     * only applies them for the 2K/4K Digital Cinema profiles, where it also
+-     * derives the rate from max_cs_size and clamps both to the 24 fps limits. */
++     * applies them for the 2K/4K Digital Cinema profiles, where it also
++     * derives the rate from max_cs_size and clamps both to the 24 fps limits,
++     * and for the IMF profiles, where the IMF sub level bounds them. */
+     if (ctx->max_cs_size > 0 || ctx->max_comp_size > 0) {
+         if (ctx->enc_params.rsiz != OPJ_PROFILE_CINEMA_2K &&
+-            ctx->enc_params.rsiz != OPJ_PROFILE_CINEMA_4K)
++            ctx->enc_params.rsiz != OPJ_PROFILE_CINEMA_4K &&
++            !IS_IMF_PROFILE(ctx->profile))
+             av_log(avctx, AV_LOG_WARNING,
+-                   "max_cs_size/max_comp_size only apply with a cinema profile or cinema_mode.\n");
++                   "max_cs_size/max_comp_size only apply with a cinema or IMF profile or cinema_mode.\n");
+         if (ctx->max_cs_size > 0)
+             ctx->enc_params.max_cs_size = ctx->max_cs_size;
+         if (ctx->max_comp_size > 0)
+@@ -704,6 +846,13 @@
+         ret = AVERROR_EXTERNAL;
+         goto done;
+     }
++    /* OpenJPEG resets Rsiz to 0 when the IMF compliance check fails. */
++    if (IS_IMF_PROFILE(ctx->profile) && params->rsiz != ctx->enc_params.rsiz) {
++        av_log(avctx, AV_LOG_ERROR, "OpenJPEG rejected IMF Rsiz 0x%04x: the codestream would not be IMF compliant\n",
++               ctx->enc_params.rsiz);
++        ret = AVERROR(EINVAL);
++        goto done;
++    }
+     stream = opj_stream_default_create(OPJ_STREAM_WRITE);
+ 
+     if (!stream) {
+@@ -749,8 +898,10 @@
+         (ctx->enc_params.rsiz == OPJ_PROFILE_CINEMA_2K ||
+          ctx->enc_params.rsiz == OPJ_PROFILE_CINEMA_4K))
+         limit = FFMIN(ctx->max_cs_size, OPJ_CINEMA_24_CS);
++    else if (ctx->max_cs_size > 0 && IS_IMF_PROFILE(ctx->profile))
++        limit = ctx->max_cs_size;
+ 
+-    if (!limit) {
++    if (!limit && !IS_IMF_PROFILE(ctx->profile)) {
+         ret = libopenjpeg_encode_attempt(avctx, pkt, frame, &ctx->enc_params);
+         if (ret < 0)
+             return ret;
+@@ -760,7 +911,8 @@
+ 
+     /* OpenJPEG's rate allocation can overshoot max_cs_size by a few bytes.
+      * Re-encode with a tighter target until the codestream fits the cap.
+-     * Each attempt needs fresh parameters and image: OpenJPEG rewrites both. */
++     * Each attempt needs fresh parameters and image: OpenJPEG rewrites both.
++     * IMF profiles always use a copy so a rejected Rsiz is detected per frame. */
+     params = av_malloc(sizeof(*params));
+     if (!params)
+         return AVERROR(ENOMEM);
+@@ -768,9 +920,10 @@
+     target = limit;
+     for (attempt = 0; attempt < 8; attempt++) {
+         memcpy(params, &ctx->enc_params, sizeof(*params));
+-        params->max_cs_size = target;
++        if (limit)
++            params->max_cs_size = target;
+         ret = libopenjpeg_encode_attempt(avctx, pkt, frame, params);
+-        if (ret < 0 || pkt->size <= limit)
++        if (ret < 0 || !limit || pkt->size <= limit)
+             break;
+         av_log(avctx, AV_LOG_DEBUG, "Codestream of %d bytes exceeds max_cs_size %d, retrying\n",
+                pkt->size, limit);
+@@ -783,7 +936,7 @@
+ 
+     if (ret < 0)
+         return ret;
+-    if (pkt->size > limit) {
++    if (limit && pkt->size > limit) {
+         av_log(avctx, AV_LOG_ERROR, "Could not fit the codestream within max_cs_size %d\n", limit);
+         av_packet_unref(pkt);
+         return AVERROR_EXTERNAL;
+@@ -798,10 +951,16 @@
+     { "format",        "Codec Format",      OFFSET(format),        AV_OPT_TYPE_INT,   { .i64 = OPJ_CODEC_JP2   }, OPJ_CODEC_J2K, OPJ_CODEC_JP2,   VE, .unit = "format"      },
+     { "j2k",           NULL,                0,                     AV_OPT_TYPE_CONST, { .i64 = OPJ_CODEC_J2K   }, 0,         0,           VE, .unit = "format"      },
+     { "jp2",           NULL,                0,                     AV_OPT_TYPE_CONST, { .i64 = OPJ_CODEC_JP2   }, 0,         0,           VE, .unit = "format"      },
+-    { "profile",       NULL,                OFFSET(profile),       AV_OPT_TYPE_INT,   { .i64 = OPJ_STD_RSIZ    }, OPJ_STD_RSIZ,  OPJ_CINEMA4K,    VE, .unit = "profile"     },
++    { "profile",       NULL,                OFFSET(profile),       AV_OPT_TYPE_INT,   { .i64 = OPJ_STD_RSIZ    }, OPJ_STD_RSIZ,  OPJ_PROFILE_IMF_8K_R, VE, .unit = "profile"     },
+     { "jpeg2000",      NULL,                0,                     AV_OPT_TYPE_CONST, { .i64 = OPJ_STD_RSIZ    }, 0,         0,           VE, .unit = "profile"     },
+     { "cinema2k",      NULL,                0,                     AV_OPT_TYPE_CONST, { .i64 = OPJ_CINEMA2K    }, 0,         0,           VE, .unit = "profile"     },
+     { "cinema4k",      NULL,                0,                     AV_OPT_TYPE_CONST, { .i64 = OPJ_CINEMA4K    }, 0,         0,           VE, .unit = "profile"     },
++    { "imf_2k",        "IMF 2K lossy (9/7)",        0,             AV_OPT_TYPE_CONST, { .i64 = OPJ_PROFILE_IMF_2K   }, 0, 0, VE, .unit = "profile" },
++    { "imf_4k",        "IMF 4K lossy (9/7)",        0,             AV_OPT_TYPE_CONST, { .i64 = OPJ_PROFILE_IMF_4K   }, 0, 0, VE, .unit = "profile" },
++    { "imf_8k",        "IMF 8K lossy (9/7)",        0,             AV_OPT_TYPE_CONST, { .i64 = OPJ_PROFILE_IMF_8K   }, 0, 0, VE, .unit = "profile" },
++    { "imf_2k_r",      "IMF 2K reversible (5/3)",   0,             AV_OPT_TYPE_CONST, { .i64 = OPJ_PROFILE_IMF_2K_R }, 0, 0, VE, .unit = "profile" },
++    { "imf_4k_r",      "IMF 4K reversible (5/3)",   0,             AV_OPT_TYPE_CONST, { .i64 = OPJ_PROFILE_IMF_4K_R }, 0, 0, VE, .unit = "profile" },
++    { "imf_8k_r",      "IMF 8K reversible (5/3)",   0,             AV_OPT_TYPE_CONST, { .i64 = OPJ_PROFILE_IMF_8K_R }, 0, 0, VE, .unit = "profile" },
+     { "cinema_mode",   "Digital Cinema",    OFFSET(cinema_mode),   AV_OPT_TYPE_INT,   { .i64 = OPJ_OFF         }, OPJ_OFF,       OPJ_CINEMA4K_24, VE, .unit = "cinema_mode" },
+     { "off",           NULL,                0,                     AV_OPT_TYPE_CONST, { .i64 = OPJ_OFF         }, 0,         0,           VE, .unit = "cinema_mode" },
+     { "2k_24",         NULL,                0,                     AV_OPT_TYPE_CONST, { .i64 = OPJ_CINEMA2K_24 }, 0,         0,           VE, .unit = "cinema_mode" },
+@@ -817,8 +976,10 @@
+     { "irreversible",  NULL,                OFFSET(irreversible),  AV_OPT_TYPE_INT,   { .i64 = 0            }, 0,         1,           VE                },
+     { "disto_alloc",   NULL,                OFFSET(disto_alloc),   AV_OPT_TYPE_INT,   { .i64 = 1            }, 0,         1,           VE                },
+     { "fixed_quality", NULL,                OFFSET(fixed_quality), AV_OPT_TYPE_INT,   { .i64 = 0            }, 0,         1,           VE                },
+-    { "max_cs_size",   "Maximum codestream bytes per frame for cinema profiles (0 = cinema_mode/OpenJPEG default)", OFFSET(max_cs_size),   AV_OPT_TYPE_INT, { .i64 = 0 }, 0, INT_MAX, VE },
+-    { "max_comp_size", "Maximum bytes per component for cinema profiles (0 = max_cs_size / 1.25 if set)",          OFFSET(max_comp_size), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, INT_MAX, VE },
++    { "max_cs_size",   "Maximum codestream bytes per frame for cinema/IMF profiles (0 = cinema_mode/OpenJPEG default)", OFFSET(max_cs_size),   AV_OPT_TYPE_INT, { .i64 = 0 }, 0, INT_MAX, VE },
++    { "max_comp_size", "Maximum bytes per component for cinema/IMF profiles (0 = max_cs_size / 1.25 if set)",      OFFSET(max_comp_size), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, INT_MAX, VE },
++    { "imf_mainlevel", "IMF main level 0-11 (-1 = from resolution, chroma format and frame rate)", OFFSET(imf_mainlevel), AV_OPT_TYPE_INT, { .i64 = -1 }, -1, OPJ_IMF_MAINLEVEL_MAX, VE },
++    { "imf_sublevel",  "IMF sub level 0-9 (-1 = from max_cs_size and frame rate; set alone it caps max_cs_size)", OFFSET(imf_sublevel), AV_OPT_TYPE_INT, { .i64 = -1 }, -1, 9, VE },
+     { NULL },
+ };
+ 

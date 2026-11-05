@@ -1,0 +1,28 @@
+{
+  "previousSHA256": "c4cd2362fd3147a9f0b30d42f2c894337bc947ad95ad4e33f72c024e1d6661a0",
+  "sha256": "21f5d3fbea60883e280b54bcff32670d672ac8f49c996e330df34b4a7d471484",
+  "bytes": 60211280,
+  "mode": "0755",
+  "architecture": "arm64",
+  "minimumMacOS": "11.0",
+  "sourceVersion": "9.0.2",
+  "buildSystemRepository": "https://github.com/aagedal/ffmpeg-apple-silicon",
+  "buildSystemRevision": "651e805dc9623debf85ae07c4f55fa661ea6c0dd",
+  "workingTreeModified": false,
+  "dependencyChanges": {
+    "SVT-AV1": "4.2.0 -> 4.3.0",
+    "libaom": "3.15.2 -> 3.15.3",
+    "HarfBuzz": "14.6.0 -> 15.0.0",
+    "FriBidi": "1.0.17 -> 1.0.18"
+  },
+  "sourcePatches": [
+    "scripts/ffmpeg/yadif-videotoolbox-autorelease.patch",
+    "scripts/ffmpeg/libopenjpegenc-max-size.patch",
+    "scripts/ffmpeg/libopenjpegenc-imf.patch",
+    "scripts/ffmpeg/af_whisper-canonical-json.patch"
+  ],
+  "sourceNote": "Full build of every library and FFmpeg from one workspace. Its corresponding-source archive replaces the three FFmpeg 9.0.2 archives of the 4.5 builds.",
+  "signature": "Developer ID Application: Truls Aagedal (3R5QGG9DW6); hardened runtime; secure timestamp 2026-11-03 16:16:38 CET",
+  "cdhash": "b28fc922a56db5db2ada7c585ae042dc5f416985",
+  "notarizationStatus": "Accepted (spctl: Notarized Developer ID)"
+}
