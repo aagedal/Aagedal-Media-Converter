@@ -301,7 +301,10 @@ enum P2CardImporter {
         }
 
         let token = UUID()
+        // The work waits until the import has begun, or the overlay ignores its first message.
+        let (begun, begunContinuation) = AsyncStream<Void>.makeStream()
         let work = Task<[URL?], Never> {
+            for await _ in begun {}
             var results: [URL?] = []
             var failures: [String] = []
             var doneBytes: Int64 = 0
@@ -340,6 +343,7 @@ enum P2CardImporter {
         }
 
         await P2ImportProgress.shared.begin(token, weight: totalBytes, cancel: { work.cancel() })
+        begunContinuation.finish()
         let results = await withTaskCancellationHandler {
             await work.value
         } onCancel: {
@@ -376,6 +380,9 @@ actor P2ClipRewrapper {
     }
 
     private var inFlight: [String: InFlight] = [:]
+    /// Cancelled rewraps whose ffmpeg may still be running. They own the shot's partial and
+    /// list files until they end, so a new rewrap of the shot waits for them.
+    private var stopping: [String: Task<URL, Error>] = [:]
     private let runner: any SubprocessRunning = SubprocessRunner()
 
     static func outputURL(for shot: P2CardImporter.Shot) -> URL {
@@ -398,7 +405,13 @@ actor P2ClipRewrapper {
             inFlight[key]?.waiters += 1
         } else {
             let runner = self.runner
-            task = Task { try await Self.perform(shot, to: output, runner: runner, progress: progress) }
+            let previous = stopping[key]
+            task = Task {
+                // A cancel that came after the move leaves a finished file; use it.
+                if let url = try? await previous?.value { return url }
+                try Task.checkCancellation()
+                return try await Self.perform(shot, to: output, runner: runner, progress: progress)
+            }
             inFlight[key] = InFlight(task: task, waiters: 1)
         }
         defer { if inFlight[key]?.task == task { inFlight[key] = nil } }
@@ -415,9 +428,14 @@ actor P2ClipRewrapper {
         inFlight[key]?.waiters -= 1
         if inFlight[key]?.waiters ?? 0 <= 0 {
             // Forget it now, so a request arriving before ffmpeg exits starts a new rewrap
-            // instead of joining this cancelled one.
+            // instead of joining this cancelled one. That rewrap waits for this one to end.
             inFlight[key] = nil
+            stopping[key] = task
             task.cancel()
+            Task {
+                _ = try? await task.value
+                if self.stopping[key] == task { self.stopping[key] = nil }
+            }
         }
     }
 
