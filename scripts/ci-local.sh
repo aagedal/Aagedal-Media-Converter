@@ -37,11 +37,30 @@ WORK_DIR="${HOME}/Library/Caches/AagedalMediaConverter-CI"
 DERIVED_DATA="${WORK_DIR}/DerivedData"
 RESULTS="${WORK_DIR}/Results"
 
+step() { printf '\n==> %s\n' "$1"; }
+
+# Runs from other worktrees share DerivedData and Results, so only one runs at a time.
+LOCK="${WORK_DIR}/lock"
+mkdir -p "$WORK_DIR"
+if ! mkdir "$LOCK" 2>/dev/null; then
+    other="$(cat "$LOCK/pid" 2>/dev/null || true)"
+    if [[ -n "$other" ]] && kill -0 "$other" 2>/dev/null; then
+        echo "Another ci-local.sh run (pid $other) is using $WORK_DIR. Wait for it to finish." >&2
+        exit 1
+    fi
+    # Left behind by a run that was killed.
+    rm -rf "$LOCK"
+    mkdir "$LOCK"
+fi
+echo $$ > "$LOCK/pid"
+trap 'rm -rf "$LOCK"' EXIT
+
 if $clean; then rm -rf "$DERIVED_DATA"; fi
 rm -rf "$RESULTS"
 mkdir -p "$RESULTS"
 
-step() { printf '\n==> %s\n' "$1"; }
+# CI pins its Xcode; say which one this run uses.
+xcodebuild -version | head -1
 
 # Shows the xcodebuild log only when it fails; the result bundle has the details.
 xcodebuild_quiet() {
