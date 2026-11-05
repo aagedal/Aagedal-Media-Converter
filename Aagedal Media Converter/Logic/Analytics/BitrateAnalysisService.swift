@@ -19,10 +19,10 @@ enum BitrateAnalysisError: Error, LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .noStream(.video): return "This file has no video stream."
-        case .noStream(.audio): return "This file has no audio stream."
-        case .noPackets: return "Bitrate analysis did not return any packets for this stream."
-        case .failed(let reason): return "Bitrate analysis failed. \(reason)"
+        case .noStream(.video): return String(localized: "This file has no video stream.")
+        case .noStream(.audio): return String(localized: "This file has no audio stream.")
+        case .noPackets: return String(localized: "Bitrate analysis did not return any packets for this stream.")
+        case .failed(let reason): return String(format: String(localized: "Bitrate analysis failed. %@"), reason)
         }
     }
 }
@@ -70,6 +70,14 @@ struct BitrateTimeline: Equatable, Sendable {
     }
 
     /// The smallest offered window that keeps the chart at or below `maxWindows` points.
+    /// The offered windows that keep the chart at or below `maxWindows` points, so a short
+    /// window on a long file can't build tens of thousands of chart marks.
+    static func windowChoices(duration: Double, maxWindows: Int = 4000) -> [Double] {
+        guard duration.isFinite, duration > 0 else { return windowChoices }
+        let allowed = windowChoices.filter { duration / $0 <= Double(max(1, maxWindows)) }
+        return allowed.isEmpty ? [windowChoices[windowChoices.count - 1]] : allowed
+    }
+
     static func automaticWindow(duration: Double, maxWindows: Int = 1000) -> Double {
         guard duration.isFinite, duration > 0 else { return 1 }
         let limit = Double(max(1, maxWindows))
@@ -174,6 +182,8 @@ actor BitrateAnalysisService {
             executableURL: URL(fileURLWithPath: path),
             arguments: ["-hide_banner", "-nostdin", "-nostats", "-v", "error",
                         "-i", file.path, "-map", stream.mapSpecifier,
+                        // No -copyinkf: packets before the first keyframe can't be decoded, so
+                        // an encode starts at that keyframe too and the two timelines line up.
                         "-c", "copy", "-f", "framecrc", "-"],
             timeout: .seconds(2 * 60 * 60),
             standardOutputCaptureLimit: 0,

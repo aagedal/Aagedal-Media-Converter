@@ -31,6 +31,13 @@ struct BitrateSeries: Identifiable {
     var id: String { name }
 }
 
+/// The pointer position lives outside the chart's state so hovering only redraws the
+/// pointer line and the readout, not every mark of a long file.
+@MainActor @Observable
+private final class BitrateHover {
+    var time: Double?
+}
+
 struct BitrateChart: View {
     let series: [BitrateSeries]
     let duration: Double
@@ -40,7 +47,7 @@ struct BitrateChart: View {
     var showsReadout = true
     var xAxisLabel = String(localized: "Seconds")
     var onSeek: ((Double) -> Void)? = nil
-    @State private var hoverTime: Double?
+    @State private var hover = BitrateHover()
 
     private static let maxKeyframeMarks = 1500
 
@@ -85,9 +92,6 @@ struct BitrateChart: View {
                 if let position {
                     RuleMark(x: .value("Playback", position)).foregroundStyle(.secondary)
                 }
-                if let hoverTime {
-                    RuleMark(x: .value("Pointer", hoverTime)).foregroundStyle(.secondary.opacity(0.5))
-                }
             }
             .chartForegroundStyleScale(domain: series.map(\.name), range: series.map(\.color))
             .chartLegend(series.count > 1 ? .visible : .hidden)
@@ -99,24 +103,26 @@ struct BitrateChart: View {
             .chartPlotStyle { $0.clipped() }
             .chartOverlay { proxy in
                 GeometryReader { geometry in
-                    Rectangle().fill(.clear).contentShape(Rectangle())
-                        .onContinuousHover { phase in
-                            switch phase {
-                            case .active(let location): hoverTime = time(at: location, proxy: proxy, geometry: geometry)
-                            case .ended: hoverTime = nil
+                    ZStack(alignment: .topLeading) {
+                        Rectangle().fill(.clear).contentShape(Rectangle())
+                            .onContinuousHover { phase in
+                                switch phase {
+                                case .active(let location): hover.time = time(at: location, proxy: proxy, geometry: geometry)
+                                case .ended: hover.time = nil
+                                }
                             }
-                        }
-                        .gesture(DragGesture(minimumDistance: 0).onChanged { value in
-                            guard let onSeek, let seconds = time(at: value.location, proxy: proxy, geometry: geometry) else { return }
-                            onSeek(seconds)
-                        })
+                            .gesture(DragGesture(minimumDistance: 0).onChanged { value in
+                                guard let onSeek, let seconds = time(at: value.location, proxy: proxy, geometry: geometry) else { return }
+                                onSeek(seconds)
+                            })
+                        BitrateHoverLine(hover: hover, proxy: proxy, geometry: geometry)
+                            .allowsHitTesting(false)
+                    }
                 }
             }
             .accessibilityLabel("Bitrate over time")
             if showsReadout {
-                Text(readout(at: hoverTime ?? position, windows: windows))
-                    .font(.caption).monospacedDigit().foregroundStyle(.secondary)
-                    .lineLimit(1)
+                BitrateReadout(hover: hover, position: position, series: series, windows: windows, windowSize: windowSize)
             }
         }
     }
@@ -130,8 +136,38 @@ struct BitrateChart: View {
         return max(0, min(seconds, duration))
     }
 
+}
+
+private struct BitrateHoverLine: View {
+    let hover: BitrateHover
+    let proxy: ChartProxy
+    let geometry: GeometryProxy
+
+    var body: some View {
+        if let time = hover.time, let plotFrame = proxy.plotFrame, let x = proxy.position(forX: time) {
+            let frame = geometry[plotFrame]
+            Rectangle().fill(.secondary.opacity(0.5))
+                .frame(width: 1, height: frame.height)
+                .offset(x: frame.minX + x - 0.5, y: frame.minY)
+        }
+    }
+}
+
+private struct BitrateReadout: View {
+    let hover: BitrateHover
+    let position: Double?
+    let series: [BitrateSeries]
+    let windows: [[BitrateWindow]]
+    let windowSize: Double
+
+    var body: some View {
+        Text(readout(at: hover.time ?? position))
+            .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+            .lineLimit(1)
+    }
+
     /// Windows are contiguous from zero, so the window index is the time divided by its size.
-    private func readout(at seconds: Double?, windows: [[BitrateWindow]]) -> String {
+    private func readout(at seconds: Double?) -> String {
         guard let seconds else { return String(localized: "Point at the graph to read the bitrate.") }
         let index = Int(seconds / windowSize)
         let values = zip(series, windows).map { entry, windows in
@@ -177,7 +213,10 @@ struct BitrateAnalysisView: View {
     }
 
     private var duration: Double { series.map(\.timeline.duration).max() ?? 0 }
-    private var windowSize: Double { windowChoice > 0 ? windowChoice : BitrateTimeline.automaticWindow(duration: duration) }
+    private var windowOptions: [Double] { BitrateTimeline.windowChoices(duration: duration) }
+    private var windowSize: Double {
+        windowOptions.contains(windowChoice) ? windowChoice : BitrateTimeline.automaticWindow(duration: duration)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -191,15 +230,18 @@ struct BitrateAnalysisView: View {
                     .frame(width: 220)
                     .accessibilityIdentifier("analysis.bitrate.stream")
                 }
-                Picker("Window", selection: $windowChoice) {
+                Picker("Averaging window", selection: $windowChoice) {
                     Text(String(format: String(localized: "Automatic (%@)"), Self.windowLabel(BitrateTimeline.automaticWindow(duration: duration))))
                         .tag(0.0)
-                    ForEach(BitrateTimeline.windowChoices, id: \.self) { size in
+                    ForEach(windowOptions, id: \.self) { size in
                         Text(Self.windowLabel(size)).tag(size)
                     }
                 }
                 .frame(width: 210)
                 .accessibilityIdentifier("analysis.bitrate.window")
+                .onChange(of: windowOptions) {
+                    if windowChoice > 0, !windowOptions.contains(windowChoice) { windowChoice = 0 }
+                }
                 if stream == .video {
                     Toggle("Keyframes", isOn: $showsKeyframes)
                 }

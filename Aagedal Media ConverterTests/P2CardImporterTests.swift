@@ -63,6 +63,8 @@ final class P2CardImporterTests: XCTestCase {
         XCTAssertEqual(P2CardImporter.cardRoot(containing: card)?.path, root.path)
         XCTAssertEqual(P2CardImporter.cardRoot(containing: card.appendingPathComponent("CONTENTS"))?.path, root.path)
         XCTAssertEqual(P2CardImporter.cardRoot(containing: card.appendingPathComponent("CONTENTS/AUDIO/0001AB01.MXF"))?.path, root.path)
+        // Copies that changed the folder's case are still cards (the file system ignores case).
+        XCTAssertEqual(P2CardImporter.cardRoot(containing: card.appendingPathComponent("Contents/AUDIO/0001AB01.MXF"))?.path, root.path)
         XCTAssertNil(P2CardImporter.cardRoot(containing: FileManager.default.temporaryDirectory))
         // Media next to CONTENTS, as in a folder holding a copied card, is not on the card.
         XCTAssertNil(P2CardImporter.cardRoot(containing: card.appendingPathComponent("export.mov")))
@@ -100,6 +102,23 @@ final class P2CardImporterTests: XCTestCase {
             destination.resolveFolder(for: output, defaultOutputFolder: "/Output", presetSuffix: "_x"),
             card.standardizedFileURL.path
         )
+        // Importing a backup copy later keeps the card that is still there.
+        let backup = card.deletingLastPathComponent().appendingPathComponent("P2Backup-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.copyItem(at: card, to: backup)
+        defer { try? FileManager.default.removeItem(at: backup) }
+        let backupShot = try XCTUnwrap(P2CardImporter.shots(from: P2CardImporter.clips(onCard: backup)).first)
+        _ = try await P2ClipRewrapper.shared.rewrap(backupShot) { _ in }
+        XCTAssertEqual(
+            destination.resolveFolder(for: output, defaultOutputFolder: "/Output", presetSuffix: "_x"),
+            card.standardizedFileURL.path
+        )
+
+        // A different card at the same path doesn't receive the outputs.
+        let xml = card.appendingPathComponent("CONTENTS/CLIP/0001AB.XML")
+        try String(contentsOf: xml, encoding: .utf8).replacingOccurrences(of: "ID-0001AB", with: "ID-OTHER")
+            .write(to: xml, atomically: true, encoding: .utf8)
+        XCTAssertEqual(destination.resolveFolder(for: output, defaultOutputFolder: "/Output", presetSuffix: "_x"), "/Output")
+
         // Without the card, outputs go to the output folder, never into the rewrap folder.
         try FileManager.default.removeItem(at: card)
         XCTAssertEqual(destination.resolveFolder(for: output, defaultOutputFolder: "/Output", presetSuffix: "_x"), "/Output")
@@ -175,6 +194,23 @@ final class P2CardImporterTests: XCTestCase {
         progress.end(second)
         XCTAssertFalse(progress.isActive)
         XCTAssertNil(progress.message)
+
+        // Overlapping imports share the bar by size, and an ended import's message goes away.
+        let large = progress.begin(weight: 300) {}
+        progress.update(large, message: "Large", fraction: 1)
+        let small = progress.begin(weight: 100) {}
+        XCTAssertEqual(progress.fraction ?? 0, 0.75, accuracy: 0.001)
+        progress.update(small, message: "Small", fraction: 0.5)
+        XCTAssertEqual(progress.fraction ?? 0, 0.875, accuracy: 0.001)
+        XCTAssertEqual(progress.message, "Small")
+        progress.update(large, fraction: 0.2)  // Never moves back.
+        XCTAssertEqual(progress.fraction ?? 0, 0.875, accuracy: 0.001)
+        progress.end(small)
+        XCTAssertEqual(progress.message, "Large")
+        XCTAssertEqual(progress.fraction ?? 0, 1, accuracy: 0.001)
+        progress.end(large)
+        progress.update(large, fraction: 0.5)  // Late updates don't bring the overlay back.
+        XCTAssertFalse(progress.isActive)
 
         progress.showFailure("One.")
         progress.showFailure("Two.")

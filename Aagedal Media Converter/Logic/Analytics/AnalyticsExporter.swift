@@ -803,7 +803,7 @@ private final class AnalysisPDFRenderer {
             try text(details.joined(separator: "    "), size: 10, spacing: 10)
         }
         try text(String(localized: "Packet sizes are read from the container without decoding. Each point is the average bitrate over one window.")
-                 + " " + String(localized: "Window") + ": " + windowSize.formatted(.number.precision(.fractionLength(0...1))) + " s",
+                 + " " + String(localized: "Averaging window") + ": " + windowSize.formatted(.number.precision(.fractionLength(0...1))) + " s",
                  size: 10, color: .secondaryLabelColor)
         if files.count > 1 {
             try text(String(localized: "Each file is plotted from its own first frame, so a trimmed output starts at its trim-in point."),
