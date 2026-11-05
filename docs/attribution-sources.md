@@ -12,17 +12,15 @@ pins. Apple SDKs, system libraries and general build tools are not redistributed
 
 ## Source material
 
-- **FFmpeg 9.0.2:** the corrected full build includes the Metal YADIF teardown
-  correction. The original dependency-source and generated-input archives retain
-  the codec libraries reused by this build; a third correction archive preserves
-  the patched full FFmpeg tree, exact modified recipes, patch authorship/license,
-  and actual full-tree configuration. Extract the dependency archive first, then
-  overlay the correction archive and follow its `README-metal-source.md` to rebuild.
-  All three archives remain required in the source companion. Install Xcode with
+- **FFmpeg 9.0.2:** one archive holds the complete corresponding source of the
+  bundled build (SVT-AV1 4.3.0, libaom 3.15.3): the FFmpeg tree with its source
+  patches (Metal YADIF teardown, libopenjpeg frame-size caps and IMF profiles,
+  canonical Whisper JSON), every linked library source and the replay recipe.
+  Extract it and follow its `README.md` to run `bash rebuild.sh`. Install Xcode with
   its Metal compiler, CMake, Meson, Ninja, pkg-config, Python 3, and the usual build
-  utilities. Current evidence is in
-  `docs/provenance/4.5-local-builds/ffmpeg-9.0.2-metal/`; the earlier capture and its
-  explicitly scoped generated dependency inputs remain in `ffmpeg-9.0.2/`.
+  utilities. Evidence is in
+  `docs/provenance/4.7-local-builds/ffmpeg-9.0.2-svt-av1-4.3.0/`; the 4.5 captures
+  in `docs/provenance/4.5-local-builds/` describe the previous binary.
 - **rclone:** the reviewed minimal source revision with only the unused `serve s3`
   command removed; its S3 storage backend remains. The archive includes the
   exact source patch, Go toolchain/module inputs, notices and `rebuild.py`, plus
