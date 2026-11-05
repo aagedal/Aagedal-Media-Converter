@@ -509,6 +509,10 @@ enum StreamCopyEndCut {
             let interval = zip(pictureTimes, pictureTimes.dropFirst()).map { $1 - $0 }.min() ?? 1
             return .at(end: Double(cut) * timeBase, frame: Double(max(interval, 1)) * timeBase)
         }
+        // A single picture (cover art) or video ending before `end` says nothing about
+        // where the clip ends, so FFmpeg's cut applies.
+        let lastShown = Double(packets.map(\.pts).max() ?? 0) * timeBase
+        guard packets.count > 1, lastShown >= end else { return .unknown }
         // Packets stopping well short of the listed span mean the source ended.
         let lastDecode = Double(packets.map(\.dts).max() ?? 0) * timeBase
         return lastDecode < end + lookAhead - 1 ? .endOfFile : .unknown

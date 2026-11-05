@@ -949,6 +949,22 @@ final class TrimmedStreamCopyMergeTests: XCTestCase {
         XCTAssertEqual(parsed.packets, [.init(dts: -1024, pts: 0), .init(dts: -512, pts: 2048)])
     }
 
+    func testStreamCopyEndCutKeepsTheRequestedEndWhenVideoStopsBeforeIt() {
+        // Cover art: one picture at 0.
+        let coverArt = "#tb 0: 1/90000\n0,          0,          0,        1,    41230, 0x1d2c3b4a\n"
+        XCTAssertEqual(StreamCopyEndCut.cut(fromListing: coverArt, end: 30), .unknown)
+        XCTAssertEqual(StreamCopyEndCut.Cut.unknown.duration(requested: 30), 30)
+
+        // A video track ending at 9 s, before a 30 s end.
+        let shortVideo = "#tb 0: 1/1\n" + (0..<10).map { "0, \($0), \($0), 1, 100, 0x0\n" }.joined()
+        XCTAssertEqual(StreamCopyEndCut.cut(fromListing: shortVideo, end: 30), .unknown)
+
+        // Video reaching the end with no clean point before it stops keeps the rest.
+        let order: [Int64] = [0, 4, 2, 1, 3]
+        let tail = "#tb 0: 1/1\n" + order.enumerated().map { "0, \($0.offset - 1), \($0.element), 1, 100, 0x0\n" }.joined()
+        XCTAssertEqual(StreamCopyEndCut.cut(fromListing: tail, end: 3.5), .endOfFile)
+    }
+
     func testAVCMXFStreamCopyUsesExactEditRates() {
         XCTAssertEqual(AVCMXFStreamCopy.exactFrameRate(25), "25")
         XCTAssertEqual(AVCMXFStreamCopy.exactFrameRate(29.97), "30000/1001")
