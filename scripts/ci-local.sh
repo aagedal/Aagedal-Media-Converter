@@ -60,7 +60,8 @@ rm -rf "$RESULTS"
 mkdir -p "$RESULTS"
 
 # CI pins its Xcode; say which one this run uses.
-xcodebuild -version | head -1
+# sed reads all of it; head would exit early and SIGPIPE xcodebuild under pipefail.
+xcodebuild -version | sed -n 1p
 
 # Shows the xcodebuild log only when it fails; the result bundle has the details.
 xcodebuild_quiet() {
