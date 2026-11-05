@@ -721,9 +721,14 @@ struct ContentView: View {
 
     var body: some View {
         mainContentView
-            .overlay(alignment: .bottom) { updateNotificationOverlay }
+            .overlay(alignment: .bottom) {
+                // Stacked so P2 import progress and the update notice don't cover each other.
+                VStack(spacing: 0) {
+                    P2ImportProgressOverlay()
+                    updateNotificationOverlay
+                }
+            }
             .overlay(alignment: .top) { settingsSyncNoticeOverlay }
-            .overlay(alignment: .bottom) { P2ImportProgressOverlay() }
             .frame(minWidth: 860)
             .modifier(ContentViewSheets(
                 droppedFiles: $droppedFiles,

@@ -34,6 +34,8 @@ enum P2CardImporter {
         /// Set when the clip is one part of a spanned shot.
         var shotID: String?
         var offsetInShot: Int
+        /// The next part of a spanned shot, when the metadata names it.
+        var nextClipID: String? = nil
     }
 
     struct Shot: Sendable, Equatable {
@@ -46,6 +48,17 @@ enum P2CardImporter {
         var cacheKey: String { "P2-\(clips[0].globalClipID)-\(clips.count)" }
 
         var sourceURLs: [URL] { clips.flatMap { ($0.videoURL.map { [$0] } ?? []) + $0.audioURLs } }
+
+        /// Whether parts of a spanned recording are missing, such as a card that
+        /// wasn't imported with the others. Its parts are still joined.
+        var isMissingParts: Bool {
+            guard clips[0].shotID != nil else { return false }
+            if clips[0].offsetInShot != 0 { return true }
+            for (clip, next) in zip(clips, clips.dropFirst()) {
+                if let nextID = clip.nextClipID, nextID != next.globalClipID { return true }
+            }
+            return clips[clips.count - 1].nextClipID != nil
+        }
 
         /// The card holding the first clip (essence files are at `CONTENTS/<kind>/<file>`).
         var cardRoot: URL? {
@@ -151,7 +164,8 @@ enum P2CardImporter {
                     startTimecode: parsed.startTimecode,
                     recordingDate: parsed.recordingDate,
                     shotID: parsed.shotID,
-                    offsetInShot: parsed.offsetInShot ?? 0
+                    offsetInShot: parsed.offsetInShot ?? 0,
+                    nextClipID: parsed.nextClipID
                 )
             }
     }
@@ -234,6 +248,14 @@ enum P2CardImporter {
         if unreadFiles.values.contains(where: { !$0.isEmpty }) {
             logger.warning("P2 clip metadata missing or unreadable; adding those card files as they are")
             await P2ImportProgress.shared.showFailure("Some P2 clip metadata couldn't be read. Those files were added as they are.")
+        }
+
+        let incomplete = wanted.filter(\.isMissingParts).map(\.name)
+        if !incomplete.isEmpty {
+            logger.warning("P2 shots missing parts: \(incomplete.joined(separator: ", "), privacy: .public)")
+            await P2ImportProgress.shared.showFailure(incomplete.count == 1
+                ? "P2 clip \(incomplete[0]) is missing part of its recording. Import all of its cards together to join it."
+                : "P2 clips \(incomplete.joined(separator: ", ")) are missing parts of their recordings. Import all of their cards together to join them.")
         }
 
         let rewrapped = wanted.isEmpty ? [] : await rewrapWithProgress(wanted)
@@ -328,7 +350,8 @@ enum P2CardImporter {
 // MARK: - Rewrapping
 
 /// Rewraps P2 shots into `AppConstants.p2ClipsDirectory`. Requests for a shot that
-/// is already being rewrapped join that work instead of starting a second ffmpeg.
+/// is already being rewrapped join that work instead of starting a second ffmpeg,
+/// which stops only when every request for it is cancelled.
 ///
 /// Not in the preview cache: its default "Delete on launch" policy would remove
 /// clips that a restored session or a re-queued history entry still points at.
@@ -344,7 +367,12 @@ actor P2ClipRewrapper {
     /// Holds the path of the card a shot came from, next to its rewrapped file.
     private static let cardMarkerName = ".card"
 
-    private var inFlight: [String: Task<URL, Error>] = [:]
+    private struct InFlight {
+        let task: Task<URL, Error>
+        var waiters: Int
+    }
+
+    private var inFlight: [String: InFlight] = [:]
     private let runner: any SubprocessRunning = SubprocessRunner()
 
     static func outputURL(for shot: P2CardImporter.Shot) -> URL {
@@ -360,18 +388,29 @@ actor P2ClipRewrapper {
             Self.markUsed(output, cardRoot: shot.cardRoot)
             return output
         }
-        if let existing = inFlight[shot.cacheKey] {
-            return try await existing.value
+        let key = shot.cacheKey
+        let task: Task<URL, Error>
+        if let existing = inFlight[key] {
+            task = existing.task
+            inFlight[key]?.waiters += 1
+        } else {
+            let runner = self.runner
+            task = Task { try await Self.perform(shot, to: output, runner: runner, progress: progress) }
+            inFlight[key] = InFlight(task: task, waiters: 1)
         }
-        let runner = self.runner
-        let task = Task { try await Self.perform(shot, to: output, runner: runner, progress: progress) }
-        inFlight[shot.cacheKey] = task
-        defer { inFlight[shot.cacheKey] = nil }
+        defer { if inFlight[key]?.task == task { inFlight[key] = nil } }
         return try await withTaskCancellationHandler {
             try await task.value
         } onCancel: {
-            task.cancel()
+            Task { await self.withdraw(from: task, key: key) }
         }
+    }
+
+    /// A request was cancelled; stop the rewrap once no request still wants it.
+    private func withdraw(from task: Task<URL, Error>, key: String) {
+        guard inFlight[key]?.task == task else { return }
+        inFlight[key]?.waiters -= 1
+        if inFlight[key]?.waiters ?? 0 <= 0 { task.cancel() }
     }
 
     private static func perform(
@@ -447,13 +486,19 @@ actor P2ClipRewrapper {
         logger.info("Rewrapping P2 shot \(shot.name, privacy: .public) (\(shot.clips.count) clip(s), \(channelCount) audio channel(s))")
 
         let result: SubprocessResult
+        // A `-progress` line can be split across output chunks; keep the unfinished end.
+        let unfinishedLine = OSAllocatedUnfairLock(initialState: "")
         do {
             result = try await runner.run(request) { chunk in
                 // `-progress` reports blocks of key=value lines; use the latest total_size.
-                guard chunk.stream == .standardOutput,
-                      let text = String(data: chunk.data, encoding: .utf8),
-                      let range = text.range(of: "total_size=", options: .backwards),
-                      let bytes = Int64(text[range.upperBound...].prefix(while: \.isNumber)) else { return }
+                guard chunk.stream == .standardOutput, let text = String(data: chunk.data, encoding: .utf8) else { return }
+                let lines = unfinishedLine.withLock { unfinished in
+                    var lines = (unfinished + text).components(separatedBy: "\n")
+                    unfinished = lines.removeLast()
+                    return lines
+                }
+                guard let line = lines.last(where: { $0.hasPrefix("total_size=") }),
+                      let bytes = Int64(line.dropFirst("total_size=".count)) else { return }
                 progress(bytes)
             }
         } catch {
@@ -531,18 +576,19 @@ final class P2ImportProgress {
     private(set) var message: String?
     private(set) var fraction: Double?
     private(set) var failureMessage: String?
-    var isActive: Bool { token != nil }
+    var isActive: Bool { !cancelActions.isEmpty }
 
-    private var token: UUID?
-    private var cancelAction: (@Sendable () -> Void)?
+    /// One per running import; the overlay stays until all of them end.
+    private var cancelActions: [UUID: @Sendable () -> Void] = [:]
     private var failureDismissTask: Task<Void, Never>?
 
     func begin(cancel: @escaping @Sendable () -> Void) -> UUID {
         let token = UUID()
-        self.token = token
-        cancelAction = cancel
-        message = "Preparing P2 clips…"
-        fraction = 0
+        if cancelActions.isEmpty {
+            message = "Preparing P2 clips…"
+            fraction = 0
+        }
+        cancelActions[token] = cancel
         return token
     }
 
@@ -552,21 +598,25 @@ final class P2ImportProgress {
         self.fraction = max(self.fraction ?? 0, min(fraction, 1))
     }
 
-    /// A newer import replaces the overlay; only its own end clears it.
     func end(_ token: UUID) {
-        guard self.token == token else { return }
-        self.token = nil
-        cancelAction = nil
+        cancelActions[token] = nil
+        guard cancelActions.isEmpty else { return }
         message = nil
         fraction = nil
     }
 
+    /// Cancels every running import.
     func cancel() {
-        cancelAction?()
+        for action in cancelActions.values { action() }
     }
 
+    /// Shown for a few seconds; a message arriving meanwhile is added below the current one.
     func showFailure(_ message: String) {
-        failureMessage = message
+        if let current = failureMessage, current != message {
+            failureMessage = current + "\n" + message
+        } else {
+            failureMessage = message
+        }
         failureDismissTask?.cancel()
         failureDismissTask = Task {
             try? await Task.sleep(for: .seconds(8))
@@ -590,6 +640,7 @@ private final class ClipXMLParser: NSObject, XMLParserDelegate {
         var recordingDate: Date?
         var shotID: String?
         var offsetInShot: Int?
+        var nextClipID: String?
     }
 
     private var result = Result()
@@ -632,6 +683,7 @@ private final class ClipXMLParser: NSObject, XMLParserDelegate {
             case ("Access", "CreationDate"): creationDate = Self.date(value)
             case ("Relation", "GlobalShotID"): result.shotID = value
             case ("Relation", "OffsetInShot"): result.offsetInShot = Int(value)
+            case ("Next", "GlobalClipID"): result.nextClipID = value
             default: break
             }
         }
