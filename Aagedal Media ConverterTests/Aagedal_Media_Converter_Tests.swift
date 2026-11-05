@@ -207,6 +207,27 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertEqual(decoded.defaults, source.defaults)
     }
 
+    @MainActor
+    func testImportedSettingsReplaceTheRemovedAV1Tune() throws {
+        let suite = "SettingsSyncAV1Tune.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("\(suite).json")
+        defer { try? FileManager.default.removeItem(at: file) }
+        // A Mac on an older build still syncs the removed Subjective Quality tune.
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(SettingsSnapshot(
+            defaults: [AppConstants.av1TuneKey: .string(AV1TuneMode.legacySubjectiveRawValue)],
+            modifiedAt: Date()
+        )).write(to: file)
+
+        let service = SettingsSyncService(defaults: defaults, observeChanges: false)
+        try service.importSnapshot(from: file, notify: false)
+
+        XCTAssertEqual(defaults.string(forKey: AppConstants.av1TuneKey), AV1TuneMode.vq.rawValue)
+    }
+
     func testSettingsSnapshotDecoderRejectsMalformedFileWithActionableError() {
         XCTAssertThrowsError(
             try SettingsSyncService.decodeSnapshot(Data("not settings JSON".utf8))

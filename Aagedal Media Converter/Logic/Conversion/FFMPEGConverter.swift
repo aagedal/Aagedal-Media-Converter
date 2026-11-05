@@ -1360,6 +1360,9 @@ actor FFMPEGConverter {
             let trimPlan = FFMPEGTrimPlan(start: request.trimStart, end: trimEnd)
             if trimPlan.preparationError == nil, let end = trimPlan.end {
                 let start = trimPlan.start ?? 0
+                // Reads the source up to the end before the export starts, which takes a
+                // while for an end-only trim of a long file.
+                progressUpdate(0, "Finding the trim's end frame…")
                 guard let cut = await findStreamCopyEndCut(
                     conversionID: conversionID, ffmpegPath: ffmpegPath, inputURL: effectiveInputURL,
                     seek: trimPlan.seekArguments, end: end - start
@@ -5217,6 +5220,7 @@ actor FFMPEGConverter {
             _ = Self.outputReservations.release(outputURL, owner: conversionID)
             Self.cleanupFailedOutput(at: outputURL)
             Self.logger.warning("Falling back to FFmpeg concat for MXF merge")
+            request.nativeMXFMergeFellBack?()
             return false
         }
         activeConversionID = nil

@@ -1586,6 +1586,7 @@ actor ConversionManager: Sendable {
             }
         }
         let resolvedOutput = OSAllocatedUnfairLock(initialState: plan.outputBaseURL.appendingPathExtension(outputExtension))
+        let nativeMergeFellBack = OSAllocatedUnfairLock(initialState: false)
 
         let customInputs = ["-f", "concat", "-safe", "0", "-i", plan.listFileURL.path]
 
@@ -1619,6 +1620,7 @@ actor ConversionManager: Sendable {
             outputURL: plan.outputBaseURL,
             preset: plan.preset,
             outputURLResolved: { url in resolvedOutput.withLock { $0 = url } },
+            nativeMXFMergeFellBack: { nativeMergeFellBack.withLock { $0 = true } },
             chapterMetadataURL: chapterMetadataURL,
             chapterMetadataTitles: chapterMetadataTitles,
             comment: plan.comment,
@@ -1681,6 +1683,7 @@ actor ConversionManager: Sendable {
                         plan: plan,
                         outputExtension: outputExtension,
                         resolvedOutputURL: resolvedOutput.withLock { $0 },
+                        nativeMergeFellBack: nativeMergeFellBack.withLock { $0 },
                         cutMarkers: capturedMarkers,
                         markerWarning: capturedMarkerWarning,
                         chapterMetadataURL: capturedChapterURL,
@@ -1947,6 +1950,7 @@ actor ConversionManager: Sendable {
         plan: MergePlan,
         outputExtension: String,
         resolvedOutputURL: URL,
+        nativeMergeFellBack: Bool,
         cutMarkers: [StitchCutMarker],
         markerWarning: String?,
         chapterMetadataURL: URL?,
@@ -1980,7 +1984,10 @@ actor ConversionManager: Sendable {
             mergeLogger.warning("\(exportWarning, privacy: .public)")
             await StitchMarkerExport.presentWarning(exportWarning, outputURL: finalURL)
         }
-        let mergeNotice = success ? plan.mergeNotice : nil
+        let fallbackNotice = nativeMergeFellBack
+            ? String(localized: "bmx couldn't merge the MXF clips, so they were merged with FFmpeg and camera metadata was not kept.")
+            : nil
+        let mergeNotice = success ? plan.mergeNotice ?? fallbackNotice : nil
         if let mergeNotice { mergeLogger.notice("\(mergeNotice, privacy: .public)") }
         let warnings = [exportWarning, mergeNotice].compactMap { $0 }
         let completedWarning = warnings.isEmpty ? nil : warnings.joined(separator: "\n")
