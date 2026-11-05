@@ -5178,7 +5178,9 @@ actor FFMPEGConverter {
 
         let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
         // Trimmed segments are rewrapped copies that already start at the trimmed timecode.
-        let firstSegmentInfo: String? = if let first = merge.segmentURLs.first { await bmxService.getMXFInfo(url: first) } else { nil }
+        let firstSegmentInfo: String? = if merge.startTimecode == nil, let first = merge.segmentURLs.first {
+            await bmxService.getMXFInfo(url: first)
+        } else { nil }
         progressUpdate(0, "Merging MXF…")
         let result = await bmxService.mergeMXFSequence(
             inputURLs: merge.segmentURLs,
@@ -5186,7 +5188,7 @@ actor FFMPEGConverter {
             arguments: NativeMXFMerge.mergeArguments(
                 companyName: merge.companyName,
                 appVersion: appVersion,
-                startTimecode: firstSegmentInfo.flatMap(NativeMXFMerge.startTimecode(fromMXFInfo:)),
+                startTimecode: merge.startTimecode ?? firstSegmentInfo.flatMap(NativeMXFMerge.startTimecode(fromMXFInfo:)),
                 embeddedXMLURL: xmlURL
             ),
             operationID: conversionID,

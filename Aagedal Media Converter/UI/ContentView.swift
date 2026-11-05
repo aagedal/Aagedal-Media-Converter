@@ -1877,7 +1877,7 @@ struct ContentView: View {
 
     @MainActor
     private func addFilesToGroup(groupID: UUID) async {
-        guard let groupIndex = encodingGroups.firstIndex(where: { $0.id == groupID }) else { return }
+        guard encodingGroups.contains(where: { $0.id == groupID }) else { return }
 
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
@@ -1893,12 +1893,16 @@ struct ContentView: View {
         }
 
         guard response == .OK, !panel.urls.isEmpty else { return }
+        // P2 card files become one rewrapped file per shot. Look the group up after
+        // this await: the index must not cross it.
+        let urls = await P2CardImporter.resolveCards(in: panel.urls)
+        guard let groupIndex = encodingGroups.firstIndex(where: { $0.id == groupID }) else { return }
 
         let groupPreset = encodingGroups[groupIndex].preset ?? selectedPreset
         let importContext = VideoGroupImportContext(preset: groupPreset, outputFolder: outputFolder)
         var newItemIDs: [UUID] = []
 
-        for url in panel.urls {
+        for url in urls {
             let hasAccess = url.startAccessingSecurityScopedResource()
             _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
             if hasAccess { url.stopAccessingSecurityScopedResource() }

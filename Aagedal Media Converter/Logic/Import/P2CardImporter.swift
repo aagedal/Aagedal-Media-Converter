@@ -195,6 +195,27 @@ enum P2CardImporter {
 
     // MARK: - Import
 
+    /// Picks one card for each clip, by global clip ID. A clip on several cards (a card
+    /// and its copy) goes with a card it was picked from, so picking different clips from
+    /// each card keeps all of them. `requestedClips` holds upper-cased clip names per card.
+    static func assignCards(
+        _ clipsByCard: [(root: URL, clips: [Clip])],
+        requestedClips: [URL: Set<String>]
+    ) -> (clips: [Clip], cardByClipID: [String: URL]) {
+        var allClips: [Clip] = []
+        var cardByClipID: [String: URL] = [:]
+        for picked in [true, false] {
+            for (root, cardClips) in clipsByCard {
+                for clip in cardClips where cardByClipID[clip.globalClipID] == nil
+                    && (requestedClips[root]?.contains(clip.name.uppercased()) == true) == picked {
+                    cardByClipID[clip.globalClipID] = root
+                    allClips.append(clip)
+                }
+            }
+        }
+        return (allClips, cardByClipID)
+    }
+
     /// Replaces files that belong to P2 cards with one rewrapped file per shot,
     /// placed where the card's first file was. Only shots with at least one file
     /// in `urls` are included, so dropping a single clip doesn't import the whole
@@ -230,18 +251,15 @@ enum P2CardImporter {
         // Group across cards so a shot spanned over two cards is joined. It is
         // placed with the card holding its first clip.
         let cardRoots = entries.compactMap { if case .card(let root) = $0 { root } else { nil } }
-        var allClips: [Clip] = []
-        var cardByClipID: [String: URL] = [:]
         var unreadFiles: [URL: [URL]] = [:]
+        var clipsByCard: [(root: URL, clips: [Clip])] = []
         for root in cardRoots {
             let cardClips = clips(onCard: root)
             let names = Set(cardClips.map { $0.name.uppercased() })
             unreadFiles[root] = requestedFiles[root]?.filter { !names.contains(clipName(forFileAt: $0).uppercased()) }
-            for clip in cardClips where cardByClipID[clip.globalClipID] == nil {
-                cardByClipID[clip.globalClipID] = root
-                allClips.append(clip)
-            }
+            clipsByCard.append((root, cardClips))
         }
+        let (allClips, cardByClipID) = assignCards(clipsByCard, requestedClips: requestedClips)
         let wanted = shots(from: allClips).filter { shot in
             shot.clips.contains { clip in
                 cardByClipID[clip.globalClipID].flatMap { requestedClips[$0] }?.contains(clip.name.uppercased()) == true
@@ -367,8 +385,9 @@ actor P2ClipRewrapper {
 
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "P2CardImporter")
     private static let timeout: Duration = .seconds(6 * 60 * 60)
-    /// Rewrapped shots unused for this long are removed at launch.
-    private static let retention: TimeInterval = 7 * 24 * 60 * 60
+    /// Rewrapped shots unused for this long are removed at launch. As long as the
+    /// restore-last-session offer, so a restored queue still finds its shots.
+    static let retention: TimeInterval = max(7 * 24 * 60 * 60, LastSessionStore.pendingLifetime)
     /// Free space kept beyond a rewrap's size.
     static let spaceMargin: Int64 = 512 * 1024 * 1024
     /// Holds the path of the card a shot came from, next to its rewrapped file.
@@ -596,12 +615,17 @@ actor P2ClipRewrapper {
 
     /// Removes shots not imported for `retention`, including partial files left by
     /// a quit mid-rewrap (a newer rewrap of the shot overwrites those). Run at launch.
-    nonisolated static func removeStale(now: Date = Date()) {
+    /// On the actor, so it can't remove a shot that an import is reusing or rewrapping.
+    func removeStale(now: Date = Date()) {
+        Self.removeStale(in: AppConstants.p2ClipsDirectory, now: now, keeping: Set(inFlight.keys).union(stopping.keys))
+    }
+
+    nonisolated static func removeStale(in directory: URL, now: Date, keeping busy: Set<String> = []) {
         let fileManager = FileManager.default
         guard let shots = try? fileManager.contentsOfDirectory(
-            at: AppConstants.p2ClipsDirectory, includingPropertiesForKeys: [.contentModificationDateKey]
+            at: directory, includingPropertiesForKeys: [.contentModificationDateKey]
         ) else { return }
-        for shot in shots {
+        for shot in shots where !busy.contains(shot.lastPathComponent) {
             let modified = (try? shot.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
             guard let modified, now.timeIntervalSince(modified) >= retention else { continue }
             try? fileManager.removeItem(at: shot)

@@ -18,6 +18,9 @@ struct NativeMXFMergeRequest: Sendable, Equatable {
     let companyName: String
     /// Merged Sony NonRealTimeMeta document, when the sources carry one.
     let nonRealTimeMetaXML: String?
+    /// Start timecode for the merged file. Nil uses the first segment's, which for a
+    /// trimmed first clip already includes its trim-in offset.
+    var startTimecode: String? = nil
 }
 
 enum NativeMXFMerge {
