@@ -78,7 +78,9 @@
 
 - Panasonic P2 cards can be imported with Import Camera Card, by opening the card folder, or by dropping the card (or individual clips from it) on the queue or on a group. Each clip becomes one queue item with its video and every audio channel. Before, a P2 card gave silent video clips, a separate item for each audio channel, and the low-resolution proxies.
 - Recordings that the camera split across several clips, including across cards imported together, are joined into one item.
-- Clips are stream-copied into Matroska files in Application Support (about the size of the card, at disk speed) with their timecode, recording date and field order, so interlaced AVC-Intra is still deinterlaced. Progress shows at the bottom of the window with a Cancel button. Re-importing a card reuses the files, and files not imported for 7 days are removed at launch.
+- Clips are stream-copied into Matroska files in Application Support (about the size of the card, at disk speed) with their timecode, recording date and field order, so interlaced AVC-Intra is still deinterlaced. Progress shows at the bottom of the window with a Cancel button. Re-importing a card reuses the files, and files not imported for 7 days are removed at launch. An import that wouldn't fit on the disk stops before copying anything.
+- With Save next to original, encodes of P2 clips are saved in the card folder (next to `CONTENTS`), or in the output folder when the card is no longer connected.
+- Other media in the folder holding a card is imported as usual, and clips whose metadata can't be read are added as they are, with a notice.
 
 ### IMF
 

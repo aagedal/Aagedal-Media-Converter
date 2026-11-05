@@ -46,6 +46,12 @@ enum P2CardImporter {
         var cacheKey: String { "P2-\(clips[0].globalClipID)-\(clips.count)" }
 
         var sourceURLs: [URL] { clips.flatMap { ($0.videoURL.map { [$0] } ?? []) + $0.audioURLs } }
+
+        /// The card holding the first clip (essence files are at `CONTENTS/<kind>/<file>`).
+        var cardRoot: URL? {
+            (clips[0].videoURL ?? clips[0].audioURLs.first)?
+                .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        }
     }
 
     enum RewrapError: LocalizedError {
@@ -74,12 +80,18 @@ enum P2CardImporter {
                 || isDirectory(contents.appendingPathComponent("AUDIO", isDirectory: true)))
     }
 
-    /// The card root for a card folder, its `CONTENTS` folder, or any file on the card.
+    /// The card root for a card folder, its `CONTENTS` folder, or any file in it.
+    /// Files next to `CONTENTS`, such as other media in a folder holding a copied
+    /// card, are not on the card.
     static func cardRoot(containing url: URL) -> URL? {
+        let path = url.standardizedFileURL.path
         var candidate = url.standardizedFileURL
         // A file on the card is at most three levels below the root (CONTENTS/VIDEO/file).
         for _ in 0..<4 {
-            if isCardRoot(candidate) { return candidate }
+            if isCardRoot(candidate) {
+                let contents = candidate.appendingPathComponent("CONTENTS", isDirectory: true).path
+                return path == candidate.path || path == contents || path.hasPrefix(contents + "/") ? candidate : nil
+            }
             let parent = candidate.deletingLastPathComponent()
             guard parent.path != candidate.path else { break }
             candidate = parent
@@ -170,13 +182,15 @@ enum P2CardImporter {
     /// Replaces files that belong to P2 cards with one rewrapped file per shot,
     /// placed where the card's first file was. Only shots with at least one file
     /// in `urls` are included, so dropping a single clip doesn't import the whole
-    /// card. Other URLs pass through unchanged. Shots that can't be rewrapped are
-    /// left out and reported in the progress overlay.
+    /// card. Other URLs pass through unchanged, and so do card files whose clip
+    /// metadata can't be read. Shots that can't be rewrapped are left out and
+    /// reported in the progress overlay.
     static func resolveCards(in urls: [URL]) async -> [URL] {
         enum Entry { case file(URL), card(URL) }
 
         var entries: [Entry] = []
         var requestedClips: [URL: Set<String>] = [:]
+        var requestedFiles: [URL: [URL]] = [:]
         var rootByFolder: [String: URL?] = [:]
         for url in urls {
             let folder = url.deletingLastPathComponent().path
@@ -193,6 +207,7 @@ enum P2CardImporter {
             }
             if requestedClips[root] == nil { entries.append(.card(root)) }
             requestedClips[root, default: []].insert(clipName(forFileAt: url).uppercased())
+            requestedFiles[root, default: []].append(url)
         }
         guard !requestedClips.isEmpty else { return urls }
 
@@ -201,8 +216,12 @@ enum P2CardImporter {
         let cardRoots = entries.compactMap { if case .card(let root) = $0 { root } else { nil } }
         var allClips: [Clip] = []
         var cardByClipID: [String: URL] = [:]
+        var unreadFiles: [URL: [URL]] = [:]
         for root in cardRoots {
-            for clip in clips(onCard: root) where cardByClipID[clip.globalClipID] == nil {
+            let cardClips = clips(onCard: root)
+            let names = Set(cardClips.map { $0.name.uppercased() })
+            unreadFiles[root] = requestedFiles[root]?.filter { !names.contains(clipName(forFileAt: $0).uppercased()) }
+            for clip in cardClips where cardByClipID[clip.globalClipID] == nil {
                 cardByClipID[clip.globalClipID] = root
                 allClips.append(clip)
             }
@@ -212,12 +231,12 @@ enum P2CardImporter {
                 cardByClipID[clip.globalClipID].flatMap { requestedClips[$0] }?.contains(clip.name.uppercased()) == true
             }
         }
-        guard !wanted.isEmpty else {
-            logger.warning("P2 card found but no clips could be read")
-            return entries.compactMap { if case .file(let url) = $0 { url } else { nil } }
+        if unreadFiles.values.contains(where: { !$0.isEmpty }) {
+            logger.warning("P2 clip metadata missing or unreadable; adding those card files as they are")
+            await P2ImportProgress.shared.showFailure("Some P2 clip metadata couldn't be read. Those files were added as they are.")
         }
 
-        let rewrapped = await rewrapWithProgress(wanted)
+        let rewrapped = wanted.isEmpty ? [] : await rewrapWithProgress(wanted)
 
         var urlsByCard: [URL: [URL]] = [:]
         for (shot, url) in zip(wanted, rewrapped) {
@@ -227,7 +246,7 @@ enum P2CardImporter {
         return entries.flatMap { entry -> [URL] in
             switch entry {
             case .file(let url): [url]
-            case .card(let root): urlsByCard[root] ?? []
+            case .card(let root): (urlsByCard[root] ?? []) + (unreadFiles[root] ?? [])
             }
         }
     }
@@ -241,6 +260,21 @@ enum P2CardImporter {
             }
         }
         let totalBytes = max(sizes.reduce(0, +), 1)
+
+        // Check the whole import up front, so a large card doesn't fill the disk shot by shot.
+        let neededBytes = zip(shots, sizes).reduce(Int64(0)) { total, pair in
+            FileManager.default.fileExists(atPath: P2ClipRewrapper.outputURL(for: pair.0).path) ? total : total + pair.1
+        }
+        try? FileManager.default.createDirectory(at: AppConstants.p2ClipsDirectory, withIntermediateDirectories: true)
+        if let available = try? AppConstants.p2ClipsDirectory
+            .resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]).volumeAvailableCapacityForImportantUsage,
+            available < neededBytes + P2ClipRewrapper.spaceMargin {
+            let needed = ByteCountFormatter.string(fromByteCount: neededBytes, countStyle: .file)
+            let free = ByteCountFormatter.string(fromByteCount: available, countStyle: .file)
+            logger.error("Not enough space to prepare P2 clips: need \(needed, privacy: .public), \(free, privacy: .public) free")
+            await P2ImportProgress.shared.showFailure("Not enough free disk space to prepare the P2 clips (\(needed) needed, \(free) free).")
+            return shots.map { _ in nil }
+        }
 
         let work = Task<[URL?], Never> {
             var results: [URL?] = []
@@ -305,6 +339,10 @@ actor P2ClipRewrapper {
     private static let timeout: Duration = .seconds(6 * 60 * 60)
     /// Rewrapped shots unused for this long are removed at launch.
     private static let retention: TimeInterval = 7 * 24 * 60 * 60
+    /// Free space kept beyond a rewrap's size.
+    static let spaceMargin: Int64 = 512 * 1024 * 1024
+    /// Holds the path of the card a shot came from, next to its rewrapped file.
+    private static let cardMarkerName = ".card"
 
     private var inFlight: [String: Task<URL, Error>] = [:]
     private let runner: any SubprocessRunning = SubprocessRunner()
@@ -319,7 +357,7 @@ actor P2ClipRewrapper {
     func rewrap(_ shot: P2CardImporter.Shot, progress: @escaping @Sendable (Int64) -> Void) async throws -> URL {
         let output = Self.outputURL(for: shot)
         if FileManager.default.fileExists(atPath: output.path) {
-            Self.markUsed(output)
+            Self.markUsed(output, cardRoot: shot.cardRoot)
             return output
         }
         if let existing = inFlight[shot.cacheKey] {
@@ -356,7 +394,7 @@ actor P2ClipRewrapper {
             total + Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
         }
         if let available = try? directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
-            .volumeAvailableCapacityForImportantUsage, available < sourceBytes + 512 * 1024 * 1024 {
+            .volumeAvailableCapacityForImportantUsage, available < sourceBytes + spaceMargin {
             throw P2CardImporter.RewrapError.insufficientSpace(shot.name)
         }
 
@@ -434,15 +472,37 @@ actor P2ClipRewrapper {
         if let date = shot.clips[0].recordingDate {
             try? FileManager.default.setAttributes([.creationDate: date, .modificationDate: date], ofItemAtPath: output.path)
         }
-        markUsed(output)
+        markUsed(output, cardRoot: shot.cardRoot)
         return output
     }
 
-    /// The shot folder's modification date is when it was last imported; `removeStale` reads it.
-    private static func markUsed(_ output: URL) {
-        try? FileManager.default.setAttributes(
-            [.modificationDate: Date()], ofItemAtPath: output.deletingLastPathComponent().path
-        )
+    /// Records where the shot came from, and touches the shot folder, whose modification
+    /// date is when it was last imported; `removeStale` reads it.
+    private static func markUsed(_ output: URL, cardRoot: URL?) {
+        let directory = output.deletingLastPathComponent()
+        if let cardRoot {
+            try? cardRoot.path.write(
+                to: directory.appendingPathComponent(cardMarkerName), atomically: true, encoding: .utf8
+            )
+        }
+        try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: directory.path)
+    }
+
+    /// Whether `url` is in the rewrapped-shot folder.
+    nonisolated static func isRewrap(_ url: URL) -> Bool {
+        url.standardizedFileURL.path.hasPrefix(AppConstants.p2ClipsDirectory.standardizedFileURL.path + "/")
+    }
+
+    /// The card folder a rewrapped shot came from, if it is still there. "Save next to
+    /// original" saves there, not in the rewrap folder that `removeStale` cleans out.
+    nonisolated static func cardRoot(forRewrap url: URL) -> URL? {
+        guard isRewrap(url),
+              let path = try? String(
+                  contentsOf: url.deletingLastPathComponent().appendingPathComponent(cardMarkerName), encoding: .utf8
+              ),
+              !path.isEmpty, P2CardImporter.isCardRoot(URL(fileURLWithPath: path, isDirectory: true))
+        else { return nil }
+        return URL(fileURLWithPath: path, isDirectory: true)
     }
 
     /// Removes shots not imported for `retention`, including partial files left by

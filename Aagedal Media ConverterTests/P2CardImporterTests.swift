@@ -60,6 +60,45 @@ final class P2CardImporterTests: XCTestCase {
         XCTAssertEqual(P2CardImporter.cardRoot(containing: card.appendingPathComponent("CONTENTS"))?.path, root.path)
         XCTAssertEqual(P2CardImporter.cardRoot(containing: card.appendingPathComponent("CONTENTS/AUDIO/0001AB01.MXF"))?.path, root.path)
         XCTAssertNil(P2CardImporter.cardRoot(containing: FileManager.default.temporaryDirectory))
+        // Media next to CONTENTS, as in a folder holding a copied card, is not on the card.
+        XCTAssertNil(P2CardImporter.cardRoot(containing: card.appendingPathComponent("export.mov")))
+        XCTAssertNil(P2CardImporter.cardRoot(containing: card.appendingPathComponent("Audio/zoom.wav")))
+    }
+
+    func testFilesNextToTheCardAndClipsWithoutReadableMetadataPassThrough() async throws {
+        try addClip("0001AB", audio: 2)
+        try "not xml".write(to: card.appendingPathComponent("CONTENTS/CLIP/0001AB.XML"), atomically: true, encoding: .utf8)
+        let urls = [
+            card.appendingPathComponent("CONTENTS/VIDEO/0001AB.MXF"),
+            card.appendingPathComponent("export.mov"),
+        ]
+        let resolved = await P2CardImporter.resolveCards(in: urls)
+        XCTAssertEqual(resolved.map(\.lastPathComponent), ["0001AB.MXF", "export.mov"])
+    }
+
+    func testSaveNextToOriginalUsesTheCardForRewrappedShots() async throws {
+        try addClip("0001AB", audio: 2)
+        let shot = try XCTUnwrap(P2CardImporter.shots(from: P2CardImporter.clips(onCard: card)).first)
+        let output = P2ClipRewrapper.outputURL(for: shot)
+        try FileManager.default.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: output.deletingLastPathComponent()) }
+        try Data().write(to: output)
+        // An already rewrapped shot is reused and records its card.
+        let rewrapped = try await P2ClipRewrapper.shared.rewrap(shot) { _ in }
+        XCTAssertEqual(rewrapped, output)
+
+        let suite = "P2SaveNextToOriginal.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: AppConstants.saveNextToOriginalKey)
+        let destination = OutputDestinationSettings(defaults: defaults)
+        XCTAssertEqual(
+            destination.resolveFolder(for: output, defaultOutputFolder: "/Output", presetSuffix: "_x"),
+            card.standardizedFileURL.path
+        )
+        // Without the card, outputs go to the output folder, never into the rewrap folder.
+        try FileManager.default.removeItem(at: card)
+        XCTAssertEqual(destination.resolveFolder(for: output, defaultOutputFolder: "/Output", presetSuffix: "_x"), "/Output")
     }
 
     func testFilesMapToTheirClipName() {
