@@ -224,6 +224,48 @@ final class P2CardImporterTests: XCTestCase {
         XCTAssertEqual(shots.map(\.clips.count), [1])
     }
 
+    func testClipsPickedFromACardAndItsCopyAreBothKept() throws {
+        try addClip("0001AA", audio: 1)
+        try addClip("0002AB", audio: 1)
+        let copy = card.deletingLastPathComponent().appendingPathComponent("\(card.lastPathComponent)-copy")
+        try FileManager.default.copyItem(at: card, to: copy)
+        defer { try? FileManager.default.removeItem(at: copy) }
+
+        let assigned = P2CardImporter.assignCards(
+            [(card, P2CardImporter.clips(onCard: card)), (copy, P2CardImporter.clips(onCard: copy))],
+            requestedClips: [card: ["0001AA"], copy: ["0002AB"]]
+        )
+        XCTAssertEqual(assigned.clips.count, 2)
+        XCTAssertEqual(assigned.cardByClipID["ID-0001AA"], card)
+        XCTAssertEqual(assigned.cardByClipID["ID-0002AB"], copy)
+
+        // A whole card and its copy: each clip once, from the first card.
+        let both: Set<String> = ["0001AA", "0002AB"]
+        let whole = P2CardImporter.assignCards(
+            [(card, P2CardImporter.clips(onCard: card)), (copy, P2CardImporter.clips(onCard: copy))],
+            requestedClips: [card: both, copy: both]
+        )
+        XCTAssertEqual(whole.clips.count, 2)
+        XCTAssertEqual(Set(whole.cardByClipID.values), [card])
+    }
+
+    func testStaleRewrapsOutliveTheSessionOfferAndBusyShotsAreKept() throws {
+        XCTAssertGreaterThanOrEqual(P2ClipRewrapper.retention, LastSessionStore.pendingLifetime)
+
+        let folder = card.appendingPathComponent("P2Clips", isDirectory: true)
+        let now = Date()
+        let old = now.addingTimeInterval(-P2ClipRewrapper.retention - 60)
+        for (name, date) in [("P2-OLD-1", old), ("P2-BUSY-1", old), ("P2-NEW-1", now.addingTimeInterval(-8 * 86_400))] {
+            let shot = folder.appendingPathComponent(name, isDirectory: true)
+            try FileManager.default.createDirectory(at: shot, withIntermediateDirectories: true)
+            try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: shot.path)
+        }
+
+        P2ClipRewrapper.removeStale(in: folder, now: now, keeping: ["P2-BUSY-1"])
+        let left = try FileManager.default.contentsOfDirectory(atPath: folder.path).sorted()
+        XCTAssertEqual(left, ["P2-BUSY-1", "P2-NEW-1"])
+    }
+
     func testURLsOutsideP2CardsPassThroughUnchanged() async {
         let urls = [URL(fileURLWithPath: "/nonexistent/a.mov"), URL(fileURLWithPath: "/nonexistent/b.mxf")]
         let resolved = await P2CardImporter.resolveCards(in: urls)

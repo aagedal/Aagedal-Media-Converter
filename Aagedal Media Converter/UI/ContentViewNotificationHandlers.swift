@@ -68,11 +68,13 @@ struct ContentViewNotificationHandlers: ViewModifier {
 
         guard PendingAppIntentRequests.shared.claim(notification) else { return }
         AppIntentOperationQueue.shared.enqueue {
-            enqueueFiles(urls)
+            await enqueueFiles(urls)
         }
     }
 
-    private func enqueueFiles(_ urls: [URL]) {
+    private func enqueueFiles(_ urls: [URL]) async {
+        // P2 card files become one rewrapped file per shot, as in the other import paths.
+        let urls = await P2CardImporter.resolveCards(in: urls)
         let importPreset = selectedPreset
         let importFolder = outputFolder
         let importSettings = VideoImportSettings()
@@ -139,6 +141,8 @@ struct ContentViewNotificationHandlers: ViewModifier {
         let requestID = notification.userInfo?[PendingAppIntentRequests.requestIDKey] as? UUID
 
         AppIntentOperationQueue.shared.enqueue {
+            let fileURLs = await P2CardImporter.resolveCards(in: fileURLs)
+            guard !fileURLs.isEmpty else { return }
             // The six presets exposed by the 4.5 application contract go through
             // the same persisted planner and serialized executor as agent jobs.
             // Wider presets retain the established queue path until the contract

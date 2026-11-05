@@ -868,7 +868,10 @@ actor ConversionManager: Sendable {
         }
 
         let nativeMXFMerge = usesNativeMXFMerge
-            ? await makeNativeMXFMergeRequest(items: orderedWaitingItems, segments: segments, frameRanges: nativeFrameRanges)
+            ? await makeNativeMXFMergeRequest(
+                items: orderedWaitingItems, segments: segments, frameRanges: nativeFrameRanges,
+                ignoreTrimOffset: settings.ignoreStitchTimecodeTrimOffset
+            )
             : nil
         guard isMergePreparationActive(batchID) else {
             cleanupTemporaryFiles(temporaryFiles)
@@ -903,10 +906,13 @@ actor ConversionManager: Sendable {
     /// sidecar Duration matches what bmx writes even when container durations round.
     /// `frameRanges` holds the trim of each clip (by item ID) when the segments are
     /// bmx-trimmed copies; the merged XML then counts only the frames kept.
+    /// `ignoreTrimOffset` starts the merged timecode at the first source's own start
+    /// instead of its trim-in point, as the FFmpeg merge path does.
     private func makeNativeMXFMergeRequest(
         items: [VideoItem],
         segments: [MergeSegment],
-        frameRanges: [UUID: NativeMXFMerge.FrameRange]? = nil
+        frameRanges: [UUID: NativeMXFMerge.FrameRange]? = nil,
+        ignoreTrimOffset: Bool = false
     ) async -> NativeMXFMergeRequest? {
         guard let first = items.first else { return nil }
         var firstInfo: String?
@@ -931,17 +937,22 @@ actor ConversionManager: Sendable {
                 ?? metadata?.duration.map { Int(($0 * rate).rounded()) } ?? 0
             let range = frameRanges?[item.id]
             let start = min(range?.start ?? 0, frames)
+            // The timecode starts at the source's own start, so the first clip's LTC does too.
+            let timecodeOffset = ignoreTrimOffset && item.id == first.id ? 0 : start
             let kept = min(range?.count ?? frames - start, frames - start)
-            xmlSegments.append(NativeMXFMerge.XMLSegment(xml: xml, frameCount: kept, startOffset: start))
+            xmlSegments.append(NativeMXFMerge.XMLSegment(xml: xml, frameCount: kept, startOffset: timecodeOffset))
         }
         let mergedXML = xmlSegments.contains { $0.xml == nil || $0.frameCount <= 0 }
             ? nil : NativeMXFMerge.mergedNonRealTimeMeta(segments: xmlSegments)
         let company = firstInfo.flatMap(NativeMXFMerge.companyName(fromMXFInfo:))
             ?? (mergedXML != nil ? "Sony" : NativeMXFMerge.fallbackCompanyName)
+        let trimsFirstClip = (frameRanges?[first.id]?.start ?? 0) > 0
         return NativeMXFMergeRequest(
             segmentURLs: segments.map(\.preparedURL),
             companyName: company,
-            nonRealTimeMetaXML: mergedXML
+            nonRealTimeMetaXML: mergedXML,
+            startTimecode: ignoreTrimOffset && trimsFirstClip
+                ? firstInfo.flatMap(NativeMXFMerge.startTimecode(fromMXFInfo:)) : nil
         )
     }
 
