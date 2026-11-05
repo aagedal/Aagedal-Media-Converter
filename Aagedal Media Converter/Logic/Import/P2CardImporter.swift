@@ -97,13 +97,15 @@ enum P2CardImporter {
     /// Files next to `CONTENTS`, such as other media in a folder holding a copied
     /// card, are not on the card.
     static func cardRoot(containing url: URL) -> URL? {
-        let path = url.standardizedFileURL.path
+        // Lower-cased like the file system: a copied card may name the folder `Contents`.
+        let path = url.standardizedFileURL.path.lowercased()
         var candidate = url.standardizedFileURL
         // A file on the card is at most three levels below the root (CONTENTS/VIDEO/file).
         for _ in 0..<4 {
             if isCardRoot(candidate) {
-                let contents = candidate.appendingPathComponent("CONTENTS", isDirectory: true).path
-                return path == candidate.path || path == contents || path.hasPrefix(contents + "/") ? candidate : nil
+                let contents = candidate.appendingPathComponent("CONTENTS", isDirectory: true).path.lowercased()
+                return path == candidate.path.lowercased() || path == contents || path.hasPrefix(contents + "/")
+                    ? candidate : nil
             }
             let parent = candidate.deletingLastPathComponent()
             guard parent.path != candidate.path else { break }
@@ -298,6 +300,7 @@ enum P2CardImporter {
             return shots.map { _ in nil }
         }
 
+        let token = UUID()
         let work = Task<[URL?], Never> {
             var results: [URL?] = []
             var failures: [String] = []
@@ -311,11 +314,11 @@ enum P2CardImporter {
                     ? "Preparing P2 clip \(shot.name)…"
                     : "Preparing P2 clip \(index + 1) of \(shots.count) (\(shot.name))…"
                 let base = doneBytes
-                await P2ImportProgress.shared.update(message: message, fraction: Double(base) / Double(totalBytes))
+                await P2ImportProgress.shared.update(token, message: message, fraction: Double(base) / Double(totalBytes))
                 do {
                     let url = try await P2ClipRewrapper.shared.rewrap(shot) { written in
                         let fraction = Double(base + min(written, sizes[index])) / Double(totalBytes)
-                        Task { @MainActor in P2ImportProgress.shared.update(fraction: fraction) }
+                        Task { @MainActor in P2ImportProgress.shared.update(token, fraction: fraction) }
                     }
                     results.append(url)
                 } catch is CancellationError {
@@ -336,7 +339,7 @@ enum P2CardImporter {
             return results
         }
 
-        let token = await P2ImportProgress.shared.begin(cancel: { work.cancel() })
+        await P2ImportProgress.shared.begin(token, weight: totalBytes, cancel: { work.cancel() })
         let results = await withTaskCancellationHandler {
             await work.value
         } onCancel: {
@@ -410,7 +413,12 @@ actor P2ClipRewrapper {
     private func withdraw(from task: Task<URL, Error>, key: String) {
         guard inFlight[key]?.task == task else { return }
         inFlight[key]?.waiters -= 1
-        if inFlight[key]?.waiters ?? 0 <= 0 { task.cancel() }
+        if inFlight[key]?.waiters ?? 0 <= 0 {
+            // Forget it now, so a request arriving before ffmpeg exits starts a new rewrap
+            // instead of joining this cancelled one.
+            inFlight[key] = nil
+            task.cancel()
+        }
     }
 
     private static func perform(
@@ -522,10 +530,12 @@ actor P2ClipRewrapper {
     }
 
     /// Records where the shot came from, and touches the shot folder, whose modification
-    /// date is when it was last imported; `removeStale` reads it.
+    /// date is when it was last imported; `removeStale` reads it. A card already recorded
+    /// is kept while it still holds the shot, so importing a backup copy of the card later
+    /// doesn't move where earlier queue items save.
     private static func markUsed(_ output: URL, cardRoot: URL?) {
         let directory = output.deletingLastPathComponent()
-        if let cardRoot {
+        if let cardRoot, Self.cardRoot(forRewrap: output) == nil {
             try? cardRoot.path.write(
                 to: directory.appendingPathComponent(cardMarkerName), atomically: true, encoding: .utf8
             )
@@ -545,9 +555,25 @@ actor P2ClipRewrapper {
               let path = try? String(
                   contentsOf: url.deletingLastPathComponent().appendingPathComponent(cardMarkerName), encoding: .utf8
               ),
-              !path.isEmpty, P2CardImporter.isCardRoot(URL(fileURLWithPath: path, isDirectory: true))
+              !path.isEmpty
         else { return nil }
-        return URL(fileURLWithPath: path, isDirectory: true)
+        let root = URL(fileURLWithPath: path, isDirectory: true)
+        guard P2CardImporter.isCardRoot(root), card(root, holds: url) else { return nil }
+        return root
+    }
+
+    /// Whether the card at `root` still holds the shot rewrapped to `url`, and is not a
+    /// different card mounted at the same path. Compares the first clip's global clip ID
+    /// with the one in the shot folder's name (`P2-<id>-<count>`).
+    private nonisolated static func card(_ root: URL, holds url: URL) -> Bool {
+        let folder = url.deletingLastPathComponent().lastPathComponent
+        guard folder.hasPrefix("P2-"), let dash = folder.lastIndex(of: "-"),
+              dash > folder.index(folder.startIndex, offsetBy: 2) else { return false }
+        let clipID = String(folder[folder.index(folder.startIndex, offsetBy: 3)..<dash])
+        let clipName = url.deletingPathExtension().lastPathComponent
+        let xml = root.appendingPathComponent("CONTENTS/CLIP/\(clipName).XML")
+        guard let data = try? Data(contentsOf: xml), let parsed = ClipXMLParser.parse(data) else { return false }
+        return (parsed.globalClipID ?? clipName) == clipID
     }
 
     /// Removes shots not imported for `retention`, including partial files left by
@@ -576,38 +602,63 @@ final class P2ImportProgress {
     private(set) var message: String?
     private(set) var fraction: Double?
     private(set) var failureMessage: String?
-    var isActive: Bool { !cancelActions.isEmpty }
+    var isActive: Bool { !imports.isEmpty }
+
+    private struct Import {
+        var message: String
+        var fraction: Double
+        /// Bytes to rewrap, so a large import counts for more of the shared bar.
+        let weight: Double
+        let cancel: @Sendable () -> Void
+    }
 
     /// One per running import; the overlay stays until all of them end.
-    private var cancelActions: [UUID: @Sendable () -> Void] = [:]
+    private var imports: [UUID: Import] = [:]
+    /// The import whose message is shown: the one updated most recently.
+    private var shownImport: UUID?
     private var failureDismissTask: Task<Void, Never>?
 
-    func begin(cancel: @escaping @Sendable () -> Void) -> UUID {
-        let token = UUID()
-        if cancelActions.isEmpty {
-            message = "Preparing P2 clips…"
-            fraction = 0
-        }
-        cancelActions[token] = cancel
+    @discardableResult
+    func begin(_ token: UUID = UUID(), weight: Int64 = 1, cancel: @escaping @Sendable () -> Void) -> UUID {
+        imports[token] = Import(message: "Preparing P2 clips…", fraction: 0, weight: Double(max(weight, 1)), cancel: cancel)
+        shownImport = token
+        refresh()
         return token
     }
 
-    func update(message: String? = nil, fraction: Double) {
-        guard isActive else { return }
-        if let message { self.message = message }
-        self.fraction = max(self.fraction ?? 0, min(fraction, 1))
+    /// Updates for an import that hasn't begun or has ended are ignored.
+    func update(_ token: UUID, message: String? = nil, fraction: Double) {
+        guard var entry = imports[token] else { return }
+        if let message {
+            entry.message = message
+            shownImport = token
+        }
+        entry.fraction = max(entry.fraction, min(fraction, 1))
+        imports[token] = entry
+        refresh()
     }
 
     func end(_ token: UUID) {
-        cancelActions[token] = nil
-        guard cancelActions.isEmpty else { return }
-        message = nil
-        fraction = nil
+        imports[token] = nil
+        if shownImport == token { shownImport = imports.keys.first }
+        refresh()
     }
 
     /// Cancels every running import.
     func cancel() {
-        for action in cancelActions.values { action() }
+        for entry in imports.values { entry.cancel() }
+    }
+
+    /// The bar shows the combined progress of all running imports, weighted by size.
+    private func refresh() {
+        guard !imports.isEmpty else {
+            message = nil
+            fraction = nil
+            return
+        }
+        let total = imports.values.reduce(0) { $0 + $1.weight }
+        fraction = imports.values.reduce(0) { $0 + $1.fraction * $1.weight } / total
+        message = shownImport.flatMap { imports[$0]?.message }
     }
 
     /// Shown for a few seconds; a message arriving meanwhile is added below the current one.

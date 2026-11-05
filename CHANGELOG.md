@@ -127,6 +127,12 @@
 - The camera card import dialog shows the real output extension for Stream Copy.
 - XAVC Long, XDCAM HD/HD422, D-10, DVCPRO HD, ProRes, DNxHD/DNxHR and JPEG 2000 MXF files report the right video codec in the metadata window and to camera card grouping. XAVC Long and XDCAM HD clips used to show no codec, so card recordings split across several files couldn't be checked for compatibility, and D-10 and DVCPRO HD video was reported as PCM.
 
+### Analysis
+
+- New Bitrate tab in Media Analysis: the source and the encoded file on one chart, with keyframes, an adjustable averaging window, and the average, peak, lowest, keyframe interval and size of each file. Packet sizes are read from the file without decoding it.
+- Video quality results show the encoded bitrate under the quality chart, and at each of the lowest-scoring points, so you can see whether a quality drop follows a bitrate drop.
+- Export Report… replaces the separate PDF buttons and writes one PDF with the quality metrics, bitrate and loudness reports you choose. A file whose bitrate can't be read, such as an audio-only encode of a video, is left out instead of stopping the export, and Cancel stops a report that is still reading large files. PDFs exported automatically after a conversion include the encoded bitrate.
+
 ### Uploads
 
 - Uploads can send sidecar files beside the main file, with one switch per format in Upload settings: Sony `M01.XML` camera metadata, subtitles (.srt) and the clip-marker EDL from merges. All are off by default.

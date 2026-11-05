@@ -40,20 +40,39 @@ RESULTS="${WORK_DIR}/Results"
 step() { printf '\n==> %s\n' "$1"; }
 
 # Runs from other worktrees share DerivedData and Results, so only one runs at a time.
+# The lock is a symlink to the owner's pid, so taking it and recording the owner is one
+# atomic step; a directory with a pid file could be seen before the pid was written.
 LOCK="${WORK_DIR}/lock"
 mkdir -p "$WORK_DIR"
-if ! mkdir "$LOCK" 2>/dev/null; then
-    other="$(cat "$LOCK/pid" 2>/dev/null || true)"
-    if [[ -n "$other" ]] && kill -0 "$other" 2>/dev/null; then
+lock_owner() {
+    if [[ -L "$LOCK" ]]; then readlink "$LOCK"
+    elif [[ -d "$LOCK" ]]; then cat "$LOCK/pid" 2>/dev/null  # Written by older versions of this script.
+    fi
+}
+for _ in 1 2 3; do
+    # ln into an existing directory (an older version's lock) would succeed, so only try
+    # it when nothing is there.
+    if [[ ! -e "$LOCK" && ! -L "$LOCK" ]] && ln -s "$$" "$LOCK" 2>/dev/null; then break; fi
+    other="$(lock_owner || true)"
+    if [[ -z "$other" && -d "$LOCK" && ! -L "$LOCK" ]]; then
+        # An older version may be between taking the lock and writing its pid.
+        sleep 1
+        other="$(lock_owner || true)"
+    fi
+    # A pid reused by another program doesn't hold the lock.
+    if [[ -n "$other" ]] && ps -p "$other" -o command= 2>/dev/null | grep -q 'ci-local\.sh'; then
         echo "Another ci-local.sh run (pid $other) is using $WORK_DIR. Wait for it to finish." >&2
         exit 1
     fi
-    # Left behind by a run that was killed.
+    # Left behind by a run that was killed. Another run may be recovering it too; the
+    # loser's ln fails and it tries again.
     rm -rf "$LOCK"
-    mkdir "$LOCK"
+done
+if [[ "$(readlink "$LOCK" 2>/dev/null)" != "$$" ]]; then
+    echo "Couldn't take the lock $LOCK. Try again." >&2
+    exit 1
 fi
-echo $$ > "$LOCK/pid"
-trap 'rm -rf "$LOCK"' EXIT
+trap '[[ "$(readlink "$LOCK" 2>/dev/null)" == "$$" ]] && rm -f "$LOCK"' EXIT
 
 if $clean; then rm -rf "$DERIVED_DATA"; fi
 rm -rf "$RESULTS"
