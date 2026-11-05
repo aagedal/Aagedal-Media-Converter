@@ -517,17 +517,41 @@ enum AnalyticsExporter {
         settings: AnalyticsAutoExportSettingsSnapshot
     ) {
         guard settings.enabled else { return }
+        func export(bitrate: BitrateTimeline?) {
+            do {
+                let exportURL = try autoExport(results: results, encodedFileURL: encodedFileURL, format: settings.format, bitrate: bitrate)
+                logger.info("Auto-exported analytics to \(exportURL.lastPathComponent, privacy: .public)")
+            } catch {
+                logger.error("Auto-export failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        switch settings.format {
+        case .json:
+            export(bitrate: nil)
+        case .pdf:
+            // The PDF includes the encoded bitrate, which needs a packet scan first.
+            Task { @MainActor in
+                export(bitrate: await encodedBitrate(for: encodedFileURL, results: results))
+            }
+        }
+    }
+
+    /// The encoded file's video bitrate for the PDF report, or nil when it cannot be read or
+    /// the file no longer matches the report. The report is still exported without it.
+    static func encodedBitrate(for encodedFileURL: URL?, results: AnalyticsResults) async -> BitrateTimeline? {
+        guard let encodedFileURL, encodedFileURL.lastPathComponent == results.encodedFileName else { return nil }
         do {
-            let exportURL = try autoExport(results: results, encodedFileURL: encodedFileURL, format: settings.format)
-            logger.info("Auto-exported analytics to \(exportURL.lastPathComponent, privacy: .public)")
+            return try await BitrateAnalysisService.shared.analyze(file: encodedFileURL, stream: .video)
         } catch {
-            logger.error("Auto-export failed: \(error.localizedDescription, privacy: .public)")
+            logger.error("Bitrate for the analytics report failed: \(error.localizedDescription, privacy: .public)")
+            return nil
         }
     }
 
     /// Exclusive creation also protects against another app process exporting concurrently.
     @MainActor
-    static func autoExport(results: AnalyticsResults, encodedFileURL: URL, format: AnalyticsExportFormat) throws -> URL {
+    static func autoExport(results: AnalyticsResults, encodedFileURL: URL, format: AnalyticsExportFormat,
+                           bitrate: BitrateTimeline? = nil) throws -> URL {
         let data: Data
         switch format {
         case .json:
@@ -536,7 +560,7 @@ enum AnalyticsExporter {
             }
             data = json
         case .pdf:
-            data = try pdfData(results: results)
+            data = try pdfData(results: results, bitrate: bitrate)
         }
         let baseName = encodedFileURL.deletingPathExtension().lastPathComponent + "_analytics"
         let folder = encodedFileURL.deletingLastPathComponent()
@@ -563,13 +587,14 @@ enum AnalyticsExporter {
 
     /// Exports results to a PDF report
     @MainActor
-    static func exportPDF(results: AnalyticsResults, to url: URL) throws {
-        try pdfData(results: results).write(to: url, options: .atomic)
+    static func exportPDF(results: AnalyticsResults, bitrate: BitrateTimeline? = nil, to url: URL) throws {
+        try pdfData(results: results, bitrate: bitrate).write(to: url, options: .atomic)
     }
 
     @MainActor
-    private static func pdfData(results: AnalyticsResults) throws -> Data {
-        try QualityPDFRenderer(results: results).render()
+    private static func pdfData(results: AnalyticsResults, bitrate: BitrateTimeline?) throws -> Data {
+        guard !results.metrics.isEmpty else { throw AnalyticsError.parsingFailed("No quality reports to export") }
+        return try AnalysisPDFRenderer(content: AnalysisReportContent(quality: results, qualityBitrate: bitrate)).render()
     }
 
     /// Render the same summary and timelines as the analysis sheet on an A4 page.
@@ -584,35 +609,35 @@ enum AnalyticsExporter {
         guard !results.isEmpty else {
             throw AnalyticsError.parsingFailed("No loudness reports to export")
         }
-        let data = NSMutableData()
-        var mediaBox = CGRect(x: 0, y: 0, width: 595, height: 842)
-        guard let consumer = CGDataConsumer(data: data as CFMutableData),
-              let context = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else {
-            throw AnalyticsError.parsingFailed("Could not create the loudness PDF report")
-        }
-        for result in results {
-            let report = LoudnessPDFReportView(results: result, fileName: fileName, timestamp: timestamp)
-                .frame(width: 595, height: 842)
-                .background(Color.white)
-                .environment(\.colorScheme, .light)
-            let renderer = ImageRenderer(content: report)
-            renderer.proposedSize = ProposedViewSize(width: 595, height: 842)
-            var succeeded = false
-            renderer.render { _, render in
-                context.beginPDFPage(nil)
-                render(context)
-                context.endPDFPage()
-                succeeded = true
-            }
-            guard succeeded else {
-                context.closePDF()
-                throw AnalyticsError.parsingFailed("Could not render the loudness PDF report")
-            }
-        }
-        context.closePDF()
-        try (data as Data).write(to: url, options: .atomic)
+        try exportReport(AnalysisReportContent(loudness: results, loudnessFileName: fileName, loudnessTimestamp: timestamp), to: url)
     }
 
+    /// One PDF holding every section chosen in the analysis sheet's report export.
+    @MainActor
+    static func exportReport(_ content: AnalysisReportContent, to url: URL) throws {
+        try AnalysisPDFRenderer(content: content).render().write(to: url, options: .atomic)
+    }
+
+}
+
+/// The sections chosen for one combined PDF report. Each section starts on a new A4 page.
+struct AnalysisReportContent {
+    struct BitrateFile {
+        let label: String
+        let fileName: String
+        let timeline: BitrateTimeline
+        let isEncoded: Bool
+    }
+
+    var quality: AnalyticsResults? = nil
+    /// The encoded file's bitrate, drawn under each quality chart on the same time axis.
+    var qualityBitrate: BitrateTimeline? = nil
+    var bitrateFiles: [BitrateFile] = []
+    var loudness: [LoudnessResults] = []
+    var loudnessFileName = ""
+    var loudnessTimestamp = Date()
+
+    var isEmpty: Bool { (quality?.metrics.isEmpty ?? true) && bitrateFiles.isEmpty && loudness.isEmpty }
 }
 
 private struct LoudnessPDFReportView: View {
@@ -649,14 +674,14 @@ private struct LoudnessPDFReportView: View {
     }
 }
 
-// MARK: - Paginated video quality report
+// MARK: - Paginated analysis report
 
 /// Text is laid out using Core Text's visible ranges, so long filenames, method
 /// descriptions and warnings continue on A4 pages instead of shrinking or clipping.
 /// Charts are vector paths; full-resolution samples remain in the JSON report.
 @MainActor
-private final class QualityPDFRenderer {
-    private let results: AnalyticsResults
+private final class AnalysisPDFRenderer {
+    private let content: AnalysisReportContent
     private let width: CGFloat = 595
     private let height: CGFloat = 842
     private let margin: CGFloat = 38
@@ -664,82 +689,162 @@ private final class QualityPDFRenderer {
     private var context: CGContext!
     private var cursor: CGFloat = 66
     private var page = 0
+    private var pageOpen = false
+    private var pageTitle = ""
 
-    init(results: AnalyticsResults) { self.results = results }
+    init(content: AnalysisReportContent) { self.content = content }
 
     func render() throws -> Data {
-        guard !results.metrics.isEmpty else { throw AnalyticsError.parsingFailed("No quality reports to export") }
+        guard !content.isEmpty else { throw AnalyticsError.parsingFailed("Choose at least one analysis to export") }
         let data = NSMutableData()
         var box = CGRect(x: 0, y: 0, width: width, height: height)
         guard let consumer = CGDataConsumer(data: data as CFMutableData),
               let pdf = CGContext(consumer: consumer, mediaBox: &box, nil) else {
-            throw AnalyticsError.parsingFailed("Could not create the quality PDF report")
+            throw AnalyticsError.parsingFailed("Could not create the PDF report")
         }
         context = pdf
         var closed = false
         defer { if !closed { context.closePDF() } }
-        for metric in results.metrics {
-            newPage()
-            try text(metric.metric.displayName, size: 24, bold: true, spacing: 12)
-            try text(String(localized: "Source File:") + " " + results.sourceFileName)
-            try text(String(localized: "Encoded File:") + " " + results.encodedFileName)
-            try text(String(localized: "Date:") + " " + results.timestamp.formatted(date: .abbreviated, time: .shortened), color: .secondaryLabelColor, spacing: 14)
-            try text(String(localized: "Overall Score") + ": " + metric.formattedScore + "   ·   " + Bundle.main.localizedString(forKey: metric.qualityRating, value: nil, table: nil),
-                     size: 16, bold: true, spacing: 10)
-            if let channels = metric.channelScores, !channels.isEmpty {
-                try text(channels.sorted { $0.key < $1.key }.map { "\($0.key): \(score($0.value)) \(metric.unit)" }.joined(separator: "    "))
-            }
-            if metric.scoreAggregation == "minimum_channel_average", let channels = metric.channelScores {
-                try text("XPSNR = min(" + channels.keys.sorted().joined(separator: ", ") + ")", color: .secondaryLabelColor)
-            }
-            if let minimum = metric.min { try text(String(localized: "Min") + ": " + score(minimum) + " " + metric.unit) }
-            if let maximum = metric.max { try text(String(localized: "Max") + ": " + score(maximum) + " " + metric.unit) }
-            if let comparison = metric.comparison {
-                try text(comparison.summary, size: 10, color: .secondaryLabelColor, spacing: 8)
-                for warning in comparison.warnings { try text(warning, size: 10, color: .systemBrown, spacing: 6) }
-            }
-            let timeline = QualityTimeline(result: metric, fallbackDuration: results.durationSeconds)
-            if timeline.samples.isEmpty {
-                try text(String(localized: "No timeline data"), size: 14, bold: true, spacing: 8)
-                try text(String(localized: "Run this metric again to collect timestamped quality scores."))
-            } else {
-                ensureSpace(220)
-                try text(String(localized: "Quality timeline"), size: 14, bold: true, spacing: 8)
-                chart(timeline)
-                try text("P05: " + (timeline.fifthPercentile.map(score) ?? "—") + "    n = \(timeline.samples.count)", size: 10)
-                try text(String(localized: "Encoded time (seconds)"), size: 10, color: .secondaryLabelColor, spacing: 10)
-                try text(metric.metric == .ssimulacra2
-                    ? String(localized: "Sampled frames only. Quality between these points was not measured.")
-                    : String(localized: "Per-frame measurements. The graph preserves brief lows and highs when reducing detail."), size: 10, color: .secondaryLabelColor)
-                if timeline.graphSamples.contains(where: { $0.score == .infinity }) {
-                    try text(String(localized: "∞ (perfect match) is drawn at the chart ceiling."), size: 10, color: .secondaryLabelColor)
-                }
-                ensureSpace(46)
-                try text(String(localized: "Lowest measured sections"), size: 14, bold: true, spacing: 8)
-                if timeline.worstSamples.isEmpty {
-                    try text(String(localized: "All measured frames have infinite (perfect-match) scores."), size: 10)
-                } else {
-                    for sample in timeline.worstSamples {
-                        try text(String(format: "%.3f s    ", sample.seconds) + score(sample.score) + " " + metric.unit, size: 11, spacing: 5)
-                    }
-                }
-            }
+        if let results = content.quality {
+            pageTitle = String(localized: "Quality Analytics Report")
+            for metric in results.metrics { try qualityPage(metric, results: results) }
         }
-        context.endPDFPage()
+        if !content.bitrateFiles.isEmpty {
+            pageTitle = String(localized: "Bitrate over time")
+            try bitratePage()
+        }
+        try loudnessPages()
+        if pageOpen { context.endPDFPage() }
         // Flush the PDF trailer before copying NSMutableData into a value.
         context.closePDF()
         closed = true
         return data as Data
     }
 
+    private func qualityPage(_ metric: MetricResult, results: AnalyticsResults) throws {
+        newPage()
+        try text(metric.metric.displayName, size: 24, bold: true, spacing: 12)
+        try text(String(localized: "Source File:") + " " + results.sourceFileName)
+        try text(String(localized: "Encoded File:") + " " + results.encodedFileName)
+        try text(String(localized: "Date:") + " " + results.timestamp.formatted(date: .abbreviated, time: .shortened), color: .secondaryLabelColor, spacing: 14)
+        try text(String(localized: "Overall Score") + ": " + metric.formattedScore + "   ·   " + Bundle.main.localizedString(forKey: metric.qualityRating, value: nil, table: nil),
+                 size: 16, bold: true, spacing: 10)
+        if let channels = metric.channelScores, !channels.isEmpty {
+            try text(channels.sorted { $0.key < $1.key }.map { "\($0.key): \(score($0.value)) \(metric.unit)" }.joined(separator: "    "))
+        }
+        if metric.scoreAggregation == "minimum_channel_average", let channels = metric.channelScores {
+            try text("XPSNR = min(" + channels.keys.sorted().joined(separator: ", ") + ")", color: .secondaryLabelColor)
+        }
+        if let minimum = metric.min { try text(String(localized: "Min") + ": " + score(minimum) + " " + metric.unit) }
+        if let maximum = metric.max { try text(String(localized: "Max") + ": " + score(maximum) + " " + metric.unit) }
+        if let comparison = metric.comparison {
+            try text(comparison.summary, size: 10, color: .secondaryLabelColor, spacing: 8)
+            for warning in comparison.warnings { try text(warning, size: 10, color: .systemBrown, spacing: 6) }
+        }
+        let timeline = QualityTimeline(result: metric, fallbackDuration: results.durationSeconds)
+        if timeline.samples.isEmpty {
+            try text(String(localized: "No timeline data"), size: 14, bold: true, spacing: 8)
+            try text(String(localized: "Run this metric again to collect timestamped quality scores."))
+            if let bitrate = content.qualityBitrate { try bitrateSection(bitrate, duration: bitrate.duration) }
+        } else {
+            ensureSpace(220)
+            try text(String(localized: "Quality timeline"), size: 14, bold: true, spacing: 8)
+            chart(timeline)
+            try text("P05: " + (timeline.fifthPercentile.map(score) ?? "—") + "    n = \(timeline.samples.count)", size: 10)
+            try text(String(localized: "Encoded time (seconds)"), size: 10, color: .secondaryLabelColor, spacing: 10)
+            try text(metric.metric == .ssimulacra2
+                ? String(localized: "Sampled frames only. Quality between these points was not measured.")
+                : String(localized: "Per-frame measurements. The graph preserves brief lows and highs when reducing detail."), size: 10, color: .secondaryLabelColor)
+            if timeline.graphSamples.contains(where: { $0.score == .infinity }) {
+                try text(String(localized: "∞ (perfect match) is drawn at the chart ceiling."), size: 10, color: .secondaryLabelColor)
+            }
+            if let bitrate = content.qualityBitrate { try bitrateSection(bitrate, duration: timeline.duration) }
+            ensureSpace(46)
+            try text(String(localized: "Lowest measured sections"), size: 14, bold: true, spacing: 8)
+            if timeline.worstSamples.isEmpty {
+                try text(String(localized: "All measured frames have infinite (perfect-match) scores."), size: 10)
+            } else {
+                for sample in timeline.worstSamples {
+                    var row = String(format: "%.3f s    ", sample.seconds) + score(sample.score) + " " + metric.unit
+                    if let bitrate = content.qualityBitrate { row += "    " + BitrateFormatting.string(bitrate.bitsPerSecond(around: sample.seconds)) }
+                    try text(row, size: 11, spacing: 5)
+                }
+            }
+        }
+    }
+
+    private func bitratePage() throws {
+        let files = content.bitrateFiles
+        newPage()
+        try text(String(localized: "Bitrate over time"), size: 24, bold: true, spacing: 12)
+        for file in files { try text(file.label + ": " + file.fileName) }
+        try text(String(localized: "Date:") + " " + Date().formatted(date: .abbreviated, time: .shortened), color: .secondaryLabelColor, spacing: 14)
+        let duration = files.map(\.timeline.duration).max() ?? 0
+        let windowSize = BitrateTimeline.automaticWindow(duration: duration, maxWindows: 500)
+        ensureSpace(190)
+        bitrateChart(files.map { file in
+            BitrateChartSeries(name: file.label, color: file.isEncoded ? .systemOrange : .systemBlue,
+                               windows: file.timeline.windows(size: windowSize).filter { $0.start < duration },
+                               average: file.timeline.averageBitsPerSecond)
+        }, windowSize: windowSize, duration: duration)
+        try text(String(localized: "Seconds"), size: 10, color: .secondaryLabelColor, spacing: 12)
+        for file in files {
+            let windows = file.timeline.windows(size: windowSize).map(\.bitsPerSecond)
+            var details = [
+                String(localized: "Average") + ": " + BitrateFormatting.string(file.timeline.averageBitsPerSecond),
+                String(localized: "Peak") + ": " + BitrateFormatting.string(windows.max()),
+                String(localized: "Lowest") + ": " + BitrateFormatting.string(windows.min()),
+            ]
+            if file.timeline.stream == .video {
+                details.append(String(localized: "Keyframe interval") + ": " + file.timeline.keyframeIntervalDescription)
+            }
+            details.append(String(localized: "Size") + ": " + Int64(file.timeline.totalBytes).formatted(.byteCount(style: .file)))
+            try text(file.label, size: 12, bold: true, spacing: 3)
+            try text(details.joined(separator: "    "), size: 10, spacing: 10)
+        }
+        try text(String(localized: "Packet sizes are read from the container without decoding. Each point is the average bitrate over one window.")
+                 + " " + String(localized: "Window") + ": " + windowSize.formatted(.number.precision(.fractionLength(0...1))) + " s",
+                 size: 10, color: .secondaryLabelColor)
+        if files.count > 1 {
+            try text(String(localized: "Each file is plotted from its own first frame, so a trimmed output starts at its trim-in point."),
+                     size: 10, color: .secondaryLabelColor)
+        }
+    }
+
+    /// Loudness pages are the SwiftUI report view, so they match the analysis sheet.
+    private func loudnessPages() throws {
+        for result in content.loudness {
+            if pageOpen {
+                context.endPDFPage()
+                pageOpen = false
+            }
+            let report = LoudnessPDFReportView(results: result, fileName: content.loudnessFileName, timestamp: content.loudnessTimestamp)
+                .frame(width: width, height: height)
+                .background(Color.white)
+                .environment(\.colorScheme, .light)
+            let renderer = ImageRenderer(content: report)
+            renderer.proposedSize = ProposedViewSize(width: width, height: height)
+            var succeeded = false
+            renderer.render { _, render in
+                self.context.beginPDFPage(nil)
+                render(self.context)
+                self.context.endPDFPage()
+                succeeded = true
+            }
+            guard succeeded else { throw AnalyticsError.parsingFailed("Could not render the loudness PDF report") }
+            page += 1
+        }
+    }
+
     private func newPage() {
-        if page > 0 { context.endPDFPage() }
+        if pageOpen { context.endPDFPage() }
         context.beginPDFPage(nil)
+        pageOpen = true
         page += 1
         cursor = 66
         context.setFillColor(NSColor.white.cgColor)
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-        line(String(localized: "Quality Analytics Report"), at: CGPoint(x: margin, y: height - 39), size: 11, bold: true)
+        line(pageTitle, at: CGPoint(x: margin, y: height - 39), size: 11, bold: true)
         line(String(localized: "Generated by Aagedal Media Converter"), at: CGPoint(x: margin, y: 26), size: 8)
         line(String(page), at: CGPoint(x: width - margin - 20, y: 26), size: 8)
     }
@@ -786,6 +891,85 @@ private final class QualityPDFRenderer {
 
     private func score(_ value: Double) -> String {
         value == .infinity ? "∞" : String(format: "%.2f", value)
+    }
+
+    /// Drawn on the quality chart's time axis so drops in score and bitrate line up.
+    private func bitrateSection(_ bitrate: BitrateTimeline, duration: Double) throws {
+        let windowSize = BitrateTimeline.automaticWindow(duration: duration, maxWindows: 500)
+        let windows = bitrate.windows(size: windowSize).filter { $0.start < duration }
+        guard !windows.isEmpty else { return }
+        ensureSpace(220)
+        try text(String(localized: "Encoded bitrate"), size: 14, bold: true, spacing: 8)
+        bitrateChart([BitrateChartSeries(name: String(localized: "Encoded"), color: .systemOrange,
+                                         windows: windows, average: bitrate.averageBitsPerSecond)],
+                     windowSize: windowSize, duration: duration)
+        try text(String(localized: "Average") + ": " + BitrateFormatting.string(bitrate.averageBitsPerSecond)
+                 + "    " + String(localized: "Peak") + ": " + BitrateFormatting.string(windows.map(\.bitsPerSecond).max()), size: 10)
+        try text(String(format: String(localized: "Encoded time (seconds). Averaged over %@ windows from packet sizes."),
+                        windowSize.formatted(.number.precision(.fractionLength(0...1))) + " s"),
+                 size: 10, color: .secondaryLabelColor, spacing: 10)
+    }
+
+    private struct BitrateChartSeries {
+        let name: String
+        let color: NSColor
+        let windows: [BitrateWindow]
+        let average: Double
+    }
+
+    /// Uses the quality chart's plot rectangle, so stacked charts share one time axis.
+    private func bitrateChart(_ series: [BitrateChartSeries], windowSize: Double, duration: Double) {
+        let peak = series.flatMap { $0.windows.map(\.bitsPerSecond) }.max() ?? 0
+        let megabits = BitrateFormatting.usesMegabits(peak: peak)
+        let scale = megabits ? 1_000_000.0 : 1_000.0
+        let high = max(peak / scale * 1.08, 0.001)
+        let plot = CGRect(x: margin + 38, y: height - cursor - 138, width: width - 2 * margin - 46, height: 124)
+        context.saveGState()
+        for tick in 0...4 {
+            let fraction = Double(tick) / 4
+            let y = plot.minY + plot.height * fraction
+            context.setStrokeColor(NSColor(calibratedWhite: 0.88, alpha: 1).cgColor)
+            context.setLineWidth(0.5)
+            context.move(to: CGPoint(x: plot.minX, y: y))
+            context.addLine(to: CGPoint(x: plot.maxX, y: y))
+            context.strokePath()
+            line(String(format: high * fraction < 10 && tick > 0 ? "%.1f" : "%.0f", high * fraction), at: CGPoint(x: margin, y: y - 3), size: 8)
+            line(String(format: "%.2f", duration * fraction), at: CGPoint(x: plot.minX + plot.width * fraction - 7, y: plot.minY - 16), size: 8)
+        }
+        line(megabits ? "Mbit/s" : "kbit/s", at: CGPoint(x: margin, y: plot.maxY + 5), size: 8)
+        func x(_ seconds: Double) -> CGFloat { plot.minX + plot.width * min(1, max(0, seconds / duration)) }
+        func y(_ bitsPerSecond: Double) -> CGFloat { plot.minY + plot.height * min(1, max(0, bitsPerSecond / scale / high)) }
+        var legendX = plot.minX + 60
+        for entry in series {
+            // Steps show each window's average across its whole interval.
+            context.setStrokeColor(entry.color.cgColor)
+            context.setLineWidth(1.1)
+            context.setLineDash(phase: 0, lengths: [])
+            for (index, window) in entry.windows.enumerated() {
+                let start = CGPoint(x: x(window.start), y: y(window.bitsPerSecond))
+                if index == 0 { context.move(to: start) } else { context.addLine(to: start) }
+                context.addLine(to: CGPoint(x: x(window.start + windowSize), y: start.y))
+            }
+            context.strokePath()
+            context.setStrokeColor(entry.color.withAlphaComponent(0.7).cgColor)
+            context.setLineDash(phase: 0, lengths: [3, 3])
+            context.move(to: CGPoint(x: plot.minX, y: y(entry.average)))
+            context.addLine(to: CGPoint(x: plot.maxX, y: y(entry.average)))
+            context.strokePath()
+            if series.count > 1 {
+                context.setStrokeColor(entry.color.cgColor)
+                context.setLineDash(phase: 0, lengths: [])
+                context.setLineWidth(2)
+                context.move(to: CGPoint(x: legendX, y: plot.maxY + 8))
+                context.addLine(to: CGPoint(x: legendX + 14, y: plot.maxY + 8))
+                context.strokePath()
+                line(entry.name, at: CGPoint(x: legendX + 18, y: plot.maxY + 5), size: 8)
+                let label = NSAttributedString(string: entry.name, attributes: attributes(size: 8, bold: false, color: .labelColor))
+                legendX += 30 + CGFloat(CTLineGetTypographicBounds(CTLineCreateWithAttributedString(label as CFAttributedString), nil, nil, nil))
+            }
+        }
+        context.restoreGState()
+        cursor += 165
     }
 
     private func chart(_ timeline: QualityTimeline) {

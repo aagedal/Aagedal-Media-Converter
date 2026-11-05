@@ -13,6 +13,8 @@ struct MediaAnalysisView: View {
     var onCancelVideo: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: String
+    @State private var loudnessReports: LoudnessReportSnapshot?
+    @State private var showingReportExport = false
 
     init(item: Binding<VideoItem>, onRunVideo: @escaping ([QualityMetric]?) -> Void,
          onCancelVideo: @escaping () -> Void) {
@@ -30,18 +32,23 @@ struct MediaAnalysisView: View {
                     Text(item.name).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer()
+                Button("Export Report…") { showingReportExport = true }
+                    .disabled(item.analyticsStatus.isInProgress)
+                    .accessibilityIdentifier("analysis.exportReport")
                 Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
             }
             Picker("Analysis", selection: $selectedTab) {
                 Text("Audio").tag("audio")
                 Text("Video").tag("video")
+                Text("Bitrate").tag("bitrate")
             }
             .pickerStyle(.segmented)
             .accessibilityIdentifier("analysis.tabs")
             // Keep both tabs alive so switching tabs preserves reports and runs.
             ZStack {
                 LoudnessAnalysisView(sourceFile: item.url,
-                                     outputFile: item.outputFileExists ? item.outputURL : nil)
+                                     outputFile: item.outputFileExists ? item.outputURL : nil,
+                                     onReportsChanged: { loudnessReports = $0 })
                     .opacity(selectedTab == "audio" ? 1 : 0)
                     .allowsHitTesting(selectedTab == "audio")
                     .disabled(selectedTab != "audio")
@@ -51,10 +58,25 @@ struct MediaAnalysisView: View {
                     .allowsHitTesting(selectedTab == "video")
                     .disabled(selectedTab != "video")
                     .accessibilityHidden(selectedTab != "video")
+                BitrateAnalysisView(sourceFile: item.url,
+                                    outputFile: item.outputFileExists ? item.outputURL : nil,
+                                    hasVideo: item.hasVideoStream,
+                                    isActive: selectedTab == "bitrate")
+                    .opacity(selectedTab == "bitrate" ? 1 : 0)
+                    .allowsHitTesting(selectedTab == "bitrate")
+                    .disabled(selectedTab != "bitrate")
+                    .accessibilityHidden(selectedTab != "bitrate")
             }
         }
         .padding(20)
         .frame(width: 920, height: 780)
+        .sheet(isPresented: $showingReportExport) {
+            AnalysisReportExportView(sourceFile: item.url,
+                                     outputFile: item.outputFileExists ? item.outputURL : nil,
+                                     hasVideo: item.hasVideoStream,
+                                     quality: item.analyticsResults,
+                                     loudness: loudnessReports)
+        }
         .task(id: item.outputURL) { refreshOutputCache() }
         .onChange(of: item.status) {
             if item.status == .done { refreshOutputCache() }
@@ -177,6 +199,7 @@ struct AudioAnalysisConfiguration: Identifiable {
 struct LoudnessAnalysisView: View {
     let sourceFile: URL
     let outputFile: URL?
+    var onReportsChanged: (LoudnessReportSnapshot?) -> Void = { _ in }
     @State private var selectedFileID = "source"
     @State private var tracks: [AudioTrackInfo] = []
     @State private var configurations: [AudioAnalysisConfiguration] = []
@@ -255,12 +278,9 @@ struct LoudnessAnalysisView: View {
                             }
                         }
                         .accessibilityIdentifier("analysis.audio.report")
-                        Button("Export JSON") { exportLoudness(format: .json) }
+                        Button("Export JSON") { exportLoudnessJSON() }
                             .disabled(isAnalyzing)
                             .accessibilityIdentifier("analysis.audio.exportJSON")
-                        Button("Export PDF") { exportLoudness(format: .pdf) }
-                            .disabled(isAnalyzing)
-                            .accessibilityIdentifier("analysis.audio.exportPDF")
                     }
                     if results.count > 1 {
                         Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 6) {
@@ -319,6 +339,8 @@ struct LoudnessAnalysisView: View {
             analysisTimestamp = nil
             errorMessage = nil
         }
+        .onChange(of: results) { publishReports() }
+        .onChange(of: isAnalyzing) { publishReports() }
         .onDisappear {
             analysisID = nil
             analysisTask?.cancel()
@@ -472,24 +494,30 @@ struct LoudnessAnalysisView: View {
         configurations.append(configuration)
     }
 
-    private func exportLoudness(format: AnalyticsExportFormat) {
+    private func exportLoudnessJSON() {
         guard let timestamp = analysisTimestamp, !results.isEmpty else { return }
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [format == .json ? .json : .pdf]
-        panel.nameFieldStringValue = "\(file.deletingPathExtension().lastPathComponent)_loudness.\(format.fileExtension)"
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "\(file.deletingPathExtension().lastPathComponent)_loudness.json"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let access = SecurityScopedBookmarkManager.shared.startAccessing(url: url)
         defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
         do {
-            switch format {
-            case .json:
-                try AnalyticsExporter.exportLoudnessJSON(results: results, sourceFile: file, timestamp: timestamp, to: url)
-            case .pdf:
-                try AnalyticsExporter.exportLoudnessPDF(results: results, fileName: file.lastPathComponent, timestamp: timestamp, to: url)
-            }
+            try AnalyticsExporter.exportLoudnessJSON(results: results, sourceFile: file, timestamp: timestamp, to: url)
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Completed reports are offered in the sheet-wide PDF export; in-progress runs are not.
+    private func publishReports() {
+        guard !isAnalyzing, let analysisTimestamp, !results.isEmpty else {
+            onReportsChanged(nil)
+            return
+        }
+        onReportsChanged(LoudnessReportSnapshot(
+            results: results, file: file, timestamp: analysisTimestamp,
+            labels: Dictionary(uniqueKeysWithValues: results.map { ($0.presentation.id, label(for: $0.presentation)) })))
     }
 
     private func label(for presentation: LoudnessPresentation) -> String {
@@ -784,14 +812,9 @@ struct AnalyticsResultsView: View {
     private var footerSection: some View {
         HStack {
             Button("Export JSON") {
-                exportResults(format: .json)
+                exportJSON()
             }
             .accessibilityIdentifier("analysis.video.exportJSON")
-
-            Button("Export PDF") {
-                exportResults(format: .pdf)
-            }
-            .accessibilityIdentifier("analysis.video.exportPDF")
 
             Spacer()
 
@@ -804,24 +827,18 @@ struct AnalyticsResultsView: View {
 
     // MARK: - Export
 
-    private func exportResults(format: AnalyticsExportFormat) {
+    /// PDF reports are exported for the whole analysis sheet; see `AnalysisReportExportView`.
+    private func exportJSON() {
         let panel = NSSavePanel()
-        panel.allowedContentTypes = format == .json
-            ? [.json]
-            : [.pdf]
-        panel.nameFieldStringValue = "\(results.encodedFileName)_analytics.\(format.fileExtension)"
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "\(results.encodedFileName)_analytics.json"
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         let access = SecurityScopedBookmarkManager.shared.startAccessing(url: url)
         defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
         do {
-            switch format {
-            case .json:
-                try AnalyticsExporter.exportJSON(results: results, to: url)
-            case .pdf:
-                try AnalyticsExporter.exportPDF(results: results, to: url)
-            }
+            try AnalyticsExporter.exportJSON(results: results, to: url)
         } catch {
             let alert = NSAlert()
             alert.messageText = "Export Failed"
@@ -968,6 +985,8 @@ private struct QualityInspectionView: View {
     @State private var preparing = true
     @State private var previewError: String?
     @State private var assets: [URL: AnalyticsPreviewAsset] = [:]
+    @State private var encodedBitrate: BitrateTimeline?
+    @State private var bitrateError: String?
 
     init(request: QualityInspectionRequest) {
         self.request = request
@@ -1061,6 +1080,7 @@ private struct QualityInspectionView: View {
                         } else {
                             QualityTimelineChart(timeline: timeline, position: position, onSeek: { seconds in seek(seconds) })
                                 .frame(height: 235)
+                            bitrateSection
                             HStack {
                                 Text(String(format: String(localized: "5th percentile: %@"), score(timeline.fifthPercentile)))
                                     .fixedSize(horizontal: false, vertical: true)
@@ -1075,6 +1095,11 @@ private struct QualityInspectionView: View {
                                     .fixedSize(horizontal: false, vertical: true)
                                     .accessibilityIdentifier("analysis.inspection.nearest")
                             }
+                            if let encodedBitrate {
+                                Text(String(format: String(localized: "Encoded bitrate here: %@ (1 s average)"), BitrateFormatting.string(encodedBitrate.bitsPerSecond(around: position))))
+                                    .font(.caption).monospacedDigit()
+                                    .accessibilityIdentifier("analysis.inspection.bitrate")
+                            }
                             Text(selectedMetric == .ssimulacra2
                                  ? String(localized: "Sampled frames only. Quality between these points was not measured.")
                                  : String(localized: "Per-frame measurements. The graph preserves brief lows and highs when reducing detail."))
@@ -1085,6 +1110,10 @@ private struct QualityInspectionView: View {
                                     HStack {
                                         Label(sample.seconds.formatted(.number.precision(.fractionLength(3))) + " s", systemImage: "play.circle")
                                         Spacer()
+                                        if let encodedBitrate {
+                                            Text(BitrateFormatting.string(encodedBitrate.bitsPerSecond(around: sample.seconds)))
+                                                .monospacedDigit().foregroundStyle(.secondary)
+                                        }
                                         Text(score(sample.score)).monospacedDigit()
                                     }
                                 }
@@ -1104,8 +1133,9 @@ private struct QualityInspectionView: View {
             }
         }
         .padding(20)
-        .frame(width: 860, height: 620)
+        .frame(width: 860, height: 680)
         .task(id: loadID) { await loadPreview() }
+        .task(id: request.encoded) { await loadBitrate() }
         .onChange(of: player.timePos) { _, time in
             guard player.isFileLoaded, !preparing, time.isFinite else { return }
             let relative = max(0, time - playbackSourceStart)
@@ -1139,6 +1169,35 @@ private struct QualityInspectionView: View {
             guard !Task.isCancelled else { return }
             previewError = error.localizedDescription
             preparing = false
+        }
+    }
+
+    /// Encoded bitrate on the quality chart's time axis, to show whether quality drops follow bitrate drops.
+    @ViewBuilder
+    private var bitrateSection: some View {
+        if let encodedBitrate {
+            BitrateChart(series: [BitrateSeries(name: String(localized: "Encoded"), color: .orange, timeline: encodedBitrate)],
+                         duration: timeline.duration,
+                         windowSize: BitrateTimeline.automaticWindow(duration: timeline.duration, maxWindows: 500),
+                         position: position,
+                         showsReadout: false,
+                         xAxisLabel: String(localized: "Encoded time (seconds)"),
+                         onSeek: { seconds in seek(seconds) })
+                .frame(height: 140)
+                .accessibilityIdentifier("analysis.inspection.bitrateChart")
+        } else if let bitrateError {
+            Text(bitrateError).font(.caption).foregroundStyle(.secondary)
+        } else {
+            ProgressView("Reading bitrate…").controlSize(.small)
+        }
+    }
+
+    private func loadBitrate() async {
+        do {
+            encodedBitrate = try await BitrateAnalysisService.shared.analyze(file: request.encoded, stream: .video)
+        } catch is CancellationError {
+        } catch {
+            bitrateError = error.localizedDescription
         }
     }
 
@@ -1196,7 +1255,9 @@ private struct QualityTimelineChart: View {
             .chartXScale(domain: 0...timeline.duration)
             .chartYScale(domain: bounds)
             .chartXAxisLabel("Encoded time (seconds)")
-            .chartYAxisLabel(timeline.metric == .psnr || timeline.metric == .xpsnr ? "dB" : String(localized: "Score"))
+            .chartYAxis { AnalysisChartLayout.leadingYAxis() }
+            .chartYAxisLabel(timeline.metric == .psnr || timeline.metric == .xpsnr ? "dB" : String(localized: "Score"),
+                             position: .top, alignment: .leading)
             .chartOverlay { proxy in
                 GeometryReader { geometry in
                     Rectangle().fill(.clear).contentShape(Rectangle())

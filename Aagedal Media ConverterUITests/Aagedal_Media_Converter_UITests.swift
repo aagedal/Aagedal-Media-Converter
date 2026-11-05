@@ -1793,10 +1793,17 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         run.click()
         XCTAssertTrue(element("analysis.result.psnr").waitForExistence(timeout: 30))
         XCTAssertTrue(element("analysis.result.xpsnr").waitForExistence(timeout: 5))
-        let export = element("analysis.video.exportPDF")
+        let export = element("analysis.exportReport")
         XCTAssertTrue(export.isHittable)
         app.activate()
         export.click()
+        let save = element("analysis.export.save")
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        // Quality pages only, so the page count below is one page per metric.
+        for option in ["analysis.export.qualityBitrate", "analysis.export.sourceBitrate", "analysis.export.encodedBitrate"] {
+            element(option).click()
+        }
+        save.click()
         let name = app.textFields["saveAsNameTextField"]
         XCTAssertTrue(name.waitForExistence(timeout: 5))
         app.typeKey(.escape, modifierFlags: [])
@@ -1804,7 +1811,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         let url = URL(fileURLWithPath: "/private/tmp/amc-video-quality-\(UUID()).pdf")
         defer { try? FileManager.default.removeItem(at: url) }
         app.activate()
-        export.click()
+        save.click()
         XCTAssertTrue(name.waitForExistence(timeout: 5))
         name.click()
         name.typeKey("a", modifierFlags: .command)
@@ -1888,7 +1895,10 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         let url = URL(fileURLWithPath: "/private/tmp/amc-ssim-sampling-native-report-\(language).pdf")
         try? FileManager.default.removeItem(at: url)
         app.activate()
-        element("analysis.video.exportPDF").click()
+        element("analysis.exportReport").click()
+        let save = element("analysis.export.save")
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        save.click()
         let name = app.textFields["saveAsNameTextField"]
         XCTAssertTrue(name.waitForExistence(timeout: 5))
         name.click()
@@ -2817,7 +2827,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         run.click()
         XCTAssertTrue(element("analysis.audio.report").waitForExistence(timeout: 20))
         XCTAssertEqual(element("analysis.audio.exportJSON").label, "Eksporter JSON")
-        XCTAssertEqual(element("analysis.audio.exportPDF").label, "Eksporter PDF")
+        XCTAssertEqual(element("analysis.exportReport").label, "Eksporter rapport…")
         attachWindowScreenshot(named: "Loudness report exports in Norwegian")
         element("analysis.audio.add").click()
         XCTAssertFalse(element("analysis.audio.report").exists)
