@@ -608,5 +608,177 @@
             ]]></description>
         </item>
 
+            <item xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <title>Version 4.7.0</title>
+            <pubDate>Thu, 05 Nov 2026 17:18:49 +0100</pubDate>
+            <sparkle:version>604</sparkle:version>
+            <sparkle:shortVersionString>4.7.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure
+                url="https://github.com/aagedal/Aagedal-Media-Converter/releases/download/4.7.0/Aagedal_Media_Converter_4-7-0.zip"
+                length="139679677"
+                type="application/octet-stream"
+                sparkle:edSignature="clmKOVcMFqqnvv9spVBW6gr+eA17P5/md0gyB6IKmzt+W2Nz3LKIXs8od2mdaHuFU/WXk+5C8VdpVD8PuR/BCA==" />
+            <description><![CDATA[
+                <h3>Crop</h3>
+                <ul>
+                <li>Cropping portrait phone videos and other rotated clips works. The crop box, pixel fields and output now follow the picture as it is shown; previously FFmpeg rejected the crop, or cut the wrong area and squeezed the result. AV2 encodes of rotated clips also keep their portrait shape.</li>
+                <li>Dragging an edge or corner past the frame, or past the opposite edge, no longer moves the rest of the box. With an aspect ratio locked, corners follow vertical drags too and stop at the frame instead of sliding.</li>
+                <li>Holding Shift before you start dragging keeps the box's shape, and no longer switches off a locked aspect ratio.</li>
+                <li>Choosing an aspect ratio from the menu or with ⌘1–⌘9 gives the same box. Center now centers the current box instead of replacing it with an 80% box, and both respect the locked ratio.</li>
+                <li>The pixel fields follow the box while you drag, apply when you leave a field as well as on Return, stay inside the frame, and keep a locked aspect ratio by adjusting the other dimension. The crop panel shows the output size, including the square-pixel size for anamorphic sources.</li>
+                <li>Edges can be grabbed along their whole length, and the pointer shows the standard macOS resize cursors.</li>
+                </ul>
+                <h3>Trim</h3>
+                <ul>
+                <li>Trim handles, range drags and the I and O keys snap to frames instead of a fixed 0.1-second grid, so any frame can be an in or out point. Points within half a frame of the start or end count as untrimmed.</li>
+                <li>Setting an in-point after the out-point (I), or an out-point before the in-point (O), now clears the other point instead of leaving an empty range.</li>
+                <li>Shift-dragging the range keeps its length exactly, and Option-dragging a handle stays centered when one side reaches the start or end of the file.</li>
+                <li>Dragging trim handles sends fewer seeks to the player, which keeps MPV previews responsive. The drag mode (scrub, ⌘ range select, ⇧ slide) is chosen when you press the mouse button and no longer changes if you press or release a key mid-drag; ⇧-dragging outside the range now scrubs.</li>
+                <li>I and O (and the other playback shortcuts) work while you drag the playhead, so you can set in and out points mid-scrub. Previously key presses were dropped until the mouse button was released.</li>
+                </ul>
+                <h3>Fullscreen player</h3>
+                <ul>
+                <li>Keyboard shortcuts only apply while the fullscreen player is the active window. Switching back to the main window no longer sends Space, J/K/L, arrows, digits or Esc to the hidden player, and the queue's own shortcuts work again while it is open.</li>
+                <li>Typing a timecode works properly: Space, arrows and Return go to the field, and Esc cancels the edit instead of closing the player.</li>
+                <li>The cursor hides along with the controls during playback. Controls hide after 3 seconds only while playing, come back when you pause, and stay up while an audio or subtitle menu is open or Tab moves through them.</li>
+                <li>The right-edge cursor-hide zone no longer leaves the cursor hidden after switching items, leaving fullscreen or switching apps.</li>
+                <li>Trim points set in fullscreen stay with the item when you move back and forth through the queue, and items inside encoding groups keep their trims and navigate within their group.</li>
+                <li>Auto Next no longer risks skipping an item when the end of a clip is reported twice.</li>
+                <li>Added a volume slider and mute button. M toggles mute and ⌘↑/⌘↓ change the volume by 10%; the setting is remembered. MPV volume now follows the same linear scale as AVPlayer, so 50% is half as loud rather than barely audible.</li>
+                <li>The display no longer dims or sleeps during fullscreen playback of files played through MPV.</li>
+                <li>Typing a timecode for a file whose metadata is still loading no longer jumps to the start, and in and out points set in fullscreen apply to loop playback straight away.</li>
+                </ul>
+                <h3>Metadata window</h3>
+                <ul>
+                <li>Search fields and values with the new search field (⌘F). Matches are highlighted, and a matching stream keeps its header so you can tell which track a hit belongs to. Esc clears the search.</li>
+                <li>When comparing several files, Differences shows only the fields whose values differ.</li>
+                <li>Redesigned for readability: General, Video and Audio now come first, sections can be collapsed (remembered between launches), rows are striped, and value columns use the window's width instead of a fixed 200-point column. Files with several streams get a summary line per stream, such as "AAC · 2 ch · NOR". The window remembers its size and position.</li>
+                <li>Added fields that were read but never shown: dynamic range (SDR, HDR10, PQ, HLG, Dolby Vision), mastering display, content light level and Dolby Vision profile, rotation, embedded closed captions, audio track titles, default tracks, MXF channel labels, audio and subtitle durations, chapters, data tracks (timecode, metadata), attachments, MPEG-TS service names and Live Photo IDs. A Tracks row sums up the streams in each file.</li>
+                <li>Files with Content Credentials or HDR video show a badge under the file name.</li>
+                <li>Copy all metadata as text, or copy a single row from its context menu. Export JSON and Export PDF are back in the window's menu; they had been unreachable since metadata moved to its own window.</li>
+                <li>Camera metadata only appears for files that carry it.</li>
+                <li>Content Credentials (C2PA) are read in much more detail: who signed them (from the signing certificate, with issuer, algorithm, signing time and certificate expiry), the app or camera that made the claim, every action with the tool that performed it, the source type in plain words (e.g. "Digital Capture", "Created Using Generative AI"), ingredients, author and copyright, AI training and mining preferences, CAWG identity assertions, redactions, and the full edit history when a file passed through several apps. The signed thumbnail is shown too, and files that declare generative AI get a badge. Signatures are still not verified; the window links to verification services. JSON and PDF exports include the new fields.</li>
+                </ul>
+                <h3>Watch folder</h3>
+                <ul>
+                <li>Files removed from the queue are no longer imported again a few seconds later. The watch folder remembers what it has imported, across relaunches and turning Watch Mode off and on, for as long as a file stays in the folder and for a set time after it leaves (a week by default, adjustable in Settings). A file that is replaced or rewritten is imported again, and Forget Imported Files in Settings starts over.</li>
+                <li>New files are picked up as soon as they finish copying instead of on a fixed 5-second poll. The folder is watched with file-system events; folders on network drives, which don't report changes made from other computers, are still checked every 5 seconds.</li>
+                <li>Include subfolders imports files from folders inside the watch folder, such as copied camera cards. The output folder is skipped when it sits inside the watch folder.</li>
+                <li>A Waiting button appears next to Watch Mode while files are still copying. It lists each file with its size and whether it's copying, settling (with a countdown), being checked, or can't be read yet.</li>
+                <li>Files you add to the queue by hand from the watch folder, and outputs saved into the watch folder, are no longer picked up when they leave the queue, and automatic cleanup never moves a queued item's output to the Trash.</li>
+                </ul>
+                <h3>Live streams</h3>
+                <ul>
+                <li>Scheduled live streams and premieres no longer fail. The download waits for the stream to start, and the row shows that it's waiting, the announced start time, the title and the thumbnail. Stopping a row that is still waiting cancels it. The Mac stays awake while waiting; turn off Keep Mac awake while waiting for scheduled streams in Settings › Downloads to let it sleep until an hour before the announced start.</li>
+                <li>Stopping a recording lets yt-dlp finish cleanly, so recordings from the start of the stream are merged into one playable file with metadata. Stopping again forces it. If a recording is cut off anyway, the recovered file gets a <code>.ts</code> extension when it is an MPEG transport stream.</li>
+                <li>New setting: Record live streams as growing files. The stream is written to one QuickTime <code>.mov</code> that DaVinci Resolve and Premiere Pro can import while it is still recording. It needs yt-dlp-rs turned on. The queue row's Finder, copy-path and drag buttons point at the growing file during the recording.</li>
+                <li>A recording that stalls or fails keeps what it has recorded instead of starting over, so footage isn't lost once a stream's rewind window has passed.</li>
+                <li>Recording from the start of a stream uses yt-dlp-rs when yt-dlp-rs is turned on. Recorded duration and size are shown while recording.</li>
+                <li>yt-dlp-rs is now off by default while it is in beta, so downloads use yt-dlp. Turn on Use yt-dlp-rs for supported sites in Settings › Downloads to use it. If you already changed the setting, your choice is kept.</li>
+                <li>Updated yt-dlp-rs to 0.9.0-beta.1. Stopping a yt-dlp-rs recording no longer waits up to 20 seconds when the server has stopped sending data.</li>
+                <li>yt-dlp-rs now also downloads from Dailymotion, in the same top quality as yt-dlp. Earlier versions often got only 480p there, so Dailymotion keeps using yt-dlp with a pinned older yt-dlp-rs.</li>
+                <li>Download progress, speed and the file being written are read from structured output that yt-dlp and yt-dlp-rs print the same way, instead of from their on-screen progress text.</li>
+                <li>Stopping an ordinary download with yt-dlp-rs keeps a playable file of what was downloaded, with sound. Previously a video downloaded as separate picture and sound streams kept only the picture.</li>
+                <li>Cancelling a download removes the partial files it left in the output folder, for both yt-dlp and yt-dlp-rs. Cancelling a live recording still keeps what was recorded.</li>
+                <li>If yt-dlp-rs rejects the app's options, for example an older pinned version, downloads use yt-dlp until the app is relaunched.</li>
+                <li>Stopping a download before its first piece has arrived no longer adds an empty file to the queue.</li>
+                </ul>
+                <h3>DCP</h3>
+                <ul>
+                <li>New DCP validator (File › Validate DCP…). It checks the package's ASSETMAP, packing list and composition playlist against each other, file sizes and checksums, durations and frame rates, the MXF files, picture and sound rules, the 250 Mbps limit and JPEG 2000 headers. It also runs after every DCP export, and an export with errors is reported as failed; the package is kept so you can inspect it.</li>
+                <li>Colour is converted to DCI X′Y′Z′ the way DCP-o-matic does it. White was about 8% too bright before; mid-tones now look slightly darker than in earlier versions.</li>
+                <li>The bitrate setting now works; previously it had no effect. The chosen bitrate (at most 250 Mbps) caps every frame, so 25 and 30 fps and 4K exports stay within the DCI limit. 4K at 48 fps is blocked.</li>
+                <li>Asset IDs in the MXF files match the CPL, packing list and ASSETMAP, and the CPL's duration counts the frames actually encoded.</li>
+                <li>Audio is always a 5.1 track with channel labels and a language: mono goes to the centre channel, stereo to left and right, and 7.1 is folded down. It runs exactly as long as the picture, and files without audio get a silent track.</li>
+                <li>The CPL includes the Bv2.1 composition metadata, and folder names follow the ISDCF naming convention more closely.</li>
+                <li>DCP and IMF export need the bundled FFmpeg; a custom FFmpeg without its JPEG 2000 patches can't produce them.</li>
+                </ul>
+                <h3>P2 cards</h3>
+                <ul>
+                <li>Panasonic P2 cards can be imported with Import Camera Card, by opening the card folder, or by dropping the card (or individual clips from it) on the queue or on a group. Each clip becomes one queue item with its video and every audio channel. Before, a P2 card gave silent video clips, a separate item for each audio channel, and the low-resolution proxies.</li>
+                <li>Recordings that the camera split across several clips, including across cards imported together, are joined into one item. If some of a recording's cards weren't imported, the parts that were are still joined, with a notice.</li>
+                <li>Clips are stream-copied into Matroska files in Application Support (about the size of the card, at disk speed) with their timecode, recording date and field order, so interlaced AVC-Intra is still deinterlaced. Progress shows at the bottom of the window with a Cancel button. Re-importing a card reuses the files, and files not imported for 7 days are removed at launch. An import that wouldn't fit on the disk stops before copying anything.</li>
+                <li>With Save next to original, encodes of P2 clips are saved in the card folder (next to <code>CONTENTS</code>), or in the output folder when the card is no longer connected.</li>
+                <li>Other media in the folder holding a card is imported as usual, and clips whose metadata can't be read are added as they are, with a notice.</li>
+                </ul>
+                <h3>IMF</h3>
+                <ul>
+                <li>Audio tracks are labelled as mono, stereo, 5.1 or 7.1 with the item's language and title, both in the MXF and in the CPL.</li>
+                <li>Audio is padded or cut to exactly the picture length. A longer audio tail used to make the audio run past the picture. Export now fails with an error if the audio can't be fitted.</li>
+                <li>JPEG 2000 (App 2e) frames are encoded at the chosen bitrate and declare an IMF profile. Before, every frame was lossless, at about 960 Mbps for 1080p24.</li>
+                </ul>
+                <h3>Waveforms and alpha</h3>
+                <ul>
+                <li>New waveform styles: Halo, Orb, Ridgeline and LED Meter, with gradient palettes and a style preview in Settings.</li>
+                <li>In Settings › Audio Waveform, the Engine and Style pickers sit directly under the preview, followed by Bands, Distribution and Opacity, so you can compare styles without scrolling.</li>
+                <li>Video with an alpha channel, such as transparent ProRes 4444 waveform exports, plays over a checkerboard in the Trim view and the fullscreen player instead of black. In fullscreen the checkerboard covers only the picture, so letterbox bars stay black.</li>
+                <li>New per-preset option, Export matte sidecar when alpha would be lost (off by default). When a source with transparency is exported to a format that can't keep it, a black-and-white <code>_matte</code> file is written next to the export, with the same trim, crop and size. Transparent waveforms get one too.</li>
+                <li>ProRes 4444 and 4444 XQ keep transparency in the file itself, including from PNG, TIFF and other image sequences with alpha. Opaque ProRes 4444 sources are no longer treated as transparent, so they don't gain an empty alpha channel or a white matte, and the metadata window no longer lists them with an alpha channel.</li>
+                </ul>
+                <h3>MKV</h3>
+                <ul>
+                <li>MKV exports that keep subtitles now also keep the fonts attached to the source, so styled ASS subtitles and karaoke no longer shift when a player falls back to another font. This works with metadata stripped too (#64).</li>
+                <li>Updated SwiftMediaMetadata to 3.1.3, which reads Matroska font attachments, tells opaque ProRes 4444 apart from ProRes 4444 with alpha, and reads the video and audio codec of more MXF files.</li>
+                </ul>
+                <h3>Timecode</h3>
+                <ul>
+                <li>Choosing Disable in the timecode window now sticks. Reopening the window no longer switches the item back to the default timecode mode.</li>
+                <li>Drop-frame timecode (<code>;</code>) is only accepted for 29.97 and 59.94 fps sources, so a manual timecode no longer makes the conversion fail at other frame rates. Frame numbers that drop-frame skips are flagged and corrected instead of being written as a timecode two frames earlier.</li>
+                <li>The ±1 and ±10 frame buttons count drop-frame timecode correctly and stop at 23:59:59 instead of wrapping to midnight.</li>
+                <li>Fixed a crash when stepping frames on a file whose frame rate couldn't be read.</li>
+                </ul>
+                <h3>Screen capture</h3>
+                <ul>
+                <li>Escape, Return and the Shift, Option and Space drag modifiers work in the region selector opened from Capture Mode. Previously they went to the app underneath, and the overlay couldn't be closed before drawing a region.</li>
+                <li>A saved recording region is kept inside the screen after switching to a smaller display, and resizing a region below the minimum size snaps back instead of producing an invalid recording size.</li>
+                <li>The region selector closes if its display is disconnected or changes resolution.</li>
+                <li>Escape and Return work normally in the main window after the record overlay closes, and the crosshair cursor no longer lingers.</li>
+                </ul>
+                <h3>Progress</h3>
+                <ul>
+                <li>The Dock icon shows the same overall progress as the main window, including Shortcuts and agent jobs, and no longer flickers between files.</li>
+                <li>The progress bar shows an estimate for the whole queue next to the overall percentage, and labels the per-file estimate as This file.</li>
+                </ul>
+                <h3>MXF merges</h3>
+                <ul>
+                <li>Stream Copy merges of MXF clips into MXF keep the camera metadata. They are joined with bmxtranswrap instead of FFmpeg, which rewrote the picture descriptor and dropped the ANC track, so Resolve lost the S-Log3/S-Gamut3 colour space, the XAVC codec name and the camera fields. The merged file keeps the first clip's start timecode and maker name, and Sony clips get a merged <code>&lt;name&gt;M01.XML</code> beside the output with camera model, serial and lens, the total duration and a timecode entry per clip. If bmx can't join the clips, or would drop a track, the merge falls back to FFmpeg as before, and the row says that camera metadata was not kept.</li>
+                <li>Trimmed MXF merges can keep camera metadata too, with “Keep camera metadata in trimmed MXF merges” in Encoding Groups settings (off by default). Each clip is first copied to a temporary MXF, so it needs about as much free space as the merged output. Trimmed Long GOP clips (XAVC Long GOP, XDCAM MPEG-2), video formats bmx can't copy (such as DNxHR) and merges without enough free space use FFmpeg instead, and the row says why.</li>
+                <li>The camera card import dialog shows the real output extension for Stream Copy.</li>
+                <li>XAVC Long, XDCAM HD/HD422, D-10, DVCPRO HD, ProRes, DNxHD/DNxHR and JPEG 2000 MXF files report the right video codec in the metadata window and to camera card grouping. XAVC Long and XDCAM HD clips used to show no codec, so card recordings split across several files couldn't be checked for compatibility, and D-10 and DVCPRO HD video was reported as PCM.</li>
+                </ul>
+                <h3>Analysis</h3>
+                <ul>
+                <li>New Bitrate tab in Media Analysis: the source and the encoded file on one chart, with keyframes, an adjustable averaging window, and the average, peak, lowest, keyframe interval and size of each file. Packet sizes are read from the file without decoding it.</li>
+                <li>Video quality results show the encoded bitrate under the quality chart, and at each of the lowest-scoring points, so you can see whether a quality drop follows a bitrate drop.</li>
+                <li>Export Report… replaces the separate PDF buttons and writes one PDF with the quality metrics, bitrate and loudness reports you choose. A file whose bitrate can't be read, such as an audio-only encode of a video, is left out instead of stopping the export, and Cancel stops a report that is still reading large files. PDFs exported automatically after a conversion include the encoded bitrate.</li>
+                </ul>
+                <h3>Uploads</h3>
+                <ul>
+                <li>Uploads can send sidecar files beside the main file, with one switch per format in Upload settings: Sony <code>M01.XML</code> camera metadata, subtitles (.srt) and the clip-marker EDL from merges. All are off by default.</li>
+                <li>When subtitles are uploaded or embedded, the upload waits until they are written. Previously it could read the output while subtitle embedding was replacing it.</li>
+                </ul>
+                <h3>Other fixes</h3>
+                <ul>
+                <li>Updated FFmpeg with SVT-AV1 4.3.0 and libaom 3.15.3. AV1 encodes are about 5–9% faster at speeds 4–8 (the default is 6), with the same size and quality.</li>
+                <li>The AV1 tune Default (VQ) now actually tunes for visual quality. It used to get SVT-AV1's own default, PSNR.</li>
+                <li>Removed the AV1 tune Subjective Quality, which made every AV1 video encode fail with the current SVT-AV1. If you had it selected, it is now Default (VQ).</li>
+                <li>Folders can be imported by dropping them on the queue or a group, or choosing them with Import. The media files inside are added, including from subfolders, and image sequences are found in any subfolder; the Import panel used to find only image sequences, and dropped folders were ignored. Hidden files and packages such as apps and libraries are skipped, and a sequence's soundtrack isn't added again as a separate file. A few files are inspected at a time, so a large folder no longer starts a metadata probe for every file at once.</li>
+                <li>Files dropped together are added in the order they were dropped.</li>
+                <li>Video without colour tags no longer changes colour when it's scaled between SD and HD sizes (for example a 640×360 clip exported as 1080p, or an HD clip exported as a 540p proxy). Players read untagged SD and HD video with different colour standards, so the same picture came out with shifted yellows, cyans and skin tones. Such exports are now converted where needed and tagged as BT.709.</li>
+                <li>Dragging only unsupported files onto the empty queue shows the "can't drop" cursor instead of highlighting the queue and then doing nothing.</li>
+                <li>The Force Merge dialog shows exact frame rates (29.97 fps instead of 30 fps), so you can tell which clips need frame-rate conversion.</li>
+                <li>Double-clicking a preset in Select Preset (⌘P) applies it.</li>
+                <li>Stream Copy merges with trimmed clips keep every audio track. Each trimmed clip used to keep only its first audio track, so merging clips with two or more tracks gave a file with one.</li>
+                <li>Stream Copy merges of trimmed XDCAM and other Long GOP MPEG-2 MXF files no longer have timestamps running backwards at the start of a trimmed clip. Decoders could show frames out of order or skip frames there.</li>
+                <li>Stream Copy merges of XAVC Long and other H.264 MXF files play every frame in order. FFmpeg wrote these files without the frame-order information that Long GOP H.264 needs, so a merge decoded with timestamps running backwards and about a third of its frames missing. Stream Copy exports of single H.264 MXF files are fixed the same way.</li>
+                <li>Interlaced XAVC Long (50i, 59.94i) MXF files can be trimmed and merged with Stream Copy. Preparing a trimmed clip failed with "Unsupported frame rate 25/2".</li>
+                <li>An end trim with Stream Copy ends on the matching source frame, in merges and single-file exports. With B-frames (HEVC, H.264, MPEG-2), the trimmed clip used to skip frames just before the end and then show a frame from after it. The clip now runs to the first frame where it can end cleanly, which can be a few frames after the trim point.</li>
+                <li>Settings › Shortcuts and KeyboardShortcuts.md list the new fullscreen trim, mute and volume keys, metadata search, slow J/L playback, clearing both trim points (⌥X) and Shift-dragging in crop mode.</li>
+                <li>Text added in this release, including the metadata window, watch folder, DCP validator, waveform and live-recording options, is translated into all supported languages, as are the timecode window and the update banner. VoiceOver labels the remaining icon-only buttons in Select Preset, the update banner and the Force Merge dialog.</li>
+                </ul>
+            ]]></description>
+        </item>
+
     </channel>
 </rss>
