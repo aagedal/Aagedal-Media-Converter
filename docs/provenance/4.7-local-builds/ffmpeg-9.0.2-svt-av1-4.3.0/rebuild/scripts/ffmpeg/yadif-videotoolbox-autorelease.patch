@@ -1,0 +1,105 @@
+From 732e3afeb3f4a35389edeccc4329256265519a56 Mon Sep 17 00:00:00 2001
+From: Vincent Herbst <superuser404@tuta.com>
+Date: Sun, 19 Jul 2026 20:09:29 +0200
+Subject: [PATCH] avfilter/vf_yadif_videotoolbox: fix over-release of
+ autoreleased Metal objects
+
+call_kernel() obtains the command buffer and compute encoder from
+property getters (mtlQueue.commandBuffer, buffer.computeCommandEncoder),
+which return autoreleased references under the non-ARC build, and then
+releases them via ff_objc_release(). That is an over-release: when the
+enclosing autorelease pool is drained, the objects are released a second
+time and the process crashes with EXC_BAD_ACCESS in objc_release.
+
+On current macOS this is reproducible with the ffmpeg CLI itself. The
+filter thread's thread-local autorelease pool is popped during pthread
+TSD cleanup at thread exit, so any run that used yadif_videotoolbox
+crashes when the filter thread terminates:
+
+  ffmpeg -init_hw_device videotoolbox=vt -filter_hw_device vt \
+    -f lavfi -i testsrc2=size=640x480:rate=30 \
+    -vf setfield=tff,format=nv12,hwupload,yadif_videotoolbox,\
+  hwdownload,format=nv12 -frames:v 20 -f null -
+
+  Thread 11 Crashed:: vf#0:0
+  0 libobjc.A.dylib  objc_release + 16
+  1 libobjc.A.dylib  AutoreleasePoolPage::releaseUntil(objc_object**) + 204
+  2 libobjc.A.dylib  objc_autoreleasePoolPop + 244
+  3 libobjc.A.dylib  objc_tls_direct_base<...>::dtor_(void*) + 156
+  4 libsystem_pthread.dylib  _pthread_tsd_cleanup + 620
+  5 libsystem_pthread.dylib  _pthread_exit + 84
+
+Host applications hit the same crash earlier, for example when a
+dispatch queue drains its last-resort pool after a work item that ran
+the filter.
+
+Wrap the kernel invocation in @autoreleasepool and drop the manual
+releases, making the pool pop the single balanced release and draining
+the Metal transients once per frame. The ff_objc_release() calls on the
+s->mtl* members in do_uninit() stay: those hold owned references
+obtained from new* methods.
+---
+ libavfilter/vf_yadif_videotoolbox.m | 45 ++++++++++++++---------------
+ 1 file changed, 22 insertions(+), 23 deletions(-)
+
+diff --git a/libavfilter/vf_yadif_videotoolbox.m b/libavfilter/vf_yadif_videotoolbox.m
+index f8eb0c6bfa..b1211ceed1 100644
+--- a/libavfilter/vf_yadif_videotoolbox.m
++++ b/libavfilter/vf_yadif_videotoolbox.m
+@@ -73,31 +73,30 @@ static void call_kernel(AVFilterContext *ctx,
+                         int tff) API_AVAILABLE(macos(10.11), ios(8.0))
+ {
+     YADIFVTContext *s = ctx->priv;
+-    id<MTLCommandBuffer> buffer = s->mtlQueue.commandBuffer;
+-    id<MTLComputeCommandEncoder> encoder = buffer.computeCommandEncoder;
+-    struct mtlYadifParams *params = (struct mtlYadifParams *)s->mtlParamsBuffer.contents;
+-    *params = (struct mtlYadifParams){
+-        .channels = channels,
+-        .parity = parity,
+-        .tff = tff,
+-        .is_second_field = !(parity ^ tff),
+-        .skip_spatial_check = s->yadif.mode&2,
+-        .field_mode = s->yadif.current_field
+-    };
++    @autoreleasepool {
++        id<MTLCommandBuffer> buffer = s->mtlQueue.commandBuffer;
++        id<MTLComputeCommandEncoder> encoder = buffer.computeCommandEncoder;
++        struct mtlYadifParams *params = (struct mtlYadifParams *)s->mtlParamsBuffer.contents;
++        *params = (struct mtlYadifParams){
++            .channels = channels,
++            .parity = parity,
++            .tff = tff,
++            .is_second_field = !(parity ^ tff),
++            .skip_spatial_check = s->yadif.mode&2,
++            .field_mode = s->yadif.current_field
++        };
+ 
+-    [encoder setTexture:dst  atIndex:0];
+-    [encoder setTexture:prev atIndex:1];
+-    [encoder setTexture:cur  atIndex:2];
+-    [encoder setTexture:next atIndex:3];
+-    [encoder setBuffer:s->mtlParamsBuffer offset:0 atIndex:4];
+-    ff_metal_compute_encoder_dispatch(s->mtlDevice, s->mtlPipeline, encoder, dst.width, dst.height);
+-    [encoder endEncoding];
++        [encoder setTexture:dst  atIndex:0];
++        [encoder setTexture:prev atIndex:1];
++        [encoder setTexture:cur  atIndex:2];
++        [encoder setTexture:next atIndex:3];
++        [encoder setBuffer:s->mtlParamsBuffer offset:0 atIndex:4];
++        ff_metal_compute_encoder_dispatch(s->mtlDevice, s->mtlPipeline, encoder, dst.width, dst.height);
++        [encoder endEncoding];
+ 
+-    [buffer commit];
+-    [buffer waitUntilCompleted];
+-
+-    ff_objc_release(&encoder);
+-    ff_objc_release(&buffer);
++        [buffer commit];
++        [buffer waitUntilCompleted];
++    }
+ }
+ 
+ static void filter(AVFilterContext *ctx, AVFrame *dst,
+-- 
+2.52.0
+

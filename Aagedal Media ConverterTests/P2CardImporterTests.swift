@@ -1,4 +1,5 @@
 import XCTest
+import os
 @testable import Aagedal_Media_Converter
 
 final class P2CardImporterTests: XCTestCase {
@@ -20,10 +21,13 @@ final class P2CardImporterTests: XCTestCase {
     }
 
     private func addClip(_ name: String, audio: Int, shot: (id: String, offset: Int)? = nil,
-                         timecode: String = "00:29:18:09") throws {
+                         next: String? = nil, timecode: String = "00:29:18:09") throws {
         let audioElements = String(repeating: "<Audio><AudioFormat>MXF</AudioFormat></Audio>", count: audio)
+        let connection = next.map {
+            "<Connection><Top><GlobalClipID>ID-TOP</GlobalClipID></Top><Next><GlobalClipID>ID-\($0)</GlobalClipID></Next></Connection>"
+        } ?? ""
         let relation = shot.map {
-            "<Relation><OffsetInShot>\($0.offset)</OffsetInShot><GlobalShotID>\($0.id)</GlobalShotID></Relation>"
+            "<Relation><OffsetInShot>\($0.offset)</OffsetInShot><GlobalShotID>\($0.id)</GlobalShotID>\(connection)</Relation>"
         } ?? ""
         let xml = """
         <?xml version="1.0" encoding="UTF-8" standalone="no" ?>
@@ -60,6 +64,45 @@ final class P2CardImporterTests: XCTestCase {
         XCTAssertEqual(P2CardImporter.cardRoot(containing: card.appendingPathComponent("CONTENTS"))?.path, root.path)
         XCTAssertEqual(P2CardImporter.cardRoot(containing: card.appendingPathComponent("CONTENTS/AUDIO/0001AB01.MXF"))?.path, root.path)
         XCTAssertNil(P2CardImporter.cardRoot(containing: FileManager.default.temporaryDirectory))
+        // Media next to CONTENTS, as in a folder holding a copied card, is not on the card.
+        XCTAssertNil(P2CardImporter.cardRoot(containing: card.appendingPathComponent("export.mov")))
+        XCTAssertNil(P2CardImporter.cardRoot(containing: card.appendingPathComponent("Audio/zoom.wav")))
+    }
+
+    func testFilesNextToTheCardAndClipsWithoutReadableMetadataPassThrough() async throws {
+        try addClip("0001AB", audio: 2)
+        try "not xml".write(to: card.appendingPathComponent("CONTENTS/CLIP/0001AB.XML"), atomically: true, encoding: .utf8)
+        let urls = [
+            card.appendingPathComponent("CONTENTS/VIDEO/0001AB.MXF"),
+            card.appendingPathComponent("export.mov"),
+        ]
+        let resolved = await P2CardImporter.resolveCards(in: urls)
+        XCTAssertEqual(resolved.map(\.lastPathComponent), ["0001AB.MXF", "export.mov"])
+    }
+
+    func testSaveNextToOriginalUsesTheCardForRewrappedShots() async throws {
+        try addClip("0001AB", audio: 2)
+        let shot = try XCTUnwrap(P2CardImporter.shots(from: P2CardImporter.clips(onCard: card)).first)
+        let output = P2ClipRewrapper.outputURL(for: shot)
+        try FileManager.default.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: output.deletingLastPathComponent()) }
+        try Data().write(to: output)
+        // An already rewrapped shot is reused and records its card.
+        let rewrapped = try await P2ClipRewrapper.shared.rewrap(shot) { _ in }
+        XCTAssertEqual(rewrapped, output)
+
+        let suite = "P2SaveNextToOriginal.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: AppConstants.saveNextToOriginalKey)
+        let destination = OutputDestinationSettings(defaults: defaults)
+        XCTAssertEqual(
+            destination.resolveFolder(for: output, defaultOutputFolder: "/Output", presetSuffix: "_x"),
+            card.standardizedFileURL.path
+        )
+        // Without the card, outputs go to the output folder, never into the rewrap folder.
+        try FileManager.default.removeItem(at: card)
+        XCTAssertEqual(destination.resolveFolder(for: output, defaultOutputFolder: "/Output", presetSuffix: "_x"), "/Output")
     }
 
     func testFilesMapToTheirClipName() {
@@ -98,6 +141,44 @@ final class P2CardImporterTests: XCTestCase {
         XCTAssertEqual(shots.map { $0.clips.map(\.name) }, [["0001AA", "0002BB"], ["0003CC"]])
         XCTAssertEqual(shots[0].name, "0001AA")
         XCTAssertNotEqual(shots[0].cacheKey, shots[1].cacheKey)
+    }
+
+    func testSpannedShotsReportMissingParts() throws {
+        try addClip("0001AA", audio: 2, shot: ("SHOT1", 0), next: "0002BB")
+        try addClip("0002BB", audio: 2, shot: ("SHOT1", 100), next: "0003CC")
+        try addClip("0003CC", audio: 2, shot: ("SHOT1", 200))
+        try addClip("0004DD", audio: 2)
+        let clips = P2CardImporter.clips(onCard: card)
+        XCTAssertEqual(clips.first { $0.name == "0001AA" }?.nextClipID, "ID-0002BB")
+        let complete = P2CardImporter.shots(from: clips)
+        XCTAssertEqual(complete.map(\.isMissingParts), [false, false])
+
+        // The middle part on another card that wasn't imported.
+        let withoutMiddle = P2CardImporter.shots(from: clips.filter { $0.name != "0002BB" })
+        XCTAssertEqual(withoutMiddle.map(\.isMissingParts), [true, false])
+        // The last or the first part missing.
+        XCTAssertTrue(P2CardImporter.shots(from: clips.filter { $0.name != "0003CC" })[0].isMissingParts)
+        XCTAssertTrue(P2CardImporter.shots(from: clips.filter { $0.name != "0001AA" })[0].isMissingParts)
+    }
+
+    @MainActor
+    func testOverlayStaysUntilEveryImportEndsAndCancelStopsThemAll() {
+        let progress = P2ImportProgress()
+        let cancelled = OSAllocatedUnfairLock(initialState: 0)
+        let first = progress.begin { cancelled.withLock { $0 += 1 } }
+        let second = progress.begin { cancelled.withLock { $0 += 1 } }
+        progress.cancel()
+        XCTAssertEqual(cancelled.withLock { $0 }, 2)
+        progress.end(first)
+        XCTAssertTrue(progress.isActive)
+        XCTAssertNotNil(progress.message)
+        progress.end(second)
+        XCTAssertFalse(progress.isActive)
+        XCTAssertNil(progress.message)
+
+        progress.showFailure("One.")
+        progress.showFailure("Two.")
+        XCTAssertEqual(progress.failureMessage, "One.\nTwo.")
     }
 
     func testDuplicateClipsFromACopiedCardAreJoinedOnce() throws {
