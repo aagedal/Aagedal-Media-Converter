@@ -116,7 +116,7 @@ Turn on **Normalize Loudness** in Settings → Presets to normalize every re-enc
 - Mark recording continuations explicitly and optionally split groups after gaps over two hours. Compatibility checks help identify clips that can be stitched.
 
 ### Local agent access
-Enable **Settings → Agent Access**, approve source folders, and copy the setup for your MCP client. The bundled helper lets agents browse and inspect approved media, plan conversions, submit jobs, follow progress, and cancel work in the app queue. All 20 built-in presets are available; custom FFmpeg slots are excluded. IMF exports are experimental.
+Enable **Settings → Agent Access**, approve source folders, and copy the setup for your MCP client. The bundled helper lets agents browse and inspect approved media, plan conversions, submit jobs, follow progress, and cancel work in the app queue. All 21 built-in presets are available; custom FFmpeg slots are excluded. IMF exports are experimental.
 
 Accepted jobs continue after a client disconnects. Plans last 15 minutes and terminal results remain available for 30 days. Agent exports disable output timecode. See the [setup and workflow guide](Documentation/LOCAL_AGENT_ACCESS.md) for folder approvals, client setup, and job recovery.
 
@@ -212,6 +212,9 @@ Apple ProRes (yuv422p10) for edit-friendly masters. Includes the first video and
 
 #### DNxHR
 Avid DNxHR at the source resolution for editing and mastering: LB, SQ, or HQ (8-bit 4:2:2), HQX (10-bit 4:2:2), or 444 (10-bit 4:4:4). Choose a MOV or MXF container. Every audio track is kept as 24-bit PCM (resampled to 48 kHz in MXF).
+
+#### CineForm
+GoPro CineForm at the source resolution in a MOV container, for editing and finishing: 10-bit 4:2:2 YUV, 12-bit 4:4:4 RGB, or 12-bit 4:4:4 RGB with alpha. Choose a quality from Low to Film Scan 3+ (Film Scan 1 by default). The codec stores at most 12 bits per channel, so 16-bit sources are reduced to 12-bit. FFmpeg's encoder needs a width that is a multiple of 16, so other widths are padded with black at the sides. Every audio track is kept as 24-bit PCM.
 
 #### Proxy
 Lightweight proxy creation in HEVC, ProRes Proxy, or DNxHR with configurable resolution limits. Retains every audio channel as uncompressed PCM, which is ideal for offline editing and pairing with a dedicated Proxy sub-folder next to the source material.

@@ -362,7 +362,7 @@ private final class MCPStdioServer: @unchecked Sendable {
                             "h264", "hevc", "av1", "av2", "tv_hevc", "tv_avc_intra",
                             "prores", "proxy", "audio_only", "stream_copy",
                             "image_sequence", "dcp", "imf_app_2e", "imf_rdd_45",
-                            "xdcam_hd422", "dnxhr", "vp9"
+                            "xdcam_hd422", "dnxhr", "cineform", "vp9"
                         ]
                     ],
                     "request_id": ["type": "string", "format": "uuid"],

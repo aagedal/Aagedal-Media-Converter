@@ -547,6 +547,57 @@ final class CodecExportSettingsTests: XCTestCase {
         XCTAssertEqual(value(after: "-pix_fmt", in: full.ffmpegArguments), "yuv444p10le")
     }
 
+    func testCineFormArgumentsFollowProfileAndQuality() throws {
+        let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let standard = try XCTUnwrap(CodecExportSettings(preset: .cineform, defaults: defaults))
+        XCTAssertEqual(standard.fileExtension, "mov")
+        XCTAssertEqual(Array(standard.ffmpegArguments.prefix(15)), [
+            "-hide_banner", "-pix_fmt", "yuv422p10le", "-c:v", "cfhd", "-quality", "film1",
+            "-vf", "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1,pad=w=ceil(iw/16)*16:h=ih:x=(ow-iw)/2",
+            "-map", "0:v:0", "-c:a", "pcm_s24le", "-map", "0:a?"
+        ])
+
+        defaults.set(CineFormProfile.rgba4444.rawValue, forKey: AppConstants.cineformProfileKey)
+        defaults.set(CineFormQuality.filmScan3Plus.rawValue, forKey: AppConstants.cineformQualityKey)
+        let alpha = try XCTUnwrap(CodecExportSettings(preset: .cineform, defaults: defaults))
+        XCTAssertEqual(value(after: "-pix_fmt", in: alpha.ffmpegArguments), "gbrap12le")
+        XCTAssertEqual(value(after: "-quality", in: alpha.ffmpegArguments), "film3+")
+        XCTAssertTrue(FFMPEGCommandBuilder.outputKeepsAlpha(alpha.ffmpegArguments + ["/tmp/out.mov"]))
+        XCTAssertFalse(FFMPEGCommandBuilder.outputKeepsAlpha(standard.ffmpegArguments + ["/tmp/out.mov"]))
+    }
+
+    /// FFmpeg's CineForm encoder rejects widths that are not a multiple of 16; the
+    /// preset pads them. Every profile must encode an odd anamorphic frame and decode it again.
+    func testCineFormProfilesEncodeOddWidthsWithTheBundledFFmpeg() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("cineform-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let runner = SubprocessRunner()
+        for profile in CineFormProfile.allCases {
+            defaults.set(profile.rawValue, forKey: AppConstants.cineformProfileKey)
+            let settings = try XCTUnwrap(CodecExportSettings(preset: .cineform, defaults: defaults))
+            let output = directory.appendingPathComponent("\(profile.pixelFormat).mov")
+            let encode = try await runner.run(SubprocessRequest(
+                executableURL: URL(fileURLWithPath: ffmpeg),
+                arguments: ["-y", "-v", "error", "-f", "lavfi", "-i", "testsrc2=d=0.4:s=1438x811:r=25,setsar=4/3",
+                            "-f", "lavfi", "-i", "sine=d=0.4:sample_rate=48000"]
+                    + settings.ffmpegArguments.map { $0 == "0:a?" ? "1:a?" : $0 } + [output.path]
+            ))
+            XCTAssertTrue(encode.succeeded, "\(profile.rawValue): \(encode.standardErrorText)")
+            let metadata = try await BoundedVideoMetadataProbe.metadata(for: output)
+            let video = try XCTUnwrap(metadata.videoStreams.first)
+            XCTAssertEqual((video.width ?? 1) % 16, 0, profile.rawValue)
+            XCTAssertEqual(video.height, 810, profile.rawValue)
+            XCTAssertEqual(metadata.audioStreams.count, 1, profile.rawValue)
+        }
+    }
+
     func testXDCAMHD422ArgumentsUseBroadcastGOPAndRateControl() throws {
         let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -641,7 +692,7 @@ final class CodecExportSettingsTests: XCTestCase {
     }
 
     func testNewDeliveryPresetsAreRegisteredAcrossSettingsAndAgentAccess() {
-        for preset in [ExportPreset.dnxhr, .xdcamHD422, .vp9] {
+        for preset in [ExportPreset.dnxhr, .cineform, .xdcamHD422, .vp9] {
             XCTAssertNotNil(ApplicationPresetID(exportPreset: preset))
             XCTAssertEqual(ApplicationPresetID(exportPreset: preset)?.exportPreset, preset)
             XCTAssertTrue(preset.supportsMatteSidecar)
@@ -654,7 +705,8 @@ final class CodecExportSettingsTests: XCTestCase {
             AppConstants.dnxhrProfileKey, AppConstants.dnxhrContainerKey, AppConstants.xdcamFormatKey,
             AppConstants.xdcamAudioChannelsKey, AppConstants.vp9QualityKey, AppConstants.vp9SpeedKey,
             AppConstants.vp9BitDepthKey, AppConstants.vp9ContainerKey, AppConstants.vp9ResolutionLimitKey,
-            AppConstants.vp9AudioBitrateKey,
+            AppConstants.vp9AudioBitrateKey, AppConstants.cineformVisibleKey, AppConstants.cineformProfileKey,
+            AppConstants.cineformQualityKey,
         ] {
             XCTAssertTrue(SettingsSyncKeys.all.contains(key), key)
         }

@@ -86,6 +86,12 @@ struct CodecExportSettings: Codable, Equatable, Sendable {
             resolutionLimit = .unlimited
             ffmpegArguments = preset.codecFFmpegArguments(defaults: defaults)
             return
+        case .cineform:
+            fileExtension = "mov"
+            container = .mov
+            resolutionLimit = .unlimited
+            ffmpegArguments = preset.codecFFmpegArguments(defaults: defaults)
+            return
         case .vp9:
             fileExtension = VP9Container.current(defaults: defaults).fileExtension
             container = CodecContainer(rawValue: fileExtension.uppercased())

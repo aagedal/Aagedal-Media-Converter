@@ -27,6 +27,7 @@ enum ApplicationPresetID: String, CaseIterable, Codable, Sendable {
     case imfProRes = "imf_rdd_45"
     case xdcamHD422 = "xdcam_hd422"
     case dnxhr = "dnxhr"
+    case cineform = "cineform"
     case vp9 = "vp9"
 
     var isRunnable: Bool { true }
@@ -67,6 +68,7 @@ enum ApplicationPresetID: String, CaseIterable, Codable, Sendable {
         case .imfProRes: .imfProRes
         case .xdcamHD422: .xdcamHD422
         case .dnxhr: .dnxhr
+        case .cineform: .cineform
         case .vp9: .vp9
         }
     }
@@ -92,6 +94,7 @@ enum ApplicationPresetID: String, CaseIterable, Codable, Sendable {
         case .imfProRes: self = .imfProRes
         case .xdcamHD422: self = .xdcamHD422
         case .dnxhr: self = .dnxhr
+        case .cineform: self = .cineform
         case .vp9: self = .vp9
         default: return nil
         }
@@ -502,7 +505,7 @@ struct ApplicationPresetSettings: Codable, Equatable, Sendable {
         )
         outputExtension = switch presetID {
         case .videoLoop, .videoLoopWithSound, .animatedStill, .av1,
-             .av2, .tvHEVC, .tvAVCIntra, .xdcamHD422, .dnxhr, .vp9:
+             .av2, .tvHEVC, .tvAVCIntra, .xdcamHD422, .dnxhr, .cineform, .vp9:
             capturedAV2?.container.fileExtension ?? capturedCodec?.fileExtension
         case .imageSequence, .dcp, .imfJ2K, .imfProRes:
             ""
@@ -514,7 +517,7 @@ struct ApplicationPresetSettings: Codable, Equatable, Sendable {
 
         switch presetID {
         case .videoLoop, .videoLoopWithSound, .animatedStill, .av1,
-             .tvHEVC, .tvAVCIntra, .xdcamHD422, .dnxhr, .vp9:
+             .tvHEVC, .tvAVCIntra, .xdcamHD422, .dnxhr, .cineform, .vp9:
             let ext = capturedCodec?.fileExtension ?? preset.fileExtension
             containerID = ApplicationContainerID(rawValue: ext) ?? .other
             video = nil
@@ -2163,7 +2166,7 @@ private final class ApplicationExecutionDefaults {
     ) throws {
         switch settings.presetID {
         case .videoLoop, .videoLoopWithSound, .animatedStill, .av1,
-             .tvHEVC, .tvAVCIntra, .xdcamHD422, .dnxhr, .vp9:
+             .tvHEVC, .tvAVCIntra, .xdcamHD422, .dnxhr, .cineform, .vp9:
             guard settings.capturedCodec != nil else {
                 throw ApplicationExecutionSettingsError.invalidPresetSettings
             }

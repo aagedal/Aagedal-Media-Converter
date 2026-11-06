@@ -521,6 +521,12 @@ enum AppConstants {
     static let dnxhrContainerKey = "dnxhrContainer"                // DNxHRContainer raw value
     static let defaultDNxHRContainer = "MOV"
 
+    // CineForm preset settings
+    static let cineformProfileKey = "cineformProfile"              // CineFormProfile raw value
+    static let defaultCineFormProfile = "10-bit 4:2:2 (YUV)"
+    static let cineformQualityKey = "cineformQuality"              // CineFormQuality raw value
+    static let defaultCineFormQuality = "Film Scan 1"
+
     // VP9 preset settings
     static let vp9QualityKey = "vp9Quality"                        // AV1QualityLevel raw value (same 0–63 CRF scale)
     static let defaultVP9Quality = "Good (30)"
@@ -693,6 +699,7 @@ enum AppConstants {
     static let tvAVCIntraVisibleKey = "tvAVCIntraVisible"
     static let xdcamHD422VisibleKey = "xdcamHD422Visible"
     static let dnxhrVisibleKey = "dnxhrVisible"
+    static let cineformVisibleKey = "cineformVisible"
     static let vp9VisibleKey = "vp9Visible"
     static let losslessVisibleKey = "losslessVisible"
     static let proresVisibleKey = "proresVisible"

@@ -59,6 +59,71 @@
         }
       }
     },
+    "10-bit 4:2:2 suits camera footage and editing. 12-bit 4:4:4 RGB keeps full chroma for graphics, VFX and finishing; choose RGB + alpha to keep transparency." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "10-Bit 4:2:2 eignet sich für Kameramaterial und Schnitt. 12-Bit 4:4:4 RGB behält die volle Farbauflösung für Grafik, VFX und Finishing; wählen Sie RGB + Alpha, um Transparenz zu erhalten."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "10-bit 4:2:2 suits camera footage and editing. 12-bit 4:4:4 RGB keeps full chroma for graphics, VFX and finishing; choose RGB + alpha to keep transparency."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "10 bits 4:2:2 es adecuado para material de cámara y edición. RGB 4:4:4 de 12 bits conserva la crominancia completa para gráficos, VFX y acabado; elija RGB + alfa para conservar la transparencia."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Le 4:2:2 10 bits convient aux images de caméra et au montage. Le RVB 4:4:4 12 bits garde toute la chrominance pour le graphisme, les VFX et la finition ; choisissez RVB + alpha pour conserver la transparence."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Il 4:2:2 a 10 bit è adatto al materiale di ripresa e al montaggio. L’RGB 4:4:4 a 12 bit mantiene la crominanza completa per grafica, VFX e finishing; scegli RGB + alfa per mantenere la trasparenza."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "10 ビット 4:2:2 はカメラ素材と編集に適しています。12 ビット 4:4:4 RGB はグラフィックス、VFX、仕上げ用にフルクロマを保持します。透明部分を残すには RGB + アルファを選んでください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "10비트 4:2:2는 카메라 영상과 편집에 적합합니다. 12비트 4:4:4 RGB는 그래픽, VFX, 마무리 작업을 위해 전체 색차를 유지합니다. 투명도를 유지하려면 RGB + 알파를 선택하세요."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "10-bit 4:2:2 passer for kameraopptak og redigering. 12-bit 4:4:4 RGB beholder full krominans for grafikk, VFX og etterarbeid; velg RGB + alfa for å beholde gjennomsiktighet."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "10 bits 4:2:2 é adequado para material de câmera e edição. RGB 4:4:4 de 12 bits mantém a crominância completa para gráficos, VFX e finalização; escolha RGB + alfa para manter a transparência."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "10 位 4:2:2 适合摄像机素材和剪辑。12 位 4:4:4 RGB 为图形、视觉特效和调色保留完整色度；选择 RGB + Alpha 可保留透明度。"
+          }
+        }
+      }
+    },
     "1080 formats are full-raster 1920×1080 and 720 formats are 1280×720. Interlaced formats are encoded top field first. Sources are scaled and pillarboxed or letterboxed to 16:9." : {
       "localizations" : {
         "de" : {
@@ -2989,6 +3054,71 @@
         }
       }
     },
+    "Film Scan levels keep the most detail and make the largest files. Film Scan 1 is a good mastering default; High and Medium suit editing." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Film-Scan-Stufen erhalten die meisten Details und erzeugen die größten Dateien. Film Scan 1 ist ein guter Standard fürs Mastering; High und Medium eignen sich für den Schnitt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Film Scan levels keep the most detail and make the largest files. Film Scan 1 is a good mastering default; High and Medium suit editing."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los niveles Film Scan conservan el mayor detalle y generan los archivos más grandes. Film Scan 1 es un buen valor predeterminado para masterizar; High y Medium son adecuados para edición."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Les niveaux Film Scan conservent le plus de détails et produisent les fichiers les plus lourds. Film Scan 1 est un bon choix par défaut pour le mastering ; High et Medium conviennent au montage."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "I livelli Film Scan mantengono più dettagli e producono i file più grandi. Film Scan 1 è un buon valore predefinito per il mastering; High e Medium sono adatti al montaggio."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Film Scan レベルは最も多くのディテールを保持し、ファイルサイズも最大になります。マスタリングには Film Scan 1 が適した初期値で、編集には High や Medium が向いています。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Film Scan 단계는 가장 많은 디테일을 유지하며 파일 크기도 가장 큽니다. 마스터링에는 Film Scan 1이 적당한 기본값이며, 편집에는 High와 Medium이 적합합니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Film Scan-nivåene beholder mest detaljer og gir de største filene. Film Scan 1 er et godt standardvalg for mastering; High og Medium passer for redigering."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Os níveis Film Scan mantêm o máximo de detalhes e geram os maiores arquivos. Film Scan 1 é um bom padrão para masterização; High e Medium são adequados para edição."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Film Scan 级别保留最多细节，文件也最大。Film Scan 1 是母版制作的良好默认值；High 和 Medium 适合剪辑。"
+          }
+        }
+      }
+    },
     "Flip horizontally" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4979,6 +5109,72 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "正在准备报告…"
+          }
+        }
+      }
+    },
+    "PRESET_CINEFORM_DESCRIPTION" : {
+      "comment" : "Description for CineForm preset",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "GoPro-CineForm-Zwischenformat in Quellauflösung in einem MOV-Container. Wählen Sie 10-Bit 4:2:2 YUV oder 12-Bit 4:4:4 RGB mit oder ohne Alpha sowie eine Qualität von Low bis Film Scan 3+. Breiten werden auf ein Vielfaches von 16 aufgefüllt. Alle Audiospuren werden als 24-Bit-PCM beibehalten."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GoPro CineForm intermediate at the source resolution in a MOV container. Choose 10-bit 4:2:2 YUV, or 12-bit 4:4:4 RGB with or without alpha, and a quality from Low to Film Scan 3+. Widths are padded to a multiple of 16. Every audio track is kept as 24-bit PCM."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Formato intermedio GoPro CineForm a la resolución de origen en un contenedor MOV. Elija YUV 4:2:2 de 10 bits o RGB 4:4:4 de 12 bits con o sin alfa, y una calidad de Low a Film Scan 3+. El ancho se rellena hasta un múltiplo de 16. Todas las pistas de audio se conservan como PCM de 24 bits."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Format intermédiaire GoPro CineForm à la résolution source dans un conteneur MOV. Choisissez YUV 4:2:2 10 bits ou RVB 4:4:4 12 bits avec ou sans alpha, et une qualité de Low à Film Scan 3+. La largeur est complétée jusqu’à un multiple de 16. Toutes les pistes audio sont conservées en PCM 24 bits."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Formato intermedio GoPro CineForm alla risoluzione sorgente in un contenitore MOV. Scegli YUV 4:2:2 a 10 bit o RGB 4:4:4 a 12 bit con o senza alfa, e una qualità da Low a Film Scan 3+. La larghezza viene estesa a un multiplo di 16. Tutte le tracce audio sono mantenute in PCM a 24 bit."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ソース解像度の GoPro CineForm 中間フォーマットを MOV コンテナで出力します。10 ビット 4:2:2 YUV、またはアルファあり／なしの 12 ビット 4:4:4 RGB と、Low から Film Scan 3+ までの品質を選べます。幅は 16 の倍数になるよう余白が追加されます。すべての音声トラックは 24 ビット PCM として保持されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "소스 해상도의 GoPro CineForm 중간 형식을 MOV 컨테이너로 출력합니다. 10비트 4:2:2 YUV 또는 알파 포함/미포함 12비트 4:4:4 RGB와 Low부터 Film Scan 3+까지의 품질을 선택하세요. 너비는 16의 배수가 되도록 여백이 추가됩니다. 모든 오디오 트랙은 24비트 PCM으로 유지됩니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GoPro CineForm-mellomformat i kildeoppløsning i en MOV-container. Velg 10-bit 4:2:2 YUV eller 12-bit 4:4:4 RGB med eller uten alfa, og en kvalitet fra Low til Film Scan 3+. Bredden fylles ut til et multiplum av 16. Alle lydspor beholdes som 24-bit PCM."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Formato intermediário GoPro CineForm na resolução de origem em um contêiner MOV. Escolha YUV 4:2:2 de 10 bits ou RGB 4:4:4 de 12 bits com ou sem alfa, e uma qualidade de Low a Film Scan 3+. A largura é preenchida até um múltiplo de 16. Todas as faixas de áudio são mantidas como PCM de 24 bits."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "源分辨率的 GoPro CineForm 中间格式，输出为 MOV 容器。可选择 10 位 4:2:2 YUV，或带/不带 Alpha 的 12 位 4:4:4 RGB，以及从 Low 到 Film Scan 3+ 的质量。宽度会补边到 16 的倍数。所有音轨均保留为 24 位 PCM。"
           }
         }
       }

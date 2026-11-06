@@ -273,6 +273,60 @@ enum DNxHRContainer: String, CaseIterable, Identifiable {
     }
 }
 
+/// Pixel layouts for the CineForm preset. FFmpeg's encoder stores 10-bit 4:2:2 YUV
+/// or 12-bit 4:4:4 RGB, optionally with alpha; GoPro's own 16-bit input modes
+/// are also coded at 12-bit precision.
+enum CineFormProfile: String, CaseIterable, Identifiable {
+    case yuv422 = "10-bit 4:2:2 (YUV)"
+    case rgb444 = "12-bit 4:4:4 (RGB)"
+    case rgba4444 = "12-bit 4:4:4:4 (RGB + alpha)"
+
+    var id: String { rawValue }
+
+    var pixelFormat: String {
+        switch self {
+        case .yuv422: return "yuv422p10le"
+        case .rgb444: return "gbrp12le"
+        case .rgba4444: return "gbrap12le"
+        }
+    }
+}
+
+/// CineForm quality levels, named as in GoPro's tools; values are FFmpeg's `-quality` names.
+enum CineFormQuality: String, CaseIterable, Identifiable {
+    case filmScan3Plus = "Film Scan 3+"
+    case filmScan3 = "Film Scan 3"
+    case filmScan2Plus = "Film Scan 2+"
+    case filmScan2 = "Film Scan 2"
+    case filmScan1Plus = "Film Scan 1+"
+    case filmScan1 = "Film Scan 1"
+    case highPlus = "High+"
+    case high = "High"
+    case mediumPlus = "Medium+"
+    case medium = "Medium"
+    case lowPlus = "Low+"
+    case low = "Low"
+
+    var id: String { rawValue }
+
+    var ffmpegName: String {
+        switch self {
+        case .filmScan3Plus: return "film3+"
+        case .filmScan3: return "film3"
+        case .filmScan2Plus: return "film2+"
+        case .filmScan2: return "film2"
+        case .filmScan1Plus: return "film1+"
+        case .filmScan1: return "film1"
+        case .highPlus: return "high+"
+        case .high: return "high"
+        case .mediumPlus: return "medium+"
+        case .medium: return "medium"
+        case .lowPlus: return "low+"
+        case .low: return "low"
+        }
+    }
+}
+
 /// Broadcast formats for the XDCAM HD422 preset (MPEG-2 422P@HL, 50 Mbps long GOP).
 enum XDCAMHD422Format: String, CaseIterable, Identifiable {
     case i50 = "1080i50"
@@ -964,6 +1018,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
     case lossless = "Lossless (FFV1)"
     case prores = "ProRes"
     case dnxhr = "DNxHR"
+    case cineform = "CineForm"
     case proxy = "Proxy"
     case streamCopy = "Stream Copy"
     case audioOnly = "Audio Only"
@@ -985,7 +1040,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
     var supportsRecursiveEncoding: Bool {
         switch self {
         case .lossless, .h264, .h265, .av1, .prores, .proxy, .tvHEVC, .tvAVCIntra, .audioOnly,
-             .dnxhr, .xdcamHD422, .vp9:
+             .dnxhr, .cineform, .xdcamHD422, .vp9:
             return true
         default:
             return false
@@ -1012,7 +1067,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return AV2Container.current.fileExtension
         case .lossless:
             return "mkv"
-        case .prores, .tvHEVC:
+        case .prores, .tvHEVC, .cineform:
             return "mov"
         case .tvAVCIntra, .xdcamHD422:
             return "mxf"
@@ -1119,6 +1174,12 @@ enum ExportPreset: String, CaseIterable, Identifiable {
                 value: "Avid DNxHR mastering and editing format at the source resolution. Choose LB, SQ or HQ (8-bit 4:2:2), HQX (10-bit 4:2:2) or 444 (10-bit 4:4:4) in a MOV or MXF container. Every audio track is kept as 24-bit PCM.",
                 comment: "Description for DNxHR preset"
             )
+        case .cineform:
+            return NSLocalizedString(
+                "PRESET_CINEFORM_DESCRIPTION",
+                value: "GoPro CineForm intermediate at the source resolution in a MOV container. Choose 10-bit 4:2:2 YUV, or 12-bit 4:4:4 RGB with or without alpha, and a quality from Low to Film Scan 3+. Widths are padded to a multiple of 16. Every audio track is kept as 24-bit PCM.",
+                comment: "Description for CineForm preset"
+            )
         case .vp9:
             return NSLocalizedString(
                 "PRESET_VP9_DESCRIPTION",
@@ -1174,6 +1235,8 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return "_xdcam"
         case .dnxhr:
             return "_dnxhr"
+        case .cineform:
+            return "_cineform"
         case .vp9:
             return "_vp9"
         case .lossless:
@@ -1771,6 +1834,24 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             }
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
             return args
+        case .cineform:
+            let profile = CineFormProfile(rawValue: defaults.string(forKey: AppConstants.cineformProfileKey)
+                ?? AppConstants.defaultCineFormProfile) ?? .yuv422
+            let quality = CineFormQuality(rawValue: defaults.string(forKey: AppConstants.cineformQualityKey)
+                ?? AppConstants.defaultCineFormQuality) ?? .filmScan1
+
+            var args = commonArgs + [
+                "-pix_fmt", profile.pixelFormat,
+                "-c:v", "cfhd",
+                "-quality", quality.ffmpegName,
+                // FFmpeg's CineForm encoder needs a width divisible by 16; pad, centred, rather than rescale.
+                "-vf", Self.desqueezeFilter + ",pad=w=ceil(iw/16)*16:h=ih:x=(ow-iw)/2",
+                "-map", "0:v:0",
+                "-c:a", "pcm_s24le",
+                "-map", "0:a?"
+            ]
+            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
+            return args
         case .vp9:
             let qualityRaw = defaults.string(forKey: AppConstants.vp9QualityKey) ?? AppConstants.defaultVP9Quality
             let quality = AV1QualityLevel(rawValue: qualityRaw) ?? .good
@@ -1925,7 +2006,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
     var supportsMatteSidecar: Bool {
         switch self {
         case .videoLoop, .videoLoopWithSound, .h264, .h265, .av1, .tvHEVC, .tvAVCIntra, .prores, .proxy,
-             .dnxhr, .xdcamHD422, .vp9,
+             .dnxhr, .cineform, .xdcamHD422, .vp9,
              .custom1, .custom2, .custom3, .custom4, .custom5, .custom6, .custom7, .custom8, .custom9, .custom10:
             return true
         case .animatedStill, .av2, .lossless, .streamCopy, .audioOnly, .imageSequence, .dcp, .imfJ2K, .imfProRes:
@@ -1961,7 +2042,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return codecFFmpegArguments(defaults: .standard)
         case .tvHEVC, .tvAVCIntra, .xdcamHD422, .animatedStill, .proxy:
             return codecFFmpegArguments(defaults: .standard)
-        case .prores, .lossless, .dnxhr, .vp9:
+        case .prores, .lossless, .dnxhr, .cineform, .vp9:
             return codecFFmpegArguments(defaults: .standard)
         case .streamCopy:
             return codecFFmpegArguments(defaults: .standard)
@@ -2087,6 +2168,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
         case .tvAVCIntra: key = AppConstants.tvAVCIntraVisibleKey
         case .xdcamHD422: key = AppConstants.xdcamHD422VisibleKey
         case .dnxhr: key = AppConstants.dnxhrVisibleKey
+        case .cineform: key = AppConstants.cineformVisibleKey
         case .vp9: key = AppConstants.vp9VisibleKey
         case .lossless: key = AppConstants.losslessVisibleKey
         case .prores: key = AppConstants.proresVisibleKey

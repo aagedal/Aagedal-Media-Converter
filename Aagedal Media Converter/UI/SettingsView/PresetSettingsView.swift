@@ -41,6 +41,10 @@ struct PresetsSettingsView: View {
     @AppStorage(AppConstants.dnxhrProfileKey) private var dnxhrProfile = AppConstants.defaultDNxHRProfile
     @AppStorage(AppConstants.dnxhrContainerKey) private var dnxhrContainer = AppConstants.defaultDNxHRContainer
 
+    // CineForm settings
+    @AppStorage(AppConstants.cineformProfileKey) private var cineformProfile = AppConstants.defaultCineFormProfile
+    @AppStorage(AppConstants.cineformQualityKey) private var cineformQuality = AppConstants.defaultCineFormQuality
+
     // VP9 settings
     @AppStorage(AppConstants.vp9QualityKey) private var vp9Quality = AppConstants.defaultVP9Quality
     @AppStorage(AppConstants.vp9SpeedKey) private var vp9Speed = AppConstants.defaultVP9Speed
@@ -161,6 +165,7 @@ struct PresetsSettingsView: View {
     @AppStorage(AppConstants.tvAVCIntraVisibleKey) private var tvAVCIntraVisible = true
     @AppStorage(AppConstants.xdcamHD422VisibleKey) private var xdcamHD422Visible = true
     @AppStorage(AppConstants.dnxhrVisibleKey) private var dnxhrVisible = true
+    @AppStorage(AppConstants.cineformVisibleKey) private var cineformVisible = true
     @AppStorage(AppConstants.vp9VisibleKey) private var vp9Visible = true
     @AppStorage(AppConstants.losslessVisibleKey) private var losslessVisible = true
     @AppStorage(AppConstants.proresVisibleKey) private var proresVisible = true
@@ -1621,6 +1626,39 @@ struct PresetsSettingsView: View {
             }
         }
 
+        if selectedPreset == .cineform {
+            settingsCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Format")
+                        Spacer()
+                        Picker("", selection: $cineformProfile) {
+                            ForEach(CineFormProfile.allCases) { option in
+                                Text(option.rawValue).tag(option.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .labelsHidden()
+                        .help("10-bit 4:2:2 suits camera footage and editing. 12-bit 4:4:4 RGB keeps full chroma for graphics, VFX and finishing; choose RGB + alpha to keep transparency.")
+                    }
+                    HStack {
+                        Text("Quality")
+                        Spacer()
+                        Picker("", selection: $cineformQuality) {
+                            ForEach(CineFormQuality.allCases) { option in
+                                Text(option.rawValue).tag(option.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .labelsHidden()
+                        .help("Film Scan levels keep the most detail and make the largest files. Film Scan 1 is a good mastering default; High and Medium suit editing.")
+                    }
+                }
+            }
+        }
+
         if selectedPreset == .vp9 {
             settingsCard {
                 VStack(alignment: .leading, spacing: 12) {
@@ -2102,6 +2140,8 @@ struct PresetsSettingsView: View {
             return $xdcamHD422Visible
         case .dnxhr:
             return $dnxhrVisible
+        case .cineform:
+            return $cineformVisible
         case .vp9:
             return $vp9Visible
         case .lossless:

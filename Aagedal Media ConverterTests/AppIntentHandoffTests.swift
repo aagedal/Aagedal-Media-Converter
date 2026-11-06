@@ -342,7 +342,7 @@ final class AppIntentHandoffTests: XCTestCase {
     func testManualBridgeSupportsEveryFullyRepresentablePreset() throws {
         let defaults = try makeIsolatedDefaults()
         let supported = ApplicationPresetID.allCases.filter(\.supportsManualSharedExecution)
-        XCTAssertEqual(supported.count, 16)
+        XCTAssertEqual(supported.count, 17)
         for preset in supported {
             let request = try XCTUnwrap(ManualApplicationJobBridge.makeRequest(
                 items: [makeItem(url: first)], destinationFolderURL: folder,
