@@ -57,6 +57,7 @@ struct VideoFileListView: View {
     var onOpenTrimWithCrop: ((UUID) -> Void)?
     var onOpenTimecode: ((UUID) -> Void)?
     var onOpenAudioConfig: ((UUID) -> Void)?
+    var onOpenAdjustments: ((UUID) -> Void)?
     var onOpenMetadata: (([UUID]) -> Void)?
     var onOpenDCPMetadata: ((UUID) -> Void)?
     var onOpenIMFMetadata: ((UUID) -> Void)?
@@ -255,6 +256,7 @@ struct VideoFileListView: View {
                     onOpenTrimWithCrop: onOpenTrimWithCrop,
                     onOpenTimecode: onOpenTimecode,
                     onOpenAudioConfig: onOpenAudioConfig,
+                    onOpenAdjustments: onOpenAdjustments,
                     onOpenMetadata: onOpenMetadata,
                     onOpenDCPMetadata: onOpenDCPMetadata,
                     onOpenIMFMetadata: onOpenIMFMetadata,

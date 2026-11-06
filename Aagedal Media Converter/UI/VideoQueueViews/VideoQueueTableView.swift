@@ -150,6 +150,7 @@ struct VideoQueueTableView: NSViewRepresentable {
     var onOpenTrimWithCrop: ((UUID) -> Void)?
     var onOpenTimecode: ((UUID) -> Void)?
     var onOpenAudioConfig: ((UUID) -> Void)?
+    var onOpenAdjustments: ((UUID) -> Void)?
     var onOpenMetadata: (([UUID]) -> Void)?
     var onOpenDCPMetadata: ((UUID) -> Void)?
     var onOpenIMFMetadata: ((UUID) -> Void)?
@@ -1105,6 +1106,7 @@ struct VideoQueueTableView: NSViewRepresentable {
                 canRunAnalyticsWithFilePicker: item.canRunAnalyticsWithFilePicker,
                 isMuted: item.isMuted,
                 hasCustomAudioRouting: hasCustomRouting,
+                hasAdjustments: item.adjustments?.isActive ?? false,
                 hasSurroundAudio: hasSurround,
                 hasDownmix: hasDownmix,
                 audioTrackCount: trackCount,
@@ -1580,6 +1582,8 @@ struct VideoQueueTableView: NSViewRepresentable {
                 parent.onOpenIMFMetadata?(itemID)
             case .showAudioRouting:
                 parent.onOpenAudioConfig?(itemID)
+            case .showAdjustments:
+                parent.onOpenAdjustments?(itemID)
             case .showTimecode:
                 parent.onOpenTimecode?(itemID)
             case .playFullscreen:

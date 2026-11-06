@@ -126,6 +126,7 @@ struct ConversionPreparationSettings: Sendable {
     let imageSequence: ImageSequenceSettings?
     let codec: CodecExportSettings?
     let subtitles: SubtitleExportSettings
+    let loudness: LoudnessNormalizationSettings
     let comment: CommentSettings
     let packageMetadata: PackageMetadataSettings
     let generatedVideo: GeneratedVideoSettings
@@ -145,6 +146,7 @@ struct ConversionPreparationSettings: Sendable {
         imageSequence = preset == .imageSequence ? ImageSequenceSettings(defaults: defaults) : nil
         codec = CodecExportSettings(preset: preset, defaults: defaults)
         subtitles = SubtitleExportSettings(defaults: defaults)
+        loudness = LoudnessNormalizationSettings(defaults: defaults)
         comment = CommentSettings(defaults: defaults)
         packageMetadata = PackageMetadataSettings(defaults: defaults)
         generatedVideo = GeneratedVideoSettings(preset: preset, defaults: defaults)

@@ -157,6 +157,7 @@ struct ContentView: View {
     @State private var trimWithCropSheetItemID: UUID?
     @State private var timecodeSheetItemID: UUID?
     @State private var audioConfigSheetItemID: UUID?
+    @State private var adjustmentsSheetItemID: UUID?
     @State private var dcpMetadataSheetItemID: UUID?
     @State private var imfMetadataSheetItemID: UUID?
     
@@ -259,6 +260,7 @@ struct ContentView: View {
             trimWithCropSheetItemID != nil ||
             timecodeSheetItemID != nil ||
             audioConfigSheetItemID != nil ||
+            adjustmentsSheetItemID != nil ||
             dcpMetadataSheetItemID != nil ||
             imfMetadataSheetItemID != nil ||
             CaptureOverlayWindowController.shared.isShowing ||
@@ -518,6 +520,10 @@ struct ContentView: View {
                 guard itemExists(id: id) else { return }
                 audioConfigSheetItemID = id
             },
+            onOpenAdjustments: { [self] id in
+                guard itemExists(id: id) else { return }
+                adjustmentsSheetItemID = id
+            },
             onOpenMetadata: { [self] ids in
                 // Gather all items from both ungrouped queue and encoding groups
                 let allItems = droppedFiles + encodingGroups.flatMap { $0.items }
@@ -737,6 +743,7 @@ struct ContentView: View {
                 trimWithCropSheetItemID: $trimWithCropSheetItemID,
                 timecodeSheetItemID: $timecodeSheetItemID,
                 audioConfigSheetItemID: $audioConfigSheetItemID,
+                adjustmentsSheetItemID: $adjustmentsSheetItemID,
                 dcpMetadataSheetItemID: $dcpMetadataSheetItemID,
                 imfMetadataSheetItemID: $imfMetadataSheetItemID,
                 selectedPreset: selectedPreset,
@@ -3679,6 +3686,7 @@ private struct ContentViewSheets: ViewModifier {
     @Binding var trimWithCropSheetItemID: UUID?
     @Binding var timecodeSheetItemID: UUID?
     @Binding var audioConfigSheetItemID: UUID?
+    @Binding var adjustmentsSheetItemID: UUID?
     @Binding var dcpMetadataSheetItemID: UUID?
     @Binding var imfMetadataSheetItemID: UUID?
     let selectedPreset: ExportPreset
@@ -3699,6 +3707,9 @@ private struct ContentViewSheets: ViewModifier {
             }
             .sheet(isPresented: sheetBinding(for: $audioConfigSheetItemID)) {
                 audioConfigSheetContent
+            }
+            .sheet(isPresented: sheetBinding(for: $adjustmentsSheetItemID)) {
+                adjustmentsSheetContent
             }
             .sheet(isPresented: sheetBinding(for: $dcpMetadataSheetItemID)) {
                 dcpMetadataSheetContent
@@ -3750,6 +3761,13 @@ private struct ContentViewSheets: ViewModifier {
     private var audioConfigSheetContent: some View {
         if let id = audioConfigSheetItemID, let binding = itemBinding(id: id) {
             AudioRoutingView(item: binding, preset: presetForItem(id))
+        }
+    }
+
+    @ViewBuilder
+    private var adjustmentsSheetContent: some View {
+        if let id = adjustmentsSheetItemID, let binding = itemBinding(id: id) {
+            MediaAdjustmentsView(item: binding, preset: presetForItem(id))
         }
     }
 

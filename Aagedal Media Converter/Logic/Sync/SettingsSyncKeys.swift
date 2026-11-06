@@ -175,6 +175,13 @@ enum SettingsSyncKeys {
         AppConstants.videoLoopDefaultMutedKey,
         AppConstants.keepSubtitlesKey,
 
+        // Loudness normalization
+        AppConstants.loudnessNormalizationEnabledKey,
+        AppConstants.loudnessNormalizationStandardKey,
+        AppConstants.loudnessNormalizationIntegratedKey,
+        AppConstants.loudnessNormalizationTruePeakKey,
+        AppConstants.loudnessNormalizationRangeKey,
+
         // File-name processing & templates
         AppConstants.includeDateTagPreferenceKey,
         AppConstants.preserveMetadataPreferenceKey,

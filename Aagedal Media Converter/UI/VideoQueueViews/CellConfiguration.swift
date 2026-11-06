@@ -126,6 +126,8 @@ struct VideoFileCellConfiguration: Equatable {
     // Audio/video config state (for badge display)
     let isMuted: Bool
     let hasCustomAudioRouting: Bool
+    /// Rotation, speed, fades, audio offset/replacement, burned-in subtitles or a loudness override.
+    let hasAdjustments: Bool
     let hasSurroundAudio: Bool
     let hasDownmix: Bool
     let audioTrackCount: Int
@@ -374,6 +376,7 @@ enum CellAction {
     case moveSelectionToNewGroup
     case showMetadata
     case showAudioRouting
+    case showAdjustments
     case showTimecode
     case showDCPMetadata
     case showIMFMetadata

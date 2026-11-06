@@ -127,6 +127,12 @@ struct PresetsSettingsView: View {
 
     @AppStorage(AppConstants.keepSubtitlesKey) private var keepSubtitles = AppConstants.defaultKeepSubtitles
 
+    @AppStorage(AppConstants.loudnessNormalizationEnabledKey) private var loudnessEnabled = false
+    @AppStorage(AppConstants.loudnessNormalizationStandardKey) private var loudnessStandard = LoudnessNormalizationSettings.Standard.ebuR128.rawValue
+    @AppStorage(AppConstants.loudnessNormalizationIntegratedKey) private var loudnessIntegrated = -23.0
+    @AppStorage(AppConstants.loudnessNormalizationTruePeakKey) private var loudnessTruePeak = -1.0
+    @AppStorage(AppConstants.loudnessNormalizationRangeKey) private var loudnessRange = 20.0
+
     // Built-in preset visibility (default to true)
     @AppStorage(AppConstants.videoLoopVisibleKey) private var videoLoopVisible = true
     @AppStorage(AppConstants.videoLoopWithSoundVisibleKey) private var videoLoopWithSoundVisible = true
@@ -1634,6 +1640,12 @@ struct PresetsSettingsView: View {
             }
         }
 
+        if FFMPEGCommandBuilder.adjustmentsUnsupportedReason(
+            preset: selectedPreset, codecSettings: nil, customInputArguments: nil, generatesVideo: false
+        ) == nil, selectedPreset.outputsAudioTrack {
+            settingsCard { loudnessSettings }
+        }
+
         // Visibility toggle for built-in presets
         if !selectedPreset.isCustom {
             settingsCard {
@@ -1847,6 +1859,55 @@ struct PresetsSettingsView: View {
     private func setCustomPresetActive(_ value: Bool, slot: Int) {
         UserDefaults.standard.set(value, forKey: AppConstants.customPresetActiveKey(for: slot))
         customPresetRefreshToken = UUID()
+    }
+
+    /// Shared by every re-encoding preset with audio; items can override it in Adjustments.
+    @ViewBuilder
+    private var loudnessSettings: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: $loudnessEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Normalize Loudness")
+                        .font(.subheadline)
+                    Text("Measure each audio track, then normalize it to the target (two-pass loudnorm). Applies to all re-encoding presets.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .toggleStyle(SwitchToggleStyle())
+
+            if loudnessEnabled {
+                Picker("Target", selection: $loudnessStandard) {
+                    ForEach(LoudnessNormalizationSettings.Standard.allCases) { standard in
+                        Text(standard.displayName).tag(standard.rawValue)
+                    }
+                }
+                if loudnessStandard == LoudnessNormalizationSettings.Standard.custom.rawValue {
+                    HStack {
+                        Text("Integrated")
+                        TextField("LUFS", value: $loudnessIntegrated, format: .number.precision(.fractionLength(0...1)))
+                            .frame(width: 60)
+                        Text(verbatim: "LUFS")
+                        Spacer()
+                        Text("True peak")
+                        TextField("dBTP", value: $loudnessTruePeak, format: .number.precision(.fractionLength(0...1)))
+                            .frame(width: 60)
+                        Text(verbatim: "dBTP")
+                    }
+                    .font(.caption)
+                }
+                HStack {
+                    Text("Loudness range target")
+                    TextField("LU", value: $loudnessRange, format: .number.precision(.fractionLength(0...1)))
+                        .frame(width: 60)
+                    Text(verbatim: "LU")
+                }
+                .font(.caption)
+                Text("Programmes whose range or true peak cannot meet the target with a single gain are normalized dynamically instead. Not applied to Stream Copy, DCP, IMF, AV2, merges or generated waveform video.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
     }
 
     private func visibilityBinding(for preset: ExportPreset) -> Binding<Bool> {

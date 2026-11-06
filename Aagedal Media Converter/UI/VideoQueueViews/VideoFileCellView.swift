@@ -1282,6 +1282,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         if Self.thumbnailAreaEnabled, isFirstConfigure
             || prev?.isMuted != config.isMuted
             || prev?.hasCustomAudioRouting != config.hasCustomAudioRouting
+            || prev?.hasAdjustments != config.hasAdjustments
             || prev?.hasDownmix != config.hasDownmix
             || prev?.hasOutputSurroundWithoutDownmix != config.hasOutputSurroundWithoutDownmix
             || prev?.audioTrackCount != config.audioTrackCount

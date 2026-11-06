@@ -644,6 +644,13 @@ enum AppConstants {
     static let keepSubtitlesKey = "keepSubtitles"
     static let defaultKeepSubtitles = false
 
+    // Loudness normalization (two-pass loudnorm) applied to re-encoded audio
+    static let loudnessNormalizationEnabledKey = "loudnessNormalizationEnabled"
+    static let loudnessNormalizationStandardKey = "loudnessNormalizationStandard"
+    static let loudnessNormalizationIntegratedKey = "loudnessNormalizationIntegrated"
+    static let loudnessNormalizationTruePeakKey = "loudnessNormalizationTruePeak"
+    static let loudnessNormalizationRangeKey = "loudnessNormalizationRange"
+
     // VideoLoop mute settings
     static let videoLoopDefaultMutedKey = "videoLoopDefaultMuted"
     static let defaultVideoLoopMuted = true

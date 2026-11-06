@@ -528,6 +528,10 @@ extension VideoFileCellView {
         if config.hasVideoStream || config.audioStreamCount > 0 {
             menu.addItem(withTitle: "Audio Routing", action: #selector(ctxAudioRouting), keyEquivalent: "")
                 .target = self
+            let adjustmentsItem = menu.addItem(withTitle: "Adjustments…", action: #selector(ctxAdjustments), keyEquivalent: "")
+            adjustmentsItem.target = self
+            adjustmentsItem.state = config.hasAdjustments ? .on : .off
+            adjustmentsItem.isEnabled = config.status != .converting && config.applicationJobID == nil
         }
 
         menu.addItem(withTitle: "Attach Subtitle File", action: #selector(ctxAttachSubtitle), keyEquivalent: "")
@@ -571,6 +575,7 @@ extension VideoFileCellView {
     @objc private func ctxDCPMetadata() { actionHandler?(.showDCPMetadata) }
     @objc private func ctxIMFMetadata() { actionHandler?(.showIMFMetadata) }
     @objc private func ctxAudioRouting() { actionHandler?(.showAudioRouting) }
+    @objc private func ctxAdjustments() { actionHandler?(.showAdjustments) }
     @objc private func ctxAttachSubtitle() { actionHandler?(.attachSubtitleFile) }
     @objc private func ctxRecursiveEncoding() { actionHandler?(.toggleRecursiveEncoding) }
     @objc private func ctxRename() { beginOutputNameEditing() }

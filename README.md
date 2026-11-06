@@ -89,6 +89,21 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 - Audio Track deletion and rearrangement
     - Does not work with the Stream Copy preset
 
+### Adjustments
+Right-click a queued file and choose **Adjustments…** to set, per file:
+- **Rotate** 90°/180° and **flip** horizontally or vertically (applied after crop, before the preset's scaling)
+- **Speed** from 0.25× to 4× with pitch-preserved audio
+- **Fade** video in from / out to black, and fade audio in and out
+- **Audio offset** to fix out-of-sync clips (positive delays the audio)
+- **Replace or add audio** from another file, aligned with the trim and fitted to the video's length
+- **Burn in subtitles** from a text subtitle track or an SRT, ASS or VTT file, with font size, outline or box, and position. Picture subtitles (PGS, DVD) need subtitle OCR to SRT first.
+- A per-file override of loudness normalization
+
+Adjustments need a re-encoding preset; they are not available for Stream Copy, DCP, IMF, AV2, merges or generated waveform video.
+
+### Loudness normalization
+Turn on **Normalize Loudness** in Settings → Presets to normalize every re-encoded audio track to EBU R128 (−23 LUFS, −1 dBTP), ATSC A/85, streaming (−14 LUFS), web/podcast (−16 LUFS) or a custom target. Each track is measured in a first pass, then normalized with FFmpeg's `loudnorm` using a linear gain where the programme allows it. Mono-track broadcast presets such as AVC-Intra are measured per source track before the split, so stereo balance is kept.
+
 ### Merge queued files
 - Merge files into one if they are the same codec, resolution, frame rate, bit depth, and audio tracks.
 - The first clip in the queue works as a master for timecode and crop.
