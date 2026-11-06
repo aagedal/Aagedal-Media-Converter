@@ -244,16 +244,19 @@ final class MediaAdjustmentsTests: XCTestCase {
     func testMonoTrackBroadcastPresetNormalizesSourcesBeforeTheSplit() async throws {
         let fixture = try await Fixture.make(audioTracks: 1, size: "1920x1080")
         defer { fixture.remove() }
-        let output = fixture.directory.appendingPathComponent("avci.mxf")
-        let command = try await fixture.export(
-            preset: .tvAVCIntra, adjustments: ResolvedMediaAdjustments(adjustments: nil, globalLoudness: .enabledEBU),
-            to: output
-        )
-        XCTAssertEqual(command.loudnessTrackCount, 1)
-        let graph = try XCTUnwrap(command.arguments.firstIndex(of: "-filter_complex").map { command.arguments[$0 + 1] })
-        XCTAssertTrue(graph.hasPrefix("[0:a:0]loudnorm="), graph)
-        let probe = try await fixture.probe(output)
-        XCTAssertGreaterThanOrEqual(probe.audioTracks, 2)
+        for preset in [ExportPreset.tvAVCIntra, .xdcamHD422] {
+            XCTAssertTrue(preset.splitsAudioIntoMonoTracks)
+            let output = fixture.directory.appendingPathComponent("\(preset.rawValue.filter(\.isLetter)).mxf")
+            let command = try await fixture.export(
+                preset: preset, adjustments: ResolvedMediaAdjustments(adjustments: nil, globalLoudness: .enabledEBU),
+                to: output
+            )
+            XCTAssertEqual(command.loudnessTrackCount, 1, preset.rawValue)
+            let graph = try XCTUnwrap(command.arguments.firstIndex(of: "-filter_complex").map { command.arguments[$0 + 1] })
+            XCTAssertTrue(graph.hasPrefix("[0:a:0]loudnorm="), graph)
+            let probe = try await fixture.probe(output)
+            XCTAssertGreaterThanOrEqual(probe.audioTracks, 2, preset.rawValue)
+        }
     }
 
     func testParsesLoudnormStatisticsInGraphOrder() {
