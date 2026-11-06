@@ -5670,7 +5670,7 @@ actor FFMPEGConverter {
         waveformRequest: WaveformVideoRequest?,
         synthesizedVideoRequest: SynthesizedVideoRequest?
     ) -> Bool {
-        guard preset == .tvAVCIntra else { return false }
+        guard preset.splitsAudioIntoMonoTracks else { return false }
         // Only needed for audio-only files (which use waveform or synthesized video)
         return waveformRequest != nil || synthesizedVideoRequest != nil
     }

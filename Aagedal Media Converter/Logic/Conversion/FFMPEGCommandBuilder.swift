@@ -1040,7 +1040,7 @@ extension FFMPEGCommandBuilder {
     /// Mono-track deliveries are normalized per source track before the split, so a
     /// stereo programme keeps its balance.
     static func audioChainsRunOnSources(preset: ExportPreset, audioRoutingConfig: AudioRoutingConfig?) -> Bool {
-        if preset == .tvAVCIntra { return true }
+        if preset.splitsAudioIntoMonoTracks { return true }
         if case .splitToMono? = audioRoutingConfig?.channelOperation { return true }
         return false
     }
@@ -2121,8 +2121,8 @@ extension FFMPEGCommandBuilder {
             await FFMPEGProbeService.fetchAudioStreams(for: url)
         }
     ) async {
-        // Handle AVC-Intra mono channel splitting
-        if preset == .tvAVCIntra {
+        // Handle AVC-Intra / XDCAM HD422 mono channel splitting
+        if preset.splitsAudioIntoMonoTracks {
             let targetChannelCount = (codecSettings ?? CodecExportSettings(preset: preset))?.avcIntraAudioChannels?.count ?? 8
             // Calculate effective duration for silent streams
             let effectiveDuration = await calculateEffectiveDurationForAudio(

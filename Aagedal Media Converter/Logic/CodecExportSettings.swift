@@ -14,6 +14,7 @@ struct CodecExportSettings: Codable, Equatable, Sendable {
     let streamCopyContainer: StreamCopyContainer?
     let appliesCrop: Bool
     let appliesAudioRouting: Bool
+    /// Mono PCM track count for the broadcast MXF presets (AVC-Intra and XDCAM HD422).
     let avcIntraAudioChannels: AVCIntraAudioChannels?
     let resolutionLimit: CodecResolutionLimit?
     let ffmpegArguments: [String]
@@ -41,10 +42,20 @@ struct CodecExportSettings: Codable, Equatable, Sendable {
             appliesCrop = preset.appliesCrop
             appliesAudioRouting = preset.appliesAudioRouting
         }
-        avcIntraAudioChannels = preset == .tvAVCIntra ? AVCIntraAudioChannels(
-            rawValue: defaults.string(forKey: AppConstants.avcIntraAudioChannelsKey)
-                ?? AppConstants.defaultAVCIntraAudioChannels
-        ) ?? .ch8 : nil
+        switch preset {
+        case .tvAVCIntra:
+            avcIntraAudioChannels = AVCIntraAudioChannels(
+                rawValue: defaults.string(forKey: AppConstants.avcIntraAudioChannelsKey)
+                    ?? AppConstants.defaultAVCIntraAudioChannels
+            ) ?? .ch8
+        case .xdcamHD422:
+            avcIntraAudioChannels = AVCIntraAudioChannels(
+                rawValue: defaults.string(forKey: AppConstants.xdcamAudioChannelsKey)
+                    ?? AppConstants.defaultXDCAMAudioChannels
+            ).flatMap { AVCIntraAudioChannels.xdcamCases.contains($0) ? $0 : nil } ?? .ch8
+        default:
+            avcIntraAudioChannels = nil
+        }
         let containerKey: String
         let defaultContainer: String
         let resolutionKey: String
@@ -69,17 +80,30 @@ struct CodecExportSettings: Codable, Equatable, Sendable {
             resolutionLimit = nil
             ffmpegArguments = preset.codecFFmpegArguments(defaults: defaults)
             return
+        case .dnxhr:
+            fileExtension = DNxHRContainer.current(defaults: defaults).fileExtension
+            container = CodecContainer(rawValue: fileExtension.uppercased())
+            resolutionLimit = .unlimited
+            ffmpegArguments = preset.codecFFmpegArguments(defaults: defaults)
+            return
+        case .vp9:
+            fileExtension = VP9Container.current(defaults: defaults).fileExtension
+            container = CodecContainer(rawValue: fileExtension.uppercased())
+            resolutionLimit = CodecResolutionLimit(rawValue: defaults.string(forKey: AppConstants.vp9ResolutionLimitKey)
+                ?? AppConstants.defaultVP9ResolutionLimit) ?? .unlimited
+            ffmpegArguments = preset.codecFFmpegArguments(defaults: defaults, capturedResolution: resolutionLimit)
+            return
         case .prores, .videoLoop, .videoLoopWithSound:
             container = preset == .prores ? .mov : .mp4
             fileExtension = preset == .prores ? "mov" : "mp4"
             resolutionLimit = preset == .prores ? .unlimited : .r1080
             ffmpegArguments = preset.codecFFmpegArguments(defaults: defaults)
             return
-        case .tvHEVC, .tvAVCIntra, .proxy, .animatedStill:
+        case .tvHEVC, .tvAVCIntra, .xdcamHD422, .proxy, .animatedStill:
             switch preset {
             case .tvHEVC:
                 fileExtension = "mov"
-            case .tvAVCIntra:
+            case .tvAVCIntra, .xdcamHD422:
                 fileExtension = "mxf"
             case .proxy:
                 let codec = ProxyCodec(rawValue: defaults.string(forKey: AppConstants.proxyCodecKey)

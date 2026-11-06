@@ -509,6 +509,32 @@ enum AppConstants {
     static let avcIntraDefaultMCASoundfield6ChKey = "avcIntraDefaultMCASoundfield6Ch"
     static let avcIntraDefaultMCASoundfield8ChKey = "avcIntraDefaultMCASoundfield8Ch"
 
+    // XDCAM HD422 preset settings
+    static let xdcamFormatKey = "xdcamHD422Format"                 // XDCAMHD422Format raw value
+    static let defaultXDCAMFormat = "1080i50"
+    static let xdcamAudioChannelsKey = "xdcamHD422AudioChannels"   // AVCIntraAudioChannels raw value (4 or 8)
+    static let defaultXDCAMAudioChannels = "8 Channels"
+
+    // DNxHR preset settings
+    static let dnxhrProfileKey = "dnxhrProfile"                    // DNxHRProfile raw value
+    static let defaultDNxHRProfile = "DNxHR HQ"
+    static let dnxhrContainerKey = "dnxhrContainer"                // DNxHRContainer raw value
+    static let defaultDNxHRContainer = "MOV"
+
+    // VP9 preset settings
+    static let vp9QualityKey = "vp9Quality"                        // AV1QualityLevel raw value (same 0–63 CRF scale)
+    static let defaultVP9Quality = "Good (30)"
+    static let vp9SpeedKey = "vp9Speed"                            // VP9EncodingSpeed raw value
+    static let defaultVP9Speed = "Balanced"
+    static let vp9BitDepthKey = "vp9BitDepth"                      // VP9BitDepth raw value
+    static let defaultVP9BitDepth = "8-bit"
+    static let vp9ContainerKey = "vp9Container"                    // VP9Container raw value
+    static let defaultVP9Container = "WebM"
+    static let vp9ResolutionLimitKey = "vp9ResolutionLimit"        // CodecResolutionLimit raw value
+    static let defaultVP9ResolutionLimit = "Unlimited"
+    static let vp9AudioBitrateKey = "vp9AudioBitrate"              // AudioBitrate raw value for Opus
+    static let defaultVP9AudioBitrate = "192 kbps"
+
     // DCP preset settings
     static let dcpResolutionKey = "dcpResolution"
     static let defaultDCPResolution = "2K Full (2048x1080)"
@@ -665,6 +691,9 @@ enum AppConstants {
     static let av2VisibleKey = "av2Visible"
     static let tvHEVCVisibleKey = "tvHEVCVisible"
     static let tvAVCIntraVisibleKey = "tvAVCIntraVisible"
+    static let xdcamHD422VisibleKey = "xdcamHD422Visible"
+    static let dnxhrVisibleKey = "dnxhrVisible"
+    static let vp9VisibleKey = "vp9Visible"
     static let losslessVisibleKey = "losslessVisible"
     static let proresVisibleKey = "proresVisible"
     static let proxyVisibleKey = "proxyVisible"

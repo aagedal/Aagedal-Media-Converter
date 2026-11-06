@@ -10314,6 +10314,9 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
                 .init(.av1, extension: "mp4", videoCodec: "libsvtav1", audioCodec: "aac", media: .videoAndAudio),
                 .init(.tvHEVC, extension: "mov", videoCodec: "hevc_videotoolbox", audioCodec: "pcm_s24le", media: .videoAndAudio),
                 .init(.tvAVCIntra, extension: "mxf", videoCodec: "libx264", audioCodec: "pcm_s24le", media: .videoAndAudio),
+                .init(.xdcamHD422, extension: "mxf", videoCodec: "mpeg2video", audioCodec: "pcm_s24le", media: .videoAndAudio),
+                .init(.dnxhr, extension: "mov", videoCodec: "dnxhd", audioCodec: "pcm_s24le", media: .videoAndAudio),
+                .init(.vp9, extension: "webm", videoCodec: "libvpx-vp9", audioCodec: "libopus", media: .videoAndAudio),
                 .init(.lossless, extension: "mkv", videoCodec: "ffv1", audioCodec: "pcm_f64le", media: .videoAndAudio),
                 .init(.prores, extension: "mov", videoCodec: "prores_videotoolbox", audioCodec: "pcm_s24le", media: .videoAndAudio),
                 .init(.proxy, extension: "mov", videoCodec: "hevc_videotoolbox", audioCodec: "pcm_s24le", media: .videoAndAudio),
@@ -14661,7 +14664,17 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             AppConstants.imfJ2KColorEncodingKey: AppConstants.defaultIMFJ2KColorEncoding,
             AppConstants.imfJ2KBitrateKey: AppConstants.defaultIMFJ2KBitrate,
             AppConstants.imfProResProfileKey: AppConstants.defaultIMFProResProfile,
-            AppConstants.av2ContainerKey: AppConstants.defaultAV2Container
+            AppConstants.av2ContainerKey: AppConstants.defaultAV2Container,
+            AppConstants.xdcamFormatKey: AppConstants.defaultXDCAMFormat,
+            AppConstants.xdcamAudioChannelsKey: AppConstants.defaultXDCAMAudioChannels,
+            AppConstants.dnxhrProfileKey: AppConstants.defaultDNxHRProfile,
+            AppConstants.dnxhrContainerKey: AppConstants.defaultDNxHRContainer,
+            AppConstants.vp9QualityKey: AppConstants.defaultVP9Quality,
+            AppConstants.vp9SpeedKey: AppConstants.defaultVP9Speed,
+            AppConstants.vp9BitDepthKey: AppConstants.defaultVP9BitDepth,
+            AppConstants.vp9ContainerKey: AppConstants.defaultVP9Container,
+            AppConstants.vp9ResolutionLimitKey: AppConstants.defaultVP9ResolutionLimit,
+            AppConstants.vp9AudioBitrateKey: AppConstants.defaultVP9AudioBitrate
         ]
     }
 

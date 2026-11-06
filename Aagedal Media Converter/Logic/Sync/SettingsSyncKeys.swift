@@ -66,6 +66,9 @@ enum SettingsSyncKeys {
         AppConstants.av2VisibleKey,
         AppConstants.tvHEVCVisibleKey,
         AppConstants.tvAVCIntraVisibleKey,
+        AppConstants.xdcamHD422VisibleKey,
+        AppConstants.dnxhrVisibleKey,
+        AppConstants.vp9VisibleKey,
         AppConstants.proresVisibleKey,
         AppConstants.proxyVisibleKey,
         AppConstants.streamCopyVisibleKey,
@@ -137,6 +140,18 @@ enum SettingsSyncKeys {
         AppConstants.avcIntraDefaultMCASoundfield2ChKey,
         AppConstants.avcIntraDefaultMCASoundfield6ChKey,
         AppConstants.avcIntraDefaultMCASoundfield8ChKey,
+
+        // XDCAM HD422 / DNxHR / VP9
+        AppConstants.xdcamFormatKey,
+        AppConstants.xdcamAudioChannelsKey,
+        AppConstants.dnxhrProfileKey,
+        AppConstants.dnxhrContainerKey,
+        AppConstants.vp9QualityKey,
+        AppConstants.vp9SpeedKey,
+        AppConstants.vp9BitDepthKey,
+        AppConstants.vp9ContainerKey,
+        AppConstants.vp9ResolutionLimitKey,
+        AppConstants.vp9AudioBitrateKey,
 
         // DCP
         AppConstants.dcpResolutionKey,

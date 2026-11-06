@@ -519,6 +519,152 @@ final class CodecExportSettingsTests: XCTestCase {
         }
     }
 
+    func testDNxHRArgumentsFollowProfileAndContainer() throws {
+        let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let mov = try XCTUnwrap(CodecExportSettings(preset: .dnxhr, defaults: defaults))
+        XCTAssertEqual(mov.fileExtension, "mov")
+        XCTAssertEqual(mov.container, .mov)
+        XCTAssertEqual(Array(mov.ffmpegArguments.prefix(13)), [
+            "-hide_banner", "-pix_fmt", "yuv422p", "-c:v", "dnxhd", "-profile:v", "dnxhr_hq",
+            "-vf", "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1", "-map", "0:v:0", "-c:a", "pcm_s24le"
+        ])
+        XCTAssertFalse(mov.ffmpegArguments.contains("-ar"))
+
+        defaults.set(DNxHRProfile.hqx.rawValue, forKey: AppConstants.dnxhrProfileKey)
+        defaults.set(DNxHRContainer.mxf.rawValue, forKey: AppConstants.dnxhrContainerKey)
+        let mxf = try XCTUnwrap(CodecExportSettings(preset: .dnxhr, defaults: defaults))
+        XCTAssertEqual(mxf.fileExtension, "mxf")
+        XCTAssertEqual(value(after: "-profile:v", in: mxf.ffmpegArguments), "dnxhr_hqx")
+        XCTAssertEqual(value(after: "-pix_fmt", in: mxf.ffmpegArguments), "yuv422p10le")
+        XCTAssertEqual(value(after: "-ar", in: mxf.ffmpegArguments), "48000")
+        XCTAssertTrue(mxf.ffmpegArguments.contains("0:a?"))
+
+        defaults.set(DNxHRProfile.dnx444.rawValue, forKey: AppConstants.dnxhrProfileKey)
+        let full = try XCTUnwrap(CodecExportSettings(preset: .dnxhr, defaults: defaults))
+        XCTAssertEqual(value(after: "-profile:v", in: full.ffmpegArguments), "dnxhr_444")
+        XCTAssertEqual(value(after: "-pix_fmt", in: full.ffmpegArguments), "yuv444p10le")
+    }
+
+    func testXDCAMHD422ArgumentsUseBroadcastGOPAndRateControl() throws {
+        let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let i50 = try XCTUnwrap(CodecExportSettings(preset: .xdcamHD422, defaults: defaults))
+        let args = i50.ffmpegArguments
+        XCTAssertEqual(i50.fileExtension, "mxf")
+        XCTAssertEqual(i50.avcIntraAudioChannels, .ch8)
+        for (option, expected) in [
+            ("-pix_fmt", "yuv422p"), ("-c:v", "mpeg2video"), ("-profile:v", "0"), ("-level:v", "2"),
+            ("-b:v", "50M"), ("-minrate", "50M"), ("-maxrate", "50M"), ("-bufsize", "17825792"),
+            ("-g", "12"), ("-bf", "2"), ("-mpv_flags", "+strict_gop"), ("-flags", "+ilme+ildct+cgop"), ("-alternate_scan", "1"),
+            ("-intra_vlc", "1"), ("-non_linear_quant", "1"), ("-intra_dc_precision", "2"), ("-qmax", "28"),
+            ("-r", "25"), ("-c:a", "pcm_s24le"), ("-ar", "48000"), ("-ac", "8"), ("-f", "mxf"),
+        ] {
+            XCTAssertEqual(value(after: option, in: args), expected, option)
+        }
+        let filter = try XCTUnwrap(value(after: "-vf", in: args))
+        XCTAssertTrue(filter.contains("scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080"))
+        XCTAssertTrue(filter.hasSuffix(",fps=50,tinterlace=interleave_top,fieldorder=tff"))
+
+        defaults.set(XDCAMHD422Format.p720p5994.rawValue, forKey: AppConstants.xdcamFormatKey)
+        defaults.set(AVCIntraAudioChannels.ch4.rawValue, forKey: AppConstants.xdcamAudioChannelsKey)
+        let p720 = try XCTUnwrap(CodecExportSettings(preset: .xdcamHD422, defaults: defaults))
+        XCTAssertEqual(p720.avcIntraAudioChannels, .ch4)
+        XCTAssertEqual(value(after: "-g", in: p720.ffmpegArguments), "15")
+        XCTAssertEqual(value(after: "-flags", in: p720.ffmpegArguments), "+cgop")
+        XCTAssertEqual(value(after: "-r", in: p720.ffmpegArguments), "60000/1001")
+        XCTAssertFalse(p720.ffmpegArguments.contains("-alternate_scan"))
+        XCTAssertFalse(try XCTUnwrap(value(after: "-vf", in: p720.ffmpegArguments)).contains("tinterlace"))
+        XCTAssertEqual(ExportPreset.xdcamHD422.resolutionLabel(defaults: defaults), "720p")
+        XCTAssertEqual(ExportPreset.xdcamHD422.framerateLabel(defaults: defaults), "59.94p")
+
+        // 16 channels is an AVC-Intra option only; XDCAM falls back to 8.
+        defaults.set(AVCIntraAudioChannels.ch16.rawValue, forKey: AppConstants.xdcamAudioChannelsKey)
+        XCTAssertEqual(CodecExportSettings(preset: .xdcamHD422, defaults: defaults)?.avcIntraAudioChannels, .ch8)
+    }
+
+    func testXDCAMHD422SplitsAudioIntoCapturedMonoTracks() async throws {
+        let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(AVCIntraAudioChannels.ch4.rawValue, forKey: AppConstants.xdcamAudioChannelsKey)
+        let captured = try XCTUnwrap(CodecExportSettings(preset: .xdcamHD422, defaults: defaults))
+        var arguments = captured.ffmpegArguments
+        await FFMPEGCommandBuilder.adjustArgumentsForInput(
+            preset: .xdcamHD422, codecSettings: captured,
+            inputURL: URL(fileURLWithPath: "/source/video.mov"), ffmpegArgs: &arguments,
+            trimStart: 0, trimEnd: 2,
+            audioStreamProvider: { _ in [] }
+        )
+        XCTAssertFalse(arguments.contains("0:a?"))
+        XCTAssertFalse(arguments.contains("-ac"))
+        let filterIndex = try XCTUnwrap(arguments.firstIndex(of: "-filter_complex"))
+        XCTAssertTrue(arguments[filterIndex + 1].contains("asplit=4"))
+        XCTAssertEqual(arguments.filter { $0.hasPrefix("[silent") }.count, 4)
+    }
+
+    func testVP9ArgumentsUseConstantQualityAndOpus() throws {
+        let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let webm = try XCTUnwrap(CodecExportSettings(preset: .vp9, defaults: defaults))
+        XCTAssertEqual(webm.fileExtension, "webm")
+        XCTAssertNil(webm.container)
+        XCTAssertEqual(Array(webm.ffmpegArguments.prefix(17)), [
+            "-hide_banner", "-pix_fmt", "yuv420p", "-c:v", "libvpx-vp9", "-profile:v", "0",
+            "-crf", "30", "-b:v", "0", "-row-mt", "1", "-deadline", "good", "-cpu-used", "2"
+        ])
+        XCTAssertEqual(value(after: "-c:a", in: webm.ffmpegArguments), "libopus")
+        XCTAssertEqual(value(after: "-b:a", in: webm.ffmpegArguments), "192k")
+        XCTAssertTrue(webm.ffmpegArguments.contains("0:a?"))
+
+        defaults.set(VP9BitDepth.tenBit.rawValue, forKey: AppConstants.vp9BitDepthKey)
+        defaults.set(VP9Container.mkv.rawValue, forKey: AppConstants.vp9ContainerKey)
+        defaults.set(VP9EncodingSpeed.realtime.rawValue, forKey: AppConstants.vp9SpeedKey)
+        defaults.set(AV1QualityLevel.veryHigh.rawValue, forKey: AppConstants.vp9QualityKey)
+        defaults.set(CodecResolutionLimit.r1080.rawValue, forKey: AppConstants.vp9ResolutionLimitKey)
+        defaults.set(AudioBitrate.k128.rawValue, forKey: AppConstants.vp9AudioBitrateKey)
+        let mkv = try XCTUnwrap(CodecExportSettings(preset: .vp9, defaults: defaults))
+        XCTAssertEqual(mkv.fileExtension, "mkv")
+        XCTAssertEqual(mkv.container, .mkv)
+        XCTAssertEqual(mkv.resolutionLimit, .r1080)
+        for (option, expected) in [
+            ("-pix_fmt", "yuv420p10le"), ("-profile:v", "2"), ("-crf", "15"),
+            ("-deadline", "realtime"), ("-cpu-used", "8"), ("-b:a", "128k"),
+        ] {
+            XCTAssertEqual(value(after: option, in: mkv.ffmpegArguments), expected, option)
+        }
+        XCTAssertTrue(try XCTUnwrap(value(after: "-vf", in: mkv.ffmpegArguments)).contains("1080"))
+        XCTAssertEqual(ExportPreset.vp9.resolutionLabel(defaults: defaults), "1080p")
+    }
+
+    func testNewDeliveryPresetsAreRegisteredAcrossSettingsAndAgentAccess() {
+        for preset in [ExportPreset.dnxhr, .xdcamHD422, .vp9] {
+            XCTAssertNotNil(ApplicationPresetID(exportPreset: preset))
+            XCTAssertEqual(ApplicationPresetID(exportPreset: preset)?.exportPreset, preset)
+            XCTAssertTrue(preset.supportsMatteSidecar)
+            XCTAssertFalse(preset.supportsPerTrackAudioEncoding)
+        }
+        XCTAssertTrue(ExportPreset.xdcamHD422.splitsAudioIntoMonoTracks)
+        XCTAssertFalse(ExportPreset.dnxhr.splitsAudioIntoMonoTracks)
+        for key in [
+            AppConstants.dnxhrVisibleKey, AppConstants.xdcamHD422VisibleKey, AppConstants.vp9VisibleKey,
+            AppConstants.dnxhrProfileKey, AppConstants.dnxhrContainerKey, AppConstants.xdcamFormatKey,
+            AppConstants.xdcamAudioChannelsKey, AppConstants.vp9QualityKey, AppConstants.vp9SpeedKey,
+            AppConstants.vp9BitDepthKey, AppConstants.vp9ContainerKey, AppConstants.vp9ResolutionLimitKey,
+            AppConstants.vp9AudioBitrateKey,
+        ] {
+            XCTAssertTrue(SettingsSyncKeys.all.contains(key), key)
+        }
+    }
+
+    private func value(after option: String, in arguments: [String]) -> String? {
+        guard let index = arguments.lastIndex(of: option), index + 1 < arguments.count else { return nil }
+        return arguments[index + 1]
+    }
+
     func testAVCIntraAudioUsesCapturedChannelCountAcrossStreamProbe() async throws {
         let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
