@@ -375,15 +375,19 @@
 		A598C35C58B24CE8BBE4CF00 /* AV2RecoveryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B62CDCA03AD943938CBC4A43 /* AV2RecoveryStore.swift */; };
 		FF13CD1ED3C14E4EB0F4D822 /* AV2ResourceRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD7F35730E574E58B708A19A /* AV2ResourceRecoveryTests.swift */; };
 		8816201A4FA14E8A8CFAD590 /* SilenceAnalysisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A4AF03E4925475F940E1E96 /* SilenceAnalysisService.swift */; };
+		205319AFC52B42EAB3B4137E /* VideoEventExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C17D9FDBEF6B4203B6E7D013 /* VideoEventExport.swift */; };
+		1B13B16BDE76450796B42BA6 /* VideoEventAnalysisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9089F044A3004A8FA407C99F /* VideoEventAnalysisService.swift */; };
 		CB3E2696F6604FB6B5826D6C /* BitrateAnalysisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92BB944116A548788370A900 /* BitrateAnalysisService.swift */; };
 		A91000000000000000000001 /* AudioPeakAnalysisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91000000000000000000002 /* AudioPeakAnalysisService.swift */; };
 		A92000000000000000000001 /* AudioPhaseAnalysisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92000000000000000000002 /* AudioPhaseAnalysisService.swift */; };
 		B15AF6492A5845EF8CA8C899 /* SilenceAnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 743E8FA11CE041EF8FA61896 /* SilenceAnalysisView.swift */; };
+		1A334185DD01493BB15ADB12 /* VideoEventAnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E40FD354D1F04199AEC4005A /* VideoEventAnalysisView.swift */; };
 		F4F6DF56BEC44CDAB775E2C2 /* BitrateAnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52E1CA7B62D14100BBBEE7EA /* BitrateAnalysisView.swift */; };
 		AE41D2ED90F74DB5A52C0D44 /* AnalysisReportExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68D08709C7F047A097C41D5A /* AnalysisReportExportView.swift */; };
 		A91000000000000000000003 /* AudioPeakAnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91000000000000000000004 /* AudioPeakAnalysisView.swift */; };
 		A92000000000000000000011 /* AudioPhaseAnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92000000000000000000012 /* AudioPhaseAnalysisView.swift */; };
 		4D809870F6BD46AEA540E7FA /* SilenceAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2576C110E5DB47CFB87BCFD8 /* SilenceAnalysisTests.swift */; };
+		7AF7986DAD034B10BEAAB727 /* VideoEventAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65A95880799F4BE384B86503 /* VideoEventAnalysisTests.swift */; };
 		16E45143A6794667BCF5C158 /* BitrateAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AF971F3941A47E58F8C1157 /* BitrateAnalysisTests.swift */; };
 		A91000000000000000000005 /* AudioPeakAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91000000000000000000006 /* AudioPeakAnalysisTests.swift */; };
 		A92000000000000000000021 /* AudioPhaseAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92000000000000000000022 /* AudioPhaseAnalysisTests.swift */; };
@@ -850,15 +854,19 @@
 		B62CDCA03AD943938CBC4A43 /* AV2RecoveryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2RecoveryStore.swift; sourceTree = "<group>"; };
 		FD7F35730E574E58B708A19A /* AV2ResourceRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2ResourceRecoveryTests.swift; sourceTree = "<group>"; };
 		9A4AF03E4925475F940E1E96 /* SilenceAnalysisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilenceAnalysisService.swift; sourceTree = "<group>"; };
+		C17D9FDBEF6B4203B6E7D013 /* VideoEventExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoEventExport.swift; sourceTree = "<group>"; };
+		9089F044A3004A8FA407C99F /* VideoEventAnalysisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoEventAnalysisService.swift; sourceTree = "<group>"; };
 		92BB944116A548788370A900 /* BitrateAnalysisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitrateAnalysisService.swift; sourceTree = "<group>"; };
 		A91000000000000000000002 /* AudioPeakAnalysisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPeakAnalysisService.swift; sourceTree = "<group>"; };
 		A92000000000000000000002 /* AudioPhaseAnalysisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPhaseAnalysisService.swift; sourceTree = "<group>"; };
 		743E8FA11CE041EF8FA61896 /* SilenceAnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilenceAnalysisView.swift; sourceTree = "<group>"; };
+		E40FD354D1F04199AEC4005A /* VideoEventAnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoEventAnalysisView.swift; sourceTree = "<group>"; };
 		52E1CA7B62D14100BBBEE7EA /* BitrateAnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitrateAnalysisView.swift; sourceTree = "<group>"; };
 		68D08709C7F047A097C41D5A /* AnalysisReportExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisReportExportView.swift; sourceTree = "<group>"; };
 		A91000000000000000000004 /* AudioPeakAnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPeakAnalysisView.swift; sourceTree = "<group>"; };
 		A92000000000000000000012 /* AudioPhaseAnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPhaseAnalysisView.swift; sourceTree = "<group>"; };
 		2576C110E5DB47CFB87BCFD8 /* SilenceAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilenceAnalysisTests.swift; sourceTree = "<group>"; };
+		65A95880799F4BE384B86503 /* VideoEventAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoEventAnalysisTests.swift; sourceTree = "<group>"; };
 		0AF971F3941A47E58F8C1157 /* BitrateAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitrateAnalysisTests.swift; sourceTree = "<group>"; };
 		A91000000000000000000006 /* AudioPeakAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPeakAnalysisTests.swift; sourceTree = "<group>"; };
 		A92000000000000000000022 /* AudioPhaseAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPhaseAnalysisTests.swift; sourceTree = "<group>"; };
@@ -1342,6 +1350,7 @@
 				3645F27A874241C7AF89277E /* AudioRoutingPlanTests.swift */,
 				EEBA547B45434CD3938A7B26 /* MediaAdjustmentsTests.swift */,
 				2576C110E5DB47CFB87BCFD8 /* SilenceAnalysisTests.swift */,
+				65A95880799F4BE384B86503 /* VideoEventAnalysisTests.swift */,
 				0AF971F3941A47E58F8C1157 /* BitrateAnalysisTests.swift */,
 				A91000000000000000000006 /* AudioPeakAnalysisTests.swift */,
 				A92000000000000000000022 /* AudioPhaseAnalysisTests.swift */,
@@ -1515,6 +1524,7 @@
 				E777B19FE611FEB91A8AD3C5 /* VideoQueueTableView.swift */,
 				ANALYTICSRESV0000001 /* AnalyticsResultsView.swift */,
 				743E8FA11CE041EF8FA61896 /* SilenceAnalysisView.swift */,
+				E40FD354D1F04199AEC4005A /* VideoEventAnalysisView.swift */,
 				52E1CA7B62D14100BBBEE7EA /* BitrateAnalysisView.swift */,
 				68D08709C7F047A097C41D5A /* AnalysisReportExportView.swift */,
 				A91000000000000000000004 /* AudioPeakAnalysisView.swift */,
@@ -1587,6 +1597,8 @@
 				ANALYTICSMOD00000001 /* AnalyticsModels.swift */,
 				ANALYTICSSRV00000001 /* AnalyticsService.swift */,
 				9A4AF03E4925475F940E1E96 /* SilenceAnalysisService.swift */,
+				C17D9FDBEF6B4203B6E7D013 /* VideoEventExport.swift */,
+				9089F044A3004A8FA407C99F /* VideoEventAnalysisService.swift */,
 				92BB944116A548788370A900 /* BitrateAnalysisService.swift */,
 				A91000000000000000000002 /* AudioPeakAnalysisService.swift */,
 				A92000000000000000000002 /* AudioPhaseAnalysisService.swift */,
@@ -2218,6 +2230,8 @@
 				ANALYTICSMOD00000002 /* AnalyticsModels.swift in Sources */,
 				ANALYTICSSRV00000002 /* AnalyticsService.swift in Sources */,
 				8816201A4FA14E8A8CFAD590 /* SilenceAnalysisService.swift in Sources */,
+				205319AFC52B42EAB3B4137E /* VideoEventExport.swift in Sources */,
+				1B13B16BDE76450796B42BA6 /* VideoEventAnalysisService.swift in Sources */,
 				CB3E2696F6604FB6B5826D6C /* BitrateAnalysisService.swift in Sources */,
 				A91000000000000000000001 /* AudioPeakAnalysisService.swift in Sources */,
 				A92000000000000000000001 /* AudioPhaseAnalysisService.swift in Sources */,
@@ -2226,6 +2240,7 @@
 				ANALYTICSSETV0000002 /* AnalyticsSettingsView.swift in Sources */,
 				ANALYTICSRESV0000002 /* AnalyticsResultsView.swift in Sources */,
 				B15AF6492A5845EF8CA8C899 /* SilenceAnalysisView.swift in Sources */,
+				1A334185DD01493BB15ADB12 /* VideoEventAnalysisView.swift in Sources */,
 				F4F6DF56BEC44CDAB775E2C2 /* BitrateAnalysisView.swift in Sources */,
 				AE41D2ED90F74DB5A52C0D44 /* AnalysisReportExportView.swift in Sources */,
 				A91000000000000000000003 /* AudioPeakAnalysisView.swift in Sources */,
@@ -2303,6 +2318,7 @@
 				B33D258C71A742F9A3D2D8DD /* AudioRoutingPlanTests.swift in Sources */,
 				4D84DABA368E4937BCBC055C /* MediaAdjustmentsTests.swift in Sources */,
 				4D809870F6BD46AEA540E7FA /* SilenceAnalysisTests.swift in Sources */,
+				7AF7986DAD034B10BEAAB727 /* VideoEventAnalysisTests.swift in Sources */,
 				16E45143A6794667BCF5C158 /* BitrateAnalysisTests.swift in Sources */,
 				A91000000000000000000005 /* AudioPeakAnalysisTests.swift in Sources */,
 				A92000000000000000000021 /* AudioPhaseAnalysisTests.swift in Sources */,
