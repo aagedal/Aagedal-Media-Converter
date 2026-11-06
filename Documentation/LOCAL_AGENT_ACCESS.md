@@ -31,10 +31,11 @@ unavailable or a grant is lost, reconnect the drive or select the location again
 in the app and make a new plan. A plan lasts 15 minutes, and submission rechecks
 access, source identity, and output collisions. Existing outputs are preserved.
 
-Agent Access lists all 17 built-in presets. All can be planned and run:
+Agent Access lists all 20 built-in presets. All can be planned and run:
 Video Loop, Video Loop with Sound, Animated Still, H.264, HEVC, AV1, AV2,
 TV HEVC, TV AVC-Intra, ProRes, Proxy, Audio Only, Stream Copy, Image Sequence,
-and DCP, plus the experimental IMF App 2e and RDD 45 presets. IMF output should
+DCP, XDCAM HD422, DNxHR, and VP9, plus the experimental IMF App 2e and RDD 45
+presets. IMF output should
 be validated in the target mastering or delivery tool. The initial IMF scope is
 one image track and one PCM audio track, without packaged subtitles or multiple
 audio tracks. Custom preset slots are excluded because they can contain arbitrary

@@ -25,6 +25,9 @@ enum ApplicationPresetID: String, CaseIterable, Codable, Sendable {
     case dcp = "dcp"
     case imfJ2K = "imf_app_2e"
     case imfProRes = "imf_rdd_45"
+    case xdcamHD422 = "xdcam_hd422"
+    case dnxhr = "dnxhr"
+    case vp9 = "vp9"
 
     var isRunnable: Bool { true }
     var usesExistingManualSharedBridge: Bool {
@@ -62,6 +65,9 @@ enum ApplicationPresetID: String, CaseIterable, Codable, Sendable {
         case .dcp: .dcp
         case .imfJ2K: .imfJ2K
         case .imfProRes: .imfProRes
+        case .xdcamHD422: .xdcamHD422
+        case .dnxhr: .dnxhr
+        case .vp9: .vp9
         }
     }
 
@@ -84,6 +90,9 @@ enum ApplicationPresetID: String, CaseIterable, Codable, Sendable {
         case .dcp: self = .dcp
         case .imfJ2K: self = .imfJ2K
         case .imfProRes: self = .imfProRes
+        case .xdcamHD422: self = .xdcamHD422
+        case .dnxhr: self = .dnxhr
+        case .vp9: self = .vp9
         default: return nil
         }
     }
@@ -111,6 +120,7 @@ enum ApplicationContainerID: String, Codable, Sendable {
     case mov
     case mkv
     case mxf
+    case webm
     case wav
     case m4a
     case flac
@@ -492,7 +502,7 @@ struct ApplicationPresetSettings: Codable, Equatable, Sendable {
         )
         outputExtension = switch presetID {
         case .videoLoop, .videoLoopWithSound, .animatedStill, .av1,
-             .av2, .tvHEVC, .tvAVCIntra:
+             .av2, .tvHEVC, .tvAVCIntra, .xdcamHD422, .dnxhr, .vp9:
             capturedAV2?.container.fileExtension ?? capturedCodec?.fileExtension
         case .imageSequence, .dcp, .imfJ2K, .imfProRes:
             ""
@@ -504,7 +514,7 @@ struct ApplicationPresetSettings: Codable, Equatable, Sendable {
 
         switch presetID {
         case .videoLoop, .videoLoopWithSound, .animatedStill, .av1,
-             .tvHEVC, .tvAVCIntra:
+             .tvHEVC, .tvAVCIntra, .xdcamHD422, .dnxhr, .vp9:
             let ext = capturedCodec?.fileExtension ?? preset.fileExtension
             containerID = ApplicationContainerID(rawValue: ext) ?? .other
             video = nil
@@ -2153,7 +2163,7 @@ private final class ApplicationExecutionDefaults {
     ) throws {
         switch settings.presetID {
         case .videoLoop, .videoLoopWithSound, .animatedStill, .av1,
-             .tvHEVC, .tvAVCIntra:
+             .tvHEVC, .tvAVCIntra, .xdcamHD422, .dnxhr, .vp9:
             guard settings.capturedCodec != nil else {
                 throw ApplicationExecutionSettingsError.invalidPresetSettings
             }

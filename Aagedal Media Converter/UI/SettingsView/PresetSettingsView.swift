@@ -33,6 +33,22 @@ struct PresetsSettingsView: View {
     @AppStorage(AppConstants.avcIntraDefaultMCASoundfield6ChKey) private var avcIntra6ChMCADefault = ""
     @AppStorage(AppConstants.avcIntraDefaultMCASoundfield8ChKey) private var avcIntra8ChMCADefault = ""
 
+    // XDCAM HD422 settings
+    @AppStorage(AppConstants.xdcamFormatKey) private var xdcamFormat = AppConstants.defaultXDCAMFormat
+    @AppStorage(AppConstants.xdcamAudioChannelsKey) private var xdcamAudioChannels = AppConstants.defaultXDCAMAudioChannels
+
+    // DNxHR settings
+    @AppStorage(AppConstants.dnxhrProfileKey) private var dnxhrProfile = AppConstants.defaultDNxHRProfile
+    @AppStorage(AppConstants.dnxhrContainerKey) private var dnxhrContainer = AppConstants.defaultDNxHRContainer
+
+    // VP9 settings
+    @AppStorage(AppConstants.vp9QualityKey) private var vp9Quality = AppConstants.defaultVP9Quality
+    @AppStorage(AppConstants.vp9SpeedKey) private var vp9Speed = AppConstants.defaultVP9Speed
+    @AppStorage(AppConstants.vp9BitDepthKey) private var vp9BitDepth = AppConstants.defaultVP9BitDepth
+    @AppStorage(AppConstants.vp9ContainerKey) private var vp9Container = AppConstants.defaultVP9Container
+    @AppStorage(AppConstants.vp9ResolutionLimitKey) private var vp9ResolutionLimit = AppConstants.defaultVP9ResolutionLimit
+    @AppStorage(AppConstants.vp9AudioBitrateKey) private var vp9AudioBitrate = AppConstants.defaultVP9AudioBitrate
+
     // DCP settings
     @AppStorage(AppConstants.dcpResolutionKey) private var dcpResolution = AppConstants.defaultDCPResolution
     @AppStorage(AppConstants.dcpFrameRateKey) private var dcpFrameRate = AppConstants.defaultDCPFrameRate
@@ -137,6 +153,9 @@ struct PresetsSettingsView: View {
     @AppStorage(AppConstants.av2VisibleKey) private var av2Visible = true
     @AppStorage(AppConstants.tvHEVCVisibleKey) private var tvHEVCVisible = true
     @AppStorage(AppConstants.tvAVCIntraVisibleKey) private var tvAVCIntraVisible = true
+    @AppStorage(AppConstants.xdcamHD422VisibleKey) private var xdcamHD422Visible = true
+    @AppStorage(AppConstants.dnxhrVisibleKey) private var dnxhrVisible = true
+    @AppStorage(AppConstants.vp9VisibleKey) private var vp9Visible = true
     @AppStorage(AppConstants.losslessVisibleKey) private var losslessVisible = true
     @AppStorage(AppConstants.proresVisibleKey) private var proresVisible = true
     @AppStorage(AppConstants.proxyVisibleKey) private var proxyVisible = true
@@ -1530,6 +1549,157 @@ struct PresetsSettingsView: View {
             }
         }
 
+        if selectedPreset == .xdcamHD422 {
+            settingsCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Format")
+                        Spacer()
+                        Picker("", selection: $xdcamFormat) {
+                            ForEach(XDCAMHD422Format.allCases) { option in
+                                Text(option.rawValue).tag(option.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .labelsHidden()
+                        .help("1080 formats are full-raster 1920×1080 and 720 formats are 1280×720. Interlaced formats are encoded top field first. Sources are scaled and pillarboxed or letterboxed to 16:9.")
+                    }
+                    HStack {
+                        Text("Audio Channels")
+                        Spacer()
+                        Picker("", selection: $xdcamAudioChannels) {
+                            ForEach(AVCIntraAudioChannels.xdcamCases) { option in
+                                Text(option.rawValue).tag(option.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .labelsHidden()
+                        .help("Number of mono 24-bit PCM audio tracks. Source channels fill the tracks in order, and unused tracks are silent.")
+                    }
+                }
+            }
+        }
+
+        if selectedPreset == .dnxhr {
+            settingsCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Profile")
+                        Spacer()
+                        Picker("", selection: $dnxhrProfile) {
+                            ForEach(DNxHRProfile.allCases) { option in
+                                Text(option.rawValue).tag(option.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .labelsHidden()
+                        .help("LB is for offline editing. SQ and HQ suit 8-bit masters. HQX keeps 10-bit 4:2:2, and 444 keeps full 10-bit 4:4:4 chroma for finishing and VFX.")
+                    }
+                    HStack {
+                        Text("Container")
+                        Spacer()
+                        Picker("", selection: $dnxhrContainer) {
+                            ForEach(DNxHRContainer.allCases) { option in
+                                Text(option.rawValue).tag(option.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .labelsHidden()
+                        .help("MOV works in most editing applications. MXF is the native container for Avid Media Composer.")
+                    }
+                }
+            }
+        }
+
+        if selectedPreset == .vp9 {
+            settingsCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Quality (CRF)")
+                        Spacer()
+                        Picker("", selection: $vp9Quality) {
+                            ForEach(AV1QualityLevel.allCases) { option in
+                                Text(option.rawValue).tag(option.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .labelsHidden()
+                        .help("Lower CRF values give higher quality and larger files. 30–33 suits most HD web video.")
+                    }
+                    HStack {
+                        Text("Encoding Speed")
+                        Spacer()
+                        Picker("", selection: $vp9Speed) {
+                            ForEach(VP9EncodingSpeed.allCases) { option in
+                                Text(option.rawValue).tag(option.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .labelsHidden()
+                        .help("Slower settings compress better at the same quality. Realtime is much faster but less efficient.")
+                    }
+                    HStack {
+                        Text("Bit Depth")
+                        Spacer()
+                        Picker("", selection: $vp9BitDepth) {
+                            ForEach(VP9BitDepth.allCases) { option in
+                                Text(option.rawValue).tag(option.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .labelsHidden()
+                        .help("10-bit (VP9 profile 2) reduces banding, but not every player can decode it.")
+                    }
+                    HStack {
+                        Text("Container")
+                        Spacer()
+                        Picker("", selection: $vp9Container) {
+                            ForEach(VP9Container.allCases) { option in
+                                Text(option.rawValue).tag(option.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .labelsHidden()
+                        .help("WebM plays in web browsers. MKV holds the same VP9 and Opus streams for other players.")
+                    }
+                    HStack {
+                        Text("Resolution Limit")
+                        Spacer()
+                        Picker("", selection: $vp9ResolutionLimit) {
+                            ForEach(CodecResolutionLimit.allCases) { option in
+                                Text(option.rawValue).tag(option.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .labelsHidden()
+                        .help("Limit the output resolution. Unlimited preserves source resolution.")
+                    }
+                    HStack {
+                        Text("Audio Bitrate")
+                        Spacer()
+                        Picker("", selection: $vp9AudioBitrate) {
+                            ForEach(AudioBitrate.allCases) { option in
+                                Text(option.rawValue).tag(option.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .labelsHidden()
+                        .help("Higher bitrate = better audio quality and larger files.")
+                    }
+                }
+            }
+        }
+
         if selectedPreset == .streamCopy {
             settingsCard {
                 HStack {
@@ -1867,6 +2037,12 @@ struct PresetsSettingsView: View {
             return $tvHEVCVisible
         case .tvAVCIntra:
             return $tvAVCIntraVisible
+        case .xdcamHD422:
+            return $xdcamHD422Visible
+        case .dnxhr:
+            return $dnxhrVisible
+        case .vp9:
+            return $vp9Visible
         case .lossless:
             return $losslessVisible
         case .prores:

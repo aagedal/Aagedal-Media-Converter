@@ -35,15 +35,15 @@ final class ApplicationJobContractTests: XCTestCase {
             "video_loop", "video_loop_with_sound", "animated_still",
             "h264", "hevc", "av1", "av2", "tv_hevc", "tv_avc_intra",
             "prores", "proxy", "audio_only", "stream_copy", "image_sequence",
-            "dcp", "imf_app_2e", "imf_rdd_45"
+            "dcp", "imf_app_2e", "imf_rdd_45", "xdcam_hd422", "dnxhr", "vp9"
         ])
         XCTAssertEqual(ApplicationPresetID.allCases.map(\.exportPreset), [
             .videoLoop, .videoLoopWithSound, .animatedStill,
             .h264, .h265, .av1, .av2, .tvHEVC, .tvAVCIntra,
             .prores, .proxy, .audioOnly, .streamCopy, .imageSequence,
-            .dcp, .imfJ2K, .imfProRes
+            .dcp, .imfJ2K, .imfProRes, .xdcamHD422, .dnxhr, .vp9
         ])
-        XCTAssertEqual(ApplicationPresetID.allCases.filter(\.isRunnable).count, 17)
+        XCTAssertEqual(ApplicationPresetID.allCases.filter(\.isRunnable).count, 20)
     }
 
     func testIMFPresetsCaptureRunnableSettings() throws {
@@ -2341,7 +2341,7 @@ final class ApplicationJobContractTests: XCTestCase {
 
         let snapshots = await harness.snapshots()
         XCTAssertEqual(snapshots.map(\.preset), ApplicationPresetID.allCases.filter(\.isRunnable).map(\.exportPreset))
-        XCTAssertEqual(Set(snapshots.map(\.outputURL)).count, 17)
+        XCTAssertEqual(Set(snapshots.map(\.outputURL)).count, 20)
         let byPreset = Dictionary(uniqueKeysWithValues: snapshots.map { ($0.preset, $0) })
         XCTAssertTrue(byPreset[.h264]?.ffmpegArguments.contains("libx264") == true)
         XCTAssertTrue(byPreset[.h265]?.ffmpegArguments.contains("libx265") == true)
@@ -2864,7 +2864,7 @@ final class ApplicationJobContractTests: XCTestCase {
 
         XCTAssertEqual(presets.map(\.id), ApplicationPresetID.allCases)
         XCTAssertEqual(presets.map(\.displayName), ApplicationPresetID.allCases.map { $0.exportPreset.displayName })
-        XCTAssertEqual(presets.filter(\.isAvailable).count, 17)
+        XCTAssertEqual(presets.filter(\.isAvailable).count, 20)
         XCTAssertTrue(presets.allSatisfy(\.isAvailable))
         XCTAssertTrue(presets.allSatisfy { $0.supportedOverrides.isEmpty })
         XCTAssertEqual(presets.first { $0.id == .h264 }?.settings.containerID, .mkv)
@@ -3653,12 +3653,12 @@ final class ApplicationJobContractTests: XCTestCase {
         let presetResult = try XCTUnwrap(responses[1]["result"] as? [String: Any])
         XCTAssertEqual(presetResult["isError"] as? Bool, false)
         let presetContent = try XCTUnwrap(presetResult["structuredContent"] as? [String: Any])
-        XCTAssertEqual((presetContent["presets"] as? [[String: Any]])?.count, 17)
+        XCTAssertEqual((presetContent["presets"] as? [[String: Any]])?.count, 20)
         let presetText = try XCTUnwrap((presetResult["content"] as? [[String: Any]])?.first?["text"] as? String)
         let textContent = try XCTUnwrap(
             JSONSerialization.jsonObject(with: Data(presetText.utf8)) as? [String: Any]
         )
-        XCTAssertEqual((textContent["presets"] as? [[String: Any]])?.count, 17)
+        XCTAssertEqual((textContent["presets"] as? [[String: Any]])?.count, 20)
 
         let planResult = try XCTUnwrap(responses[2]["result"] as? [String: Any])
         XCTAssertEqual(planResult["isError"] as? Bool, false)

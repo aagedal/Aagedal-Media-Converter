@@ -101,7 +101,7 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 - Mark recording continuations explicitly and optionally split groups after gaps over two hours. Compatibility checks help identify clips that can be stitched.
 
 ### Local agent access
-Enable **Settings → Agent Access**, approve source folders, and copy the setup for your MCP client. The bundled helper lets agents browse and inspect approved media, plan conversions, submit jobs, follow progress, and cancel work in the app queue. All 17 built-in presets are available; custom FFmpeg slots are excluded. IMF exports are experimental.
+Enable **Settings → Agent Access**, approve source folders, and copy the setup for your MCP client. The bundled helper lets agents browse and inspect approved media, plan conversions, submit jobs, follow progress, and cancel work in the app queue. All 20 built-in presets are available; custom FFmpeg slots are excluded. IMF exports are experimental.
 
 Accepted jobs continue after a client disconnects. Plans last 15 minutes and terminal results remain available for 30 days. Agent exports disable output timecode. See the [setup and workflow guide](Documentation/LOCAL_AGENT_ACCESS.md) for folder approvals, client setup, and job recovery.
 
@@ -176,17 +176,26 @@ The bundled encoder and decoder use AVM `1.0.0-175-g0da4c3647` (October 12, 2026
 
 Choose video-only IVF (`.ivf`) or Matroska (`.mkv`) with AAC or Opus audio. Reference encoding is very slow, and playback requires an AV2-capable decoder. The app can decode AV2 files for conversion and thumbnails, but interactive playback is not available yet. Treat AV2 as a format for experimentation rather than delivery.
 
+#### VP9 / WebM
+Royalty-free VP9 for the web, encoded with libvpx at constant quality (CRF with a zero bitrate target) and row-based multithreading. Choose the CRF, a speed from Best to Realtime, 8-bit (profile 0) or 10-bit (profile 2), and a resolution limit. Audio is encoded as Opus at a selectable bitrate. Outputs WebM, or Matroska (`.mkv`). Opus cannot encode some channel layouts, such as `5.1(side)`; downmix those tracks with audio routing.
+
 #### TV (HEVC 10-bit 4:2:2)
 Broadcast delivery format with hardware HEVC 10-bit 4:2:2, configurable resolution/framerate, automatic bitrate scaling, and preservation of all audio channels as 24-bit PCM.
 
 #### TV (AVC-Intra)
 Broadcast delivery format in an MXF container. AVC-Intra 10-bit 4:2:2 offers selectable classes (50/100/200 Mbps), resolution, and frame rate plus 4/8/16 mono audio channels as 24-bit PCM.
 
+#### XDCAM HD422 (MXF)
+Sony XDCAM HD422 broadcast delivery: MPEG-2 4:2:2 Profile @ High Level, 50 Mbps CBR long GOP (closed GOPs of 12 frames at 25/50 Hz and 15 at 29.97/59.94 Hz, two B-frames) in an MXF OP1a file. Choose 1080i50, 1080p25, 1080i59.94, 1080p29.97, 720p50, or 720p59.94. Sources are scaled and pillarboxed or letterboxed to full-raster 16:9, and audio is delivered as 4 or 8 mono 24-bit 48 kHz PCM tracks.
+
 #### Stream copy
 Copies the existing audio and video streams into a new file. Its strength is keeping the original codecs, metadata, and extension, so it pairs well with trimming or merging tasks.
 
 #### ProRes
 Apple ProRes (yuv422p10) for edit-friendly masters. Includes the first video and audio streams, keeps 24-bit PCM audio, and targets standard ProRes bitrates. The default ProRes profile can be chosen in Preset Settings.
+
+#### DNxHR
+Avid DNxHR at the source resolution for editing and mastering: LB, SQ, or HQ (8-bit 4:2:2), HQX (10-bit 4:2:2), or 444 (10-bit 4:4:4). Choose a MOV or MXF container. Every audio track is kept as 24-bit PCM (resampled to 48 kHz in MXF).
 
 #### Proxy
 Lightweight proxy creation in HEVC, ProRes Proxy, or DNxHR with configurable resolution limits. Retains every audio channel as uncompressed PCM, which is ideal for offline editing and pairing with a dedicated Proxy sub-folder next to the source material.

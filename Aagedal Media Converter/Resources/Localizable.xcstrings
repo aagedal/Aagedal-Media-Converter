@@ -152668,6 +152668,668 @@
           }
         }
       }
+    },
+    "PRESET_XDCAM_HD422_DESCRIPTION" : {
+      "comment" : "Description for XDCAM HD422 preset",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Broadcast-Übermittlung als Sony XDCAM HD422: MPEG-2 4:2:2 Long GOP mit 50 Mbit/s CBR in einem MXF-OP1a-Container. Wählen Sie 1080i50, 1080p25, 1080i59.94, 1080p29.97, 720p50 oder 720p59.94, mit 4 oder 8 Mono-Audiokanälen als 24-Bit-PCM mit 48 kHz."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Broadcast delivery as Sony XDCAM HD422: MPEG-2 4:2:2 long GOP at 50 Mbps CBR in an MXF OP1a container. Choose 1080i50, 1080p25, 1080i59.94, 1080p29.97, 720p50 or 720p59.94, with 4 or 8 mono audio channels as 24-bit 48 kHz PCM."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Entrega para emisión como Sony XDCAM HD422: MPEG-2 4:2:2 GOP largo a 50 Mbps CBR en un contenedor MXF OP1a. Elija 1080i50, 1080p25, 1080i59.94, 1080p29.97, 720p50 o 720p59.94, con 4 u 8 canales de audio mono en PCM de 24 bits a 48 kHz."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Livraison broadcast au format Sony XDCAM HD422 : MPEG-2 4:2:2 GOP long à 50 Mb/s CBR dans un conteneur MXF OP1a. Choisissez 1080i50, 1080p25, 1080i59.94, 1080p29.97, 720p50 ou 720p59.94, avec 4 ou 8 canaux audio mono en PCM 24 bits à 48 kHz."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Consegna broadcast in formato Sony XDCAM HD422: MPEG-2 4:2:2 long GOP a 50 Mbps CBR in un contenitore MXF OP1a. Scegli 1080i50, 1080p25, 1080i59.94, 1080p29.97, 720p50 o 720p59.94, con 4 o 8 canali audio mono in PCM a 24 bit e 48 kHz."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sony XDCAM HD422 形式での放送納品：MXF OP1a コンテナに 50 Mbps CBR の MPEG-2 4:2:2 ロング GOP を格納します。1080i50、1080p25、1080i59.94、1080p29.97、720p50、720p59.94 から選択でき、音声は 24 ビット 48 kHz PCM のモノラル 4 または 8 チャンネルです。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sony XDCAM HD422 방송 납품 형식: MXF OP1a 컨테이너에 50Mbps CBR MPEG-2 4:2:2 롱 GOP를 담습니다. 1080i50, 1080p25, 1080i59.94, 1080p29.97, 720p50, 720p59.94 중에서 선택하며, 오디오는 24비트 48kHz PCM 모노 4채널 또는 8채널입니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kringkastingslevering som Sony XDCAM HD422: MPEG-2 4:2:2 lang GOP med 50 Mbps CBR i en MXF OP1a-container. Velg 1080i50, 1080p25, 1080i59.94, 1080p29.97, 720p50 eller 720p59.94, med 4 eller 8 monolydkanaler som 24-bit 48 kHz PCM."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Entrega para transmissão como Sony XDCAM HD422: MPEG-2 4:2:2 GOP longo a 50 Mbps CBR em um contêiner MXF OP1a. Escolha 1080i50, 1080p25, 1080i59.94, 1080p29.97, 720p50 ou 720p59.94, com 4 ou 8 canais de áudio mono em PCM de 24 bits a 48 kHz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "以 Sony XDCAM HD422 格式进行广播交付：在 MXF OP1a 容器中封装 50 Mbps CBR 的 MPEG-2 4:2:2 长 GOP 视频。可选择 1080i50、1080p25、1080i59.94、1080p29.97、720p50 或 720p59.94，音频为 4 或 8 个 24 位 48 kHz PCM 单声道通道。"
+          }
+        }
+      }
+    },
+    "PRESET_DNXHR_DESCRIPTION" : {
+      "comment" : "Description for DNxHR preset",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Avid-DNxHR-Mastering- und Schnittformat in Quellauflösung. Wählen Sie LB, SQ oder HQ (8-Bit 4:2:2), HQX (10-Bit 4:2:2) oder 444 (10-Bit 4:4:4) in einem MOV- oder MXF-Container. Alle Audiospuren werden als 24-Bit-PCM beibehalten."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avid DNxHR mastering and editing format at the source resolution. Choose LB, SQ or HQ (8-bit 4:2:2), HQX (10-bit 4:2:2) or 444 (10-bit 4:4:4) in a MOV or MXF container. Every audio track is kept as 24-bit PCM."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Formato de masterización y edición Avid DNxHR a la resolución de origen. Elija LB, SQ o HQ (8 bits 4:2:2), HQX (10 bits 4:2:2) o 444 (10 bits 4:4:4) en un contenedor MOV o MXF. Todas las pistas de audio se conservan como PCM de 24 bits."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Format de mastering et de montage Avid DNxHR à la résolution source. Choisissez LB, SQ ou HQ (8 bits 4:2:2), HQX (10 bits 4:2:2) ou 444 (10 bits 4:4:4) dans un conteneur MOV ou MXF. Toutes les pistes audio sont conservées en PCM 24 bits."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Formato di mastering e montaggio Avid DNxHR alla risoluzione sorgente. Scegli LB, SQ o HQ (8 bit 4:2:2), HQX (10 bit 4:2:2) o 444 (10 bit 4:4:4) in un contenitore MOV o MXF. Tutte le tracce audio vengono mantenute in PCM a 24 bit."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ソース解像度の Avid DNxHR マスタリング／編集用フォーマットです。LB、SQ、HQ（8 ビット 4:2:2）、HQX（10 ビット 4:2:2）、444（10 ビット 4:4:4）から選び、MOV または MXF コンテナで出力します。すべての音声トラックは 24 ビット PCM として保持されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "소스 해상도의 Avid DNxHR 마스터링 및 편집 형식입니다. LB, SQ, HQ(8비트 4:2:2), HQX(10비트 4:2:2), 444(10비트 4:4:4) 중에서 선택하고 MOV 또는 MXF 컨테이너로 출력합니다. 모든 오디오 트랙은 24비트 PCM으로 유지됩니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avid DNxHR-format for mastering og redigering i kildeoppløsning. Velg LB, SQ eller HQ (8-bit 4:2:2), HQX (10-bit 4:2:2) eller 444 (10-bit 4:4:4) i en MOV- eller MXF-container. Alle lydspor beholdes som 24-bit PCM."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Formato de masterização e edição Avid DNxHR na resolução de origem. Escolha LB, SQ ou HQ (8 bits 4:2:2), HQX (10 bits 4:2:2) ou 444 (10 bits 4:4:4) em um contêiner MOV ou MXF. Todas as faixas de áudio são mantidas como PCM de 24 bits."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "源分辨率的 Avid DNxHR 母版与剪辑格式。可选择 LB、SQ 或 HQ（8 位 4:2:2）、HQX（10 位 4:2:2）或 444（10 位 4:4:4），并输出为 MOV 或 MXF 容器。所有音轨均保留为 24 位 PCM。"
+          }
+        }
+      }
+    },
+    "PRESET_VP9_DESCRIPTION" : {
+      "comment" : "Description for VP9 preset",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lizenzfreies VP9 für das Web, mit libvpx bei konstanter Qualität (CRF) in 8 oder 10 Bit kodiert. Audio wird als Opus kodiert. Ausgabe als WebM oder, falls gewählt, als Matroska (.mkv)."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Royalty-free VP9 for the web, encoded with libvpx at constant quality (CRF) in 8 or 10-bit. Audio is encoded as Opus. Outputs WebM, or Matroska (.mkv) if you choose it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "VP9 libre de regalías para la web, codificado con libvpx a calidad constante (CRF) en 8 o 10 bits. El audio se codifica en Opus. Genera WebM, o Matroska (.mkv) si lo elige."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "VP9 libre de redevances pour le web, encodé avec libvpx à qualité constante (CRF) en 8 ou 10 bits. L’audio est encodé en Opus. Produit du WebM, ou du Matroska (.mkv) si vous le choisissez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "VP9 royalty-free per il web, codificato con libvpx a qualità costante (CRF) a 8 o 10 bit. L'audio è codificato in Opus. Produce WebM, oppure Matroska (.mkv) se lo scegli."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Web 向けのロイヤリティフリーな VP9 です。libvpx により固定品質（CRF）、8 ビットまたは 10 ビットでエンコードします。音声は Opus でエンコードされます。WebM、または選択した場合は Matroska（.mkv）で出力します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "웹용 로열티 프리 VP9입니다. libvpx로 고정 품질(CRF), 8비트 또는 10비트로 인코딩합니다. 오디오는 Opus로 인코딩됩니다. WebM 또는 선택 시 Matroska(.mkv)로 출력합니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Royaltyfri VP9 for nettet, kodet med libvpx med konstant kvalitet (CRF) i 8 eller 10 bit. Lyd kodes som Opus. Gir WebM, eller Matroska (.mkv) hvis du velger det."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "VP9 livre de royalties para a web, codificado com libvpx em qualidade constante (CRF) em 8 ou 10 bits. O áudio é codificado em Opus. Gera WebM, ou Matroska (.mkv) se você escolher."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "面向网络的免版税 VP9，使用 libvpx 以恒定质量（CRF）进行 8 位或 10 位编码。音频编码为 Opus。输出 WebM，或在选择时输出 Matroska（.mkv）。"
+          }
+        }
+      }
+    },
+    "1080 formats are full-raster 1920×1080 and 720 formats are 1280×720. Interlaced formats are encoded top field first. Sources are scaled and pillarboxed or letterboxed to 16:9." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "1080-Formate sind Full-Raster 1920×1080, 720-Formate sind 1280×720. Interlaced-Formate werden mit oberem Halbbild zuerst kodiert. Quellen werden skaliert und mit seitlichen bzw. oberen und unteren Balken auf 16:9 gebracht."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los formatos 1080 son de trama completa 1920×1080 y los 720 son 1280×720. Los formatos entrelazados se codifican con el campo superior primero. Las fuentes se escalan y se ajustan a 16:9 con barras laterales o horizontales."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Les formats 1080 sont en trame complète 1920×1080 et les formats 720 en 1280×720. Les formats entrelacés sont encodés trame supérieure en premier. Les sources sont mises à l’échelle et complétées de bandes latérales ou horizontales en 16:9."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "I formati 1080 sono full-raster 1920×1080 e i formati 720 sono 1280×720. I formati interlacciati sono codificati con il campo superiore per primo. Le sorgenti vengono scalate e adattate a 16:9 con bande laterali o orizzontali."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "1080 形式はフルラスターの 1920×1080、720 形式は 1280×720 です。インターレース形式はトップフィールドファーストでエンコードされます。ソースはスケーリングされ、ピラーボックスまたはレターボックスで 16:9 に収められます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "1080 형식은 풀 래스터 1920×1080이고 720 형식은 1280×720입니다. 인터레이스 형식은 상위 필드 우선으로 인코딩됩니다. 소스는 크기가 조정되고 필러박스 또는 레터박스로 16:9에 맞춰집니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1080-formater er fullrasterformat 1920×1080, og 720-formater er 1280×720. Linjeflettede formater kodes med øvre felt først. Kilder skaleres og får sorte felt på sidene eller over og under for å fylle 16:9."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Os formatos 1080 são full-raster 1920×1080 e os formatos 720 são 1280×720. Formatos entrelaçados são codificados com o campo superior primeiro. As fontes são redimensionadas e ajustadas a 16:9 com barras laterais ou horizontais."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "1080 格式为全光栅 1920×1080，720 格式为 1280×720。隔行格式以顶场优先编码。源视频会被缩放，并通过左右或上下黑边适配为 16:9。"
+          }
+        }
+      }
+    },
+    "Number of mono 24-bit PCM audio tracks. Source channels fill the tracks in order, and unused tracks are silent." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Anzahl der Mono-Audiospuren mit 24-Bit-PCM. Die Quellkanäle füllen die Spuren der Reihe nach, nicht genutzte Spuren bleiben stumm."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Número de pistas de audio mono PCM de 24 bits. Los canales de origen ocupan las pistas en orden y las pistas sin usar quedan en silencio."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nombre de pistes audio mono PCM 24 bits. Les canaux source remplissent les pistes dans l’ordre et les pistes inutilisées sont silencieuses."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Numero di tracce audio mono PCM a 24 bit. I canali sorgente riempiono le tracce in ordine e le tracce inutilizzate restano silenziose."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "24 ビット PCM モノラル音声トラックの数です。ソースのチャンネルが順番にトラックに割り当てられ、未使用のトラックは無音になります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "24비트 PCM 모노 오디오 트랙 수입니다. 소스 채널이 순서대로 트랙을 채우며, 사용하지 않는 트랙은 무음입니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Antall monolydspor med 24-bit PCM. Kildekanalene fyller sporene i rekkefølge, og ubrukte spor er stille."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Número de faixas de áudio mono PCM de 24 bits. Os canais de origem preenchem as faixas em ordem, e faixas não usadas ficam em silêncio."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "24 位 PCM 单声道音轨的数量。源声道按顺序填充音轨，未使用的音轨为静音。"
+          }
+        }
+      }
+    },
+    "LB is for offline editing. SQ and HQ suit 8-bit masters. HQX keeps 10-bit 4:2:2, and 444 keeps full 10-bit 4:4:4 chroma for finishing and VFX." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "LB ist für den Offline-Schnitt gedacht. SQ und HQ eignen sich für 8-Bit-Master. HQX behält 10-Bit 4:2:2 bei, und 444 behält volle 10-Bit-4:4:4-Chroma für Finishing und VFX."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "LB es para edición offline. SQ y HQ son adecuados para másteres de 8 bits. HQX conserva 10 bits 4:2:2 y 444 conserva la crominancia completa 4:4:4 de 10 bits para finalización y VFX."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "LB est destiné au montage offline. SQ et HQ conviennent aux masters 8 bits. HQX conserve le 10 bits 4:2:2, et 444 conserve la chrominance complète 4:4:4 en 10 bits pour la finition et les VFX."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "LB è pensato per il montaggio offline. SQ e HQ sono adatti a master a 8 bit. HQX mantiene 10 bit 4:2:2 e 444 mantiene la crominanza completa 4:4:4 a 10 bit per finishing e VFX."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "LB はオフライン編集向けです。SQ と HQ は 8 ビットのマスターに適しています。HQX は 10 ビット 4:2:2 を保持し、444 はフィニッシングや VFX 向けに 10 ビット 4:4:4 のフルクロマを保持します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "LB는 오프라인 편집용입니다. SQ와 HQ는 8비트 마스터에 적합합니다. HQX는 10비트 4:2:2를 유지하고, 444는 피니싱과 VFX를 위해 10비트 4:4:4 풀 크로마를 유지합니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LB er for offline-redigering. SQ og HQ passer for 8-bit mastere. HQX beholder 10-bit 4:2:2, og 444 beholder full 10-bit 4:4:4-krominans for etterarbeid og VFX."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "LB é para edição offline. SQ e HQ são adequados para masters de 8 bits. HQX mantém 10 bits 4:2:2, e 444 mantém a crominância completa 4:4:4 de 10 bits para finalização e VFX."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "LB 适用于离线剪辑。SQ 和 HQ 适合 8 位母版。HQX 保留 10 位 4:2:2，444 则为调色收尾和视效保留完整的 10 位 4:4:4 色度。"
+          }
+        }
+      }
+    },
+    "MOV works in most editing applications. MXF is the native container for Avid Media Composer." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "MOV funktioniert in den meisten Schnittprogrammen. MXF ist der native Container von Avid Media Composer."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "MOV funciona en la mayoría de las aplicaciones de edición. MXF es el contenedor nativo de Avid Media Composer."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "MOV fonctionne dans la plupart des logiciels de montage. MXF est le conteneur natif d’Avid Media Composer."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "MOV funziona nella maggior parte delle applicazioni di montaggio. MXF è il contenitore nativo di Avid Media Composer."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "MOV はほとんどの編集アプリケーションで使用できます。MXF は Avid Media Composer のネイティブコンテナです。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "MOV는 대부분의 편집 애플리케이션에서 사용할 수 있습니다. MXF는 Avid Media Composer의 기본 컨테이너입니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MOV fungerer i de fleste redigeringsprogrammer. MXF er den opprinnelige containeren for Avid Media Composer."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "MOV funciona na maioria dos aplicativos de edição. MXF é o contêiner nativo do Avid Media Composer."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "MOV 适用于大多数剪辑软件。MXF 是 Avid Media Composer 的原生容器。"
+          }
+        }
+      }
+    },
+    "Lower CRF values give higher quality and larger files. 30–33 suits most HD web video." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Niedrigere CRF-Werte ergeben höhere Qualität und größere Dateien. 30–33 eignet sich für die meisten HD-Webvideos."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los valores de CRF más bajos dan mayor calidad y archivos más grandes. 30–33 es adecuado para la mayoría de los vídeos web en HD."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Des valeurs CRF plus basses donnent une meilleure qualité et des fichiers plus volumineux. 30–33 convient à la plupart des vidéos web HD."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Valori CRF più bassi offrono qualità più alta e file più grandi. 30–33 è adatto alla maggior parte dei video web HD."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "CRF 値が低いほど高品質になり、ファイルサイズは大きくなります。ほとんどの HD Web 動画には 30〜33 が適しています。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "CRF 값이 낮을수록 품질이 높아지고 파일이 커집니다. 대부분의 HD 웹 동영상에는 30–33이 적합합니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lavere CRF-verdier gir høyere kvalitet og større filer. 30–33 passer for de fleste HD-videoer på nett."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Valores de CRF menores oferecem maior qualidade e arquivos maiores. 30–33 é adequado para a maioria dos vídeos HD para a web."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "CRF 值越低，质量越高，文件也越大。30–33 适合大多数高清网络视频。"
+          }
+        }
+      }
+    },
+    "Slower settings compress better at the same quality. Realtime is much faster but less efficient." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Langsamere Einstellungen komprimieren bei gleicher Qualität besser. Realtime ist deutlich schneller, aber weniger effizient."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los ajustes más lentos comprimen mejor con la misma calidad. Realtime es mucho más rápido, pero menos eficiente."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Les réglages plus lents compressent mieux à qualité égale. Realtime est beaucoup plus rapide, mais moins efficace."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Le impostazioni più lente comprimono meglio a parità di qualità. Realtime è molto più veloce ma meno efficiente."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "低速な設定ほど同じ品質でより高く圧縮できます。Realtime ははるかに高速ですが、効率は下がります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "느린 설정일수록 같은 품질에서 더 잘 압축합니다. Realtime은 훨씬 빠르지만 효율이 낮습니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tregere innstillinger komprimerer bedre ved samme kvalitet. Realtime er mye raskere, men mindre effektiv."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Configurações mais lentas comprimem melhor com a mesma qualidade. Realtime é muito mais rápido, mas menos eficiente."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "较慢的设置在相同质量下压缩效果更好。Realtime 速度快得多，但效率较低。"
+          }
+        }
+      }
+    },
+    "10-bit (VP9 profile 2) reduces banding, but not every player can decode it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "10 Bit (VP9-Profil 2) reduziert Banding, kann aber nicht von jedem Player dekodiert werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "10 bits (perfil 2 de VP9) reduce las bandas de color, pero no todos los reproductores pueden decodificarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Le 10 bits (profil VP9 2) réduit l’effet de bandes, mais tous les lecteurs ne peuvent pas le décoder."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Il 10 bit (profilo VP9 2) riduce il banding, ma non tutti i lettori possono decodificarlo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "10 ビット（VP9 プロファイル 2）はバンディングを軽減しますが、すべてのプレーヤーでデコードできるわけではありません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "10비트(VP9 프로파일 2)는 밴딩을 줄여 주지만 모든 플레이어가 디코딩할 수 있는 것은 아닙니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "10-bit (VP9-profil 2) reduserer stripedannelse, men ikke alle avspillere kan dekode det."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "10 bits (perfil 2 do VP9) reduz o efeito de faixas, mas nem todo player consegue decodificá-lo."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "10 位（VP9 配置文件 2）可减少色带，但并非所有播放器都能解码。"
+          }
+        }
+      }
+    },
+    "WebM plays in web browsers. MKV holds the same VP9 and Opus streams for other players." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "WebM wird in Webbrowsern abgespielt. MKV enthält dieselben VP9- und Opus-Streams für andere Player."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "WebM se reproduce en navegadores web. MKV contiene los mismos flujos VP9 y Opus para otros reproductores."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "WebM se lit dans les navigateurs web. MKV contient les mêmes flux VP9 et Opus pour d’autres lecteurs."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "WebM si riproduce nei browser web. MKV contiene gli stessi flussi VP9 e Opus per altri lettori."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "WebM は Web ブラウザで再生できます。MKV は同じ VP9 と Opus のストリームを他のプレーヤー向けに格納します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "WebM은 웹 브라우저에서 재생됩니다. MKV는 다른 플레이어를 위해 동일한 VP9 및 Opus 스트림을 담습니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "WebM spilles av i nettlesere. MKV inneholder de samme VP9- og Opus-strømmene for andre avspillere."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "WebM é reproduzido em navegadores. MKV contém os mesmos fluxos VP9 e Opus para outros players."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "WebM 可在网页浏览器中播放。MKV 为其他播放器封装相同的 VP9 和 Opus 流。"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"
