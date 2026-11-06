@@ -128,6 +128,7 @@ actor FFMPEGConverter {
     private var currentAVCIntraPreprocessingTask: Task<AVCIntraAudioPreprocessingResult, Never>?
     private var currentAVCIntraPreprocessingTaskID: UUID?
     private var currentEndCutListingTask: Task<PackageWrapperResult, Never>?
+    private var currentLoudnessMeasurementTask: Task<SubprocessResult?, Never>?
     private var currentAV2HelperTask: Task<AV2HelperRunResult, Never>?
     private var currentAV2HelperTaskID: UUID?
     private var currentMCALabelTask: Task<URL?, Never>?
@@ -462,6 +463,41 @@ actor FFMPEGConverter {
     }
 
     /// Lists the trim's video packets and picks its clean end. Nil when cancelled.
+    enum LoudnessMeasurementResult: Sendable {
+        case measured([LoudnormMeasurement])
+        case failed
+        case cancelled
+    }
+
+    /// First loudness pass: decodes the export's audio graph and reads each loudnorm's statistics.
+    private func measureLoudness(conversionID: UUID, ffmpegPath: String, arguments: [String]) async -> LoudnessMeasurementResult {
+        var arguments = arguments
+        if let progress = arguments.firstIndex(of: "-progress"), progress + 1 < arguments.count {
+            arguments.removeSubrange(progress...progress + 1)
+        }
+        arguments = ["-hide_banner", "-nostats"] + arguments
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: ffmpegPath),
+            arguments: arguments,
+            timeout: nil,
+            standardOutputCaptureLimit: 0,
+            standardErrorCaptureLimit: 4 * 1024 * 1024,
+            sensitiveValues: Set(arguments.filter { $0.hasPrefix("/") } + [ffmpegPath])
+        )
+        let runner = subprocessRunner
+        let task = Task { () -> SubprocessResult? in try? await runner.run(request) }
+        currentLoudnessMeasurementTask?.cancel()
+        currentLoudnessMeasurementTask = task
+        let result = await task.value
+        if currentLoudnessMeasurementTask == task { currentLoudnessMeasurementTask = nil }
+        guard activeConversionID == conversionID, !task.isCancelled else { return .cancelled }
+        guard let result, result.succeeded else {
+            Self.logger.error("Loudness measurement failed: \(result.map { request.redactedDiagnostic($0.standardErrorText) } ?? "did not run", privacy: .public)")
+            return .failed
+        }
+        return .measured(MediaAdjustmentsPlan.parseLoudnormMeasurements(from: result.standardErrorText))
+    }
+
     private func findStreamCopyEndCut(
         conversionID: UUID, ffmpegPath: String, inputURL: URL, seek: [String], end: Double
     ) async -> StreamCopyEndCut.Cut? {
@@ -827,6 +863,8 @@ actor FFMPEGConverter {
         currentAVCIntraPreprocessingTaskID = nil
         currentEndCutListingTask?.cancel()
         currentEndCutListingTask = nil
+        currentLoudnessMeasurementTask?.cancel()
+        currentLoudnessMeasurementTask = nil
         currentAV2HelperTask?.cancel()
         currentAV2HelperTask = nil
         currentAV2HelperTaskID = nil
@@ -1379,7 +1417,7 @@ actor FFMPEGConverter {
         }
 
         // Build FFmpeg arguments
-        let command = await FFMPEGCommandBuilder.buildCommand(
+        let buildCommand: ([LoudnormMeasurement]?) async -> FFMPEGCommand = { loudnessMeasurements in await FFMPEGCommandBuilder.buildCommand(
             inputURL: effectiveInputURL,
             outputFileURL: ffmpegOutputURL,  // Use temp file for AVC-Intra, final file otherwise
             preset: preset,
@@ -1413,8 +1451,25 @@ actor FFMPEGConverter {
             } ?? additionalOutputArguments,
             chapterMetadataURL: request.chapterMetadataURL,
             chapterMetadataTitles: request.chapterMetadataTitles,
-            isMuted: request.isMuted
-        )
+            isMuted: request.isMuted,
+            adjustments: tempAudioURL != nil ? nil : request.adjustments,
+            loudnessMeasurements: loudnessMeasurements
+        ) }
+        var command = await buildCommand(nil)
+
+        // Two-pass loudness: measure every normalized track, then rebuild with the results.
+        if command.preparationError == nil, let measurementArguments = command.loudnessMeasurementArguments {
+            progressUpdate(0, String(localized: "Measuring loudness…", comment: "Conversion status during the first loudness normalization pass."))
+            switch await measureLoudness(conversionID: conversionID, ffmpegPath: ffmpegPath, arguments: measurementArguments) {
+            case .cancelled:
+                // The preparation-failure path below owns the cleanup of unstarted outputs.
+                command.preparationError = "Conversion cancelled"
+            case .measured(let measurements) where measurements.count == command.loudnessTrackCount:
+                command = await buildCommand(measurements)
+            case .measured, .failed:
+                command.preparationError = MediaAdjustmentsPlan.AdjustmentError.measurementFailed.message
+            }
+        }
 
         if let preparationError = command.preparationError {
             if let tempAudioURL { Self.cleanupTempFile(at: tempAudioURL, label: "Preprocessed audio") }
@@ -5031,6 +5086,8 @@ actor FFMPEGConverter {
         currentAVCIntraPreprocessingTaskID = nil
         currentEndCutListingTask?.cancel()
         currentEndCutListingTask = nil
+        currentLoudnessMeasurementTask?.cancel()
+        currentLoudnessMeasurementTask = nil
         currentAV2HelperTask?.cancel()
         currentAV2HelperTask = nil
         currentAV2HelperTaskID = nil
@@ -5613,7 +5670,7 @@ actor FFMPEGConverter {
         waveformRequest: WaveformVideoRequest?,
         synthesizedVideoRequest: SynthesizedVideoRequest?
     ) -> Bool {
-        guard preset == .tvAVCIntra else { return false }
+        guard preset.splitsAudioIntoMonoTracks else { return false }
         // Only needed for audio-only files (which use waveform or synthesized video)
         return waveformRequest != nil || synthesizedVideoRequest != nil
     }

@@ -89,6 +89,21 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 - Audio Track deletion and rearrangement
     - Does not work with the Stream Copy preset
 
+### Adjustments
+Right-click a queued file and choose **Adjustments…** to set, per file:
+- **Rotate** 90°/180° and **flip** horizontally or vertically (applied after crop, before the preset's scaling)
+- **Speed** from 0.25× to 4× with pitch-preserved audio
+- **Fade** video in from / out to black, and fade audio in and out
+- **Audio offset** to fix out-of-sync clips (positive delays the audio)
+- **Replace or add audio** from another file, aligned with the trim and fitted to the video's length
+- **Burn in subtitles** from a text subtitle track or an SRT, ASS or VTT file, with font size, outline or box, and position. Picture subtitles (PGS, DVD) need subtitle OCR to SRT first.
+- A per-file override of loudness normalization
+
+Adjustments need a re-encoding preset; they are not available for Stream Copy, DCP, IMF, AV2, merges or generated waveform video.
+
+### Loudness normalization
+Turn on **Normalize Loudness** in Settings → Presets to normalize every re-encoded audio track to EBU R128 (−23 LUFS, −1 dBTP), ATSC A/85, streaming (−14 LUFS), web/podcast (−16 LUFS) or a custom target. Each track is measured in a first pass, then normalized with FFmpeg's `loudnorm` using a linear gain where the programme allows it. Mono-track broadcast presets such as AVC-Intra are measured per source track before the split, so stereo balance is kept.
+
 ### Merge queued files
 - Merge files into one if they are the same codec, resolution, frame rate, bit depth, and audio tracks.
 - The first clip in the queue works as a master for timecode and crop.
@@ -101,7 +116,7 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 - Mark recording continuations explicitly and optionally split groups after gaps over two hours. Compatibility checks help identify clips that can be stitched.
 
 ### Local agent access
-Enable **Settings → Agent Access**, approve source folders, and copy the setup for your MCP client. The bundled helper lets agents browse and inspect approved media, plan conversions, submit jobs, follow progress, and cancel work in the app queue. All 17 built-in presets are available; custom FFmpeg slots are excluded. IMF exports are experimental.
+Enable **Settings → Agent Access**, approve source folders, and copy the setup for your MCP client. The bundled helper lets agents browse and inspect approved media, plan conversions, submit jobs, follow progress, and cancel work in the app queue. All 21 built-in presets are available; custom FFmpeg slots are excluded. IMF exports are experimental.
 
 Accepted jobs continue after a client disconnects. Plans last 15 minutes and terminal results remain available for 30 days. Agent exports disable output timecode. See the [setup and workflow guide](Documentation/LOCAL_AGENT_ACCESS.md) for folder approvals, client setup, and job recovery.
 
@@ -136,6 +151,7 @@ Open the chart button on a queued file to inspect its Audio and Video reports.
 
 - Measure whole-program loudness and true peak for individual tracks, custom mono pairs or 5.1 mono groups; export complete JSON or PDF reports.
 - Find silence and peak intervals, compare channel balance, or check stereo correlation and mono fold-down. Jump to measured sections in the paused preview and export complete JSON measurements.
+- Find black intervals (FFmpeg `blackdetect`, with adjustable minimum duration, picture ratio and pixel threshold) and scene cuts (FFmpeg `scdet`, with an adjustable threshold and a thumbnail per cut) in the source video. Click an event to inspect it in the paused preview, then export JSON or Resolve EDL markers. See the [black](docs/video-black-report-format.md) and [scene cut](docs/video-scene-cut-report-format.md) report formats.
 - After encoding, compare video with VMAF, PSNR, XPSNR or sampled SSIMULACRA2. Inspect quality over time, switch source/output playback and jump to the lowest-scoring sections.
 - SSIMULACRA2 compares verified decoded frames up to the selected limit, including on short clips. Videos are indexed first; more samples take longer.
 - Export video quality as full-resolution JSON or paginated A4 PDF with timelines, component scores and comparison warnings. See [score interpretation and report details](docs/video-quality-report-format.md).
@@ -176,17 +192,29 @@ The bundled encoder and decoder use AVM `1.0.0-175-g0da4c3647` (October 12, 2026
 
 Choose video-only IVF (`.ivf`) or Matroska (`.mkv`) with AAC or Opus audio. Reference encoding is very slow, and playback requires an AV2-capable decoder. The app can decode AV2 files for conversion and thumbnails, but interactive playback is not available yet. Treat AV2 as a format for experimentation rather than delivery.
 
+#### VP9 / WebM
+Royalty-free VP9 for the web, encoded with libvpx at constant quality (CRF with a zero bitrate target) and row-based multithreading. Choose the CRF, a speed from Best to Realtime, 8-bit (profile 0) or 10-bit (profile 2), and a resolution limit. Audio is encoded as Opus at a selectable bitrate. Outputs WebM, or Matroska (`.mkv`). Opus cannot encode some channel layouts, such as `5.1(side)`; downmix those tracks with audio routing.
+
 #### TV (HEVC 10-bit 4:2:2)
 Broadcast delivery format with hardware HEVC 10-bit 4:2:2, configurable resolution/framerate, automatic bitrate scaling, and preservation of all audio channels as 24-bit PCM.
 
 #### TV (AVC-Intra)
 Broadcast delivery format in an MXF container. AVC-Intra 10-bit 4:2:2 offers selectable classes (50/100/200 Mbps), resolution, and frame rate plus 4/8/16 mono audio channels as 24-bit PCM.
 
+#### XDCAM HD422 (MXF)
+Sony XDCAM HD422 broadcast delivery: MPEG-2 4:2:2 Profile @ High Level, 50 Mbps CBR long GOP (closed GOPs of 12 frames at 25/50 Hz and 15 at 29.97/59.94 Hz, two B-frames) in an MXF OP1a file. Choose 1080i50, 1080p25, 1080i59.94, 1080p29.97, 720p50, or 720p59.94. Sources are scaled and pillarboxed or letterboxed to full-raster 16:9, and audio is delivered as 4 or 8 mono 24-bit 48 kHz PCM tracks.
+
 #### Stream copy
 Copies the existing audio and video streams into a new file. Its strength is keeping the original codecs, metadata, and extension, so it pairs well with trimming or merging tasks.
 
 #### ProRes
 Apple ProRes (yuv422p10) for edit-friendly masters. Includes the first video and audio streams, keeps 24-bit PCM audio, and targets standard ProRes bitrates. The default ProRes profile can be chosen in Preset Settings.
+
+#### DNxHR
+Avid DNxHR at the source resolution for editing and mastering: LB, SQ, or HQ (8-bit 4:2:2), HQX (10-bit 4:2:2), or 444 (10-bit 4:4:4). Choose a MOV or MXF container. Every audio track is kept as 24-bit PCM (resampled to 48 kHz in MXF).
+
+#### CineForm
+GoPro CineForm at the source resolution in a MOV container, for editing and finishing: 10-bit 4:2:2 YUV, 12-bit 4:4:4 RGB, or 12-bit 4:4:4 RGB with alpha. Choose a quality from Low to Film Scan 3+ (Film Scan 1 by default). The codec stores at most 12 bits per channel, so 16-bit sources are reduced to 12-bit. FFmpeg's encoder needs a width that is a multiple of 16, so other widths are padded with black at the sides. Every audio track is kept as 24-bit PCM.
 
 #### Proxy
 Lightweight proxy creation in HEVC, ProRes Proxy, or DNxHR with configurable resolution limits. Retains every audio channel as uncompressed PCM, which is ideal for offline editing and pairing with a dedicated Proxy sub-folder next to the source material.

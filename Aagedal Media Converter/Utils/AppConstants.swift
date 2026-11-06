@@ -509,6 +509,38 @@ enum AppConstants {
     static let avcIntraDefaultMCASoundfield6ChKey = "avcIntraDefaultMCASoundfield6Ch"
     static let avcIntraDefaultMCASoundfield8ChKey = "avcIntraDefaultMCASoundfield8Ch"
 
+    // XDCAM HD422 preset settings
+    static let xdcamFormatKey = "xdcamHD422Format"                 // XDCAMHD422Format raw value
+    static let defaultXDCAMFormat = "1080i50"
+    static let xdcamAudioChannelsKey = "xdcamHD422AudioChannels"   // AVCIntraAudioChannels raw value (4 or 8)
+    static let defaultXDCAMAudioChannels = "8 Channels"
+
+    // DNxHR preset settings
+    static let dnxhrProfileKey = "dnxhrProfile"                    // DNxHRProfile raw value
+    static let defaultDNxHRProfile = "DNxHR HQ"
+    static let dnxhrContainerKey = "dnxhrContainer"                // DNxHRContainer raw value
+    static let defaultDNxHRContainer = "MOV"
+
+    // CineForm preset settings
+    static let cineformProfileKey = "cineformProfile"              // CineFormProfile raw value
+    static let defaultCineFormProfile = "10-bit 4:2:2 (YUV)"
+    static let cineformQualityKey = "cineformQuality"              // CineFormQuality raw value
+    static let defaultCineFormQuality = "Film Scan 1"
+
+    // VP9 preset settings
+    static let vp9QualityKey = "vp9Quality"                        // AV1QualityLevel raw value (same 0–63 CRF scale)
+    static let defaultVP9Quality = "Good (30)"
+    static let vp9SpeedKey = "vp9Speed"                            // VP9EncodingSpeed raw value
+    static let defaultVP9Speed = "Balanced"
+    static let vp9BitDepthKey = "vp9BitDepth"                      // VP9BitDepth raw value
+    static let defaultVP9BitDepth = "8-bit"
+    static let vp9ContainerKey = "vp9Container"                    // VP9Container raw value
+    static let defaultVP9Container = "WebM"
+    static let vp9ResolutionLimitKey = "vp9ResolutionLimit"        // CodecResolutionLimit raw value
+    static let defaultVP9ResolutionLimit = "Unlimited"
+    static let vp9AudioBitrateKey = "vp9AudioBitrate"              // AudioBitrate raw value for Opus
+    static let defaultVP9AudioBitrate = "192 kbps"
+
     // DCP preset settings
     static let dcpResolutionKey = "dcpResolution"
     static let defaultDCPResolution = "2K Full (2048x1080)"
@@ -644,6 +676,13 @@ enum AppConstants {
     static let keepSubtitlesKey = "keepSubtitles"
     static let defaultKeepSubtitles = false
 
+    // Loudness normalization (two-pass loudnorm) applied to re-encoded audio
+    static let loudnessNormalizationEnabledKey = "loudnessNormalizationEnabled"
+    static let loudnessNormalizationStandardKey = "loudnessNormalizationStandard"
+    static let loudnessNormalizationIntegratedKey = "loudnessNormalizationIntegrated"
+    static let loudnessNormalizationTruePeakKey = "loudnessNormalizationTruePeak"
+    static let loudnessNormalizationRangeKey = "loudnessNormalizationRange"
+
     // VideoLoop mute settings
     static let videoLoopDefaultMutedKey = "videoLoopDefaultMuted"
     static let defaultVideoLoopMuted = true
@@ -658,6 +697,10 @@ enum AppConstants {
     static let av2VisibleKey = "av2Visible"
     static let tvHEVCVisibleKey = "tvHEVCVisible"
     static let tvAVCIntraVisibleKey = "tvAVCIntraVisible"
+    static let xdcamHD422VisibleKey = "xdcamHD422Visible"
+    static let dnxhrVisibleKey = "dnxhrVisible"
+    static let cineformVisibleKey = "cineformVisible"
+    static let vp9VisibleKey = "vp9Visible"
     static let losslessVisibleKey = "losslessVisible"
     static let proresVisibleKey = "proresVisible"
     static let proxyVisibleKey = "proxyVisible"

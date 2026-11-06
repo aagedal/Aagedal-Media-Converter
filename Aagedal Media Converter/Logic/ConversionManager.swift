@@ -2775,6 +2775,7 @@ actor ConversionManager: Sendable {
             videoFrameRate: FileNameTemplateContext.imageSequenceFrameRate(for: currentItem),
             audioRoutingConfig: currentItem.audioRoutingConfig,
             cropConfig: currentItem.cropConfig,
+            adjustments: ResolvedMediaAdjustments(adjustments: currentItem.adjustments, globalLoudness: settings.loudness),
             timecodeConfig: currentItem.timecodeConfig,
             isMuted: currentItem.isMuted,
             waveformRequest: waveformRequest,

@@ -55,6 +55,7 @@ struct EncodeRecipe: Codable, Equatable, Sendable {
     var trimEnd: Double?
     var cropConfig: CropConfig?
     var audioRoutingConfig: AudioRoutingConfig?
+    var adjustments: MediaAdjustments?
     var timecodeMode: TimecodeMode?
     var manualTimecode: String?
     var isMuted: Bool = false
@@ -79,6 +80,7 @@ struct EncodeRecipe: Codable, Equatable, Sendable {
         trimEnd = item.trimEnd
         cropConfig = item.cropConfig
         audioRoutingConfig = item.audioRoutingConfig
+        adjustments = item.adjustments
         switch item.timecodeConfig?.mode {
         case .preserveSource:
             timecodeMode = .preserveSource
@@ -118,6 +120,7 @@ struct EncodeRecipe: Codable, Equatable, Sendable {
         item.trimEnd = trimEnd
         item.cropConfig = cropConfig
         item.audioRoutingConfig = audioRoutingConfig
+        item.adjustments = adjustments
         item.timecodeConfig = timecodeConfig
         item.isMuted = isMuted
         item.comment = comment
@@ -147,6 +150,7 @@ struct EncodeRecipe: Codable, Equatable, Sendable {
         if cropConfig != nil { lines.append(String(localized: "Crop", comment: "History settings summary.")) }
         if audioRoutingConfig != nil { lines.append(String(localized: "Audio routing", comment: "History settings summary.")) }
         if isMuted { lines.append(String(localized: "Muted", comment: "History settings summary.")) }
+        if let adjustments { lines += adjustments.summary }
         if let timecodeMode {
             lines.append(timecodeMode == .manual
                 ? String(localized: "Timecode \(manualTimecode ?? "")", comment: "History settings summary: manual start timecode.")
@@ -601,6 +605,7 @@ extension EncodeRecipe {
         trimEnd = c.decodeTolerant(Double.self, forKey: .trimEnd)
         cropConfig = c.decodeTolerant(CropConfig.self, forKey: .cropConfig)
         audioRoutingConfig = c.decodeTolerant(AudioRoutingConfig.self, forKey: .audioRoutingConfig)
+        adjustments = c.decodeTolerant(MediaAdjustments.self, forKey: .adjustments)
         timecodeMode = c.decodeTolerant(TimecodeMode.self, forKey: .timecodeMode)
         manualTimecode = c.decodeTolerant(String.self, forKey: .manualTimecode)
         isMuted = c.decodeTolerant(Bool.self, forKey: .isMuted) ?? false

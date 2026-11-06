@@ -837,6 +837,8 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var hasVideoStream: Bool = true
     var audioRoutingConfig: AudioRoutingConfig? = nil
     var cropConfig: CropConfig? = nil
+    /// Rotation, speed, fades, audio offset/replacement, burned-in subtitles and loudness override.
+    var adjustments: MediaAdjustments? = nil
     /// Custom background image URL for waveform video rendering (audio-only items)
     var waveformBackgroundImageURL: URL? = nil
     var timecodeConfig: TimecodeConfig? = nil
@@ -1070,6 +1072,7 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     mutating func clearUserSettings(resetNameOverride: Bool = false, settings: VideoImportSettings = VideoImportSettings()) {
         audioRoutingConfig = nil
         cropConfig = nil
+        adjustments = nil
         timecodeConfig = nil
         trimStart = nil
         trimEnd = nil

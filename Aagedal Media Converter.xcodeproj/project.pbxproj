@@ -191,6 +191,7 @@
 		8ECEBC1B2ED766F400F1F67C /* CropControlsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8ECEBC192ED766F400F1F67C /* CropControlsView.swift */; };
 		8ECEBC1C2ED766F400F1F67C /* CropOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8ECEBC1A2ED766F400F1F67C /* CropOverlayView.swift */; };
 		8ECEBC1E2ED7CEC800F1F67C /* TimecodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8ECEBC1D2ED7CEC800F1F67C /* TimecodeView.swift */; };
+		EE18A0375D0F4145A792F8B9 /* MediaAdjustmentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAF4F9FF2BB044E5B6BC00E3 /* MediaAdjustmentsView.swift */; };
 		8ECEBC202ED8782800F1F67C /* MetadataSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8ECEBC1F2ED8782800F1F67C /* MetadataSettingsView.swift */; };
 		8ED369F12F8CEFFC00FB9A33 /* SwiftMediaMetadata in Frameworks */ = {isa = PBXBuildFile; productRef = 8ED369F02F8CEFFC00FB9A33 /* SwiftMediaMetadata */; };
 		8EE0BB9C2E0892B70096171D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EE0BB9B2E0892B70096171D /* SettingsView.swift */; };
@@ -216,6 +217,7 @@
 		9CB662C7C4CE637DA85D46A2 /* DownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E2285544DA98D92593F5F73 /* DownloadManager.swift */; };
 		9E366451EF024AA38C7ADA5F /* DCPSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10186580D2B45FF94882D47 /* DCPSettings.swift */; };
 		9F8D99DD5029416DA4559EF2 /* SubtitleExportSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DBE93147D3D4B659639E3C1 /* SubtitleExportSettings.swift */; };
+		004B1E1BEE3A4FCF82434E38 /* MediaAdjustments.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8BC351DE2F5457C97F6B648 /* MediaAdjustments.swift */; };
 		A0299B59F2D04382840AD8B0 /* BMXProbeLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EFDAD2CCF6B4D1BAB4AA7B1 /* BMXProbeLifecycleTests.swift */; };
 		A14336D5FE72B1741AE6C2E2 /* RcloneService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45B40739097F270F27C5045E /* RcloneService.swift */; };
 		A1B2C3D4E5F60718293A4B5C /* CaptureModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5D /* CaptureModeView.swift */; };
@@ -231,6 +233,7 @@
 		A45919000000000000000006 /* QueueGroupingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45919000000000000000005 /* QueueGroupingTests.swift */; };
 		A4591900000000000000000B /* StitchMarkerTimecodeRate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4591900000000000000000A /* StitchMarkerTimecodeRate.swift */; };
 		A4591900000000000000000D /* StitchMarkerExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4591900000000000000000C /* StitchMarkerExport.swift */; };
+		BC9B494CEF864B20A22E8D2D /* MediaAdjustmentsPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAB8946857734CB89D62A066 /* MediaAdjustmentsPlan.swift */; };
 		A4591900000000000000000F /* StitchMarkerExportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4591900000000000000000E /* StitchMarkerExportTests.swift */; };
 		A45920000000000000000002 /* SubtitleAgentCoexistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45920000000000000000001 /* SubtitleAgentCoexistenceTests.swift */; };
 		A45921000000000000000011 /* CameraCardRecordingGrouping.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45921000000000000000012 /* CameraCardRecordingGrouping.swift */; };
@@ -272,6 +275,7 @@
 		B15C008BDFBA4E8893B1C380 /* ToolDiagnosticsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A95007ED7B0349E3B626F1BE /* ToolDiagnosticsSettingsView.swift */; };
 		B1C2D3E4F5061728394A5B70 /* ScreenCaptureSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5061728394A5B6F /* ScreenCaptureSettingsView.swift */; };
 		B33D258C71A742F9A3D2D8DD /* AudioRoutingPlanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3645F27A874241C7AF89277E /* AudioRoutingPlanTests.swift */; };
+		4D84DABA368E4937BCBC055C /* MediaAdjustmentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEBA547B45434CD3938A7B26 /* MediaAdjustmentsTests.swift */; };
 		A907D1D50000000000000304 /* ManagedToolVersionControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A907D1D50000000000000404 /* ManagedToolVersionControls.swift */; };
 		B709DBE54F69E12A7484E1CE /* YTDLPSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07D71BE05D85B5DEBAEB0A7A /* YTDLPSettingsView.swift */; };
 		BC6905B16FDDC57467098ECF /* KeychainCredentialManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8BDFDD325A4DF89E8766843 /* KeychainCredentialManager.swift */; };
@@ -371,15 +375,19 @@
 		A598C35C58B24CE8BBE4CF00 /* AV2RecoveryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B62CDCA03AD943938CBC4A43 /* AV2RecoveryStore.swift */; };
 		FF13CD1ED3C14E4EB0F4D822 /* AV2ResourceRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD7F35730E574E58B708A19A /* AV2ResourceRecoveryTests.swift */; };
 		8816201A4FA14E8A8CFAD590 /* SilenceAnalysisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A4AF03E4925475F940E1E96 /* SilenceAnalysisService.swift */; };
+		205319AFC52B42EAB3B4137E /* VideoEventExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C17D9FDBEF6B4203B6E7D013 /* VideoEventExport.swift */; };
+		1B13B16BDE76450796B42BA6 /* VideoEventAnalysisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9089F044A3004A8FA407C99F /* VideoEventAnalysisService.swift */; };
 		CB3E2696F6604FB6B5826D6C /* BitrateAnalysisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92BB944116A548788370A900 /* BitrateAnalysisService.swift */; };
 		A91000000000000000000001 /* AudioPeakAnalysisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91000000000000000000002 /* AudioPeakAnalysisService.swift */; };
 		A92000000000000000000001 /* AudioPhaseAnalysisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92000000000000000000002 /* AudioPhaseAnalysisService.swift */; };
 		B15AF6492A5845EF8CA8C899 /* SilenceAnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 743E8FA11CE041EF8FA61896 /* SilenceAnalysisView.swift */; };
+		1A334185DD01493BB15ADB12 /* VideoEventAnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E40FD354D1F04199AEC4005A /* VideoEventAnalysisView.swift */; };
 		F4F6DF56BEC44CDAB775E2C2 /* BitrateAnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52E1CA7B62D14100BBBEE7EA /* BitrateAnalysisView.swift */; };
 		AE41D2ED90F74DB5A52C0D44 /* AnalysisReportExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68D08709C7F047A097C41D5A /* AnalysisReportExportView.swift */; };
 		A91000000000000000000003 /* AudioPeakAnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91000000000000000000004 /* AudioPeakAnalysisView.swift */; };
 		A92000000000000000000011 /* AudioPhaseAnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92000000000000000000012 /* AudioPhaseAnalysisView.swift */; };
 		4D809870F6BD46AEA540E7FA /* SilenceAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2576C110E5DB47CFB87BCFD8 /* SilenceAnalysisTests.swift */; };
+		7AF7986DAD034B10BEAAB727 /* VideoEventAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65A95880799F4BE384B86503 /* VideoEventAnalysisTests.swift */; };
 		16E45143A6794667BCF5C158 /* BitrateAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AF971F3941A47E58F8C1157 /* BitrateAnalysisTests.swift */; };
 		A91000000000000000000005 /* AudioPeakAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91000000000000000000006 /* AudioPeakAnalysisTests.swift */; };
 		A92000000000000000000021 /* AudioPhaseAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92000000000000000000022 /* AudioPhaseAnalysisTests.swift */; };
@@ -499,6 +507,7 @@
 		3171BC386A1446B89E470B2C /* MPVPreviewObservationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVPreviewObservationTests.swift; sourceTree = "<group>"; };
 		04A0EDA5FFC64786A28DB95C /* MPVAudioMeterHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVAudioMeterHistoryTests.swift; sourceTree = "<group>"; };
 		3645F27A874241C7AF89277E /* AudioRoutingPlanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRoutingPlanTests.swift; sourceTree = "<group>"; };
+		EEBA547B45434CD3938A7B26 /* MediaAdjustmentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaAdjustmentsTests.swift; sourceTree = "<group>"; };
 		3675B15B144940809F827E09 /* AV2AudioTimingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2AudioTimingTests.swift; sourceTree = "<group>"; };
 		3A606FA6387C4AE4B6C4B9EE /* ConversionUploadFollowUp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionUploadFollowUp.swift; sourceTree = "<group>"; };
 		3F154E2310994DAFA60859B0 /* ModelDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDiagnostics.swift; sourceTree = "<group>"; };
@@ -510,6 +519,7 @@
 		4BBC06DAF3F395A5C54B3064 /* UploadModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = UploadModels.swift; path = "Aagedal Media Converter/Logic/Upload/UploadModels.swift"; sourceTree = "<group>"; };
 		4BCAA3452B974DD38E9213D5 /* AV2AudioSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2AudioSettingsTests.swift; sourceTree = "<group>"; };
 		4DBE93147D3D4B659639E3C1 /* SubtitleExportSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleExportSettings.swift; sourceTree = "<group>"; };
+		A8BC351DE2F5457C97F6B648 /* MediaAdjustments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaAdjustments.swift; sourceTree = "<group>"; };
 		4E224DF5E7934DB7BE4B5BB4 /* MCALabelCancellationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCALabelCancellationTests.swift; sourceTree = "<group>"; };
 		4F741F78E5BA1732D892656E /* WhisperUpdateService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WhisperUpdateService.swift; sourceTree = "<group>"; };
 		50C1AEBD980A485FBE74B23A /* AudioOnlySettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioOnlySettingsTests.swift; sourceTree = "<group>"; };
@@ -632,6 +642,7 @@
 		8ECEBC192ED766F400F1F67C /* CropControlsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CropControlsView.swift; sourceTree = "<group>"; };
 		8ECEBC1A2ED766F400F1F67C /* CropOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CropOverlayView.swift; sourceTree = "<group>"; };
 		8ECEBC1D2ED7CEC800F1F67C /* TimecodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimecodeView.swift; sourceTree = "<group>"; };
+		CAF4F9FF2BB044E5B6BC00E3 /* MediaAdjustmentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaAdjustmentsView.swift; sourceTree = "<group>"; };
 		8ECEBC1F2ED8782800F1F67C /* MetadataSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataSettingsView.swift; sourceTree = "<group>"; };
 		8EE0BB9B2E0892B70096171D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		8EE0BB9D2E089F520096171D /* DockProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockProgressView.swift; sourceTree = "<group>"; };
@@ -687,6 +698,7 @@
 		A45919000000000000000005 /* QueueGroupingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueGroupingTests.swift; sourceTree = "<group>"; };
 		A4591900000000000000000A /* StitchMarkerTimecodeRate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StitchMarkerTimecodeRate.swift; sourceTree = "<group>"; };
 		A4591900000000000000000C /* StitchMarkerExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StitchMarkerExport.swift; sourceTree = "<group>"; };
+		FAB8946857734CB89D62A066 /* MediaAdjustmentsPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaAdjustmentsPlan.swift; sourceTree = "<group>"; };
 		A4591900000000000000000E /* StitchMarkerExportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StitchMarkerExportTests.swift; sourceTree = "<group>"; };
 		A45920000000000000000001 /* SubtitleAgentCoexistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleAgentCoexistenceTests.swift; sourceTree = "<group>"; };
 		A45921000000000000000012 /* CameraCardRecordingGrouping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCardRecordingGrouping.swift; sourceTree = "<group>"; };
@@ -842,15 +854,19 @@
 		B62CDCA03AD943938CBC4A43 /* AV2RecoveryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2RecoveryStore.swift; sourceTree = "<group>"; };
 		FD7F35730E574E58B708A19A /* AV2ResourceRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2ResourceRecoveryTests.swift; sourceTree = "<group>"; };
 		9A4AF03E4925475F940E1E96 /* SilenceAnalysisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilenceAnalysisService.swift; sourceTree = "<group>"; };
+		C17D9FDBEF6B4203B6E7D013 /* VideoEventExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoEventExport.swift; sourceTree = "<group>"; };
+		9089F044A3004A8FA407C99F /* VideoEventAnalysisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoEventAnalysisService.swift; sourceTree = "<group>"; };
 		92BB944116A548788370A900 /* BitrateAnalysisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitrateAnalysisService.swift; sourceTree = "<group>"; };
 		A91000000000000000000002 /* AudioPeakAnalysisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPeakAnalysisService.swift; sourceTree = "<group>"; };
 		A92000000000000000000002 /* AudioPhaseAnalysisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPhaseAnalysisService.swift; sourceTree = "<group>"; };
 		743E8FA11CE041EF8FA61896 /* SilenceAnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilenceAnalysisView.swift; sourceTree = "<group>"; };
+		E40FD354D1F04199AEC4005A /* VideoEventAnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoEventAnalysisView.swift; sourceTree = "<group>"; };
 		52E1CA7B62D14100BBBEE7EA /* BitrateAnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitrateAnalysisView.swift; sourceTree = "<group>"; };
 		68D08709C7F047A097C41D5A /* AnalysisReportExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisReportExportView.swift; sourceTree = "<group>"; };
 		A91000000000000000000004 /* AudioPeakAnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPeakAnalysisView.swift; sourceTree = "<group>"; };
 		A92000000000000000000012 /* AudioPhaseAnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPhaseAnalysisView.swift; sourceTree = "<group>"; };
 		2576C110E5DB47CFB87BCFD8 /* SilenceAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilenceAnalysisTests.swift; sourceTree = "<group>"; };
+		65A95880799F4BE384B86503 /* VideoEventAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoEventAnalysisTests.swift; sourceTree = "<group>"; };
 		0AF971F3941A47E58F8C1157 /* BitrateAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitrateAnalysisTests.swift; sourceTree = "<group>"; };
 		A91000000000000000000006 /* AudioPeakAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPeakAnalysisTests.swift; sourceTree = "<group>"; };
 		A92000000000000000000022 /* AudioPhaseAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPhaseAnalysisTests.swift; sourceTree = "<group>"; };
@@ -1053,6 +1069,7 @@
 				C52C02E1A35246D6A0CBE187 /* AudioOnlySettings.swift */,
 				CDD5417879E5419D97AE3672 /* CodecExportSettings.swift */,
 				4DBE93147D3D4B659639E3C1 /* SubtitleExportSettings.swift */,
+				A8BC351DE2F5457C97F6B648 /* MediaAdjustments.swift */,
 				AE38B73146584B3EA484D5F8 /* OutputFolderSelectionService.swift */,
 				EE7542FB9D7445F09123B467 /* CommentSettings.swift */,
 				E6DECDFA138A4F6AA59674EA /* KeyboardShortcutSettings.swift */,
@@ -1180,6 +1197,7 @@
 				A1B2C3D4E5F60718293A4B5D /* CaptureModeView.swift */,
 				8E9B52562ED6516C006E6A10 /* AudioRoutingView.swift */,
 				8ECEBC1D2ED7CEC800F1F67C /* TimecodeView.swift */,
+				CAF4F9FF2BB044E5B6BC00E3 /* MediaAdjustmentsView.swift */,
 				DC0001A1DCP0000100000006 /* DCPMetadataView.swift */,
 				DCPV01VVIEW00000000002 /* DCPValidatorView.swift */,
 				IMFEXP0000UIV0002 /* IMFMetadataView.swift */,
@@ -1330,7 +1348,9 @@
 				1EFDAD2CCF6B4D1BAB4AA7B1 /* BMXProbeLifecycleTests.swift */,
 				42E08E9AD75145B68E1C049D /* ConversionPreparationSettingsTests.swift */,
 				3645F27A874241C7AF89277E /* AudioRoutingPlanTests.swift */,
+				EEBA547B45434CD3938A7B26 /* MediaAdjustmentsTests.swift */,
 				2576C110E5DB47CFB87BCFD8 /* SilenceAnalysisTests.swift */,
+				65A95880799F4BE384B86503 /* VideoEventAnalysisTests.swift */,
 				0AF971F3941A47E58F8C1157 /* BitrateAnalysisTests.swift */,
 				A91000000000000000000006 /* AudioPeakAnalysisTests.swift */,
 				A92000000000000000000022 /* AudioPhaseAnalysisTests.swift */,
@@ -1375,6 +1395,7 @@
 				8EEE452E2EC139120049F017 /* FFMPEGProbeService.swift */,
 				8EEE452C2EC139060049F017 /* FFMPEGCommandBuilder.swift */,
 				A4591900000000000000000C /* StitchMarkerExport.swift */,
+				FAB8946857734CB89D62A066 /* MediaAdjustmentsPlan.swift */,
 				A4591900000000000000000A /* StitchMarkerTimecodeRate.swift */,
 				AF22AF22AF22AF22AF22AF22 /* AV2CommandBuilder.swift */,
 				B62CDCA03AD943938CBC4A43 /* AV2RecoveryStore.swift */,
@@ -1503,6 +1524,7 @@
 				E777B19FE611FEB91A8AD3C5 /* VideoQueueTableView.swift */,
 				ANALYTICSRESV0000001 /* AnalyticsResultsView.swift */,
 				743E8FA11CE041EF8FA61896 /* SilenceAnalysisView.swift */,
+				E40FD354D1F04199AEC4005A /* VideoEventAnalysisView.swift */,
 				52E1CA7B62D14100BBBEE7EA /* BitrateAnalysisView.swift */,
 				68D08709C7F047A097C41D5A /* AnalysisReportExportView.swift */,
 				A91000000000000000000004 /* AudioPeakAnalysisView.swift */,
@@ -1575,6 +1597,8 @@
 				ANALYTICSMOD00000001 /* AnalyticsModels.swift */,
 				ANALYTICSSRV00000001 /* AnalyticsService.swift */,
 				9A4AF03E4925475F940E1E96 /* SilenceAnalysisService.swift */,
+				C17D9FDBEF6B4203B6E7D013 /* VideoEventExport.swift */,
+				9089F044A3004A8FA407C99F /* VideoEventAnalysisService.swift */,
 				92BB944116A548788370A900 /* BitrateAnalysisService.swift */,
 				A91000000000000000000002 /* AudioPeakAnalysisService.swift */,
 				A92000000000000000000002 /* AudioPhaseAnalysisService.swift */,
@@ -1957,6 +1981,7 @@
 				D2C68A8AFFE2425D993E231E /* AudioOnlySettings.swift in Sources */,
 				E30950B6AEDF449BA17C59D7 /* CodecExportSettings.swift in Sources */,
 				9F8D99DD5029416DA4559EF2 /* SubtitleExportSettings.swift in Sources */,
+				004B1E1BEE3A4FCF82434E38 /* MediaAdjustments.swift in Sources */,
 				12B0864F27DD4CD6BADB329A /* OutputFolderSelectionService.swift in Sources */,
 				1122330BD4DA4103ACF80E38 /* CommentSettings.swift in Sources */,
 				3E3AFCB991AB43B29AD7B9CE /* KeyboardShortcutSettings.swift in Sources */,
@@ -2029,6 +2054,7 @@
 				8E9DBF1F2EE4781B00F352A1 /* TimecodeFormatter.swift in Sources */,
 				8E2C6BAF2E059AFC00A9379F /* AppConstants.swift in Sources */,
 				8ECEBC1E2ED7CEC800F1F67C /* TimecodeView.swift in Sources */,
+				EE18A0375D0F4145A792F8B9 /* MediaAdjustmentsView.swift in Sources */,
 				DC0001A1DCP0000100000005 /* DCPMetadataView.swift in Sources */,
 				DCPV01VVIEW00000000001 /* DCPValidatorView.swift in Sources */,
 				IMFEXP0000UIV0001 /* IMFMetadataView.swift in Sources */,
@@ -2089,6 +2115,7 @@
 				8E545D832C33FD4A0088C274 /* DragAndDropView.swift in Sources */,
 				8EEE452D2EC1390F0049F017 /* FFMPEGCommandBuilder.swift in Sources */,
 				A4591900000000000000000D /* StitchMarkerExport.swift in Sources */,
+				BC9B494CEF864B20A22E8D2D /* MediaAdjustmentsPlan.swift in Sources */,
 				A4591900000000000000000B /* StitchMarkerTimecodeRate.swift in Sources */,
 				AF23AF23AF23AF23AF23AF23 /* AV2CommandBuilder.swift in Sources */,
 				A598C35C58B24CE8BBE4CF00 /* AV2RecoveryStore.swift in Sources */,
@@ -2203,6 +2230,8 @@
 				ANALYTICSMOD00000002 /* AnalyticsModels.swift in Sources */,
 				ANALYTICSSRV00000002 /* AnalyticsService.swift in Sources */,
 				8816201A4FA14E8A8CFAD590 /* SilenceAnalysisService.swift in Sources */,
+				205319AFC52B42EAB3B4137E /* VideoEventExport.swift in Sources */,
+				1B13B16BDE76450796B42BA6 /* VideoEventAnalysisService.swift in Sources */,
 				CB3E2696F6604FB6B5826D6C /* BitrateAnalysisService.swift in Sources */,
 				A91000000000000000000001 /* AudioPeakAnalysisService.swift in Sources */,
 				A92000000000000000000001 /* AudioPhaseAnalysisService.swift in Sources */,
@@ -2211,6 +2240,7 @@
 				ANALYTICSSETV0000002 /* AnalyticsSettingsView.swift in Sources */,
 				ANALYTICSRESV0000002 /* AnalyticsResultsView.swift in Sources */,
 				B15AF6492A5845EF8CA8C899 /* SilenceAnalysisView.swift in Sources */,
+				1A334185DD01493BB15ADB12 /* VideoEventAnalysisView.swift in Sources */,
 				F4F6DF56BEC44CDAB775E2C2 /* BitrateAnalysisView.swift in Sources */,
 				AE41D2ED90F74DB5A52C0D44 /* AnalysisReportExportView.swift in Sources */,
 				A91000000000000000000003 /* AudioPeakAnalysisView.swift in Sources */,
@@ -2286,7 +2316,9 @@
 				A0299B59F2D04382840AD8B0 /* BMXProbeLifecycleTests.swift in Sources */,
 				6333450EF06E41EF9B17CB73 /* ConversionPreparationSettingsTests.swift in Sources */,
 				B33D258C71A742F9A3D2D8DD /* AudioRoutingPlanTests.swift in Sources */,
+				4D84DABA368E4937BCBC055C /* MediaAdjustmentsTests.swift in Sources */,
 				4D809870F6BD46AEA540E7FA /* SilenceAnalysisTests.swift in Sources */,
+				7AF7986DAD034B10BEAAB727 /* VideoEventAnalysisTests.swift in Sources */,
 				16E45143A6794667BCF5C158 /* BitrateAnalysisTests.swift in Sources */,
 				A91000000000000000000005 /* AudioPeakAnalysisTests.swift in Sources */,
 				A92000000000000000000021 /* AudioPhaseAnalysisTests.swift in Sources */,

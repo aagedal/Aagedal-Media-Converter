@@ -29,6 +29,11 @@ struct FFMPEGCommand {
     var preservesAlpha: Bool = false
     /// Matte sidecar written by this same command (native waveform pipeline).
     var matteOutputURL: URL? = nil
+    /// First loudness pass to run before this command. Rebuild the command with its
+    /// measurements; this command's loudnorm stages only print statistics.
+    var loudnessMeasurementArguments: [String]? = nil
+    /// Number of loudnorm stages the measurement pass reports, in graph order.
+    var loudnessTrackCount = 0
 }
 
 /// Resolves the common filter spellings for the primary video stream.
@@ -369,6 +374,8 @@ enum FFMPEGCommandBuilder {
         chapterMetadataURL: URL? = nil,
         chapterMetadataTitles: [String] = [],
         isMuted: Bool = false,
+        adjustments requestedAdjustments: ResolvedMediaAdjustments? = nil,
+        loudnessMeasurements: [LoudnormMeasurement]? = nil,
         durationProvider: @Sendable (URL) async -> Double? = { url in
             await FFMPEGProbeService.getVideoDuration(for: url)
         }
@@ -413,6 +420,26 @@ enum FFMPEGCommandBuilder {
         )
 
         let inputPlan = FFMPEGInputPlan(inputURL: inputURL, customArguments: customInputArguments)
+        var adjustments = requestedAdjustments.flatMap { $0.isActive ? $0 : nil }
+        if let resolved = adjustments, let reason = adjustmentsUnsupportedReason(
+            preset: preset, codecSettings: capturedCodecSettings, customInputArguments: customInputArguments,
+            generatesVideo: waveformRequest != nil || synthesizedVideoRequest != nil
+        ) {
+            // The global loudness default must not block outputs it cannot reach.
+            guard !resolved.hasExplicitAdjustments else {
+                return FFMPEGCommand(
+                    arguments: [], normalizedTrimStart: normalizedTrimStart,
+                    normalizedTrimEnd: normalizedTrimEnd, effectiveDuration: nil,
+                    preparationError: reason
+                )
+            }
+            adjustments = nil
+        }
+        let replacementAudio = (preset.outputsAudioTrack && !isMuted) ? adjustments?.adjustments.replacementAudio : nil
+        let replacesSourceAudio = replacementAudio?.mode == .replace
+        // Routing describes the source's tracks, which replaced audio no longer uses.
+        let audioRoutingConfig = replacesSourceAudio ? nil : audioRoutingConfig
+        let audioProbeURL = replacesSourceAudio ? (replacementAudio?.url ?? inputURL) : inputURL
         let presetArguments = capturedDCPSettings?.ffmpegArguments
             ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .rdd45)
             ?? capturedImageSequenceSettings?.ffmpegArguments
@@ -427,7 +454,7 @@ enum FFMPEGCommandBuilder {
         }
         // Numeric filters follow the final output order. Do not interpret them
         // against preset maps that a later app-owned transformation will replace.
-        if hasNumericFilters && (changesAudioMapping || isMuted || inputPlan.isImageSequence ||
+        if hasNumericFilters && (changesAudioMapping || isMuted || inputPlan.isImageSequence || adjustments != nil ||
             waveformRequest != nil || synthesizedVideoRequest != nil || changesOutputMapping) {
             return FFMPEGCommand(
                 arguments: [], normalizedTrimStart: normalizedTrimStart,
@@ -446,7 +473,43 @@ enum FFMPEGCommandBuilder {
             chapterInputIndex = arguments.filter { $0 == "-i" }.count
             arguments += ["-f", "ffmetadata", "-i", chapterMetadataURL.path]
         }
+        var replacementInputIndex: Int?
+        var replacementAudioStreamCount = 0
+        if let replacementAudio {
+            guard FileManager.default.isReadableFile(atPath: replacementAudio.path) else {
+                return FFMPEGCommand(
+                    arguments: [], normalizedTrimStart: normalizedTrimStart,
+                    normalizedTrimEnd: normalizedTrimEnd, effectiveDuration: nil,
+                    preparationError: MediaAdjustmentsPlan.AdjustmentError.missingReplacementAudio.message
+                )
+            }
+            replacementAudioStreamCount = await FFMPEGProbeService.fetchAudioStreams(for: replacementAudio.url)?.count ?? 0
+            guard replacementAudioStreamCount > 0 else {
+                return FFMPEGCommand(
+                    arguments: [], normalizedTrimStart: normalizedTrimStart,
+                    normalizedTrimEnd: normalizedTrimEnd, effectiveDuration: nil,
+                    preparationError: MediaAdjustmentsPlan.AdjustmentError.replacementAudioWithoutTracks.message
+                )
+            }
+            // The replacement follows the source timeline, so it starts at the same trim point.
+            replacementInputIndex = arguments.filter { $0 == "-i" }.count
+            arguments += trimPlan.seekArguments + ["-i", replacementAudio.path]
+        }
         let outputArgumentsStart = arguments.count
+        let adjustedOutputDuration: Double? = adjustments == nil ? nil : await outputDuration(
+            trimPlan: trimPlan, speed: adjustments?.adjustments.speed ?? 1, inputURL: inputURL,
+            sourceMetadata: sourceMetadata, durationProvider: durationProvider
+        )
+        let changesTiming = adjustments.map {
+            $0.adjustments.changesSpeed || abs($0.adjustments.audioOffset) > 0.0001 || replacementAudio != nil
+        } ?? false
+        // Retimed streams and untouched ones (silent tracks, data) must end together.
+        let outputDurationArguments: [String] = if changesTiming, let adjustedOutputDuration {
+            ["-t", ffmpegTimeString(from: adjustedOutputDuration)]
+        } else {
+            trimPlan.durationArguments
+        }
+        let keepsSoftSubtitles = capturedSubtitleSettings.keepSubtitles && adjustments?.adjustments.changesSpeed != true
 
         if let waveformRequest {
             let includeAudioOutput = preset.outputsAudioTrack
@@ -615,7 +678,8 @@ enum FFMPEGCommandBuilder {
                 ffmpegArgs: &ffmpegArgs,
                 trimStart: normalizedTrimStart,
                 trimEnd: normalizedTrimEnd,
-                sourceMetadata: sourceMetadata
+                sourceMetadata: sourceMetadata,
+                audioStreamProvider: { _ in await FFMPEGProbeService.fetchAudioStreams(for: audioProbeURL) }
             )
             await adjustDeinterlaceFilter(
                 inputURL: inputURL,
@@ -626,7 +690,7 @@ enum FFMPEGCommandBuilder {
             // Filter out unsupported audio codecs (e.g., APAC spatial audio from iPhone)
             // Skip for stream copy (which doesn't decode) and when audio routing is applied (has its own mapping)
             if preset != .streamCopy && (audioRoutingConfig == nil || !(capturedCodecSettings?.appliesAudioRouting ?? preset.appliesAudioRouting)) {
-                await filterUnsupportedAudioStreams(inputURL: inputURL, ffmpegArgs: &ffmpegArgs)
+                await filterUnsupportedAudioStreams(inputURL: audioProbeURL, ffmpegArgs: &ffmpegArgs)
             }
         }
 
@@ -708,6 +772,33 @@ enum FFMPEGCommandBuilder {
             }
         }
 
+        if let resolved = adjustments, resolved.adjustments.hasVideoAdjustments, preset.outputsVisualFrames {
+            var subtitleCodecs = sourceMetadata?.subtitleStreams.map(\.codec)
+            if subtitleCodecs == nil, case .embedded = resolved.adjustments.burnInSubtitles?.source {
+                subtitleCodecs = (try? await BoundedVideoMetadataProbe.metadata(for: inputURL))?.subtitleStreams.map(\.codec)
+            }
+            let stages = MediaAdjustmentsPlan.videoFilterStages(
+                for: resolved.adjustments, inputURL: inputURL, trimStart: normalizedTrimStart,
+                outputDuration: adjustedOutputDuration, sourceSubtitleCodecs: subtitleCodecs ?? []
+            )
+            switch stages {
+            case .failure(let error):
+                return FFMPEGCommand(
+                    arguments: [], normalizedTrimStart: normalizedTrimStart,
+                    normalizedTrimEnd: normalizedTrimEnd, effectiveDuration: nil,
+                    preparationError: error.message
+                )
+            case .success(let stages):
+                guard MediaAdjustmentsPlan.insertVideoStages(stages, into: &ffmpegArgs) else {
+                    return FFMPEGCommand(
+                        arguments: [], normalizedTrimStart: normalizedTrimStart,
+                        normalizedTrimEnd: normalizedTrimEnd, effectiveDuration: nil,
+                        preparationError: MediaAdjustmentsPlan.AdjustmentError.ambiguousVideoFilters.message
+                    )
+                }
+            }
+        }
+
         // Only remove video arguments for audio-only exports. Image sequences do not contain an
         // embedded video track, but still require their visual codec and filter arguments.
         if !preset.outputsVisualFrames {
@@ -740,6 +831,80 @@ enum FFMPEGCommandBuilder {
             applyMute(to: &ffmpegArgs)
         }
 
+        var loudnessTrackCount = 0
+        if let resolved = adjustments, preset.outputsAudioTrack, !isMuted, !isImageSequenceInput,
+           resolved.adjustments.hasAudioAdjustments || resolved.loudness != nil {
+            let sourceAudioStreamCount = replacesSourceAudio
+                ? 0 : (await FFMPEGProbeService.fetchAudioStreams(for: inputURL)?.count ?? 0)
+            if let replacementInputIndex {
+                if replacesSourceAudio {
+                    MediaAdjustmentsPlan.redirectSourceAudio(to: replacementInputIndex, in: &ffmpegArgs)
+                } else if ffmpegArgs.contains("-map") {
+                    ffmpegArgs += ["-map", "\(replacementInputIndex):a"]
+                }
+            }
+            let context = MediaAdjustmentsPlan.AudioChainContext(
+                outputDuration: adjustedOutputDuration,
+                sampleRate: ffmpegArgs.firstIndex(of: "-ar").flatMap {
+                    $0 + 1 < ffmpegArgs.count ? Int(ffmpegArgs[$0 + 1]) : nil
+                } ?? 48000,
+                fitsToDuration: abs(resolved.adjustments.audioOffset) > 0.0001 || replacementAudio != nil
+            )
+            var chainError: MediaAdjustmentsPlan.AdjustmentError?
+            let placement: MediaAdjustmentsPlan.AudioChainPlacement = audioChainsRunOnSources(
+                preset: preset, audioRoutingConfig: audioRoutingConfig
+            ) ? .sources : .outputs
+            let result = MediaAdjustmentsPlan.applyAudioChains(
+                to: &ffmpegArgs,
+                placement: placement,
+                defaultAudioInput: replacesSourceAudio ? (replacementInputIndex ?? 0) : 0,
+                audioStreamCount: { input in
+                    input == replacementInputIndex ? replacementAudioStreamCount : sourceAudioStreamCount
+                },
+                chain: { index in
+                    let measurement = loudnessMeasurements.flatMap { $0.indices.contains(index) ? $0[index] : nil }
+                    // Silence measures -inf and is left as it is.
+                    let skipsLoudness = loudnessMeasurements != nil
+                        && !(measurement.map(MediaAdjustmentsPlan.measurementIsUsable) ?? false)
+                    switch MediaAdjustmentsPlan.audioFilterChain(
+                        for: resolved.adjustments, loudness: skipsLoudness ? nil : resolved.loudness,
+                        measurement: measurement, context: context
+                    ) {
+                    case .success(let chain): return chain ?? "anull"
+                    case .failure(let error):
+                        chainError = error
+                        return "anull"
+                    }
+                }
+            )
+            switch result {
+            case .failure(let error):
+                return FFMPEGCommand(
+                    arguments: [], normalizedTrimStart: normalizedTrimStart,
+                    normalizedTrimEnd: normalizedTrimEnd, effectiveDuration: nil,
+                    preparationError: error.message
+                )
+            case .success(let count):
+                if let chainError {
+                    return FFMPEGCommand(
+                        arguments: [], normalizedTrimStart: normalizedTrimStart,
+                        normalizedTrimEnd: normalizedTrimEnd, effectiveDuration: nil,
+                        preparationError: chainError.message
+                    )
+                }
+                if resolved.loudness != nil {
+                    if let loudnessMeasurements, loudnessMeasurements.count != count {
+                        return FFMPEGCommand(
+                            arguments: [], normalizedTrimStart: normalizedTrimStart,
+                            normalizedTrimEnd: normalizedTrimEnd, effectiveDuration: nil,
+                            preparationError: MediaAdjustmentsPlan.AdjustmentError.measurementFailed.message
+                        )
+                    }
+                    loudnessTrackCount = count
+                }
+            }
+        }
+
 
         if preset == .streamCopy {
             adjustStreamCopyArguments(inputURL: inputURL, outputURL: outputFileURL, ffmpegArgs: &ffmpegArgs)
@@ -749,7 +914,7 @@ enum FFMPEGCommandBuilder {
             }
         }
 
-        arguments.append(contentsOf: trimPlan.durationArguments)
+        arguments.append(contentsOf: outputDurationArguments)
 
         arguments.append(contentsOf: ffmpegArgs)
 
@@ -758,7 +923,7 @@ enum FFMPEGCommandBuilder {
         // must not receive subtitle codec arguments because FFmpeg rejects them.
         if preset != .streamCopy && preset.outputsVideoTrack {
             arguments.append(contentsOf: subtitleArguments(
-                keepSubtitles: capturedSubtitleSettings.keepSubtitles,
+                keepSubtitles: keepsSoftSubtitles,
                 outputExtension: outputFileURL.pathExtension
             ))
         }
@@ -786,7 +951,7 @@ enum FFMPEGCommandBuilder {
         // -map_metadata options that the attachment tag restore depends on.
         if preset != .streamCopy && preset.outputsVideoTrack {
             arguments.append(contentsOf: await subtitleAttachmentArguments(
-                keepSubtitles: capturedSubtitleSettings.keepSubtitles,
+                keepSubtitles: keepsSoftSubtitles,
                 outputExtension: outputFileURL.pathExtension,
                 outputArguments: arguments.dropFirst(outputArgumentsStart),
                 inputURL: inputURL,
@@ -822,16 +987,84 @@ enum FFMPEGCommandBuilder {
            ) {
             plan.apply(to: &arguments, inputPath: inputURL.path)
         }
+        let loudnessMeasurementArguments = loudnessTrackCount > 0 && loudnessMeasurements == nil
+            ? MediaAdjustmentsPlan.loudnessMeasurementArguments(from: arguments, outputArgumentsStart: outputArgumentsStart)
+            : nil
         arguments.append(outputFileURL.path)
 
-        let effectiveDuration = trimPlan.effectiveDuration
+        let effectiveDuration = adjustments?.adjustments.changesSpeed == true
+            ? adjustedOutputDuration : trimPlan.effectiveDuration
 
-        return FFMPEGCommand(
+        var command = FFMPEGCommand(
             arguments: arguments,
             normalizedTrimStart: normalizedTrimStart,
             normalizedTrimEnd: normalizedTrimEnd,
             effectiveDuration: effectiveDuration
         )
+        command.loudnessMeasurementArguments = loudnessMeasurementArguments
+        command.loudnessTrackCount = loudnessTrackCount
+        return command
+    }
+}
+
+// MARK: - Media Adjustments
+
+extension FFMPEGCommandBuilder {
+    /// Why an output cannot take picture and sound adjustments, or nil when it can.
+    static func adjustmentsUnsupportedReason(
+        preset: ExportPreset,
+        codecSettings: CodecExportSettings?,
+        customInputArguments: [String]?,
+        generatesVideo: Bool
+    ) -> String? {
+        switch preset {
+        case .streamCopy:
+            return String(localized: "Stream Copy cannot apply adjustments or loudness normalization. Choose a preset that re-encodes.")
+        case .dcp, .imfJ2K, .imfProRes, .av2:
+            return String(localized: "Adjustments and loudness normalization are not available for DCP, IMF and AV2 exports.")
+        default:
+            break
+        }
+        if generatesVideo {
+            return String(localized: "Adjustments and loudness normalization are not available when the video is generated from audio (waveform or still image).")
+        }
+        if customInputArguments != nil {
+            return String(localized: "Adjustments and loudness normalization are not available for merged clips, image sequences and AV2 sources.")
+        }
+        if !(codecSettings?.appliesCrop ?? preset.appliesCrop) {
+            return String(localized: "This custom preset does not allow the app to add filters, so adjustments cannot be applied.")
+        }
+        return nil
+    }
+
+    /// Mono-track deliveries are normalized per source track before the split, so a
+    /// stereo programme keeps its balance.
+    static func audioChainsRunOnSources(preset: ExportPreset, audioRoutingConfig: AudioRoutingConfig?) -> Bool {
+        if preset.splitsAudioIntoMonoTracks { return true }
+        if case .splitToMono? = audioRoutingConfig?.channelOperation { return true }
+        return false
+    }
+
+    /// The exported duration after trim and speed, or nil when the source duration is unknown.
+    static func outputDuration(
+        trimPlan: FFMPEGTrimPlan,
+        speed: Double,
+        inputURL: URL,
+        sourceMetadata: VideoMetadata?,
+        durationProvider: @Sendable (URL) async -> Double?
+    ) async -> Double? {
+        var duration = trimPlan.effectiveDuration
+        if duration == nil {
+            let source: Double?
+            if let known = sourceMetadata?.duration, known.isFinite, known > 0 {
+                source = known
+            } else {
+                source = await durationProvider(inputURL)
+            }
+            duration = source.map { $0 - (trimPlan.start ?? 0) }
+        }
+        guard let duration, duration.isFinite, duration > 0, speed > 0 else { return nil }
+        return duration / speed
     }
 }
 
@@ -1888,8 +2121,8 @@ extension FFMPEGCommandBuilder {
             await FFMPEGProbeService.fetchAudioStreams(for: url)
         }
     ) async {
-        // Handle AVC-Intra mono channel splitting
-        if preset == .tvAVCIntra {
+        // Handle AVC-Intra / XDCAM HD422 mono channel splitting
+        if preset.splitsAudioIntoMonoTracks {
             let targetChannelCount = (codecSettings ?? CodecExportSettings(preset: preset))?.avcIntraAudioChannels?.count ?? 8
             // Calculate effective duration for silent streams
             let effectiveDuration = await calculateEffectiveDurationForAudio(
@@ -2562,7 +2795,7 @@ extension FFMPEGCommandBuilder {
 
     /// Splits a linear FFmpeg filter chain without treating quoted or escaped commas
     /// as stage boundaries. Incomplete expressions remain opaque to automatic edits.
-    fileprivate static func splitVideoFilterStages(_ chain: String) -> [String]? {
+    static func splitVideoFilterStages(_ chain: String) -> [String]? {
         var segments: [String] = []
         var start = chain.startIndex
         var quoted = false

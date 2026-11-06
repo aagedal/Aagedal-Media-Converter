@@ -66,6 +66,10 @@ enum SettingsSyncKeys {
         AppConstants.av2VisibleKey,
         AppConstants.tvHEVCVisibleKey,
         AppConstants.tvAVCIntraVisibleKey,
+        AppConstants.xdcamHD422VisibleKey,
+        AppConstants.dnxhrVisibleKey,
+        AppConstants.cineformVisibleKey,
+        AppConstants.vp9VisibleKey,
         AppConstants.proresVisibleKey,
         AppConstants.proxyVisibleKey,
         AppConstants.streamCopyVisibleKey,
@@ -138,6 +142,20 @@ enum SettingsSyncKeys {
         AppConstants.avcIntraDefaultMCASoundfield6ChKey,
         AppConstants.avcIntraDefaultMCASoundfield8ChKey,
 
+        // XDCAM HD422 / DNxHR / VP9
+        AppConstants.xdcamFormatKey,
+        AppConstants.xdcamAudioChannelsKey,
+        AppConstants.dnxhrProfileKey,
+        AppConstants.dnxhrContainerKey,
+        AppConstants.cineformProfileKey,
+        AppConstants.cineformQualityKey,
+        AppConstants.vp9QualityKey,
+        AppConstants.vp9SpeedKey,
+        AppConstants.vp9BitDepthKey,
+        AppConstants.vp9ContainerKey,
+        AppConstants.vp9ResolutionLimitKey,
+        AppConstants.vp9AudioBitrateKey,
+
         // DCP
         AppConstants.dcpResolutionKey,
         AppConstants.dcpFrameRateKey,
@@ -174,6 +192,13 @@ enum SettingsSyncKeys {
         // VideoLoop / subtitles
         AppConstants.videoLoopDefaultMutedKey,
         AppConstants.keepSubtitlesKey,
+
+        // Loudness normalization
+        AppConstants.loudnessNormalizationEnabledKey,
+        AppConstants.loudnessNormalizationStandardKey,
+        AppConstants.loudnessNormalizationIntegratedKey,
+        AppConstants.loudnessNormalizationTruePeakKey,
+        AppConstants.loudnessNormalizationRangeKey,
 
         // File-name processing & templates
         AppConstants.includeDateTagPreferenceKey,

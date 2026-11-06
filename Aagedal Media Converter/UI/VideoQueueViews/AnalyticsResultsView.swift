@@ -97,6 +97,7 @@ private struct VideoAnalysisTabView: View {
     var onRun: ([QualityMetric]?) -> Void
     var onCancel: () -> Void
     @State private var inspection: QualityInspectionRequest?
+    @State private var videoEventRequest: VideoEventAnalysisRequest?
 
     var body: some View {
         if !item.hasVideoStream {
@@ -115,6 +116,21 @@ private struct VideoAnalysisTabView: View {
                 .frame(width: 345)
                 Divider()
                 VStack(alignment: .leading, spacing: 12) {
+                    Text("Source video events").font(.headline)
+                    HStack {
+                        Button("Detect Black Frames") {
+                            videoEventRequest = VideoEventAnalysisRequest(file: item.url, kind: .black,
+                                                                          durationSeconds: item.durationSeconds)
+                        }
+                        .accessibilityIdentifier("analysis.video.black")
+                        Button("Detect Scene Cuts") {
+                            videoEventRequest = VideoEventAnalysisRequest(file: item.url, kind: .sceneCuts,
+                                                                          durationSeconds: item.durationSeconds)
+                        }
+                        .accessibilityIdentifier("analysis.video.sceneCuts")
+                    }
+                    .sheet(item: $videoEventRequest) { request in VideoEventAnalysisView(request: request) }
+                    Divider()
                     Text("Compare source and encoded video").font(.headline)
                     Text(String(format: String(localized: "Source: %@"), item.url.lastPathComponent)).font(.caption).lineLimit(1)
                     if item.outputFileExists, let output = item.outputURL {

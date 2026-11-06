@@ -187,6 +187,9 @@ enum AVCIntraAudioChannels: String, CaseIterable, Identifiable, Codable {
         case .ch16: return 16
         }
     }
+
+    /// XDCAM HD422 carries 4 or 8 mono PCM tracks.
+    static let xdcamCases: [AVCIntraAudioChannels] = [.ch4, .ch8]
 }
 
 /// Container options for Stream Copy preset
@@ -222,6 +225,223 @@ enum ProxyCodec: String, CaseIterable, Identifiable {
         case .prores: return "mov"
         case .dnxhd: return "mxf"
         }
+    }
+}
+
+/// Profile options for the DNxHR mastering preset
+enum DNxHRProfile: String, CaseIterable, Identifiable {
+    case lb = "DNxHR LB"
+    case sq = "DNxHR SQ"
+    case hq = "DNxHR HQ"
+    case hqx = "DNxHR HQX (10-bit)"
+    case dnx444 = "DNxHR 444 (10-bit 4:4:4)"
+
+    var id: String { rawValue }
+
+    var ffmpegProfileName: String {
+        switch self {
+        case .lb: return "dnxhr_lb"
+        case .sq: return "dnxhr_sq"
+        case .hq: return "dnxhr_hq"
+        case .hqx: return "dnxhr_hqx"
+        case .dnx444: return "dnxhr_444"
+        }
+    }
+
+    /// LB/SQ/HQ are 8-bit 4:2:2; HQX is 10-bit 4:2:2 and 444 is 10-bit 4:4:4.
+    var pixelFormat: String {
+        switch self {
+        case .lb, .sq, .hq: return "yuv422p"
+        case .hqx: return "yuv422p10le"
+        case .dnx444: return "yuv444p10le"
+        }
+    }
+}
+
+/// Container options for the DNxHR mastering preset
+enum DNxHRContainer: String, CaseIterable, Identifiable {
+    case mov = "MOV"
+    case mxf = "MXF"
+
+    var id: String { rawValue }
+
+    var fileExtension: String { rawValue.lowercased() }
+
+    static func current(defaults: UserDefaults) -> DNxHRContainer {
+        DNxHRContainer(rawValue: defaults.string(forKey: AppConstants.dnxhrContainerKey)
+            ?? AppConstants.defaultDNxHRContainer) ?? .mov
+    }
+}
+
+/// Pixel layouts for the CineForm preset. FFmpeg's encoder stores 10-bit 4:2:2 YUV
+/// or 12-bit 4:4:4 RGB, optionally with alpha; GoPro's own 16-bit input modes
+/// are also coded at 12-bit precision.
+enum CineFormProfile: String, CaseIterable, Identifiable {
+    case yuv422 = "10-bit 4:2:2 (YUV)"
+    case rgb444 = "12-bit 4:4:4 (RGB)"
+    case rgba4444 = "12-bit 4:4:4:4 (RGB + alpha)"
+
+    var id: String { rawValue }
+
+    var pixelFormat: String {
+        switch self {
+        case .yuv422: return "yuv422p10le"
+        case .rgb444: return "gbrp12le"
+        case .rgba4444: return "gbrap12le"
+        }
+    }
+}
+
+/// CineForm quality levels, named as in GoPro's tools; values are FFmpeg's `-quality` names.
+enum CineFormQuality: String, CaseIterable, Identifiable {
+    case filmScan3Plus = "Film Scan 3+"
+    case filmScan3 = "Film Scan 3"
+    case filmScan2Plus = "Film Scan 2+"
+    case filmScan2 = "Film Scan 2"
+    case filmScan1Plus = "Film Scan 1+"
+    case filmScan1 = "Film Scan 1"
+    case highPlus = "High+"
+    case high = "High"
+    case mediumPlus = "Medium+"
+    case medium = "Medium"
+    case lowPlus = "Low+"
+    case low = "Low"
+
+    var id: String { rawValue }
+
+    var ffmpegName: String {
+        switch self {
+        case .filmScan3Plus: return "film3+"
+        case .filmScan3: return "film3"
+        case .filmScan2Plus: return "film2+"
+        case .filmScan2: return "film2"
+        case .filmScan1Plus: return "film1+"
+        case .filmScan1: return "film1"
+        case .highPlus: return "high+"
+        case .high: return "high"
+        case .mediumPlus: return "medium+"
+        case .medium: return "medium"
+        case .lowPlus: return "low+"
+        case .low: return "low"
+        }
+    }
+}
+
+/// Broadcast formats for the XDCAM HD422 preset (MPEG-2 422P@HL, 50 Mbps long GOP).
+enum XDCAMHD422Format: String, CaseIterable, Identifiable {
+    case i50 = "1080i50"
+    case p25 = "1080p25"
+    case i5994 = "1080i59.94"
+    case p2997 = "1080p29.97"
+    case p720p50 = "720p50"
+    case p720p5994 = "720p59.94"
+
+    var id: String { rawValue }
+
+    var dimensions: (width: Int, height: Int) {
+        switch self {
+        case .i50, .p25, .i5994, .p2997: return (1920, 1080)
+        case .p720p50, .p720p5994: return (1280, 720)
+        }
+    }
+
+    /// The matching TV framerate mode, used for filename labels.
+    var framerateMode: TVFramerateMode {
+        switch self {
+        case .i50: return .i50
+        case .p25: return .p25
+        case .i5994: return .i5994
+        case .p2997: return .p2997
+        case .p720p50: return .p50
+        case .p720p5994: return .p5994
+        }
+    }
+
+    var isInterlaced: Bool { framerateMode.isInterlaced }
+
+    /// Coded frame rate. Interlaced formats code one frame per field pair.
+    var frameRate: String {
+        switch self {
+        case .i50, .p25: return "25"
+        case .i5994, .p2997: return "30000/1001"
+        case .p720p50: return "50"
+        case .p720p5994: return "60000/1001"
+        }
+    }
+
+    /// Field rate fed to `tinterlace`, which pairs two progressive frames into one.
+    var fieldRate: String? {
+        switch self {
+        case .i50: return "50"
+        case .i5994: return "60000/1001"
+        default: return nil
+        }
+    }
+
+    /// GOP length: 12 for 25/50 Hz systems, 15 for 29.97/59.94 Hz.
+    var gopSize: Int {
+        switch self {
+        case .i50, .p25, .p720p50: return 12
+        case .i5994, .p2997, .p720p5994: return 15
+        }
+    }
+
+    var resolutionLabel: String {
+        "\(dimensions.height)" + (isInterlaced ? "i" : "p")
+    }
+
+    static func current(defaults: UserDefaults) -> XDCAMHD422Format {
+        XDCAMHD422Format(rawValue: defaults.string(forKey: AppConstants.xdcamFormatKey)
+            ?? AppConstants.defaultXDCAMFormat) ?? .i50
+    }
+}
+
+/// Encoding speed for the VP9 preset (libvpx `-deadline` and `-cpu-used`)
+enum VP9EncodingSpeed: String, CaseIterable, Identifiable {
+    case best = "Best (slowest)"
+    case good = "Good"
+    case balanced = "Balanced"
+    case fast = "Fast"
+    case realtime = "Realtime (fastest)"
+
+    var id: String { rawValue }
+
+    var ffmpegArgs: [String] {
+        switch self {
+        case .best: return ["-deadline", "good", "-cpu-used", "0"]
+        case .good: return ["-deadline", "good", "-cpu-used", "1"]
+        case .balanced: return ["-deadline", "good", "-cpu-used", "2"]
+        case .fast: return ["-deadline", "good", "-cpu-used", "4"]
+        case .realtime: return ["-deadline", "realtime", "-cpu-used", "8"]
+        }
+    }
+}
+
+/// Bit depth options for the VP9 preset
+enum VP9BitDepth: String, CaseIterable, Identifiable {
+    case eightBit = "8-bit"
+    case tenBit = "10-bit"
+
+    var id: String { rawValue }
+
+    var pixelFormat: String { self == .eightBit ? "yuv420p" : "yuv420p10le" }
+
+    /// VP9 profile 0 is 8-bit 4:2:0; profile 2 is 10/12-bit 4:2:0.
+    var profile: String { self == .eightBit ? "0" : "2" }
+}
+
+/// Container options for the VP9 preset
+enum VP9Container: String, CaseIterable, Identifiable {
+    case webm = "WebM"
+    case mkv = "MKV"
+
+    var id: String { rawValue }
+
+    var fileExtension: String { rawValue.lowercased() }
+
+    static func current(defaults: UserDefaults) -> VP9Container {
+        VP9Container(rawValue: defaults.string(forKey: AppConstants.vp9ContainerKey)
+            ?? AppConstants.defaultVP9Container) ?? .webm
     }
 }
 
@@ -791,10 +1011,14 @@ enum ExportPreset: String, CaseIterable, Identifiable {
     case h265 = "H.265 / HEVC"
     case av1 = "AV1"
     case av2 = "AV2"
+    case vp9 = "VP9 / WebM"
     case tvHEVC = "TV (HEVC 10-bit 4:2:2)"
     case tvAVCIntra = "TV (AVC-Intra MXF)"
+    case xdcamHD422 = "XDCAM HD422 (MXF)"
     case lossless = "Lossless (FFV1)"
     case prores = "ProRes"
+    case dnxhr = "DNxHR"
+    case cineform = "CineForm"
     case proxy = "Proxy"
     case streamCopy = "Stream Copy"
     case audioOnly = "Audio Only"
@@ -815,7 +1039,8 @@ enum ExportPreset: String, CaseIterable, Identifiable {
     
     var supportsRecursiveEncoding: Bool {
         switch self {
-        case .lossless, .h264, .h265, .av1, .prores, .proxy, .tvHEVC, .tvAVCIntra, .audioOnly:
+        case .lossless, .h264, .h265, .av1, .prores, .proxy, .tvHEVC, .tvAVCIntra, .audioOnly,
+             .dnxhr, .cineform, .xdcamHD422, .vp9:
             return true
         default:
             return false
@@ -842,10 +1067,14 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return AV2Container.current.fileExtension
         case .lossless:
             return "mkv"
-        case .prores, .tvHEVC:
+        case .prores, .tvHEVC, .cineform:
             return "mov"
-        case .tvAVCIntra:
+        case .tvAVCIntra, .xdcamHD422:
             return "mxf"
+        case .dnxhr:
+            return DNxHRContainer.current(defaults: .standard).fileExtension
+        case .vp9:
+            return VP9Container.current(defaults: .standard).fileExtension
         case .proxy:
             let codecRaw = UserDefaults.standard.string(forKey: AppConstants.proxyCodecKey) ?? AppConstants.defaultProxyCodec
             let codec = ProxyCodec(rawValue: codecRaw) ?? .hevc
@@ -933,6 +1162,30 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return NSLocalizedString("PRESET_TV_HEVC_DESCRIPTION", comment: "Description for TV HEVC preset")
         case .tvAVCIntra:
             return NSLocalizedString("PRESET_TV_AVC_INTRA_DESCRIPTION", comment: "Description for TV AVC-Intra preset")
+        case .xdcamHD422:
+            return NSLocalizedString(
+                "PRESET_XDCAM_HD422_DESCRIPTION",
+                value: "Broadcast delivery as Sony XDCAM HD422: MPEG-2 4:2:2 long GOP at 50 Mbps CBR in an MXF OP1a container. Choose 1080i50, 1080p25, 1080i59.94, 1080p29.97, 720p50 or 720p59.94, with 4 or 8 mono audio channels as 24-bit 48 kHz PCM.",
+                comment: "Description for XDCAM HD422 preset"
+            )
+        case .dnxhr:
+            return NSLocalizedString(
+                "PRESET_DNXHR_DESCRIPTION",
+                value: "Avid DNxHR mastering and editing format at the source resolution. Choose LB, SQ or HQ (8-bit 4:2:2), HQX (10-bit 4:2:2) or 444 (10-bit 4:4:4) in a MOV or MXF container. Every audio track is kept as 24-bit PCM.",
+                comment: "Description for DNxHR preset"
+            )
+        case .cineform:
+            return NSLocalizedString(
+                "PRESET_CINEFORM_DESCRIPTION",
+                value: "GoPro CineForm intermediate at the source resolution in a MOV container. Choose 10-bit 4:2:2 YUV, or 12-bit 4:4:4 RGB with or without alpha, and a quality from Low to Film Scan 3+. Widths are padded to a multiple of 16. Every audio track is kept as 24-bit PCM.",
+                comment: "Description for CineForm preset"
+            )
+        case .vp9:
+            return NSLocalizedString(
+                "PRESET_VP9_DESCRIPTION",
+                value: "Royalty-free VP9 for the web, encoded with libvpx at constant quality (CRF) in 8 or 10-bit. Audio is encoded as Opus. Outputs WebM, or Matroska (.mkv) if you choose it.",
+                comment: "Description for VP9 preset"
+            )
         case .lossless:
             return "Lossless FFV1 video and 64-bit floating-point PCM audio in Matroska. Preserves source resolution and frame rate; useful as a generation-loss reference."
         case .prores:
@@ -978,6 +1231,14 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return "_tv"
         case .tvAVCIntra:
             return "_avcintra"
+        case .xdcamHD422:
+            return "_xdcam"
+        case .dnxhr:
+            return "_dnxhr"
+        case .cineform:
+            return "_cineform"
+        case .vp9:
+            return "_vp9"
         case .lossless:
             return "_lossless"
         case .prores:
@@ -1039,6 +1300,11 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             case .i50, .i5994: return height + "i"
             case .p25, .p50, .p2997, .p5994: return height + "p"
             }
+        case .xdcamHD422:
+            return XDCAMHD422Format.current(defaults: defaults).resolutionLabel
+        case .vp9:
+            let raw = defaults.string(forKey: AppConstants.vp9ResolutionLimitKey) ?? AppConstants.defaultVP9ResolutionLimit
+            return CodecResolutionLimit(rawValue: raw).flatMap(Self.label(for:))
         case .proxy:
             let raw = defaults.string(forKey: AppConstants.proxyResolutionLimitKey) ?? AppConstants.defaultProxyResolutionLimit
             return ProxyResolutionLimit(rawValue: raw).flatMap(Self.label(for:))
@@ -1064,6 +1330,8 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             let raw = defaults.string(forKey: AppConstants.tvFramerateModeKey) ?? AppConstants.defaultTVFramerateMode
             guard let mode = TVFramerateMode(rawValue: raw), mode != .source else { return nil }
             return mode.rawValue
+        case .xdcamHD422:
+            return XDCAMHD422Format.current(defaults: defaults).framerateMode.rawValue
         case .dcp:
             let raw = defaults.string(forKey: AppConstants.dcpFrameRateKey) ?? AppConstants.defaultDCPFrameRate
             // Stored as e.g. "24 fps" — strip the unit so it's filename-clean.
@@ -1493,6 +1761,129 @@ enum ExportPreset: String, CaseIterable, Identifiable {
 
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
             return args
+        case .xdcamHD422:
+            let format = XDCAMHD422Format.current(defaults: defaults)
+            let audioChannelsRaw = defaults.string(forKey: AppConstants.xdcamAudioChannelsKey) ?? AppConstants.defaultXDCAMAudioChannels
+            let audioChannels = AVCIntraAudioChannels(rawValue: audioChannelsRaw)
+                .flatMap { AVCIntraAudioChannels.xdcamCases.contains($0) ? $0 : nil } ?? .ch8
+
+            // Full-raster 16:9 frame, pillarboxed or letterboxed as needed. Interlaced formats
+            // resample to the field rate first, so tinterlace pairs two fields per coded frame.
+            let (width, height) = format.dimensions
+            var filter = Self.desqueezeFilterForced16x9(width: width, height: height)
+            if let fieldRate = format.fieldRate {
+                filter += ",fps=\(fieldRate),tinterlace=interleave_top,fieldorder=tff"
+            }
+
+            // 422P@HL, 50 Mbps CBR with Sony's 17,825,792-bit VBV, closed fixed-length GOPs.
+            var args = commonArgs + [
+                "-pix_fmt", "yuv422p",
+                "-c:v", "mpeg2video",
+                "-profile:v", "0",
+                "-level:v", "2",
+                "-b:v", "50M",
+                "-minrate", "50M",
+                "-maxrate", "50M",
+                "-bufsize", "17825792",
+                "-rc_init_occupancy", "17825792",
+                "-rc_max_vbv_use", "1",
+                "-rc_min_vbv_use", "1",
+                "-g", "\(format.gopSize)",
+                "-bf", "2",
+                "-sc_threshold", "1000000000",  // Closed GOPs require scene-cut detection off
+                "-mpv_flags", "+strict_gop",    // Otherwise closed GOPs end early, two B-frames short
+                "-flags", format.isInterlaced ? "+ilme+ildct+cgop" : "+cgop",
+            ]
+            if format.isInterlaced {
+                args += ["-alternate_scan", "1"]
+            }
+            args += [
+                "-intra_vlc", "1",
+                "-non_linear_quant", "1",
+                "-intra_dc_precision", "2",  // 10-bit DC precision
+                "-qmin", "1",
+                "-qmax", "28",  // The non-linear quantiser's upper limit
+                "-vf", filter,
+                "-r", format.frameRate,
+                "-map", "0:v:0",
+                "-map", "0:a?",
+                "-c:a", "pcm_s24le",
+                "-ar", "48000",
+                "-ac", "\(audioChannels.count)",  // Replaced by the mono split in adjustArgumentsForInput
+                "-f", "mxf"
+            ]
+
+            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
+            return args
+        case .dnxhr:
+            let profileRaw = defaults.string(forKey: AppConstants.dnxhrProfileKey) ?? AppConstants.defaultDNxHRProfile
+            let profile = DNxHRProfile(rawValue: profileRaw) ?? .hq
+            let container = DNxHRContainer.current(defaults: defaults)
+
+            var args = commonArgs + [
+                "-pix_fmt", profile.pixelFormat,
+                "-c:v", "dnxhd",
+                "-profile:v", profile.ffmpegProfileName,
+                "-vf", Self.desqueezeFilter,
+                "-map", "0:v:0",
+                "-c:a", "pcm_s24le",
+                "-map", "0:a?"
+            ]
+            if container == .mxf {
+                args += ["-ar", "48000"]  // The MXF muxer only accepts 48 kHz audio
+            }
+            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
+            return args
+        case .cineform:
+            let profile = CineFormProfile(rawValue: defaults.string(forKey: AppConstants.cineformProfileKey)
+                ?? AppConstants.defaultCineFormProfile) ?? .yuv422
+            let quality = CineFormQuality(rawValue: defaults.string(forKey: AppConstants.cineformQualityKey)
+                ?? AppConstants.defaultCineFormQuality) ?? .filmScan1
+
+            var args = commonArgs + [
+                "-pix_fmt", profile.pixelFormat,
+                "-c:v", "cfhd",
+                "-quality", quality.ffmpegName,
+                // FFmpeg's CineForm encoder needs a width divisible by 16; pad, centred, rather than rescale.
+                "-vf", Self.desqueezeFilter + ",pad=w=ceil(iw/16)*16:h=ih:x=(ow-iw)/2",
+                "-map", "0:v:0",
+                "-c:a", "pcm_s24le",
+                "-map", "0:a?"
+            ]
+            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
+            return args
+        case .vp9:
+            let qualityRaw = defaults.string(forKey: AppConstants.vp9QualityKey) ?? AppConstants.defaultVP9Quality
+            let quality = AV1QualityLevel(rawValue: qualityRaw) ?? .good
+            let speedRaw = defaults.string(forKey: AppConstants.vp9SpeedKey) ?? AppConstants.defaultVP9Speed
+            let speed = VP9EncodingSpeed(rawValue: speedRaw) ?? .balanced
+            let bitDepthRaw = defaults.string(forKey: AppConstants.vp9BitDepthKey) ?? AppConstants.defaultVP9BitDepth
+            let bitDepth = VP9BitDepth(rawValue: bitDepthRaw) ?? .eightBit
+            let resolution = capturedResolution ?? CodecResolutionLimit(
+                rawValue: defaults.string(forKey: AppConstants.vp9ResolutionLimitKey) ?? AppConstants.defaultVP9ResolutionLimit
+            ) ?? .unlimited
+            let audioBitrateRaw = defaults.string(forKey: AppConstants.vp9AudioBitrateKey) ?? AppConstants.defaultVP9AudioBitrate
+            let audioBitrate = AudioBitrate(rawValue: audioBitrateRaw) ?? .k192
+
+            // Constant quality: CRF with a zero bitrate target, row-based multithreading.
+            var args = commonArgs + [
+                "-pix_fmt", bitDepth.pixelFormat,
+                "-c:v", "libvpx-vp9",
+                "-profile:v", bitDepth.profile,
+                "-crf", "\(quality.crfValue)",
+                "-b:v", "0",
+                "-row-mt", "1"
+            ]
+            args += speed.ffmpegArgs
+            args += [
+                "-vf", Self.desqueezeFilter(maxShortEdge: resolution.maxHeight),
+                "-map", "0:v:0"
+            ]
+            args += CodecAudioFormat.opus.ffmpegArgs(bitrate: audioBitrate.ffmpegValue)
+            args += ["-map", "0:a?"]
+
+            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
+            return args
         case .animatedStill:
             let formatRaw = defaults.string(forKey: AppConstants.animatedStillFormatKey) ?? AppConstants.defaultAnimatedStillFormat
             let format = AnimatedStillFormat(rawValue: formatRaw) ?? .avif
@@ -1615,6 +2006,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
     var supportsMatteSidecar: Bool {
         switch self {
         case .videoLoop, .videoLoopWithSound, .h264, .h265, .av1, .tvHEVC, .tvAVCIntra, .prores, .proxy,
+             .dnxhr, .cineform, .xdcamHD422, .vp9,
              .custom1, .custom2, .custom3, .custom4, .custom5, .custom6, .custom7, .custom8, .custom9, .custom10:
             return true
         case .animatedStill, .av2, .lossless, .streamCopy, .audioOnly, .imageSequence, .dcp, .imfJ2K, .imfProRes:
@@ -1648,9 +2040,9 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return commonArgs
         case .av1:
             return codecFFmpegArguments(defaults: .standard)
-        case .tvHEVC, .tvAVCIntra, .animatedStill, .proxy:
+        case .tvHEVC, .tvAVCIntra, .xdcamHD422, .animatedStill, .proxy:
             return codecFFmpegArguments(defaults: .standard)
-        case .prores, .lossless:
+        case .prores, .lossless, .dnxhr, .cineform, .vp9:
             return codecFFmpegArguments(defaults: .standard)
         case .streamCopy:
             return codecFFmpegArguments(defaults: .standard)
@@ -1774,6 +2166,10 @@ enum ExportPreset: String, CaseIterable, Identifiable {
         case .av2: key = AppConstants.av2VisibleKey
         case .tvHEVC: key = AppConstants.tvHEVCVisibleKey
         case .tvAVCIntra: key = AppConstants.tvAVCIntraVisibleKey
+        case .xdcamHD422: key = AppConstants.xdcamHD422VisibleKey
+        case .dnxhr: key = AppConstants.dnxhrVisibleKey
+        case .cineform: key = AppConstants.cineformVisibleKey
+        case .vp9: key = AppConstants.vp9VisibleKey
         case .lossless: key = AppConstants.losslessVisibleKey
         case .prores: key = AppConstants.proresVisibleKey
         case .proxy: key = AppConstants.proxyVisibleKey
@@ -1800,6 +2196,12 @@ extension ExportPreset {
     /// through FFmpeg and therefore must retain video codec/filter arguments.
     var outputsVisualFrames: Bool {
         self != .audioOnly
+    }
+
+    /// Broadcast MXF presets that deliver a fixed number of mono PCM tracks
+    /// (see `FFMPEGCommandBuilder.adjustAVCIntraAudio`).
+    var splitsAudioIntoMonoTracks: Bool {
+        self == .tvAVCIntra || self == .xdcamHD422
     }
 
     /// Indicates whether this preset is expected to output a video track even if the source lacks one.
@@ -1886,6 +2288,9 @@ extension ExportPreset {
             case .r2160: return CGSize(width: 3840, height: 2160)
             case .unlimited: return CGSize(width: 1920, height: 1080) // Default to 1080p for unlimited
             }
+        case .xdcamHD422:
+            let (width, height) = XDCAMHD422Format.current(defaults: defaults).dimensions
+            return CGSize(width: width, height: height)
         case .dcp:
             let resolutionRaw = defaults.string(forKey: AppConstants.dcpResolutionKey) ?? AppConstants.defaultDCPResolution
             let resolution = DCPResolution(rawValue: resolutionRaw) ?? .twoKFull

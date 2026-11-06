@@ -48,6 +48,8 @@ struct ConversionRequest: Sendable {
     // MARK: - Processing Configuration
     var audioRoutingConfig: AudioRoutingConfig? = nil
     var cropConfig: CropConfig? = nil
+    /// Item adjustments with the global loudness setting already resolved.
+    var adjustments: ResolvedMediaAdjustments? = nil
     var timecodeConfig: TimecodeConfig? = nil
     /// Metadata-only offset when source trimming was already applied (for example, stitching).
     /// Nil uses the normal trim start; zero explicitly preserves the original timecode.

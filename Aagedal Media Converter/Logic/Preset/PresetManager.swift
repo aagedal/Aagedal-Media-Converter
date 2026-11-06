@@ -36,6 +36,10 @@ final class PresetManager {
     private var av2Visible: Bool
     private var tvHEVCVisible: Bool
     private var tvAVCIntraVisible: Bool
+    private var xdcamHD422Visible: Bool
+    private var dnxhrVisible: Bool
+    private var cineformVisible: Bool
+    private var vp9Visible: Bool
     private var losslessVisible: Bool
     private var proresVisible: Bool
     private var proxyVisible: Bool
@@ -74,6 +78,10 @@ final class PresetManager {
         av2Visible = defaults.object(forKey: AppConstants.av2VisibleKey) as? Bool ?? true
         tvHEVCVisible = defaults.object(forKey: AppConstants.tvHEVCVisibleKey) as? Bool ?? true
         tvAVCIntraVisible = defaults.object(forKey: AppConstants.tvAVCIntraVisibleKey) as? Bool ?? true
+        xdcamHD422Visible = defaults.object(forKey: AppConstants.xdcamHD422VisibleKey) as? Bool ?? true
+        dnxhrVisible = defaults.object(forKey: AppConstants.dnxhrVisibleKey) as? Bool ?? true
+        cineformVisible = defaults.object(forKey: AppConstants.cineformVisibleKey) as? Bool ?? true
+        vp9Visible = defaults.object(forKey: AppConstants.vp9VisibleKey) as? Bool ?? true
         losslessVisible = defaults.object(forKey: AppConstants.losslessVisibleKey) as? Bool ?? true
         proresVisible = defaults.object(forKey: AppConstants.proresVisibleKey) as? Bool ?? true
         proxyVisible = defaults.object(forKey: AppConstants.proxyVisibleKey) as? Bool ?? true
@@ -103,6 +111,10 @@ final class PresetManager {
             case .av2: return av2Visible
             case .tvHEVC: return tvHEVCVisible
             case .tvAVCIntra: return tvAVCIntraVisible
+            case .xdcamHD422: return xdcamHD422Visible
+            case .dnxhr: return dnxhrVisible
+            case .cineform: return cineformVisible
+            case .vp9: return vp9Visible
             case .lossless: return losslessVisible
             case .prores: return proresVisible
             case .proxy: return proxyVisible
@@ -230,6 +242,10 @@ final class PresetManager {
         av2Visible = defaults.object(forKey: AppConstants.av2VisibleKey) as? Bool ?? true
         tvHEVCVisible = defaults.object(forKey: AppConstants.tvHEVCVisibleKey) as? Bool ?? true
         tvAVCIntraVisible = defaults.object(forKey: AppConstants.tvAVCIntraVisibleKey) as? Bool ?? true
+        xdcamHD422Visible = defaults.object(forKey: AppConstants.xdcamHD422VisibleKey) as? Bool ?? true
+        dnxhrVisible = defaults.object(forKey: AppConstants.dnxhrVisibleKey) as? Bool ?? true
+        cineformVisible = defaults.object(forKey: AppConstants.cineformVisibleKey) as? Bool ?? true
+        vp9Visible = defaults.object(forKey: AppConstants.vp9VisibleKey) as? Bool ?? true
         losslessVisible = defaults.object(forKey: AppConstants.losslessVisibleKey) as? Bool ?? true
         proresVisible = defaults.object(forKey: AppConstants.proresVisibleKey) as? Bool ?? true
         proxyVisible = defaults.object(forKey: AppConstants.proxyVisibleKey) as? Bool ?? true
