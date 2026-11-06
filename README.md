@@ -136,6 +136,7 @@ Open the chart button on a queued file to inspect its Audio and Video reports.
 
 - Measure whole-program loudness and true peak for individual tracks, custom mono pairs or 5.1 mono groups; export complete JSON or PDF reports.
 - Find silence and peak intervals, compare channel balance, or check stereo correlation and mono fold-down. Jump to measured sections in the paused preview and export complete JSON measurements.
+- Find black intervals (FFmpeg `blackdetect`, with adjustable minimum duration, picture ratio and pixel threshold) and scene cuts (FFmpeg `scdet`, with an adjustable threshold and a thumbnail per cut) in the source video. Click an event to inspect it in the paused preview, then export JSON or Resolve EDL markers. See the [black](docs/video-black-report-format.md) and [scene cut](docs/video-scene-cut-report-format.md) report formats.
 - After encoding, compare video with VMAF, PSNR, XPSNR or sampled SSIMULACRA2. Inspect quality over time, switch source/output playback and jump to the lowest-scoring sections.
 - SSIMULACRA2 compares verified decoded frames up to the selected limit, including on short clips. Videos are indexed first; more samples take longer.
 - Export video quality as full-resolution JSON or paginated A4 PDF with timelines, component scores and comparison warnings. See [score interpretation and report details](docs/video-quality-report-format.md).
