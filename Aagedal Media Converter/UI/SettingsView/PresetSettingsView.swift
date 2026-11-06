@@ -2037,7 +2037,7 @@ struct PresetsSettingsView: View {
         VStack(alignment: .leading, spacing: 8) {
             Toggle(isOn: $loudnessEnabled) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Normalize Loudness")
+                    Text("Loudness Normalization")
                         .font(.subheadline)
                     Text("Measure each audio track, then normalize it to the target (two-pass loudnorm). Applies to all re-encoding presets.")
                         .font(.caption)

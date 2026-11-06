@@ -51,7 +51,7 @@ struct MediaAdjustmentsView: View {
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Adjustments")
+                Text("File Adjustments")
                     .font(.title)
                     .fontWeight(.semibold)
                 Text(item.name)
@@ -193,7 +193,7 @@ struct MediaAdjustmentsView: View {
                 }
             }
         } header: {
-            Text("Burned-in Subtitles")
+            Text("Subtitle Burn-in")
         } footer: {
             Text("SRT, VTT and text tracks use the style above; ASS/SSA keep their own styling. Picture subtitles (PGS, DVD) must be converted to SRT with subtitle OCR first.")
                 .font(.caption)
@@ -229,7 +229,7 @@ struct MediaAdjustmentsView: View {
 
     private var globalLoudnessSummary: String {
         let settings = LoudnessNormalizationSettings(defaults: .standard)
-        guard settings.enabled else { return String(localized: "off", comment: "Global loudness default is off.") }
+        guard settings.enabled else { return String(localized: "Off") }
         return "\(MediaAdjustmentsPlan.number(settings.integrated)) LUFS"
     }
 
