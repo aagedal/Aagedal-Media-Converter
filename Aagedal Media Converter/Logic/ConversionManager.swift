@@ -2786,6 +2786,7 @@ actor ConversionManager: Sendable {
         )
 
         conversionRequest.exportsMatteSidecar = preset.exportsMatteSidecar()
+        conversionRequest.deinterlacer = settings.deinterlacer
         conversionRequest.outputURLResolved = { url in resolvedSingleOutput.withLock { $0 = url } }
         conversionRequest.etaUpdate = { eta in
             Task { @MainActor in

@@ -41,6 +41,16 @@ final class SubprocessStandardInputWriter: @unchecked Sendable {
 
 typealias SubprocessStandardInputProducer = @Sendable (SubprocessStandardInputWriter) async -> Void
 
+/// Rewrites a pipeline producer's standard output before it reaches the consumer
+/// (e.g. GPU processing between a decoder and an encoder). `process` is called for
+/// each stdout chunk in order; `finish` after the producer exits successfully, before
+/// the consumer's standard input is closed. A thrown error stops the pipeline and is
+/// reported as the producer's connection failure.
+protocol SubprocessPipelineTransform: AnyObject, Sendable {
+    func process(_ data: Data, into output: SubprocessStandardInputWriter) throws
+    func finish(into output: SubprocessStandardInputWriter) throws
+}
+
 enum SubprocessTermination: Sendable, Equatable {
     case exited
     case uncaughtSignal
@@ -344,7 +354,8 @@ extension SubprocessRunning {
         consumer consumerRequest: SubprocessRequest,
         producerOutputHandler: (@Sendable (SubprocessOutputChunk) -> Void)? = nil,
         consumerOutputHandler: (@Sendable (SubprocessOutputChunk) -> Void)? = nil,
-        drainProducer: Bool = false
+        drainProducer: Bool = false,
+        transform: (any SubprocessPipelineTransform)? = nil
     ) async throws -> SubprocessPipelineResult {
         precondition(
             consumerRequest.standardInput == nil,
@@ -361,7 +372,11 @@ extension SubprocessRunning {
                         try await self.run(producerRequest) { chunk in
                             if case .standardOutput = chunk.stream {
                                 do {
-                                    try standardInput.write(chunk.data)
+                                    if let transform {
+                                        try transform.process(chunk.data, into: standardInput)
+                                    } else {
+                                        try standardInput.write(chunk.data)
+                                    }
                                 } catch {
                                     producerState.recordConnectionFailureAndCancelProducer(
                                         producerRequest.redactedDiagnostic(error.localizedDescription)
@@ -380,6 +395,15 @@ extension SubprocessRunning {
                             try await producerTask.value
                         } onCancel: {
                             producerState.cancelProducer()
+                        }
+                        if let transform, result.succeeded, !producerState.hasConnectionFailure {
+                            do {
+                                try transform.finish(into: standardInput)
+                            } catch {
+                                producerState.recordConnectionFailureAndCancelProducer(
+                                    producerRequest.redactedDiagnostic(error.localizedDescription)
+                                )
+                            }
                         }
                         producerState.finish(with: .completed(result))
                     } catch is CancellationError {
@@ -1182,6 +1206,10 @@ private final class SubprocessPipelineProducerState: @unchecked Sendable {
             return producerTask
         }
         task?.cancel()
+    }
+
+    var hasConnectionFailure: Bool {
+        lock.withLock { connectionFailure != nil }
     }
 
     func finish(with outcome: SubprocessPipelineStageOutcome) {

@@ -264,6 +264,14 @@ enum AppConstants {
     /// bmx can keep camera metadata. Off by default: it needs extra free space.
     static let nativeMXFTrimmedMergeKey = "nativeMXFTrimmedMerge"
     static let nativeMXFTrimmedMergeDefault = false
+    /// Deinterlacer for interlaced sources: FFmpeg bwdif or QTGMC on the GPU (Metal).
+    static let deinterlacerEngineKey = "deinterlacerEngine"
+    static let deinterlacerEngineDefault = DeinterlacerEngine.bwdif
+    static let qtgmcPresetKey = "qtgmcPreset"
+    static let qtgmcPresetDefault = QTGMCPreset.medium
+    /// QTGMC outputs one frame per field (50i → 50p) unless this is off (50i → 25p).
+    static let qtgmcDoubleRateKey = "qtgmcDoubleRate"
+    static let qtgmcDoubleRateDefault = true
     static let defaultGroupMergeEnabledKey = "defaultGroupMergeEnabled"
     static let defaultGroupSequentialNamingEnabledKey = "defaultGroupSequentialNamingEnabled"
     static let defaultGroupPresetKey = "defaultGroupPreset"

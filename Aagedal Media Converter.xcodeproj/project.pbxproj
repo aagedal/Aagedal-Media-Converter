@@ -7,6 +7,15 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A9C7A0000000000000000101 /* QTGMC.metal in Resources */ = {isa = PBXBuildFile; fileRef = A9C7A0000000000000000201 /* QTGMC.metal */; };
+		A9C7A0000000000000000102 /* QTGMCSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C7A0000000000000000202 /* QTGMCSettings.swift */; };
+		A9C7A0000000000000000103 /* Y4MStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C7A0000000000000000203 /* Y4MStream.swift */; };
+		A9C7A0000000000000000104 /* QTGMCNNEDIWeights.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C7A0000000000000000204 /* QTGMCNNEDIWeights.swift */; };
+		A9C7A0000000000000000105 /* QTGMCMetalDeinterlacer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C7A0000000000000000205 /* QTGMCMetalDeinterlacer.swift */; };
+		A9C7A0000000000000000106 /* QTGMCPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C7A0000000000000000206 /* QTGMCPipeline.swift */; };
+		A9C7A0000000000000000107 /* nnedi3_weights.bin in Resources */ = {isa = PBXBuildFile; fileRef = A9C7A0000000000000000207 /* nnedi3_weights.bin */; };
+		A9C7A0000000000000000108 /* nnedi3-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A9C7A0000000000000000208 /* nnedi3-LICENSE.txt */; };
+		A9C7A0000000000000000109 /* QTGMCTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C7A0000000000000000209 /* QTGMCTests.swift */; };
 		DCPV01TESTS00000000001 /* DCPValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCPV01TESTS00000000002 /* DCPValidatorTests.swift */; };
 		DCPV01VVIEW00000000001 /* DCPValidatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCPV01VVIEW00000000002 /* DCPValidatorView.swift */; };
 		DCPV01VALID00000000001 /* DCPValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCPV01VALID00000000002 /* DCPValidator.swift */; };
@@ -465,6 +474,15 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A9C7A0000000000000000201 /* QTGMC.metal */ = {isa = PBXFileReference; lastKnownFileType = text; path = QTGMC.metal; sourceTree = "<group>"; };
+		A9C7A0000000000000000202 /* QTGMCSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QTGMCSettings.swift; sourceTree = "<group>"; };
+		A9C7A0000000000000000203 /* Y4MStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Y4MStream.swift; sourceTree = "<group>"; };
+		A9C7A0000000000000000204 /* QTGMCNNEDIWeights.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QTGMCNNEDIWeights.swift; sourceTree = "<group>"; };
+		A9C7A0000000000000000205 /* QTGMCMetalDeinterlacer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QTGMCMetalDeinterlacer.swift; sourceTree = "<group>"; };
+		A9C7A0000000000000000206 /* QTGMCPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QTGMCPipeline.swift; sourceTree = "<group>"; };
+		A9C7A0000000000000000207 /* nnedi3_weights.bin */ = {isa = PBXFileReference; lastKnownFileType = file; path = nnedi3_weights.bin; sourceTree = "<group>"; };
+		A9C7A0000000000000000208 /* nnedi3-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "nnedi3-LICENSE.txt"; sourceTree = "<group>"; };
+		A9C7A0000000000000000209 /* QTGMCTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QTGMCTests.swift; sourceTree = "<group>"; };
 		DCPV01TESTS00000000002 /* DCPValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DCPValidatorTests.swift; sourceTree = "<group>"; };
 		DCPV01VVIEW00000000002 /* DCPValidatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DCPValidatorView.swift; sourceTree = "<group>"; };
 		DCPV01VALID00000000002 /* DCPValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DCPValidator.swift; sourceTree = "<group>"; };
@@ -927,6 +945,19 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		A9C7A0000000000000000300 /* QTGMC */ = {
+			isa = PBXGroup;
+			children = (
+				A9C7A0000000000000000201 /* QTGMC.metal */,
+				A9C7A0000000000000000202 /* QTGMCSettings.swift */,
+				A9C7A0000000000000000203 /* Y4MStream.swift */,
+				A9C7A0000000000000000204 /* QTGMCNNEDIWeights.swift */,
+				A9C7A0000000000000000205 /* QTGMCMetalDeinterlacer.swift */,
+				A9C7A0000000000000000206 /* QTGMCPipeline.swift */,
+			);
+			path = QTGMC;
+			sourceTree = "<group>";
+		};
 		2B48C187D7A738BE42B8084A /* YTDLP */ = {
 			isa = PBXGroup;
 			children = (
@@ -991,6 +1022,7 @@
 		8E0C32D02E09FC5100F22B21 /* Licenses */ = {
 			isa = PBXGroup;
 			children = (
+				A9C7A0000000000000000208 /* nnedi3-LICENSE.txt */,
 				8EA817D52F7184AA00F9F10C /* asdcplib-LICENSE.txt */,
 				A90606000000000000000205 /* sparkle-LICENSE.txt */,
 				A90606000000000000000206 /* swiftmediametadata-LICENSE.txt */,
@@ -1223,6 +1255,7 @@
 		8EE0BBB92E0980090096171D /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				A9C7A0000000000000000207 /* nnedi3_weights.bin */,
 				8EE6EE9F2C31FC6F007B629D /* Assets.xcassets */,
 				8EE0BBBB2E0980560096171D /* Localizable.xcstrings */,
 				8EA25FED2F82D6B00087B1F1 /* tessdata */,
@@ -1289,6 +1322,7 @@
 		8EE6EEAC2C31FC6F007B629D /* Aagedal Media ConverterTests */ = {
 			isa = PBXGroup;
 			children = (
+				A9C7A0000000000000000209 /* QTGMCTests.swift */,
 				ENCHIST0010FR0000000 /* EncodeHistoryTests.swift */,
 				ENCHIST0022FR0000000 /* EncodeStatisticsTests.swift */,
 				A45000000000000000000002 /* ApplicationJobContractTests.swift */,
@@ -1390,6 +1424,7 @@
 		8EEE45292EC137EA0049F017 /* Conversion */ = {
 			isa = PBXGroup;
 			children = (
+				A9C7A0000000000000000300 /* QTGMC */,
 				8EEE45302EC1391C0049F017 /* FFMPEGProgressParser.swift */,
 				FBA41D8157AC4F0DBD63B191 /* TimelineKeyframeService.swift */,
 				8EEE452E2EC139120049F017 /* FFMPEGProbeService.swift */,
@@ -1848,6 +1883,9 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A9C7A0000000000000000101 /* QTGMC.metal in Resources */,
+				A9C7A0000000000000000107 /* nnedi3_weights.bin in Resources */,
+				A9C7A0000000000000000108 /* nnedi3-LICENSE.txt in Resources */,
 				8E0556A82F2774B200BCFB49 /* Localizable.xcstrings in Resources */,
 				8E501CFD2EF1807000717373 /* done.mp3 in Resources */,
 				8E501CFE2EF1807000717373 /* error.mp3 in Resources */,
@@ -1964,6 +2002,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A9C7A0000000000000000102 /* QTGMCSettings.swift in Sources */,
+				A9C7A0000000000000000103 /* Y4MStream.swift in Sources */,
+				A9C7A0000000000000000104 /* QTGMCNNEDIWeights.swift in Sources */,
+				A9C7A0000000000000000105 /* QTGMCMetalDeinterlacer.swift in Sources */,
+				A9C7A0000000000000000106 /* QTGMCPipeline.swift in Sources */,
 				A45100000000000000000003 /* ApplicationAgentTransport.swift in Sources */,
 				A45200000000000000000003 /* AgentAccessSettingsView.swift in Sources */,
 				A45000000000000000000003 /* ApplicationJobContract.swift in Sources */,
@@ -2259,6 +2302,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A9C7A0000000000000000109 /* QTGMCTests.swift in Sources */,
 				A45000000000000000000004 /* ApplicationJobContractTests.swift in Sources */,
 				A45A99000000000000000004 /* AnonymousUsageIndicatorTests.swift in Sources */,
 				24CB417957434AF98E564C83 /* UploadLifecycleTests.swift in Sources */,

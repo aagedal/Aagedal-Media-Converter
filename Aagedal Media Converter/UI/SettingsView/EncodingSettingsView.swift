@@ -20,6 +20,15 @@ struct EncodingSettingsView: View {
     @AppStorage(AppConstants.nativeMXFTrimmedMergeKey)
     private var nativeMXFTrimmedMerge = AppConstants.nativeMXFTrimmedMergeDefault
 
+    @AppStorage(AppConstants.deinterlacerEngineKey)
+    private var deinterlacerEngineRaw = AppConstants.deinterlacerEngineDefault.rawValue
+
+    @AppStorage(AppConstants.qtgmcPresetKey)
+    private var qtgmcPresetRaw = AppConstants.qtgmcPresetDefault.rawValue
+
+    @AppStorage(AppConstants.qtgmcDoubleRateKey)
+    private var qtgmcDoubleRate = AppConstants.qtgmcDoubleRateDefault
+
     @State private var temporaryFreeSpace: Int64?
 
     private let presetManager = PresetManager.shared
@@ -33,6 +42,24 @@ struct EncodingSettingsView: View {
 
     var body: some View {
         Form {
+            Section("Deinterlacing") {
+                Picker("Deinterlacer", selection: $deinterlacerEngineRaw) {
+                    Text("bwdif (fast)").tag(DeinterlacerEngine.bwdif.rawValue)
+                    Text("QTGMC on the GPU (high quality)").tag(DeinterlacerEngine.qtgmc.rawValue)
+                }
+                if deinterlacerEngineRaw == DeinterlacerEngine.qtgmc.rawValue {
+                    Picker("QTGMC preset", selection: $qtgmcPresetRaw) {
+                        Text("Fast").tag(QTGMCPreset.fast.rawValue)
+                        Text("Medium").tag(QTGMCPreset.medium.rawValue)
+                        Text("Slow").tag(QTGMCPreset.slow.rawValue)
+                    }
+                    Toggle("One output frame per field", isOn: $qtgmcDoubleRate)
+                    Text("On, 50i becomes 50p and 60i becomes 60p, like bwdif. Off keeps the source frame rate.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Text("Interlaced sources are deinterlaced on export. QTGMC interpolates the missing lines with NNEDI3 and smooths them with motion compensation on the GPU. Fine detail stays steadier, with less line twitter than bwdif, but exports take several times longer. The original field lines are kept unchanged. Merges, image sequences, DCP, IMF, AV2 and generated video use bwdif.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("Stitched Exports") {
                 Toggle("Export timeline markers", isOn: $exportStitchMarkers)
                 Text("Save cuts and marked notes in a Resolve marker EDL beside stitched files and embed chapters in MOV, MP4, M4V, and MKV. Cut titles include the source timecode at each clip’s trimmed in-point when available. If source chapters exist, ask before replacing them.")

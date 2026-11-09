@@ -1318,6 +1318,11 @@
       "sha256": "ad277bf4a2bf6eb60012edb6b2e5254700d49706318c302f4c05ce779ab0529b"
     },
     {
+      "path": "Licenses/nnedi3-LICENSE.txt",
+      "bytes": 19625,
+      "sha256": "dabeeed5afe8ae498e5a55d7c3720f97d3120071237ae09e32fa56145b83de26"
+    },
+    {
       "path": "Licenses/rclone-LICENSE.txt",
       "bytes": 1182659,
       "sha256": "5cafe245a21a2bd4a3e494784f9eca91efd8d180f95ad7e4115320baf1c7a022"

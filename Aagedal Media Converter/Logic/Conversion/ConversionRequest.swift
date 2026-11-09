@@ -55,6 +55,8 @@ struct ConversionRequest: Sendable {
     /// Nil uses the normal trim start; zero explicitly preserves the original timecode.
     var timecodeTrimStart: Double? = nil
     var isMuted: Bool = false
+    /// Deinterlacer used when the export deinterlaces an interlaced source.
+    var deinterlacer: DeinterlacerSettings = .standard
 
     // MARK: - Special Rendering
     var waveformRequest: WaveformVideoRequest? = nil

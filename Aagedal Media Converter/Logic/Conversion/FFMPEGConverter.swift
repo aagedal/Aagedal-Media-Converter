@@ -1456,6 +1456,7 @@ actor FFMPEGConverter {
             loudnessMeasurements: loudnessMeasurements
         ) }
         var command = await buildCommand(nil)
+        var loudnessMeasurements: [LoudnormMeasurement]? = nil
 
         // Two-pass loudness: measure every normalized track, then rebuild with the results.
         if command.preparationError == nil, let measurementArguments = command.loudnessMeasurementArguments {
@@ -1465,6 +1466,7 @@ actor FFMPEGConverter {
                 // The preparation-failure path below owns the cleanup of unstarted outputs.
                 command.preparationError = "Conversion cancelled"
             case .measured(let measurements) where measurements.count == command.loudnessTrackCount:
+                loudnessMeasurements = measurements
                 command = await buildCommand(measurements)
             case .measured, .failed:
                 command.preparationError = MediaAdjustmentsPlan.AdjustmentError.measurementFailed.message
@@ -1490,6 +1492,58 @@ actor FFMPEGConverter {
         var finalArguments = command.arguments
         if av2MatroskaAudioFromInput1 {
             finalArguments = Self.redirectAudioSubtitleMapsToSecondInput(finalArguments)
+        }
+
+        // QTGMC (Metal) replaces the built-in bwdif stage when this export deinterlaces:
+        // a decoder FFmpeg feeds the GPU deinterlacer, whose frames reach this command on
+        // its standard input while audio and metadata come from the source as input 1.
+        var qtgmcPipeline: (decoder: SubprocessRequest, transform: QTGMCFrameTransform)? = nil
+        if av2DecodeRequest == nil,
+           tempAudioURL == nil,
+           request.customInputArguments == nil,
+           request.waveformRequest == nil,
+           request.synthesizedVideoRequest == nil,
+           request.visualSourceURL == nil,
+           isOrdinaryFileExport,
+           preset != .streamCopy,
+           preset.outputsVisualFrames,
+           request.deinterlacer.usesQTGMC,
+           finalArguments.contains(where: { $0.contains(QTGMCPipelinePlan.builtInDeinterlaceStage) }) {
+            if let plan = QTGMCPipelinePlan(
+                inputURL: effectiveInputURL,
+                stream: request.sourceMetadata?.primaryVideoStream,
+                trimStart: request.trimStart,
+                trimEnd: trimEnd,
+                settings: request.deinterlacer
+            ), let weightsURL = QTGMCPipelinePlan.availableWeightsURL() {
+                effectiveCustomInputArguments = plan.encoderInputArguments
+                let qtgmcCommand = await buildCommand(loudnessMeasurements)
+                effectiveCustomInputArguments = request.customInputArguments
+                if qtgmcCommand.preparationError == nil,
+                   let arguments = QTGMCPipelinePlan.encoderArguments(fromBuilt: qtgmcCommand.arguments) {
+                    finalArguments = arguments
+                    let decoder = SubprocessRequest(
+                        executableURL: URL(fileURLWithPath: ffmpegPath),
+                        arguments: plan.decoderArguments,
+                        timeout: .seconds(7 * 24 * 60 * 60),
+                        standardOutputCaptureLimit: 0,
+                        standardErrorCaptureLimit: 64 * 1024,
+                        sensitiveValues: [ffmpegPath, inputURL.path, effectiveInputURL.path]
+                    )
+                    qtgmcPipeline = (decoder, QTGMCFrameTransform(plan: plan, weightsURL: weightsURL))
+                    Self.logger.info("QTGMC deinterlacing: \(decoder.redactedCommandDescription, privacy: .public)")
+                } else {
+                    Self.logger.warning("QTGMC skipped: the command could not be adapted; using bwdif")
+                }
+            } else {
+                Self.logger.warning("QTGMC unavailable for this source or Mac; using bwdif")
+            }
+            guard activeConversionID == conversionID else {
+                if let tempMXFURL { Self.cleanupTempFile(at: tempMXFURL, label: "Intermediate MXF") }
+                _ = await finishTrackedConversion(conversionID)
+                finish(false, "Conversion cancelled")
+                return
+            }
         }
 
         // Matte sidecar for sources with alpha whose output format drops it. Runs as a
@@ -2521,6 +2575,81 @@ actor FFMPEGConverter {
         guard activeConversionID == conversionID else {
             progressGate.invalidate()
             finish(false, "Conversion cancelled")
+            return
+        }
+
+        if let qtgmcPipeline {
+            let runner = subprocessRunner
+            let decoderRequest = qtgmcPipeline.decoder
+            let transform = qtgmcPipeline.transform
+            currentSubprocessTask = makeJoinableSubprocessTask(conversionID: conversionID) {
+                do {
+                    let pipelineResult = try await runner.runPipeline(
+                        producer: decoderRequest,
+                        consumer: subprocessRequest,
+                        consumerOutputHandler: { chunk in
+                            Self.$runningSubprocessID.withValue(conversionID) {
+                                guard case .standardError = chunk.stream else { return }
+                                progressStreamParser.consume(chunk.data)
+                            }
+                        },
+                        transform: transform
+                    )
+                    progressStreamParser.finish()
+                    let ffmpegResult = pipelineResult.consumer
+                    var forcedErrorReason: String?
+                    switch pipelineResult.producer {
+                    case .completed(let decoderResult):
+                        if !decoderResult.succeeded {
+                            let diagnostic = decoderRequest.redactedDiagnostic(
+                                decoderResult.standardErrorText,
+                                limit: 64 * 1024
+                            )
+                            forcedErrorReason = Self.extractErrorReason(
+                                from: diagnostic,
+                                exitCode: decoderResult.terminationStatus
+                            )
+                        }
+                    case .failed(.cancelled):
+                        forcedErrorReason = "Conversion cancelled"
+                    case .failed(.timedOut):
+                        forcedErrorReason = "QTGMC decoding timed out after 7 days"
+                    case .failed(.failedToStart(let reason)):
+                        forcedErrorReason = "Failed to start the QTGMC decoder: \(reason)"
+                    case .failed(.connectionClosed):
+                        // The encoder closing its input (at the trim end) is expected;
+                        // only a failure inside the deinterlacer is an error.
+                        if let reason = transform.failureReason {
+                            forcedErrorReason = "QTGMC deinterlacing failed: \(reason)"
+                        }
+                    case .failed(.failed(let reason)):
+                        forcedErrorReason = "QTGMC decoding failed: \(reason)"
+                    case .unfinished:
+                        // The encoder stopped first, e.g. at the trim end; its result decides.
+                        break
+                    }
+                    handleFFmpegTermination(
+                        ffmpegResult.terminationStatus,
+                        ffmpegResult.standardError,
+                        forcedErrorReason
+                    )
+                } catch is CancellationError {
+                    progressStreamParser.finish()
+                    handleFFmpegTermination(-SIGTERM, Data(), "Conversion cancelled")
+                } catch SubprocessRunnerError.timedOut(_, let result) {
+                    progressStreamParser.finish()
+                    handleFFmpegTermination(
+                        result.terminationStatus,
+                        result.standardError,
+                        "FFmpeg conversion timed out after 7 days"
+                    )
+                } catch {
+                    progressStreamParser.finish()
+                    let message = subprocessRequest.redactedDiagnostic(error.localizedDescription)
+                    Self.logger.error("Failed to run QTGMC pipeline: \(message, privacy: .public)")
+                    handleFFmpegTermination(-1, Data(), "Failed to start FFmpeg: \(message)")
+                }
+            }
             return
         }
 

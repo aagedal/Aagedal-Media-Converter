@@ -133,6 +133,7 @@ struct ConversionPreparationSettings: Sendable {
     let fileName: FileNamePreferences
     let fileNameContext: FileNameTemplateContext
     let outputDestination: OutputDestinationSettings
+    let deinterlacer: DeinterlacerSettings
 
     init(preset: ExportPreset, defaults: UserDefaults = .standard) {
         ignoreStitchTimecodeTrimOffset = defaults.bool(forKey: AppConstants.ignoreStitchTimecodeTrimOffsetKey)
@@ -155,6 +156,7 @@ struct ConversionPreparationSettings: Sendable {
             preset: preset, defaults: defaults, av2Settings: av2, dcpSettings: dcp, imfSettings: imf
         )
         outputDestination = OutputDestinationSettings(defaults: defaults)
+        deinterlacer = DeinterlacerSettings(defaults: defaults)
     }
 
     func namingContext(preset: ExportPreset, imageSequenceFrameRate: Double?) -> FileNameTemplateContext {

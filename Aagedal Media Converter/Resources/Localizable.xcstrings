@@ -1942,6 +1942,65 @@
         }
       }
     },
+    "bwdif (fast)" : {
+      "comment" : "Deinterlacer option: FFmpeg's bwdif filter, which is fast.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "bwdif (schnell)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "bwdif (rápido)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "bwdif (rapide)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "bwdif (veloce)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "bwdif（高速）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "bwdif (빠름)"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bwdif (rask)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "bwdif (rápido)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "bwdif（快速）"
+          }
+        }
+      }
+    },
     "Cannot determine the duration needed for the fade, offset or replacement audio. Set an end trim and try again." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2394,6 +2453,124 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "dBTP"
+          }
+        }
+      }
+    },
+    "Deinterlacer" : {
+      "comment" : "Picker label for the deinterlacing method.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Deinterlacer"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desentrelazador"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Désentrelaceur"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Deinterlacciatore"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "インターレース解除方式"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "디인터레이서"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avfletter"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desentrelaçador"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "去隔行器"
+          }
+        }
+      }
+    },
+    "Deinterlacing" : {
+      "comment" : "Settings section title for choosing how interlaced video is deinterlaced.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Deinterlacing"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desentrelazado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Désentrelacement"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Deinterlacciamento"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "インターレース解除"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "디인터레이스"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avfletting"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desentrelaçamento"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "去隔行"
           }
         }
       }
@@ -2989,6 +3166,65 @@
         }
       }
     },
+    "Fast" : {
+      "comment" : "QTGMC preset option: fastest, lower quality.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Schnell"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rápido"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rapide"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Veloce"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "高速"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "빠름"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rask"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rápido"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "快速"
+          }
+        }
+      }
+    },
     "File Adjustments" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3440,6 +3676,65 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "字号：%lld"
+          }
+        }
+      }
+    },
+    "Interlaced sources are deinterlaced on export. QTGMC interpolates the missing lines with NNEDI3 and smooths them with motion compensation on the GPU. Fine detail stays steadier, with less line twitter than bwdif, but exports take several times longer. The original field lines are kept unchanged. Merges, image sequences, DCP, IMF, AV2 and generated video use bwdif." : {
+      "comment" : "Caption explaining the deinterlacer choice.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Interlaced-Quellen werden beim Export deinterlaced. QTGMC interpoliert die fehlenden Zeilen mit NNEDI3 und glättet sie mit Bewegungskompensation auf der GPU. Feine Details bleiben ruhiger und flimmern weniger als mit bwdif, der Export dauert aber um ein Vielfaches länger. Die Originalzeilen der Halbbilder bleiben unverändert. Zusammenführungen, Bildsequenzen, DCP, IMF, AV2 und generiertes Video verwenden bwdif."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Las fuentes entrelazadas se desentrelazan al exportar. QTGMC interpola las líneas que faltan con NNEDI3 y las suaviza con compensación de movimiento en la GPU. El detalle fino se mantiene más estable, con menos parpadeo de líneas que bwdif, pero las exportaciones tardan varias veces más. Las líneas originales de los campos no se modifican. Las uniones, las secuencias de imágenes, DCP, IMF, AV2 y el vídeo generado usan bwdif."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Les sources entrelacées sont désentrelacées à l’exportation. QTGMC interpole les lignes manquantes avec NNEDI3 et les lisse par compensation de mouvement sur le GPU. Les détails fins restent plus stables, avec moins de scintillement des lignes qu’avec bwdif, mais l’exportation prend plusieurs fois plus de temps. Les lignes d’origine des trames restent inchangées. Les fusions, séquences d’images, DCP, IMF, AV2 et vidéos générées utilisent bwdif."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Le sorgenti interlacciate vengono deinterlacciate durante l’esportazione. QTGMC interpola le righe mancanti con NNEDI3 e le leviga con la compensazione del movimento sulla GPU. I dettagli fini restano più stabili, con meno sfarfallio delle righe rispetto a bwdif, ma l’esportazione richiede molto più tempo. Le righe originali dei semiquadri restano invariate. Unioni, sequenze di immagini, DCP, IMF, AV2 e video generati usano bwdif."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "インターレースのソースは書き出し時にインターレース解除されます。QTGMC は欠けたラインを NNEDI3 で補間し、GPU 上の動き補償で滑らかにします。細部が安定し、bwdif よりラインのちらつきが少なくなりますが、書き出しには数倍の時間がかかります。元のフィールドのラインは変更されません。結合、連番画像、DCP、IMF、AV2、生成ビデオでは bwdif を使用します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "인터레이스 소스는 내보낼 때 디인터레이스됩니다. QTGMC는 누락된 라인을 NNEDI3로 보간하고 GPU에서 움직임 보정으로 부드럽게 만듭니다. 세부 묘사가 더 안정적이고 bwdif보다 라인 깜박임이 적지만, 내보내기에 몇 배 더 오래 걸립니다. 원본 필드 라인은 변경되지 않습니다. 병합, 이미지 시퀀스, DCP, IMF, AV2 및 생성된 비디오는 bwdif를 사용합니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interlacede kilder avflettes ved eksport. QTGMC interpolerer de manglende linjene med NNEDI3 og glatter dem med bevegelseskompensasjon på GPU-en. Fine detaljer blir roligere, med mindre linjeflimmer enn med bwdif, men eksporten tar flere ganger så lang tid. De opprinnelige linjene i halvbildene beholdes uendret. Sammenslåinger, bildesekvenser, DCP, IMF, AV2 og generert video bruker bwdif."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fontes entrelaçadas são desentrelaçadas na exportação. O QTGMC interpola as linhas ausentes com NNEDI3 e as suaviza com compensação de movimento na GPU. Os detalhes finos ficam mais estáveis, com menos cintilação de linhas do que no bwdif, mas a exportação leva várias vezes mais tempo. As linhas originais dos campos permanecem inalteradas. Junções, sequências de imagens, DCP, IMF, AV2 e vídeo gerado usam o bwdif."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "隔行扫描的源会在导出时去隔行。QTGMC 使用 NNEDI3 插值缺失的行，并在 GPU 上通过运动补偿使其平滑。细节更稳定，行闪烁比 bwdif 更少，但导出时间会长数倍。原始场的行保持不变。合并、图像序列、DCP、IMF、AV2 和生成的视频使用 bwdif。"
           }
         }
       }
@@ -4343,6 +4638,65 @@
         }
       }
     },
+    "Medium" : {
+      "comment" : "QTGMC preset option: balanced speed and quality.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mittel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Medio"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Moyen"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Medio"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "標準"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "보통"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Middels"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Médio"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "中等"
+          }
+        }
+      }
+    },
     "MOV works in most editing applications. MXF is the native container for Avid Media Composer." : {
       "localizations" : {
         "de" : {
@@ -4715,6 +5069,124 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "偏移"
+          }
+        }
+      }
+    },
+    "On, 50i becomes 50p and 60i becomes 60p, like bwdif. Off keeps the source frame rate." : {
+      "comment" : "Caption explaining the one-frame-per-field toggle.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ein: Aus 50i wird 50p und aus 60i wird 60p, wie bei bwdif. Aus: Die Bildrate der Quelle bleibt erhalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Activado, 50i pasa a 50p y 60i a 60p, como con bwdif. Desactivado, se mantiene la velocidad de fotogramas de origen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Activé, 50i devient 50p et 60i devient 60p, comme avec bwdif. Désactivé, la fréquence d’images de la source est conservée."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Attivo, 50i diventa 50p e 60i diventa 60p, come con bwdif. Disattivo, mantiene la frequenza dei fotogrammi della sorgente."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "オンにすると、bwdif と同様に 50i は 50p、60i は 60p になります。オフにすると、ソースのフレームレートを維持します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "켜면 bwdif처럼 50i는 50p, 60i는 60p가 됩니다. 끄면 원본 프레임 레이트를 유지합니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "På: 50i blir 50p og 60i blir 60p, som med bwdif. Av: Kildens bildefrekvens beholdes."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ativado, 50i vira 50p e 60i vira 60p, como no bwdif. Desativado, mantém a taxa de quadros da origem."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "开启时，50i 变为 50p，60i 变为 60p，与 bwdif 相同。关闭时保留源帧率。"
+          }
+        }
+      }
+    },
+    "One output frame per field" : {
+      "comment" : "Toggle: QTGMC outputs one progressive frame per interlaced field (double frame rate).",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ein Ausgabebild pro Halbbild"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un fotograma de salida por campo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Une image de sortie par trame"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un fotogramma di uscita per semiquadro"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "フィールドごとに 1 フレームを出力"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "필드마다 출력 프레임 1개"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ett utdatabilde per halvbilde"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Um quadro de saída por campo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "每场输出一帧"
           }
         }
       }
@@ -5438,6 +5910,124 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "如果节目的范围或真峰值无法通过单一增益达到目标，将改为动态标准化。不适用于 Stream Copy、DCP、IMF、AV2、合并或生成的波形视频。"
+          }
+        }
+      }
+    },
+    "QTGMC on the GPU (high quality)" : {
+      "comment" : "Deinterlacer option: the QTGMC deinterlacer running on the GPU.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "QTGMC auf der GPU (hohe Qualität)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "QTGMC en la GPU (alta calidad)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "QTGMC sur le GPU (haute qualité)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "QTGMC sulla GPU (alta qualità)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "GPU で QTGMC（高画質）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "GPU에서 QTGMC (고품질)"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "QTGMC på GPU-en (høy kvalitet)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "QTGMC na GPU (alta qualidade)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "在 GPU 上运行 QTGMC（高质量）"
+          }
+        }
+      }
+    },
+    "QTGMC preset" : {
+      "comment" : "Picker label for the QTGMC speed/quality preset.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "QTGMC-Voreinstellung"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Preajuste de QTGMC"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Préréglage QTGMC"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Preset QTGMC"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "QTGMC プリセット"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "QTGMC 프리셋"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "QTGMC-forhåndsinnstilling"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Predefinição do QTGMC"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "QTGMC 预设"
           }
         }
       }
@@ -6288,6 +6878,65 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "大小"
+          }
+        }
+      }
+    },
+    "Slow" : {
+      "comment" : "QTGMC preset option: slowest, highest quality.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Langsam"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lento"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lent"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lento"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "低速"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "느림"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Langsom"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lento"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "慢速"
           }
         }
       }

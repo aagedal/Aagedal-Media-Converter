@@ -232,6 +232,12 @@ Aagedal Media Converter/
 - `SecurityScopedBookmarkManager` is still used to persist user folder/file choices (output folder, watch folder, custom binary paths) across launches — `URL.bookmarkData` survives relaunch even without the sandbox. The matching `startAccessingSecurityScopedResource()` / `stopAccessingSecurityScopedResource()` pairs in call sites are no-ops without the sandbox; they remain in the code as cheap, harmless defence in case sandboxing is ever re-enabled.
 - A common pattern in I/O paths (conversion, preview, metadata probe) is "try direct file access first, fall back to bookmark on failure." The bookmark fallback is effectively dead code without the sandbox but harmless; only remove it if you also remove the upstream bookmark plumbing.
 
+### QTGMC Deinterlacing (Metal)
+- Optional replacement for the built-in `bwdif` stage (Settings → Encoding → Deinterlacing), in `Logic/Conversion/QTGMC/`.
+- `FFMPEGConverter.convert` builds the normal command first; only when it contains `QTGMCPipelinePlan.builtInDeinterlaceStage` is it rebuilt with a Y4M pipe as input 0 and the source as input 1 (`QTGMCPipelinePlan.encoderArguments` removes the bwdif stage and redirects audio/subtitle/metadata references to input 1).
+- Runs as `ffmpeg decoder → QTGMCFrameTransform → ffmpeg encoder` through `SubprocessRunning.runPipeline(transform:)`. Trims decode a 3-frame pre-roll that the transform drops.
+- `QTGMCMetalDeinterlacer` schedules the kernels in `QTGMC.metal` (NNEDI3, search clip, hierarchical block ME, MDegrain-style smoothing, resharpen, lossless de-combing). The shader is a bundle resource compiled at runtime (`makeLibrary(source:)`), not a build-time Metal target. NNEDI3 weights: `Resources/nnedi3_weights.bin` (notice in `Licenses/nnedi3-LICENSE.txt`).
+
 ### Concurrency
 - Heavy use of Swift Concurrency (async/await, actors)
 - `ConversionManager` and `FFMPEGConverter` are actors
