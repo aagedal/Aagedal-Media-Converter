@@ -156,6 +156,14 @@
 		FFCSPLIT000000000000008B /* FFMPEGConverter+NativeWaveform.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCSPLIT000000000000008F /* FFMPEGConverter+NativeWaveform.swift */; };
 		FFCSPLIT000000000000009B /* FFMPEGConverter+AudioExtraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCSPLIT000000000000009F /* FFMPEGConverter+AudioExtraction.swift */; };
 		8E545D942C3412AE0088C274 /* ConversionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E545D932C3412AE0088C274 /* ConversionManager.swift */; };
+		CMSPLIT0000000000000001B /* ConversionManager+MergePreparation.swift in Sources */ = {isa = PBXBuildFile; fileRef = CMSPLIT0000000000000001F /* ConversionManager+MergePreparation.swift */; };
+		CMSPLIT0000000000000002B /* ConversionManager+MergeExecution.swift in Sources */ = {isa = PBXBuildFile; fileRef = CMSPLIT0000000000000002F /* ConversionManager+MergeExecution.swift */; };
+		CMSPLIT0000000000000003B /* ConversionManager+ConformanceMerge.swift in Sources */ = {isa = PBXBuildFile; fileRef = CMSPLIT0000000000000003F /* ConversionManager+ConformanceMerge.swift */; };
+		CMSPLIT0000000000000004B /* ConversionManager+MergeCompatibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = CMSPLIT0000000000000004F /* ConversionManager+MergeCompatibility.swift */; };
+		CMSPLIT0000000000000005B /* ConversionManager+SecurityScopedAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = CMSPLIT0000000000000005F /* ConversionManager+SecurityScopedAccess.swift */; };
+		CMSPLIT0000000000000006B /* ConversionManager+SubtitleGeneration.swift in Sources */ = {isa = PBXBuildFile; fileRef = CMSPLIT0000000000000006F /* ConversionManager+SubtitleGeneration.swift */; };
+		CMSPLIT0000000000000007B /* ConversionManager+SubtitleEmbedding.swift in Sources */ = {isa = PBXBuildFile; fileRef = CMSPLIT0000000000000007F /* ConversionManager+SubtitleEmbedding.swift */; };
+		CMSPLIT0000000000000008B /* ConversionManager+Analytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = CMSPLIT0000000000000008F /* ConversionManager+Analytics.swift */; };
 		8E824ABA2EF8A9E1001A6B95 /* MPVKit-GPL in Frameworks */ = {isa = PBXBuildFile; productRef = 8E824AB92EF8A9E1001A6B95 /* MPVKit-GPL */; };
 		8E824ABF2EF8AB02001A6B95 /* MPVProperty.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E824ABD2EF8AB02001A6B95 /* MPVProperty.swift */; };
 		8E824AC02EF8AB02001A6B95 /* MPVMetalLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E824ABB2EF8AB02001A6B95 /* MPVMetalLayer.swift */; };
@@ -184,6 +192,7 @@
 		8EBD10242EBE8B7000377649 /* Aagedal_Media_Converter_Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EBD10232EBE8B7000377649 /* Aagedal_Media_Converter_Tests.swift */; };
 		8EC017D3E3FDF66B8DE02E57 /* BMXService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DED542D049B53B34DBA25323 /* BMXService.swift */; };
 		A1B2C3D4E5F6A7B8C9D0E1F3 /* NativeMXFMerge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* NativeMXFMerge.swift */; };
+		SCTFIX00000000000000001B /* StreamCopyTimingFixes.swift in Sources */ = {isa = PBXBuildFile; fileRef = SCTFIX00000000000000001F /* StreamCopyTimingFixes.swift */; };
 		8EC3DCDD2EF57F0600CD75BC /* RandomTips.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EC3DCDC2EF57F0600CD75BC /* RandomTips.swift */; };
 		P2IMPOVL00000001 /* P2ImportProgressOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = P2IMPOVL00000002 /* P2ImportProgressOverlay.swift */; };
 		8EC9A6F12EC146C00082C67F /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EFBDA932EA58975005ADDCF /* AboutView.swift */; };
@@ -620,6 +629,14 @@
 		FFCSPLIT000000000000008F /* FFMPEGConverter+NativeWaveform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FFMPEGConverter+NativeWaveform.swift"; sourceTree = "<group>"; };
 		FFCSPLIT000000000000009F /* FFMPEGConverter+AudioExtraction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FFMPEGConverter+AudioExtraction.swift"; sourceTree = "<group>"; };
 		8E545D932C3412AE0088C274 /* ConversionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionManager.swift; sourceTree = "<group>"; };
+		CMSPLIT0000000000000001F /* ConversionManager+MergePreparation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversionManager+MergePreparation.swift"; sourceTree = "<group>"; };
+		CMSPLIT0000000000000002F /* ConversionManager+MergeExecution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversionManager+MergeExecution.swift"; sourceTree = "<group>"; };
+		CMSPLIT0000000000000003F /* ConversionManager+ConformanceMerge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversionManager+ConformanceMerge.swift"; sourceTree = "<group>"; };
+		CMSPLIT0000000000000004F /* ConversionManager+MergeCompatibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversionManager+MergeCompatibility.swift"; sourceTree = "<group>"; };
+		CMSPLIT0000000000000005F /* ConversionManager+SecurityScopedAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversionManager+SecurityScopedAccess.swift"; sourceTree = "<group>"; };
+		CMSPLIT0000000000000006F /* ConversionManager+SubtitleGeneration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversionManager+SubtitleGeneration.swift"; sourceTree = "<group>"; };
+		CMSPLIT0000000000000007F /* ConversionManager+SubtitleEmbedding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversionManager+SubtitleEmbedding.swift"; sourceTree = "<group>"; };
+		CMSPLIT0000000000000008F /* ConversionManager+Analytics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversionManager+Analytics.swift"; sourceTree = "<group>"; };
 		8E824ABB2EF8AB02001A6B95 /* MPVMetalLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVMetalLayer.swift; sourceTree = "<group>"; };
 		8E824ABC2EF8AB02001A6B95 /* MPVPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVPlayer.swift; sourceTree = "<group>"; };
 		8E824ABD2EF8AB02001A6B95 /* MPVProperty.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVProperty.swift; sourceTree = "<group>"; };
@@ -800,6 +817,7 @@
 		DC0001A1DCP0000100000006 /* DCPMetadataView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DCPMetadataView.swift; sourceTree = "<group>"; };
 		DED542D049B53B34DBA25323 /* BMXService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BMXService.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F2 /* NativeMXFMerge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeMXFMerge.swift; sourceTree = "<group>"; };
+		SCTFIX00000000000000001F /* StreamCopyTimingFixes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamCopyTimingFixes.swift; sourceTree = "<group>"; };
 		DF54064B23414EFA90E6AB59 /* AV2Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2Settings.swift; sourceTree = "<group>"; };
 		DLHIST001SERV00000002 /* DownloadHistoryService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DownloadHistoryService.swift; path = YTDLP/DownloadHistoryService.swift; sourceTree = "<group>"; };
 		E0148C0DED554F1ABE4B7DB0 /* MergeCompatibilityPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MergeCompatibilityPolicyTests.swift; sourceTree = "<group>"; };
@@ -1106,6 +1124,14 @@
 				VDISPMGR00001000FREF1 /* VirtualDisplayManager.swift */,
 				VDISPHDR00001000FREF1 /* CGVirtualDisplay+Private.h */,
 				8E545D932C3412AE0088C274 /* ConversionManager.swift */,
+				CMSPLIT0000000000000001F /* ConversionManager+MergePreparation.swift */,
+				CMSPLIT0000000000000002F /* ConversionManager+MergeExecution.swift */,
+				CMSPLIT0000000000000003F /* ConversionManager+ConformanceMerge.swift */,
+				CMSPLIT0000000000000004F /* ConversionManager+MergeCompatibility.swift */,
+				CMSPLIT0000000000000005F /* ConversionManager+SecurityScopedAccess.swift */,
+				CMSPLIT0000000000000006F /* ConversionManager+SubtitleGeneration.swift */,
+				CMSPLIT0000000000000007F /* ConversionManager+SubtitleEmbedding.swift */,
+				CMSPLIT0000000000000008F /* ConversionManager+Analytics.swift */,
 				02B1DCFCB3DC44408B8C4598 /* MergeCompatibilityPolicy.swift */,
 				CD5693B21A7341B2A3FA32A7 /* ConversionQueueState.swift */,
 				3A606FA6387C4AE4B6C4B9EE /* ConversionUploadFollowUp.swift */,
@@ -1451,6 +1477,7 @@
 				8ECEBC172ED766D200F1F67C /* CropService.swift */,
 				DED542D049B53B34DBA25323 /* BMXService.swift */,
 				A1B2C3D4E5F6A7B8C9D0E1F2 /* NativeMXFMerge.swift */,
+				SCTFIX00000000000000001F /* StreamCopyTimingFixes.swift */,
 				MCALABBLD00000002 /* MCALabelsBuilder.swift */,
 				SMPTEPKGUTL00000002 /* SMPTEPackageUtils.swift */,
 				IMFEXP0000MDL0002 /* IMFModels.swift */,
@@ -2122,6 +2149,14 @@
 				6EA4438287DD44FAB7470441 /* FullscreenOverlayController.swift in Sources */,
 				8EC9A6FE2EC149140082C67F /* PreviewPlayerController.swift in Sources */,
 				8E545D942C3412AE0088C274 /* ConversionManager.swift in Sources */,
+				CMSPLIT0000000000000001B /* ConversionManager+MergePreparation.swift in Sources */,
+				CMSPLIT0000000000000002B /* ConversionManager+MergeExecution.swift in Sources */,
+				CMSPLIT0000000000000003B /* ConversionManager+ConformanceMerge.swift in Sources */,
+				CMSPLIT0000000000000004B /* ConversionManager+MergeCompatibility.swift in Sources */,
+				CMSPLIT0000000000000005B /* ConversionManager+SecurityScopedAccess.swift in Sources */,
+				CMSPLIT0000000000000006B /* ConversionManager+SubtitleGeneration.swift in Sources */,
+				CMSPLIT0000000000000007B /* ConversionManager+SubtitleEmbedding.swift in Sources */,
+				CMSPLIT0000000000000008B /* ConversionManager+Analytics.swift in Sources */,
 				E771FBCBB8024A7A9BC66B55 /* MergeCompatibilityPolicy.swift in Sources */,
 				DDADD32918CD4580B1A5ECC6 /* ConversionQueueState.swift in Sources */,
 				EA6ED86B34C44A7C80E5F242 /* ConversionUploadFollowUp.swift in Sources */,
@@ -2237,6 +2272,7 @@
 				A7FDCC612BAD184830F774E4 /* WhisperSettingsView.swift in Sources */,
 				8EC017D3E3FDF66B8DE02E57 /* BMXService.swift in Sources */,
 				A1B2C3D4E5F6A7B8C9D0E1F3 /* NativeMXFMerge.swift in Sources */,
+				SCTFIX00000000000000001B /* StreamCopyTimingFixes.swift in Sources */,
 				MCALABBLD00000001 /* MCALabelsBuilder.swift in Sources */,
 				SMPTEPKGUTL00000001 /* SMPTEPackageUtils.swift in Sources */,
 				IMFEXP0000MDL0001 /* IMFModels.swift in Sources */,
