@@ -462,6 +462,57 @@ final class AppIntentHandoffTests: XCTestCase {
         ))
     }
 
+    func testManualBridgeFallsBackForAdjustmentsLoudnessAndMatteSidecar() throws {
+        let defaults = try makeIsolatedDefaults()
+        let ordinary = makeItem(url: first)
+        XCTAssertNotNil(ManualApplicationJobBridge.makeRequest(
+            items: [ordinary], destinationFolderURL: folder, preset: .h264,
+            mergeClipsEnabled: false, defaults: defaults
+        ))
+
+        var rotated = ordinary
+        rotated.adjustments = MediaAdjustments()
+        rotated.adjustments?.rotation = .clockwise90
+        XCTAssertNil(ManualApplicationJobBridge.makeRequest(
+            items: [rotated], destinationFolderURL: folder, preset: .h264,
+            mergeClipsEnabled: false, defaults: defaults
+        ))
+
+        var explicitLoudness = ordinary
+        explicitLoudness.adjustments = MediaAdjustments()
+        explicitLoudness.adjustments?.loudness = .on
+        XCTAssertNil(ManualApplicationJobBridge.makeRequest(
+            items: [explicitLoudness], destinationFolderURL: folder, preset: .h264,
+            mergeClipsEnabled: false, defaults: defaults
+        ))
+
+        // Turning loudness off for an item adds nothing the shared path lacks.
+        var loudnessOff = ordinary
+        loudnessOff.adjustments = MediaAdjustments()
+        loudnessOff.adjustments?.loudness = .off
+        XCTAssertNotNil(ManualApplicationJobBridge.makeRequest(
+            items: [loudnessOff], destinationFolderURL: folder, preset: .h264,
+            mergeClipsEnabled: false, defaults: defaults
+        ))
+
+        defaults.set(true, forKey: AppConstants.loudnessNormalizationEnabledKey)
+        XCTAssertNil(ManualApplicationJobBridge.makeRequest(
+            items: [ordinary], destinationFolderURL: folder, preset: .h264,
+            mergeClipsEnabled: false, defaults: defaults
+        ))
+        XCTAssertNotNil(ManualApplicationJobBridge.makeRequest(
+            items: [loudnessOff], destinationFolderURL: folder, preset: .h264,
+            mergeClipsEnabled: false, defaults: defaults
+        ))
+        defaults.removeObject(forKey: AppConstants.loudnessNormalizationEnabledKey)
+
+        defaults.set(true, forKey: AppConstants.matteSidecarPreferenceKey(for: .h264))
+        XCTAssertNil(ManualApplicationJobBridge.makeRequest(
+            items: [ordinary], destinationFolderURL: folder, preset: .h264,
+            mergeClipsEnabled: false, defaults: defaults
+        ))
+    }
+
     func testManualBridgeIgnoresDormantWaveformPreferenceForVideoSources() throws {
         let defaults = try makeIsolatedDefaults()
         var video = makeItem(url: first)

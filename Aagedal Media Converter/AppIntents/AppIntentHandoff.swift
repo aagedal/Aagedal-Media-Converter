@@ -172,7 +172,7 @@ enum ManualApplicationJobBridge {
               let presetID = ApplicationPresetID(exportPreset: preset),
               presetID.supportsManualSharedExecution,
               !items.isEmpty,
-              items.allSatisfy({ isRepresentable($0, preset: preset) }) else {
+              items.allSatisfy({ isRepresentable($0, preset: preset, defaults: defaults) }) else {
             return nil
         }
 
@@ -264,8 +264,15 @@ enum ManualApplicationJobBridge {
         return items.filter { $0.status == .waiting && $0.applicationJobID == nil }
     }
 
-    private static func isRepresentable(_ item: VideoItem, preset: ExportPreset) -> Bool {
+    private static func isRepresentable(_ item: VideoItem, preset: ExportPreset, defaults: UserDefaults) -> Bool {
         let hasActiveCrop = item.cropConfig?.isActive == true
+        // The shared request carries neither per-item adjustments, the global
+        // loudness default nor the matte sidecar, so those rows stay on the
+        // existing executor instead of silently converting without them.
+        let adjustments = ResolvedMediaAdjustments(
+            adjustments: item.adjustments,
+            globalLoudness: LoudnessNormalizationSettings(defaults: defaults)
+        )
         return item.status == .waiting
             && item.applicationJobID == nil
             && item.recursiveEncodingGenerations == nil
@@ -284,6 +291,8 @@ enum ManualApplicationJobBridge {
             && !item.uploadEnabled
             && !item.subtitleEnabled
             && !item.analyticsEnabled
+            && !adjustments.isActive
+            && !preset.exportsMatteSidecar(defaults: defaults)
     }
 
     @MainActor
