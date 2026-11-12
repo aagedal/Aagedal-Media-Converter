@@ -163,12 +163,14 @@ GPL `Libmpv` target is republished; the seven FFmpeg targets keep their
 resize.1 archives. Build record:
 [`mpv-meter-history-build-2026-11-12.json`](mpv-meter-history-build-2026-11-12.json).
 
-**Prepared, not published.** Nothing below has been pushed, tagged or uploaded.
+**Published 2026-11-12** with explicit user authorization: branch `amc/meter-history`,
+tag and [release](https://github.com/aagedal/MPVKit/releases/tag/aagedal-1.1.0-n9.0.2-history.1).
+The downloaded assets matched `SHA256SUMS.txt`.
 
 | Item | Value |
 | --- | --- |
-| MPVKit commits (local branch `amc/meter-history`) | `bb2c1d1` patches, `d2680851a5a56dafb6be8df79989d69817dac891` manifest |
-| Release tag (to create) | `aagedal-1.1.0-n9.0.2-history.1` at `d2680851` |
+| MPVKit commits (branch `amc/meter-history`) | `bb2c1d1` patches, `d2680851a5a56dafb6be8df79989d69817dac891` manifest |
+| Release tag | `aagedal-1.1.0-n9.0.2-history.1` at `d2680851` |
 | `Libmpv-GPL.xcframework.zip` | 5,812,616 bytes, SHA-256/SwiftPM `1fb1dc97b90d2f703a334d38c81534c118f160d82c2b6d42fe5ebdd4a1ddfe93` |
 | `mpvkit-n9.0.2-history.1-sources.tar.gz` | 24,790,663 bytes, `b814d27ac34ca2f00a50691acd7dc5a0feb341aba65bc7685c8db4555610641a` |
 | `MPVKit-1.1.0-history.1-pinned-source.tar.gz` | 127,397 bytes, `54eb17df5865d77ada1ca36e532c0c5eb47642406aa398fd90441e1e7f62b742` |
@@ -236,7 +238,7 @@ python3 scripts/benchmark-audio-meter.py --workspace override/AMC-meter-history.
 Copy the workspace's `xcshareddata/swiftpm/Package.resolved` from the project
 (without the `mpvkit` pin) so the other packages keep their pinned revisions.
 
-### Publish (needs approval)
+### Publish (done 2026-11-12)
 
 ```sh
 cd ~/Library/Caches/AagedalMediaConverter-MPVHistory/MPVKit
