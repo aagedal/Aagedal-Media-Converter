@@ -15,22 +15,25 @@ work writing after cancellation must be fixed, or the affected path disabled,
 before a release. Record a disposition for unresolved risks; do not quietly
 reclassify them as polish.
 
-## In progress
+## Awaiting review or merge (2026-11-12)
 
-| Item | Where |
+| Item | Branch |
 | --- | --- |
-| Split `FFMPEGConverter.swift` (≈5,900 lines) and `ConversionManager.swift` into focused files; plan the move to one job engine | `docs/engine-unification-plan.md` (to be written) |
-| Encode history cloud sync: one file per device in iCloud Drive, merged on read | [encode-history-plan.md](docs/encode-history-plan.md) |
-| Ship the timestamped MPV playback meter: rebuild and package patched MPVKit, Release opt-in, CPU/thermal run | [AUDIO-METERING-PLAN.md](docs/AUDIO-METERING-PLAN.md) |
+| Manual rows with per-item adjustments, global loudness or a matte sidecar stay on `ConversionManager` (they lost those settings on the shared job path; engine plan phase 0) | `t3/manual-bridge-adjustments` |
+| `FFMPEGConverter` and `ConversionManager` split into area extensions; phased plan for one job engine in `docs/engine-unification-plan.md` | `t3/split-conversion-engine-files` |
+| Encode history sync between Macs (one file per Mac in the sync folder) | `t3/encode-history-cloud-sync` |
+| Statistics window, PDF/CSV export, resizable Settings window (stacked on history sync) | `t3/statistics-window` |
+| Timestamped MPV playback meter as a Release opt-in (`time-pos` clock); needs the patched MPVKit release published, then the pin branch merged | `t3/mpv-meter-history-release`, then `t3/mpv-meter-history-pin` |
 
 ## Architecture and change risk
 
 - **One conversion engine.** `ConversionManager` (queue UI) and `ApplicationJobService`
   (agent/MCP jobs, in `Logic/AgentAccess/ApplicationJobContract.swift`) both run
-  conversions. Converge on one shared job service, in phases (3.1).
-- **Large files.** `FFMPEGConverter`, `ApplicationJobContract`, `ConversionManager`,
-  `ContentView` and `FFMPEGCommandBuilder` are each 3,000–6,000 lines. Split along
-  existing seams before adding features to them.
+  conversions. Converge on one shared job service, following the phases in
+  `docs/engine-unification-plan.md` (on the split branch until merged); next is a shared
+  request builder with a parity test (3.1).
+- **Large files.** `ApplicationJobContract`, `ContentView` and `FFMPEGCommandBuilder` are
+  each 3,000–4,300 lines. Split along existing seams before adding features to them.
 - **Typed conversion plans.** Audio routing, crop, trim and several codec settings are
   typed; remaining video filters, codecs, metadata and output ownership are still
   assembled as argument strings (3.2).
@@ -87,8 +90,11 @@ These need a person, real hardware or a live service:
 
 - Screen recording: live static/animated captures at each rate, long A/V sync,
   Auto/display behaviour, permission flows, midnight rollover in editors (4.3).
-- Playback meter: physical speaker/video synchronization and longer thermal runs on
-  battery-powered hardware.
+- Playback meter: physical speaker/video synchronization on several outputs, including
+  Bluetooth and external interfaces (`docs/audio-playback-meter-sync-check.md` on the
+  meter branch), before considering Playback as the default.
+- Encode history sync and the statistics window: two-Mac checks and dragging the Settings
+  window taller.
 - Clean-machine install and update for direct download and Homebrew (5).
 
 ## Release and dependency hygiene
