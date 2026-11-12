@@ -80,11 +80,11 @@ These need a person, real hardware or a live service:
 
 - Screen recording: live static/animated captures at each rate, long A/V sync,
   Auto/display behaviour, permission flows, midnight rollover in editors (4.3).
-- Playback meter: physical speaker/video synchronization on several outputs, including
-  Bluetooth and external interfaces (`docs/audio-playback-meter-sync-check.md`),
-  before considering Playback as the default.
-- Encode history sync and the statistics window: two-Mac checks and dragging the Settings
-  window taller.
+- Playback meter: physical speaker/video synchronization on Bluetooth and external
+  interfaces (`docs/audio-playback-meter-sync-check.md`) before considering Playback as
+  the default. Checked by eye and ear on a non-Bluetooth output on 2026-11-12.
+- Encode history sync: a full two-Mac check (sync on, encodes on both, statistics per
+  Mac, turning sync off). A first look on 2026-11-12 was fine.
 - Clean-machine install and update for direct download and Homebrew (5).
 
 ## Release and dependency hygiene
