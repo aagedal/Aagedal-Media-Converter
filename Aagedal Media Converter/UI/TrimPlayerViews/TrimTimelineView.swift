@@ -107,6 +107,11 @@ struct TrimTimelineView: View {
     let waveformEnvelope: WaveformEnvelope?
     let channelWaveformEnvelopes: [WaveformEnvelope]
     let waveformVisualScale: Double
+    let waveformAmplitudeScale: WaveformAmplitudeScale
+    let marksWaveformClipping: Bool
+    /// Nil hides the volume line, for example while no waveform is shown.
+    let volumeLine: WaveformVolumeLine?
+    let onVolumeLineChange: (_ decibels: Double, _ isFinal: Bool) -> Void
     let channelWaveformLabels: [String]
     let waveformURL: URL?
     let waveformChunks: [WaveformChunk]
@@ -139,6 +144,7 @@ struct TrimTimelineView: View {
     // the resize cursor while a handle is being dragged.
     @State private var isDraggingStartHandle: Bool = false
     @State private var isDraggingEndHandle: Bool = false
+    @State private var isDraggingVolumeLine: Bool = false
 
     /// One throttle for every drag on the timeline, so handle and scrub seeks share a budget.
     @State private var seekThrottle = TimelineSeekThrottle()
@@ -161,6 +167,10 @@ struct TrimTimelineView: View {
         waveformEnvelope: WaveformEnvelope? = nil,
         channelWaveformEnvelopes: [WaveformEnvelope] = [],
         waveformVisualScale: Double = 4,
+        waveformAmplitudeScale: WaveformAmplitudeScale = .linear,
+        marksWaveformClipping: Bool = false,
+        volumeLine: WaveformVolumeLine? = nil,
+        onVolumeLineChange: @escaping (_ decibels: Double, _ isFinal: Bool) -> Void = { _, _ in },
         channelWaveformLabels: [String] = [],
         waveformURL: URL?,
         waveformChunks: [WaveformChunk] = [],
@@ -183,6 +193,10 @@ struct TrimTimelineView: View {
         self.waveformEnvelope = waveformEnvelope
         self.channelWaveformEnvelopes = channelWaveformEnvelopes
         self.waveformVisualScale = waveformVisualScale
+        self.waveformAmplitudeScale = waveformAmplitudeScale
+        self.marksWaveformClipping = marksWaveformClipping
+        self.volumeLine = volumeLine
+        self.onVolumeLineChange = onVolumeLineChange
         self.channelWaveformLabels = channelWaveformLabels
         self.waveformURL = waveformURL
         self.waveformChunks = waveformChunks
@@ -254,6 +268,17 @@ struct TrimTimelineView: View {
             }
             .accessibilityValue("\(trimEnd, specifier: "%.1f") seconds")
             .accessibilityIdentifier("trim.timeline.end")
+
+            if let volumeLine, volumeLine.isEnabled {
+                Slider(value: Binding(
+                    get: { volumeLine.decibels },
+                    set: { onVolumeLineChange(min(max($0, volumeLine.range.lowerBound), volumeLine.range.upperBound), true) }
+                ), in: volumeLine.range, step: 0.5) {
+                    Text(volumeLine.appliesToExport ? "Export volume" : "Waveform size")
+                }
+                .accessibilityValue(volumeLine.label)
+                .accessibilityIdentifier("trim.timeline.volumeLine")
+            }
 
             if showChapters {
                 ForEach(Array(chapters.enumerated()), id: \.element.id) { index, chapter in
@@ -366,6 +391,9 @@ private struct TrimHandlesInteractionLayer: View {
 /// `push()`/`pop()` so there is no shared stack to get out of sync.
 private struct TimelineCursorOverlay: NSViewRepresentable {
     let handles: TrimHandleGeometry
+    /// The volume line's grab band, measured from the top of the timeline.
+    let volumeLineBand: ClosedRange<CGFloat>?
+    let isDraggingVolumeLine: Bool
     let isEnabled: Bool
     let isSymmetricScalingActive: Bool   // Option held
     let isRangeSelectionActive: Bool     // Cmd held
@@ -387,6 +415,8 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
     private func applyState(to view: TrackingNSView) {
         view.update(
             handles: handles,
+            volumeLineBand: volumeLineBand,
+            isDraggingVolumeLine: isDraggingVolumeLine,
             isEnabled: isEnabled,
             isSymmetric: isSymmetricScalingActive,
             isRangeSelectionActive: isRangeSelectionActive,
@@ -398,6 +428,8 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
 
     final class TrackingNSView: NSView {
         private var handles = TrimHandleGeometry(trimStart: 0, trimEnd: 0, duration: 0, width: 1)
+        private var volumeLineBand: ClosedRange<CGFloat>?
+        private var isDraggingVolumeLine = false
         private var isEnabled = false
         private var isSymmetric: Bool = false
         private var isRangeSelectionActive: Bool = false
@@ -408,11 +440,14 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
         private var lastMouseLocation: CGPoint?
         private var isInside: Bool = false
 
-        func update(handles: TrimHandleGeometry, isEnabled: Bool,
+        func update(handles: TrimHandleGeometry, volumeLineBand: ClosedRange<CGFloat>?,
+                    isDraggingVolumeLine: Bool, isEnabled: Bool,
                     isSymmetric: Bool,
                     isRangeSelectionActive: Bool, isRangeSlidingActive: Bool,
                     isDraggingStart: Bool, isDraggingEnd: Bool) {
             self.handles = handles
+            self.volumeLineBand = volumeLineBand
+            self.isDraggingVolumeLine = isDraggingVolumeLine
             self.isEnabled = isEnabled
             self.isSymmetric = isSymmetric
             self.isRangeSelectionActive = isRangeSelectionActive
@@ -455,7 +490,7 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
             lastMouseLocation = nil
             // Don't reset during an active drag — the gesture keeps the
             // pointer "captured" and we want the resize cursor to persist.
-            if !isDraggingStart && !isDraggingEnd {
+            if !isDraggingStart && !isDraggingEnd && !isDraggingVolumeLine {
                 NSCursor.arrow.set()
             }
         }
@@ -473,6 +508,10 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
                 (isSymmetric ? NSCursor.resizeLeftRight : NSCursor.resizeRight).set()
                 return
             }
+            if isDraggingVolumeLine {
+                NSCursor.resizeUpDown.set()
+                return
+            }
             guard isInside, let loc = lastMouseLocation else { return }
 
             guard isEnabled else {
@@ -487,6 +526,10 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
             }
             if handles.startRange.contains(loc.x) {
                 (isSymmetric ? NSCursor.resizeLeftRight : NSCursor.resizeLeft).set()
+                return
+            }
+            if let volumeLineBand, volumeLineBand.contains(isFlipped ? loc.y : bounds.height - loc.y) {
+                NSCursor.resizeUpDown.set()
                 return
             }
             if isRangeSelectionActive {
@@ -581,13 +624,28 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
                     isDraggingEnd: $isDraggingEndHandle
                 )
 
+                let width = max(geometry.size.width, 1)
+                let handles = TrimHandleGeometry(trimStart: trimStart, trimEnd: trimEnd, duration: duration, width: width)
+                let volumeLineFrame = volumeLine == nil ? nil : waveformFrame
+                if let volumeLine, let volumeLineFrame {
+                    VolumeLineLayer(line: volumeLine, handles: handles, onChange: onVolumeLineChange,
+                                    isDragging: $isDraggingVolumeLine)
+                        .frame(height: volumeLineFrame.height)
+                        .offset(y: volumeLineFrame.minY)
+                }
+
                 // Unified cursor overlay: drives the resize / crosshair /
                 // open-hand cursors for the whole timeline from one place,
                 // so the trim handles and scrub layer never push competing
                 // cursors onto the global stack.
-                let width = max(geometry.size.width, 1)
                 TimelineCursorOverlay(
-                    handles: TrimHandleGeometry(trimStart: trimStart, trimEnd: trimEnd, duration: duration, width: width),
+                    handles: handles,
+                    volumeLineBand: volumeLine.flatMap { line in
+                        guard line.isEnabled, let frame = volumeLineFrame else { return nil }
+                        let y = frame.minY + frame.height * WaveformVolumeLine.fraction(for: line.decibels)
+                        return (y - VolumeLineLayer.grabHeight / 2)...(y + VolumeLineLayer.grabHeight / 2)
+                    },
+                    isDraggingVolumeLine: isDraggingVolumeLine,
                     isEnabled: duration > 0,
                     isSymmetricScalingActive: isOptionKeyPressed,
                     isRangeSelectionActive: isCommandKeyPressed,
@@ -653,6 +711,15 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
             filmstripContent(width: geometry.size.width, height: geometry.size.height)
         }
         .frame(height: filmstripHeight)
+    }
+
+    /// Where the waveform sits in the timeline, from the top; nil in compact mode.
+    private var waveformFrame: (minY: CGFloat, height: CGFloat)? {
+        if compactMode { return nil }
+        if !hideFilmstrip, let thumbnails, !thumbnails.isEmpty {
+            return (filmstripHeight, waveformHeight)
+        }
+        return (0, combinedHeight)
     }
 
     private var waveformSection: some View {
@@ -764,7 +831,8 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
                 .overlay(alignment: .leading) { decodeProgressOverlay(width: width) }
         } else if let waveformEnvelope {
             WaveformEnvelopeView(envelope: waveformEnvelope, sourceStart: 0,
-                                 sourceDuration: duration, visualScale: waveformVisualScale)
+                                 sourceDuration: duration, visualScale: waveformVisualScale,
+                                 amplitudeScale: waveformAmplitudeScale, marksClipping: marksWaveformClipping)
                 .equatable()
                 .frame(width: width, height: height)
         } else if !waveformChunks.isEmpty || chunkTotalDuration > 0 || duration > 600 {
@@ -816,7 +884,8 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
             ForEach(channelWaveformEnvelopes.indices, id: \.self) { index in
                 ZStack(alignment: .leading) {
                     WaveformEnvelopeView(envelope: channelWaveformEnvelopes[index], sourceStart: 0,
-                                         sourceDuration: duration, visualScale: waveformVisualScale)
+                                         sourceDuration: duration, visualScale: waveformVisualScale,
+                                         amplitudeScale: waveformAmplitudeScale, marksClipping: marksWaveformClipping)
                         .equatable()
 
                     // Channel label (top-left)
@@ -1376,6 +1445,139 @@ private struct TimelineKeyTrackerView: NSViewRepresentable {
     }
 }
 
+/// The trim view's volume line: a level in decibels on a fixed axis over the
+/// waveform. Without export it only enlarges the waveform; with export it sets
+/// the item's volume, and the waveform shows the result.
+struct WaveformVolumeLine: Equatable {
+    static let axis = MediaAdjustments.audioGainRange
+    /// Display-only scaling enlarges, from 1× to about 16×.
+    static let displayRange: ClosedRange<Double> = 0...24
+
+    var decibels: Double
+    var range: ClosedRange<Double>
+    var appliesToExport: Bool
+    /// False while loudness normalization would undo an export volume.
+    var isEnabled = true
+
+    static func gain(for decibels: Double) -> Double { pow(10, decibels / 20) }
+
+    static func decibels(forGain gain: Double) -> Double {
+        gain.isFinite && gain > 0 ? 20 * log10(gain) : 0
+    }
+
+    /// Vertical position as a fraction of the waveform height, from the top.
+    static func fraction(for decibels: Double) -> Double {
+        let clamped = min(max(decibels, axis.lowerBound), axis.upperBound)
+        return (axis.upperBound - clamped) / (axis.upperBound - axis.lowerBound)
+    }
+
+    /// The level for a vertical position, in half-decibel steps so 0 dB is easy to hit.
+    func decibels(atFraction fraction: Double) -> Double {
+        let raw = Self.axis.upperBound - fraction * (Self.axis.upperBound - Self.axis.lowerBound)
+        let stepped = (raw * 2).rounded() / 2
+        return min(max(stepped, range.lowerBound), range.upperBound)
+    }
+
+    var label: String {
+        if appliesToExport { return MediaAdjustments.formattedGain(decibels) }
+        let factor = Self.gain(for: decibels).formatted(.number.precision(.fractionLength(0...1)))
+        return "\(factor)×"
+    }
+}
+
+/// Draws the volume line over the waveform and lets it be dragged. The grab
+/// band leaves out the trim handles, so they stay reachable where they cross.
+private struct VolumeLineLayer: View {
+    static let grabHeight: CGFloat = 10
+
+    let line: WaveformVolumeLine
+    let handles: TrimHandleGeometry
+    let onChange: (_ decibels: Double, _ isFinal: Bool) -> Void
+    @Binding var isDragging: Bool
+
+    var body: some View {
+        GeometryReader { geometry in
+            let size = geometry.size
+            let y = size.height * WaveformVolumeLine.fraction(for: line.decibels)
+            let color = line.appliesToExport && line.isEnabled ? Color.white : Color.white.opacity(0.55)
+            ZStack(alignment: .topLeading) {
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: y))
+                    path.addLine(to: CGPoint(x: size.width, y: y))
+                }
+                // Dashed while it only scales the view; solid when it sets the export.
+                .stroke(color, style: StrokeStyle(lineWidth: isDragging ? 2 : 1,
+                                                  dash: line.appliesToExport ? [] : [4, 3]))
+                Text(verbatim: line.label)
+                    .font(.system(size: 9, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(color))
+                    .fixedSize()
+                    .position(x: max(24, size.width - 34), y: min(max(7, y), size.height - 7))
+                if line.isEnabled {
+                    Color.clear
+                        .contentShape(grabBand(width: size.width, y: y))
+                        .gesture(dragGesture(height: size.height))
+                        .onTapGesture(count: 2) {
+                            onChange(min(max(0, line.range.lowerBound), line.range.upperBound), true)
+                        }
+                }
+            }
+        }
+        .allowsHitTesting(line.isEnabled)
+    }
+
+    private func dragGesture(height: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 1)
+            .onChanged { value in
+                isDragging = true
+                onChange(line.decibels(atFraction: Double(value.location.y / max(1, height))), false)
+            }
+            .onEnded { value in
+                isDragging = false
+                onChange(line.decibels(atFraction: Double(value.location.y / max(1, height))), true)
+            }
+    }
+
+    private func grabBand(width: CGFloat, y: CGFloat) -> Path {
+        var path = Path()
+        var x: CGFloat = 0
+        for handle in [handles.startRange, handles.endRange].sorted(by: { $0.lowerBound < $1.lowerBound }) {
+            if handle.lowerBound > x {
+                path.addRect(CGRect(x: x, y: y - Self.grabHeight / 2, width: handle.lowerBound - x, height: Self.grabHeight))
+            }
+            x = max(x, handle.upperBound)
+        }
+        if width > x {
+            path.addRect(CGRect(x: x, y: y - Self.grabHeight / 2, width: width - x, height: Self.grabHeight))
+        }
+        return path
+    }
+}
+
+/// How waveform amplitude maps to height. Log follows decibels down to a −60 dB
+/// floor, so quiet passages stay readable without pushing loud ones off the scale.
+enum WaveformAmplitudeScale: Sendable {
+    case linear
+    case logarithmic
+
+    static let logFloorDecibels = -60.0
+
+    /// Fraction of the half-height for an amplitude after gain, from 0 to 1.
+    func height(_ amplitude: Double, gain: Double) -> Double {
+        let level = abs(amplitude) * gain
+        guard level.isFinite, level > 0 else { return 0 }
+        switch self {
+        case .linear:
+            return min(1, level)
+        case .logarithmic:
+            return min(1, max(0, 1 - 20 * log10(level) / Self.logFloorDecibels))
+        }
+    }
+}
+
 /// Shared by the Trim and encoding-group timelines. Draw at the actual display
 /// density so resizing preserves peaks instead of stretching a cached bitmap.
 /// Peaks form an antialiased outline and RMS a brighter core, as in most NLEs.
@@ -1385,19 +1587,25 @@ struct WaveformEnvelopeView: View, Equatable {
     let envelope: WaveformEnvelope?
     let sourceStart: Double
     let sourceDuration: Double
+    /// Display gain; below 1 shows an export volume cut.
     let visualScale: Double
     var visibleRange: ClosedRange<Double>? = nil
+    var amplitudeScale: WaveformAmplitudeScale = .linear
+    /// Marks columns whose peaks reach full scale after gain, for export volume.
+    var marksClipping = false
     @Environment(\.displayScale) private var displayScale
 
     private static let peakColor = Color(red: 1, green: 0.18, blue: 0.47)
     private static let rmsColor = Color(red: 1, green: 0.62, blue: 0.76)
+    private static let clipColor = Color(red: 1, green: 0.85, blue: 0.1)
 
     // Playback ticks re-evaluate the timeline; an unchanged waveform skips its redraw.
     // Envelope equality is cheap here because unchanged arrays share storage.
     nonisolated static func == (lhs: WaveformEnvelopeView, rhs: WaveformEnvelopeView) -> Bool {
         lhs.envelope == rhs.envelope && lhs.sourceStart == rhs.sourceStart
             && lhs.sourceDuration == rhs.sourceDuration && lhs.visualScale == rhs.visualScale
-            && lhs.visibleRange == rhs.visibleRange
+            && lhs.visibleRange == rhs.visibleRange && lhs.amplitudeScale == rhs.amplitudeScale
+            && lhs.marksClipping == rhs.marksClipping
     }
 
     var body: some View {
@@ -1409,7 +1617,8 @@ struct WaveformEnvelopeView: View, Equatable {
             let secondsPerPixel = secondsPerPoint * pixel
             let level = envelope.level(secondsPerPixel: secondsPerPixel)
             let interpolate = secondsPerPixel < envelope.secondsPerBin(level: 0)
-            let gain = visualScale.isFinite ? min(16, max(1, visualScale)) : 4
+            let gain = visualScale.isFinite ? min(16, max(0.01, visualScale)) : 4
+            let scale = amplitudeScale
             let midY = size.height / 2
             let halfHeight = max(0, midY - 2)
             let start = max(0, floor((visibleRange?.lowerBound ?? 0) / pixel) * pixel)
@@ -1418,6 +1627,7 @@ struct WaveformEnvelopeView: View, Equatable {
             let columns = Int(ceil((end - start) / pixel))
             var peakTop: [CGPoint] = [], peakBottom: [CGPoint] = []
             var rmsTop: [CGPoint] = [], rmsBottom: [CGPoint] = []
+            var clipped = Path()
             peakTop.reserveCapacity(columns)
             peakBottom.reserveCapacity(columns)
             for column in 0..<columns {
@@ -1432,13 +1642,18 @@ struct WaveformEnvelopeView: View, Equatable {
                     rms = envelope.rms(from: time, to: time + secondsPerPixel, level: level)
                 }
                 // At least a hairline, so silence still reads as a track.
-                let top = min(midY - pixel / 2, midY - min(1, Double(peak.maximum) * gain) * halfHeight)
-                let bottom = max(midY + pixel / 2, midY - max(-1, Double(peak.minimum) * gain) * halfHeight)
+                let top = min(midY - pixel / 2, midY - scale.height(Double(peak.maximum), gain: gain) * halfHeight)
+                let bottom = max(midY + pixel / 2, midY + scale.height(Double(peak.minimum), gain: gain) * halfHeight)
                 let centre = x + pixel / 2
                 peakTop.append(CGPoint(x: centre, y: top))
                 peakBottom.append(CGPoint(x: centre, y: bottom))
+                if marksClipping, Double(max(peak.maximum, -peak.minimum)) * gain >= 1 {
+                    let cap = max(2, pixel * 2)
+                    clipped.addRect(CGRect(x: x, y: midY - halfHeight, width: pixel, height: cap))
+                    clipped.addRect(CGRect(x: x, y: midY + halfHeight - cap, width: pixel, height: cap))
+                }
                 if let rms {
-                    let extent = min(1, Double(rms) * gain) * halfHeight
+                    let extent = scale.height(Double(rms), gain: gain) * halfHeight
                     rmsTop.append(CGPoint(x: centre, y: max(top, midY - extent)))
                     rmsBottom.append(CGPoint(x: centre, y: min(bottom, midY + extent)))
                 }
@@ -1446,6 +1661,9 @@ struct WaveformEnvelopeView: View, Equatable {
             context.fill(Self.band(upper: peakTop, lower: peakBottom), with: .color(Self.peakColor))
             if rmsTop.count == columns {
                 context.fill(Self.band(upper: rmsTop, lower: rmsBottom), with: .color(Self.rmsColor))
+            }
+            if !clipped.isEmpty {
+                context.fill(clipped, with: .color(Self.clipColor))
             }
         }
     }

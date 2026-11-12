@@ -2,6 +2,7 @@
 // Copyright 2026 Truls Aagedal
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import AVFoundation
 import XCTest
 @testable import Aagedal_Media_Converter
 
@@ -96,6 +97,32 @@ final class MediaAdjustmentsTests: XCTestCase {
             + "measured_thresh=-40.5:offset=0.3:linear=true:print_format=summary,aresample=48000")
     }
 
+    func testExportVolumePrecedesLoudnessAndFadesAndCountsOnlyWhenAudible() throws {
+        var adjustments = MediaAdjustments()
+        adjustments.audioGain = 6
+        adjustments.audioFadeIn = 1
+        let chain = try MediaAdjustmentsPlan.audioFilterChain(
+            for: adjustments, loudness: LoudnessNormalizationSettings(), measurement: nil,
+            context: .init(outputDuration: 8, sampleRate: 48000, fitsToDuration: false)
+        ).get()
+        XCTAssertEqual(chain, "volume=6dB,loudnorm=I=-23:TP=-1:LRA=20:print_format=json,aresample=48000,"
+            + "afade=t=in:st=0:d=1")
+        XCTAssertTrue(adjustments.hasAudioAdjustments)
+        XCTAssertEqual(adjustments.summary, ["Audio fade 1 s / 0 s", "Volume +6 dB"])
+
+        // An enabled volume at 0 dB keeps the item's setting without touching the audio.
+        var unity = MediaAdjustments()
+        unity.audioGain = 0.02
+        XCTAssertFalse(unity.hasAudioAdjustments)
+        XCTAssertTrue(unity.isActive)
+        XCTAssertNil(try MediaAdjustmentsPlan.audioFilterChain(
+            for: unity, loudness: nil, measurement: nil,
+            context: .init(outputDuration: nil, sampleRate: 48000, fitsToDuration: false)
+        ).get())
+        XCTAssertEqual(MediaAdjustments.formattedGain(-2.96), "−3 dB")
+        XCTAssertEqual(MediaAdjustments.formattedGain(0.02), "0 dB")
+    }
+
     func testOutputChainsExpandGenericMapsAndExtendRoutingGraphs() throws {
         var direct = ["-map", "0:v:0", "-map", "0:a?", "-c:v", "libx264", "-c:a", "aac"]
         let directCount = try MediaAdjustmentsPlan.applyAudioChains(
@@ -160,11 +187,15 @@ final class MediaAdjustmentsTests: XCTestCase {
         adjustments.speed = 1.5
         adjustments.replacementAudio = .init(path: "/tmp/voice.wav", mode: .add)
         adjustments.burnInSubtitles = .init(source: .file(path: "/tmp/subs.srt"), fontSize: 24, backgroundBox: true, position: .top)
+        adjustments.audioGain = -4.5
         let data = try JSONEncoder().encode(adjustments)
         XCTAssertEqual(try JSONDecoder().decode(MediaAdjustments.self, from: data), adjustments)
 
-        let future = Data(#"{"rotation": 45, "speed": 99, "videoFadeIn": -2, "loudness": "loud"}"#.utf8)
+        let future = Data(#"{"rotation": 45, "speed": 99, "videoFadeIn": -2, "loudness": "loud", "audioGain": 99}"#.utf8)
         let decoded = try JSONDecoder().decode(MediaAdjustments.self, from: future)
+        XCTAssertEqual(decoded.audioGain, MediaAdjustments.audioGainRange.upperBound)
+        let malformed = Data(#"{"audioGain": "loud"}"#.utf8)
+        XCTAssertNil(try JSONDecoder().decode(MediaAdjustments.self, from: malformed).audioGain)
         XCTAssertEqual(decoded.rotation, .none)
         XCTAssertEqual(decoded.speed, MediaAdjustments.maximumSpeed)
         XCTAssertEqual(decoded.videoFadeIn, 0)
@@ -221,6 +252,26 @@ final class MediaAdjustmentsTests: XCTestCase {
             let integrated = try await fixture.integratedLoudness(output, track: track)
             XCTAssertEqual(integrated, -23, accuracy: 1, "track \(track)")
         }
+    }
+
+    func testExportVolumeRaisesIntegratedLoudness() async throws {
+        let fixture = try await Fixture.make(audioTracks: 1)
+        defer { fixture.remove() }
+        let plain = fixture.directory.appendingPathComponent("plain.mkv")
+        _ = try await fixture.export(
+            preset: .lossless, adjustments: ResolvedMediaAdjustments(adjustments: nil, globalLoudness: .init()), to: plain
+        )
+        var adjustments = MediaAdjustments()
+        adjustments.audioGain = 6
+        let louder = fixture.directory.appendingPathComponent("louder.mkv")
+        let command = try await fixture.export(
+            preset: .lossless, adjustments: ResolvedMediaAdjustments(adjustments: adjustments, globalLoudness: .init()),
+            to: louder
+        )
+        XCTAssertTrue(command.arguments.contains { $0.contains("volume=6dB") })
+        let difference = try await fixture.integratedLoudness(louder, track: 0)
+            - fixture.integratedLoudness(plain, track: 0)
+        XCTAssertEqual(difference, 6, accuracy: 0.3)
     }
 
     func testReplacementAudioReplacesOrAddsTracksAndFollowsTheTrim() async throws {
@@ -374,5 +425,70 @@ private struct Fixture {
         let tail = result.standardErrorText[summary.upperBound...]
         let match = try XCTUnwrap(tail.firstMatch(of: /I:\s+(-?[\d.]+) LUFS/))
         return try XCTUnwrap(Double(match.output.1))
+    }
+}
+
+@MainActor
+final class PlayerItemAudioGainTests: XCTestCase {
+    func testTapIsInstalledOnlyForAGain() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appendingPathComponent("tone.wav")
+        let result = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: try XCTUnwrap(BinaryPathResolver.ffmpegPath)),
+            arguments: ["-hide_banner", "-loglevel", "error", "-nostdin", "-f", "lavfi",
+                        "-i", "sine=f=440:d=1:sample_rate=48000", "-y", source.path],
+            timeout: .seconds(20)))
+        XCTAssertTrue(result.succeeded, result.standardErrorText)
+
+        let unity = AVPlayerItem(url: source)
+        let untouched = PlayerItemAudioGain()
+        untouched.apply(to: unity)
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertNil(unity.audioMix)
+
+        let item = AVPlayerItem(url: source)
+        let gain = PlayerItemAudioGain()
+        gain.decibels = 6
+        gain.apply(to: item)
+        for _ in 0..<50 where item.audioMix == nil {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        let parameters = try XCTUnwrap(item.audioMix?.inputParameters.first)
+        XCTAssertNotNil(parameters.audioTapProcessor)
+
+        // The tap scales the samples: +6 dB doubles the sine's peak, −6 dB halves it.
+        let tracks = try await AVURLAsset(url: source).loadTracks(withMediaType: .audio)
+        let plain = try peak(of: source, mix: nil)
+        gain.decibels = 6.0206
+        XCTAssertEqual(try peak(of: source, mix: gain.audioMix(for: tracks)) / plain, 2, accuracy: 0.01)
+        gain.decibels = -6.0206
+        XCTAssertEqual(try peak(of: source, mix: gain.audioMix(for: tracks)) / plain, 0.5, accuracy: 0.01)
+    }
+
+    private func peak(of url: URL, mix: AVAudioMix?) throws -> Float {
+        let asset = AVURLAsset(url: url)
+        let reader = try AVAssetReader(asset: asset)
+        let tracks = asset.tracks(withMediaType: .audio)
+        let output = AVAssetReaderAudioMixOutput(audioTracks: tracks, audioSettings: [
+            AVFormatIDKey: kAudioFormatLinearPCM, AVLinearPCMBitDepthKey: 32,
+            AVLinearPCMIsFloatKey: true, AVLinearPCMIsNonInterleaved: false, AVLinearPCMIsBigEndianKey: false,
+        ])
+        output.audioMix = mix
+        reader.add(output)
+        XCTAssertTrue(reader.startReading())
+        var peak: Float = 0
+        while let buffer = output.copyNextSampleBuffer(), let block = CMSampleBufferGetDataBuffer(buffer) {
+            var length = 0
+            var pointer: UnsafeMutablePointer<CChar>?
+            guard CMBlockBufferGetDataPointer(block, atOffset: 0, lengthAtOffsetOut: nil,
+                                              totalLengthOut: &length, dataPointerOut: &pointer) == noErr,
+                  let pointer else { continue }
+            pointer.withMemoryRebound(to: Float.self, capacity: length / 4) { samples in
+                for index in 0..<(length / 4) { peak = max(peak, abs(samples[index])) }
+            }
+        }
+        return peak
     }
 }

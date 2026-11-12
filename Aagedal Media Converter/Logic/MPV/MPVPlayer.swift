@@ -53,6 +53,12 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             setFlag(MPVProperty.mute, isMuted)
         }
     }
+    /// Preview gain in dB, from −30 to +24, applied after `volume`.
+    @Published var volumeGain: Double = 0 {
+        didSet {
+            setDouble(MPVProperty.volumeGain, volumeGain)
+        }
+    }
     @Published var isSeekable = false
     @Published var isBusy = false
     @Published var isFileLoaded = false
@@ -427,6 +433,8 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         checkError(mpv_set_option_string(mpv, "hr-seek-framedrop", "yes"))
         // Reduce initial demuxer readahead for faster start (default ~1s is fine)
         checkError(mpv_set_option_string(mpv, "demuxer-readahead-secs", "1"))
+        // Export volume previews reach +24 dB; mpv's default ceiling is +12.
+        checkError(mpv_set_option_string(mpv, "volume-gain-max", "24"))
 
         // Auto-detect interlaced content and deinterlace only when needed
         checkError(mpv_set_option_string(mpv, "deinterlace", "auto"))
@@ -456,6 +464,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         // requested values now, before opening the pending source.
         setDouble(MPVProperty.speed, Double(playbackRate))
         setDouble(MPVProperty.volume, volume)
+        setDouble(MPVProperty.volumeGain, volumeGain)
         setFlag(MPVProperty.mute, isMuted)
 
         // Register property observers

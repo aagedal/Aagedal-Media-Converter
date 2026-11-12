@@ -27,7 +27,12 @@ struct PreviewTrimControls: View {
     @State private var justActivated = false
     @State private var pendingCharacter: String?
     @State private var showChapters: Bool = true
+    /// Display-only waveform enlargement, as a gain factor.
     @AppStorage("trimWaveformVisualScale") private var waveformVisualScale: Double = 4
+    @AppStorage("trimWaveformLogScale") private var waveformLogScale = false
+    @AppStorage(AppConstants.loudnessNormalizationEnabledKey) private var loudnessNormalizationByDefault = false
+    /// The volume line's level while it is being dragged, before it is committed.
+    @State private var draggedVolumeLine: Double?
     @FocusState private var isTimecodeFocused: Bool
 
     var body: some View {
@@ -45,7 +50,13 @@ struct PreviewTrimControls: View {
                     thumbnails: controller.previewAssets?.thumbnails,
                     waveformEnvelope: controller.currentWaveformEnvelope,
                     channelWaveformEnvelopes: controller.currentChannelWaveformEnvelopes,
-                    waveformVisualScale: waveformVisualScale,
+                    waveformVisualScale: volumeLine.map { line in
+                        line.isEnabled ? WaveformVolumeLine.gain(for: line.decibels) : 1
+                    } ?? waveformVisualScale,
+                    waveformAmplitudeScale: waveformLogScale ? .logarithmic : .linear,
+                    marksWaveformClipping: volumeLine?.appliesToExport == true,
+                    volumeLine: volumeLine,
+                    onVolumeLineChange: volumeLineChanged,
                     channelWaveformLabels: controller.currentChannelWaveformLabels,
                     waveformURL: controller.currentWaveformURL,
                     waveformChunks: controller.currentWaveformChunks,
@@ -63,19 +74,16 @@ struct PreviewTrimControls: View {
                 .onReceive(controller.playbackTimePublisher) { time in
                     currentPlaybackTime = time
                 }
+                // Play what the export will sound like, following the line while it is dragged.
+                .onChange(of: previewGain, initial: true) { _, gain in
+                    controller.playbackGainDecibels = gain
+                }
+                .onDisappear { controller.playbackGainDecibels = 0 }
 
                 if !isCompactMode {
                     controlButtons
-                    if controller.currentWaveformEnvelope != nil || !controller.currentChannelWaveformEnvelopes.isEmpty {
-                        Picker("Waveform height", selection: $waveformVisualScale) {
-                            ForEach([1.0, 2, 4, 8, 16], id: \.self) { scale in
-                                Text("\(Int(scale))×").tag(scale)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .fixedSize()
-                        .accessibilityIdentifier("trim.waveformScale")
-                        .help("Enlarge the waveform visually. Playback and export volume are unchanged. Choose 1× to reset.")
+                    if hasWaveform {
+                        waveformControls
                     }
                 }
             }
@@ -97,6 +105,77 @@ struct PreviewTrimControls: View {
                 timecodeActivationTrigger = nil
             }
         }
+    }
+
+    private var hasWaveform: Bool {
+        controller.currentWaveformEnvelope != nil || !controller.currentChannelWaveformEnvelopes.isEmpty
+    }
+
+    /// Loudness normalization re-targets the export level, which would undo a volume change.
+    private var loudnessOverridesVolume: Bool {
+        switch item.adjustments?.loudness ?? .useDefault {
+        case .on: return true
+        case .off: return false
+        case .useDefault: return loudnessNormalizationByDefault
+        }
+    }
+
+    private var previewGain: Double {
+        guard let gain = item.adjustments?.audioGain, !loudnessOverridesVolume else { return 0 }
+        return draggedVolumeLine ?? gain
+    }
+
+    private var volumeLine: WaveformVolumeLine? {
+        guard hasWaveform else { return nil }
+        if let gain = item.adjustments?.audioGain {
+            return WaveformVolumeLine(decibels: draggedVolumeLine ?? gain, range: MediaAdjustments.audioGainRange,
+                                      appliesToExport: true, isEnabled: !loudnessOverridesVolume)
+        }
+        let displayed = WaveformVolumeLine.decibels(forGain: waveformVisualScale)
+        return WaveformVolumeLine(
+            decibels: draggedVolumeLine ?? min(max(displayed, WaveformVolumeLine.displayRange.lowerBound),
+                                               WaveformVolumeLine.displayRange.upperBound),
+            range: WaveformVolumeLine.displayRange, appliesToExport: false)
+    }
+
+    /// Drags update the waveform live; the item or display setting changes once, at the end.
+    private func volumeLineChanged(_ decibels: Double, isFinal: Bool) {
+        guard isFinal else {
+            draggedVolumeLine = decibels
+            return
+        }
+        draggedVolumeLine = nil
+        if item.adjustments?.audioGain != nil {
+            setExportVolume(decibels)
+        } else {
+            waveformVisualScale = WaveformVolumeLine.gain(for: decibels)
+        }
+    }
+
+    private func setExportVolume(_ decibels: Double?) {
+        var adjustments = item.adjustments ?? MediaAdjustments()
+        adjustments.audioGain = decibels
+        item.adjustments = adjustments.isActive ? adjustments : nil
+    }
+
+    private var waveformControls: some View {
+        HStack(spacing: 12) {
+            Toggle("Apply volume to export", isOn: Binding(
+                get: { item.adjustments?.audioGain != nil },
+                set: { setExportVolume($0 ? 0 : nil) }
+            ))
+            .disabled(item.adjustments?.audioGain == nil && loudnessOverridesVolume)
+            .accessibilityIdentifier("trim.volumeToExport")
+            .help(loudnessOverridesVolume
+                  ? Text("Loudness normalization sets this item's export level, so a volume change would have no effect. Turn it off for this item under Adjustments to use the volume line.")
+                  : Text("When on, dragging the line over the waveform changes this item's export volume, and playback follows it. Peaks that would clip are marked in yellow. When off, the line only enlarges the waveform. Double-click the line to reset it."))
+
+            Toggle("Log scale", isOn: $waveformLogScale)
+                .accessibilityIdentifier("trim.waveformLogScale")
+                .help("Show the waveform in decibels, so quiet passages stay visible. Playback and export are unchanged.")
+        }
+        .toggleStyle(.checkbox)
+        .controlSize(.small)
     }
 
     private var controlButtons: some View {

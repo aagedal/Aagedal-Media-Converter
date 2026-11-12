@@ -24,6 +24,8 @@ struct MPVProperty {
 
     // Audio
     static let volume = "volume"
+    /// Extra gain in dB on top of `volume`, used to preview an export volume.
+    static let volumeGain = "volume-gain"
     static let mute = "mute"
     static let aid = "aid"
     static let trackListCount = "track-list/count"

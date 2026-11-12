@@ -184,6 +184,10 @@ enum MediaAdjustmentsPlan {
             guard let duration = context.outputDuration, duration > 0 else { return .failure(.unknownDuration) }
             filters += ["apad", "atrim=duration=\(number(duration))"]
         }
+        if adjustments.changesVolume, let gain = adjustments.audioGain {
+            // Before loudnorm, which would re-target the level anyway, and before the fades.
+            filters.append("volume=\(number(gain))dB")
+        }
         if let loudness {
             filters.append(loudnormFilter(settings: loudness, measurement: measurement))
             // loudnorm resamples to 192 kHz internally; return to the delivery rate.
