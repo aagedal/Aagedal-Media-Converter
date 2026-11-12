@@ -170,10 +170,10 @@ class MeterLifecycleTests(unittest.TestCase):
                 row.update(update)
             self.assertFalse(MODULE.analyze(rows)["passed"])
 
-    def test_runner_requires_both_lifecycle_and_per_generation_signal(self):
+    @staticmethod
+    def signal_rows():
         rows = capture()
         samples = RUNNER.BENCHMARK.signal_samples()
-        references = {"original": (0, samples), "delayed": (0.75, samples)}
         for row in rows:
             entry = row["history"]["frames"][0]
             frame = json.loads(entry["frame"])
@@ -185,6 +185,12 @@ class MeterLifecycleTests(unittest.TestCase):
                     frame["metadata"][f"lavfi.astats.{channel + 1}.{metric}"] = str(
                         20 * math.log10(amplitude) if amplitude else -math.inf)
             entry["frame"] = json.dumps(frame)
+        return rows
+
+    def test_runner_requires_both_lifecycle_and_per_generation_signal(self):
+        rows = self.signal_rows()
+        samples = RUNNER.BENCHMARK.signal_samples()
+        references = {"original": (0, samples), "delayed": (0.75, samples)}
         self.assertTrue(RUNNER.evaluate(rows, references)["passed"])
         # Matching sample values cannot rescue missing lifecycle observations.
         broken = copy.deepcopy(rows)
@@ -199,6 +205,18 @@ class MeterLifecycleTests(unittest.TestCase):
         result = RUNNER.evaluate(rows, references)
         self.assertTrue(result["lifecycle"]["passed"])
         self.assertFalse(result["passed"])
+
+    def test_runner_attributes_pre_reset_frames_after_replace_to_the_original(self):
+        rows = self.signal_rows()
+        references = {"original": (0, RUNNER.BENCHMARK.signal_samples()), "delayed": (0.75, RUNNER.BENCHMARK.signal_samples())}
+        first_replacement = next(i for i, row in enumerate(rows) if row["requested-generation"] == 1)
+        # A snapshot between the replace command and mpv's graph reset.
+        stale = copy.deepcopy(rows[first_replacement - 1])
+        stale["requested-generation"] = 1
+        rows[first_replacement]["history"] = stale["history"]
+        delayed = RUNNER.evaluate(rows, references)["signal"]["delayed"]
+        self.assertEqual(delayed["errors"], [])
+        self.assertGreater(delayed["frames_checked"], 0)
 
     def test_runner_rejects_missing_generation_and_malformed_history(self):
         rows = capture()

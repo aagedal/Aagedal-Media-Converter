@@ -23,8 +23,16 @@ ROOT = Path(__file__).resolve().parents[1]
 def evaluate(rows, references):
     lifecycle = LIFECYCLE.analyze(rows, references["delayed"][0])
     signals = {}
+    # Until mpv rebuilds the filter graph for the replacement, snapshots taken
+    # after the replace command still hold the original source's frames under
+    # the same instance and epoch. Those belong to the original reference.
+    original = {(r["history"]["instance"], r["history"]["epoch"]) for r in rows
+                if isinstance(r, dict) and r.get("requested-generation") == 0 and isinstance(r.get("history"), dict)}
     for generation, name in ((0, "original"), (1, "delayed")):
         selected = [r for r in rows if isinstance(r, dict) and r.get("requested-generation") == generation]
+        if generation == 1:
+            selected = [r for r in selected if not isinstance(r.get("history"), dict) or
+                        (r["history"].get("instance"), r["history"].get("epoch")) not in original]
         signals[name] = (BENCHMARK.signal_check(selected, *references[name], signal_version=2)
                          if not lifecycle["history"]["errors"] else
                          {"frames_checked": 0, "errors": ["invalid frame history"]})
