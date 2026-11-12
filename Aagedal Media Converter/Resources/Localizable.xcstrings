@@ -1681,6 +1681,122 @@
         }
       }
     },
+    "Beta · follows the playhead" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Beta · folgt dem Abspielkopf"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Beta · sigue el cabezal de reproducción"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bêta · suit la tête de lecture"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Beta · segue la testina di riproduzione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ベータ · 再生ヘッドに追従"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "베타 · 재생 헤드를 따름"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Beta · følger avspillingsposisjonen"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Beta · acompanha a agulha de reprodução"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "测试版 · 跟随播放头"
+          }
+        }
+      }
+    },
+    "Beta. Decoded active-track levels before playback volume and mute, shown when the playhead reaches the measured audio. Channel layout may differ from the source. Readings refresh ten times per second and can miss brief peaks. Loudness history resets after pause, seek or track changes. Use Source to inspect the file itself and Audio Analysis for whole-program loudness." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Beta. Decodierte Pegel der aktiven Spur vor Wiedergabelautstärke und Stummschaltung, angezeigt, wenn der Abspielkopf den gemessenen Ton erreicht. Die Kanalbelegung kann von der Quelle abweichen. Die Anzeige wird zehnmal pro Sekunde aktualisiert und kann kurze Spitzen verpassen. Der Lautheitsverlauf wird nach Pause, Sprung oder Spurwechsel zurückgesetzt. Verwenden Sie „Quelle“, um die Datei selbst zu prüfen, und die Audioanalyse für die Lautheit des gesamten Programms."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Beta. Niveles decodificados de la pista activa antes del volumen de reproducción y el silencio, mostrados cuando el cabezal de reproducción alcanza el audio medido. La disposición de canales puede diferir del origen. Las lecturas se actualizan diez veces por segundo y pueden pasar por alto picos breves. El historial de sonoridad se restablece tras pausar, saltar o cambiar de pista. Usa Origen para inspeccionar el propio archivo y Análisis de audio para la sonoridad de todo el programa."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bêta. Niveaux décodés de la piste active avant le volume de lecture et la sourdine, affichés lorsque la tête de lecture atteint le son mesuré. La disposition des canaux peut différer de la source. Les valeurs sont actualisées dix fois par seconde et peuvent manquer des crêtes brèves. L’historique de sonie est réinitialisé après une pause, un déplacement ou un changement de piste. Utilisez Source pour inspecter le fichier lui-même et l’analyse audio pour la sonie de l’ensemble du programme."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Beta. Livelli decodificati della traccia attiva prima del volume di riproduzione e del silenziamento, mostrati quando la testina di riproduzione raggiunge l’audio misurato. La disposizione dei canali può differire dalla sorgente. Le letture si aggiornano dieci volte al secondo e possono perdere picchi brevi. La cronologia della sonorità si azzera dopo una pausa, uno spostamento o un cambio di traccia. Usa Sorgente per ispezionare il file stesso e Analisi audio per la sonorità dell’intero programma."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ベータ版。再生音量とミュートの適用前にデコードされたアクティブトラックのレベルで、再生ヘッドが測定位置に到達した時点で表示されます。チャンネルレイアウトはソースと異なる場合があります。表示は1秒に10回更新されるため、短いピークを取りこぼす場合があります。ラウドネス履歴は一時停止、シーク、トラック変更後にリセットされます。ファイル自体を確認するには「ソース」を、プログラム全体のラウドネスには「オーディオ解析」を使用してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "베타. 재생 볼륨과 음소거가 적용되기 전에 디코딩된 활성 트랙 레벨이며, 재생 헤드가 측정된 오디오에 도달하면 표시됩니다. 채널 레이아웃은 소스와 다를 수 있습니다. 측정값은 초당 10회 갱신되므로 짧은 피크를 놓칠 수 있습니다. 라우드니스 기록은 일시 정지, 탐색 또는 트랙 변경 후 초기화됩니다. 파일 자체를 확인하려면 소스를, 프로그램 전체 라우드니스에는 오디오 분석을 사용하세요."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Beta. Dekodede nivåer for det aktive sporet før avspillingsvolum og demping, vist når avspillingsposisjonen når den målte lyden. Kanaloppsettet kan avvike fra kilden. Målingene oppdateres ti ganger i sekundet og kan gå glipp av korte topper. Lydstyrkehistorikken nullstilles etter pause, hopp eller sporbytte. Bruk Kilde for å inspisere selve filen, og Lydanalyse for lydstyrke over hele programmet."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Beta. Níveis decodificados da faixa ativa antes do volume de reprodução e do mudo, mostrados quando a agulha de reprodução alcança o áudio medido. O layout de canais pode ser diferente da origem. As leituras são atualizadas dez vezes por segundo e podem perder picos breves. O histórico de sonoridade é redefinido após pausar, buscar ou trocar de faixa. Use Origem para inspecionar o próprio arquivo e Análise de áudio para a sonoridade de todo o programa."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "测试版。在应用播放音量和静音之前解码的当前音轨电平，在播放头到达所测音频时显示。声道布局可能与源不同。读数每秒刷新十次，可能遗漏短暂的峰值。暂停、跳转或切换音轨后，响度历史会重置。若要检查文件本身，请使用“源”；若要测量整个节目的响度，请使用“音频分析”。"
+          }
+        }
+      }
+    },
     "Bitrate over time" : {
       "comment" : "Media analysis interface.",
       "extractionState" : "manual",
@@ -2329,6 +2445,64 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "关闭调整而不保存"
+          }
+        }
+      }
+    },
+    "Playback measures the decoded audio and shows each reading when the playhead reaches it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Die Wiedergabemessung misst den decodierten Ton und zeigt jeden Wert an, wenn der Abspielkopf ihn erreicht."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La medición de reproducción mide el audio decodificado y muestra cada lectura cuando el cabezal de reproducción la alcanza."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La mesure de lecture analyse le son décodé et affiche chaque valeur lorsque la tête de lecture l’atteint."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La misurazione in riproduzione analizza l’audio decodificato e mostra ogni lettura quando la testina di riproduzione la raggiunge."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "再生メーターはデコードされた音声を測定し、再生ヘッドが到達した時点で各値を表示します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "재생 미터는 디코딩된 오디오를 측정하고 재생 헤드가 해당 위치에 도달하면 각 값을 표시합니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Avspillingsmåling måler den dekodede lyden og viser hver verdi når avspillingsposisjonen når den."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "A medição de reprodução mede o áudio decodificado e mostra cada leitura quando a agulha de reprodução a alcança."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "播放计量测量已解码的音频，并在播放头到达时显示每个读数。"
           }
         }
       }
@@ -140353,64 +140527,6 @@
         }
       }
     },
-    "Experimental. Decoded active-track levels before playback volume and mute. Channel layout may differ from the source. Readings may lead audible playback, and polling can miss brief peaks. Loudness history resets after pause, seek or track changes. Use Source for playhead-aligned inspection and Audio Analysis for whole-program loudness." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Experimentell. Decodierte Pegel der aktiven Spur vor Wiedergabelautstärke und Stummschaltung. Die Kanalbelegung kann von der Quelle abweichen. Die Anzeige kann der hörbaren Wiedergabe vorauseilen, und durch die Abfrage können kurze Spitzen verloren gehen. Der Lautheitsverlauf wird nach Pause, Sprung oder Spurwechsel zurückgesetzt. Verwenden Sie „Quelle“ für eine am Abspielkopf ausgerichtete Prüfung und die Audioanalyse für die Lautheit des gesamten Programms."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Experimental. Niveles decodificados de la pista activa antes del volumen de reproducción y el silencio. La disposición de canales puede diferir del origen. Las lecturas pueden adelantarse a lo que se oye y el sondeo puede pasar por alto picos breves. El historial de sonoridad se restablece tras pausar, saltar o cambiar de pista. Usa Origen para una inspección alineada con el cabezal de reproducción y Análisis de audio para la sonoridad de todo el programa."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Expérimental. Niveaux décodés de la piste active avant le volume de lecture et la sourdine. La disposition des canaux peut différer de la source. Les mesures peuvent précéder le son audible et l’échantillonnage peut manquer des crêtes brèves. L’historique de sonie est réinitialisé après une pause, un déplacement ou un changement de piste. Utilisez Source pour une inspection alignée sur la tête de lecture et l’analyse audio pour la sonie de l’ensemble du programme."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Sperimentale. Livelli decodificati della traccia attiva prima del volume di riproduzione e del silenziamento. La disposizione dei canali può differire dalla sorgente. Le letture possono precedere l’audio udibile e il campionamento può perdere picchi brevi. La cronologia della sonorità si azzera dopo una pausa, uno spostamento o un cambio di traccia. Usa Sorgente per un’ispezione allineata alla testina di riproduzione e Analisi audio per la sonorità dell’intero programma."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "試験的機能。再生音量とミュートの適用前にデコードされたアクティブトラックのレベルです。チャンネルレイアウトはソースと異なる場合があります。表示は実際に聞こえる音より先行することがあり、ポーリングにより短いピークを取りこぼす場合があります。ラウドネス履歴は一時停止、シーク、トラック変更後にリセットされます。再生ヘッドに合わせて確認するには「ソース」を、プログラム全体のラウドネスには「オーディオ解析」を使用してください。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "실험적 기능. 재생 볼륨과 음소거가 적용되기 전에 디코딩된 활성 트랙 레벨입니다. 채널 레이아웃은 소스와 다를 수 있습니다. 측정값이 실제로 들리는 소리보다 앞설 수 있으며, 폴링 방식이라 짧은 피크를 놓칠 수 있습니다. 라우드니스 기록은 일시 정지, 탐색 또는 트랙 변경 후 초기화됩니다. 재생 헤드에 맞춘 확인에는 소스를, 프로그램 전체 라우드니스에는 오디오 분석을 사용하세요."
-          }
-        },
-        "nb" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Eksperimentell. Dekodede nivåer for det aktive sporet før avspillingsvolum og demping. Kanaloppsettet kan avvike fra kilden. Målingene kan ligge foran det du hører, og avlesningen kan gå glipp av korte topper. Lydstyrkehistorikken nullstilles etter pause, hopp eller sporbytte. Bruk Kilde for inspeksjon som følger avspillingsposisjonen, og Lydanalyse for lydstyrke over hele programmet."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Experimental. Níveis decodificados da faixa ativa antes do volume de reprodução e do mudo. O layout de canais pode ser diferente da origem. As leituras podem se adiantar à reprodução audível, e a amostragem pode perder picos breves. O histórico de sonoridade é redefinido após pausar, buscar ou trocar de faixa. Use Origem para inspeção alinhada à agulha de reprodução e Análise de áudio para a sonoridade de todo o programa."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "实验性功能。在应用播放音量和静音之前解码的当前音轨电平。声道布局可能与源不同。读数可能领先于实际听到的声音，轮询也可能遗漏短暂的峰值。暂停、跳转或切换音轨后，响度历史会重置。若要按播放头位置检查，请使用“源”；若要测量整个节目的响度，请使用“音频分析”。"
-          }
-        }
-      }
-    },
     "Source levels before playback volume, mute and speaker downmixing. White marks show sample peaks; filled bars show RMS. LUFS measures the selected track over the preceding 0.4 and 3 seconds of source audio. Use Audio Analysis for whole-program integrated loudness and true peak." : {
       "localizations" : {
         "de" : {
@@ -140701,64 +140817,6 @@
         }
       }
     },
-    "Playback metering is experimental: readings can run several seconds ahead of the audio you hear." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Die Wiedergabemessung ist experimentell: Die Anzeige kann dem hörbaren Ton mehrere Sekunden vorauseilen."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "La medición de reproducción es experimental: las lecturas pueden ir varios segundos por delante del audio que oyes."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "La mesure de lecture est expérimentale : les valeurs peuvent précéder de plusieurs secondes le son que vous entendez."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "La misurazione della riproduzione è sperimentale: le letture possono anticipare di diversi secondi l’audio che senti."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "再生メーターは試験的機能です。表示が実際に聞こえる音より数秒先行する場合があります。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "재생 미터는 실험적 기능입니다. 측정값이 실제로 들리는 오디오보다 몇 초 앞설 수 있습니다."
-          }
-        },
-        "nb" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Avspillingsmåling er eksperimentell: målingene kan ligge flere sekunder foran lyden du hører."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "A medição de reprodução é experimental: as leituras podem estar vários segundos à frente do áudio que você ouve."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "播放电平测量为实验性功能：读数可能比你听到的音频提前几秒。"
-          }
-        }
-      }
-    },
     "Decoded peak / RMS" : {
       "localizations" : {
         "de" : {
@@ -141045,64 +141103,6 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "播放电平表不可用"
-          }
-        }
-      }
-    },
-    "Experimental · may run ahead of sound" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Experimentell · kann dem Ton vorauseilen"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Experimental · puede adelantarse al sonido"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Expérimental · peut précéder le son"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Sperimentale · può anticipare l’audio"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "試験的 · 音より先行する場合あり"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "실험적 · 소리보다 앞설 수 있음"
-          }
-        },
-        "nb" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Eksperimentell · kan ligge foran lyden"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Experimental · pode se adiantar ao som"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "实验性 · 可能领先于声音"
           }
         }
       }

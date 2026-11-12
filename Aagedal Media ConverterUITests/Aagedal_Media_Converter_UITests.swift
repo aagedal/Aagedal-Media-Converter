@@ -1469,17 +1469,16 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     /// actually pass its display gate, against independently authored AAC edges.
     @MainActor
     func testMPVPlaybackMeterHistoryTimingInNativePreview() throws {
-        // `amc-meter-history` exists only in the diagnostic libmpv build, not in
-        // the bundled MPVKit. Run with TEST_RUNNER_AMC_METER_HISTORY_LIBRARY=1
-        // after linking that library (docs/audio-playback-lifecycle-validation-2026-10-18.md).
+        // Playback metering needs MPVKit's `amc-meter-history` lavfi option.
+        // Until the app pins that build, run with TEST_RUNNER_AMC_METER_HISTORY_LIBRARY=1
+        // against a local MPVKit override (docs/dependency-patches/README.md).
         try XCTSkipUnless(ProcessInfo.processInfo.environment["AMC_METER_HISTORY_LIBRARY"] == "1",
-                          "Needs the history-capable diagnostic libmpv")
-        for clock in ["time-pos", "audio-pts"] {
+                          "Needs the MPVKit build with amc-meter-history")
+        do {
+            let clock = "time-pos"
             launchApp(generatedFixture: true, realtimeInput: true,
                       extraLaunchEnvironment: ["AMC_UI_TEST_METER_TIMING": "1",
-                                               "AMC_UI_TEST_METER_TRACE": "1",
-                                               "AMC_PLAYBACK_METER_HISTORY": "1",
-                                               "AMC_PLAYBACK_METER_CLOCK": clock], previewContainer: "mkv")
+                                               "AMC_UI_TEST_METER_TRACE": "1"], previewContainer: "mkv")
             defer { terminateAndCleanFixtures() }
             let queueItem = element("queue.item")
             XCTAssertTrue(queueItem.waitForExistence(timeout: 30))

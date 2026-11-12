@@ -68,6 +68,33 @@ class MPVCandidateTests(unittest.TestCase):
             return architectures
         return MODULE.verify(self.root, self.evidence, read_architectures)
 
+    def use_meter_evidence(self):
+        sources = {}
+        for name in MODULE.METER_SOURCES:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if not path.exists():
+                path.write_bytes(name.encode())
+            sources[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+        for key in ("patch_sha256", "source_before_coreaudio_diff_sha256", "patched_coreaudio_sha256"):
+            del self.evidence[key]
+        (self.root / MODULE.SOURCE_DIFF).unlink()
+        self.evidence["meter_input_sha256"] = {
+            name: hashlib.sha256((MODULE.PATCH.parent / name).read_bytes()).hexdigest() for name in MODULE.METER_INPUTS}
+        self.evidence["patched_source_sha256"] = sources
+
+    def test_meter_history_candidate_checks_meter_sources_instead_of_coreaudio_diff(self):
+        self.use_meter_evidence()
+        result = self.verify()
+        self.assertTrue(result["meter_source_correspondence"])
+        self.assertFalse(result["release_ready"])
+
+    def test_changed_meter_source_fails(self):
+        self.use_meter_evidence()
+        (self.root / MODULE.METER_SOURCES[0]).write_bytes(b"different")
+        with self.assertRaisesRegex(ValueError, "Patched meter source hash mismatch"):
+            self.verify()
+
     def test_corresponding_candidate_passes_without_claiming_release_ready(self):
         self.assertFalse(self.verify()["release_ready"])
 
