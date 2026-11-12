@@ -19,8 +19,9 @@ INTRO = """MPVKit and preview playback dependencies
 =======================================
 
 Aagedal Media Converter uses the MPVKit-GPL package for media preview playback.
-The package is pinned to revision f957f4830d449e80723554cdc05ddc4138c1806e.
-Its custom libraries contain mpv 0.41.0 and FFmpeg n9.0.2 with local patches.
+The package is pinned to revision d2680851a5a56dafb6be8df79989d69817dac891.
+Its custom libraries contain mpv 0.41.0 and FFmpeg n9.0.2 with local patches,
+including the timestamped audio meter history in libmpv.
 The original source notice collections below are retained for unchanged inputs;
 the current FFmpeg n9.0.2 source notices follow them as a separate collection.
 

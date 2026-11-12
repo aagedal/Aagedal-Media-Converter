@@ -1,11 +1,11 @@
 {
-  "revision": "f957f4830d449e80723554cdc05ddc4138c1806e",
+  "revision": "d2680851a5a56dafb6be8df79989d69817dac891",
   "product": "MPVKit-GPL",
   "targets": [
     {
       "target": "Libmpv-GPL",
-      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-resize.1/Libmpv-GPL.xcframework.zip",
-      "sha256": "6275a4164a649978bff96ec70ae801b89c9688075a6f8ba69f8069919f9aebdd"
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-history.1/Libmpv-GPL.xcframework.zip",
+      "sha256": "1fb1dc97b90d2f703a334d38c81534c118f160d82c2b6d42fe5ebdd4a1ddfe93"
     },
     {
       "target": "Libavcodec-GPL",

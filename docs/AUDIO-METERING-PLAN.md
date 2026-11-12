@@ -27,8 +27,8 @@ targets keep their resize.1 archives. The AAC priming fix is included: it fixed
 the 21.3 ms startup gap in all six AAC matrix cases and every later AAC check,
 and it also corrects the start of normal AAC playback. Build, checksums, source
 archive, local override and publish steps: [dependency-patches/README.md](dependency-patches/README.md#meter-history-release-build--2026-11-12).
-**Nothing is published and the app still pins resize.1** (`f957f48`); until the
-pin changes, Playback reports unavailable and the meter tests skip.
+The app pins MPVKit `d2680851` (`aagedal-1.1.0-n9.0.2-history.1`); the meter
+tests now require the history option instead of skipping without it.
 
 ### Qualification on this Mac (M5 Pro, macOS 27.2)
 
@@ -80,9 +80,8 @@ quiet-machine baseline. Physical Intel hardware was not tested.
 
 ### Remaining
 
-- Publish MPVKit `aagedal-1.1.0-n9.0.2-history.1` and apply the prepared pin
-  commit (local branch `t3/mpv-meter-history-pin`), then rerun
-  `scripts/ci-local.sh --release` and the MPV UI tests on the pinned package.
+- Rerun `scripts/ci-local.sh --release` and the MPV UI tests on the pinned
+  package after resolving it from the published release.
 - Physical speaker/video synchronization: see the [manual check](audio-playback-meter-sync-check.md).
   Bluetooth and external interfaces in particular.
 - Keep Source as the default until the physical check has been done on a few
