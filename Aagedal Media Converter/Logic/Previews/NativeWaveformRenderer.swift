@@ -2,36 +2,34 @@
 // Copyright © 2026 Truls Aagedal
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Decodes audio to raw PCM via FFmpeg and renders waveform images natively in Swift.
+// Decodes audio to raw PCM via FFmpeg and builds waveform envelopes natively in Swift.
 // Ported from Aagedal Media Player's AudioWaveformGenerator for fast preview waveforms.
 
 import Foundation
 import AppKit
 import OSLog
 
-/// @unchecked Sendable wrapper for NSImage (created once, read-only afterward).
-struct SendableImage: @unchecked Sendable {
-    let image: NSImage
-}
-
-/// Per-channel waveform data: one image and label per audio channel.
-struct SendableChannelWaveform: @unchecked Sendable {
-    let channelImages: [NSImage]
+/// Per-channel waveform data: one envelope and label per audio channel.
+struct SendableChannelWaveform: Sendable {
     let channelLabels: [String]
     var channelEnvelopes: [WaveformEnvelope] = []
 }
 
 /// Peak envelopes retain amplitude precision independently of display size.
 /// Each coarser level combines adjacent bins, preserving short transients.
-struct WaveformEnvelope: Sendable {
+/// `powerLevels` holds each bin's mean square, so views can draw an RMS body.
+struct WaveformEnvelope: Sendable, Equatable {
     struct Peak: Sendable, Equatable {
         var minimum: Float
         var maximum: Float
     }
     let levels: [[Peak]]
+    /// Mean square per bin, parallel to `levels`; empty when unknown.
+    let powerLevels: [[Float]]
     let duration: Double
     let framesPerBin: Int
     let frameCount: Int
+    let sampleRate: Double
 
     init(pcmData: Data, channelCount: Int, sampleRate: Double, minimumFramesPerBin: Int = 256, channel: Int? = nil) {
         let channels = max(1, channelCount)
@@ -40,6 +38,7 @@ struct WaveformEnvelope: Sendable {
         let framesPerBin = max(1, max(minimumFramesPerBin, Int(ceil(Double(frameCount) / 2_000_000))))
         let bins = (frameCount + framesPerBin - 1) / framesPerBin
         var base = [Peak](repeating: Peak(minimum: 0, maximum: 0), count: bins)
+        var sums = [Float](repeating: 0, count: bins)
         let binSize = framesPerBin
         let frames = frameCount
         let selectedChannels = channel.map { min(channels - 1, max(0, $0))..<(min(channels - 1, max(0, $0)) + 1) } ?? (0..<channels)
@@ -50,18 +49,24 @@ struct WaveformEnvelope: Sendable {
                 for channel in selectedChannels {
                     let value = samples[frame * channels + channel]
                     guard value.isFinite else { continue }
-                    base[bin].minimum = min(base[bin].minimum, max(-1, value))
-                    base[bin].maximum = max(base[bin].maximum, min(1, value))
+                    let clamped = min(1, max(-1, value))
+                    base[bin].minimum = min(base[bin].minimum, clamped)
+                    base[bin].maximum = max(base[bin].maximum, clamped)
+                    sums[bin] += clamped * clamped
                 }
             }
         }
-        self.init(peaks: base, frameCount: frameCount, framesPerBin: framesPerBin,
-                  sampleRate: max(1, sampleRate))
+        let meanSquares = sums.indices.map { bin in
+            sums[bin] / Float(min(binSize, frames - bin * binSize) * selectedChannels.count)
+        }
+        self.init(peaks: base, meanSquares: meanSquares, frameCount: frameCount,
+                  framesPerBin: framesPerBin, sampleRate: max(1, sampleRate))
     }
 
-    init(peaks: [Peak], frameCount: Int, framesPerBin: Int, sampleRate: Double) {
+    init(peaks: [Peak], meanSquares: [Float] = [], frameCount: Int, framesPerBin: Int, sampleRate: Double) {
         self.frameCount = frameCount
         self.framesPerBin = framesPerBin
+        self.sampleRate = sampleRate
         duration = Double(frameCount) / sampleRate
         var pyramid = [peaks]
         while let previous = pyramid.last, previous.count > 1 {
@@ -75,39 +80,118 @@ struct WaveformEnvelope: Sendable {
             pyramid.append(next)
         }
         levels = pyramid
+        // Power is optional; a mismatched array is dropped rather than misaligned.
+        var power = meanSquares.count == peaks.count && !peaks.isEmpty ? [meanSquares] : []
+        while let previous = power.last, previous.count > 1 {
+            var next: [Float] = []
+            next.reserveCapacity((previous.count + 1) / 2)
+            for index in stride(from: 0, to: previous.count, by: 2) {
+                next.append((previous[index] + previous[min(index + 1, previous.count - 1)]) / 2)
+            }
+            power.append(next)
+        }
+        powerLevels = power
+    }
+
+    /// Combines channels decoded together into one envelope. Peaks take the
+    /// extremes, so opposite-phase channels don't cancel; power is averaged.
+    static func merging(_ channels: [WaveformEnvelope]) -> WaveformEnvelope? {
+        guard let first = channels.first, let firstPeaks = first.levels.first,
+              channels.allSatisfy({ $0.frameCount == first.frameCount && $0.framesPerBin == first.framesPerBin
+                  && $0.sampleRate == first.sampleRate && $0.levels.first?.count == firstPeaks.count }) else {
+            return nil
+        }
+        guard channels.count > 1 else { return first }
+        var peaks = firstPeaks
+        for channel in channels.dropFirst() {
+            for (index, peak) in channel.levels[0].enumerated() {
+                peaks[index].minimum = min(peaks[index].minimum, peak.minimum)
+                peaks[index].maximum = max(peaks[index].maximum, peak.maximum)
+            }
+        }
+        var meanSquares: [Float] = []
+        if channels.allSatisfy({ $0.powerLevels.first?.count == firstPeaks.count }) {
+            meanSquares = [Float](repeating: 0, count: firstPeaks.count)
+            for channel in channels {
+                for (index, power) in channel.powerLevels[0].enumerated() { meanSquares[index] += power }
+            }
+            let scale = 1 / Float(channels.count)
+            for index in meanSquares.indices { meanSquares[index] *= scale }
+        }
+        return WaveformEnvelope(peaks: peaks, meanSquares: meanSquares, frameCount: first.frameCount,
+                                framesPerBin: first.framesPerBin, sampleRate: first.sampleRate)
     }
 
     func level(secondsPerPixel: Double) -> Int {
         guard duration > 0, frameCount > 0, secondsPerPixel > 0 else { return 0 }
-        let baseSeconds = Double(framesPerBin) / Double(frameCount) * duration
-        return min(levels.count - 1, max(0, Int(floor(log2(max(1, secondsPerPixel / baseSeconds))))))
+        return min(levels.count - 1, max(0, Int(floor(log2(max(1, secondsPerPixel / secondsPerBin(level: 0)))))))
+    }
+
+    func secondsPerBin(level: Int) -> Double {
+        Double(framesPerBin) * pow(2, Double(max(0, level))) / sampleRate
     }
 
     func peak(from start: Double, to end: Double, level: Int) -> Peak {
-        guard duration > 0, frameCount > 0, start < duration, end > 0 else {
+        guard let (index, bins) = binRange(from: start, to: end, level: level) else {
             return Peak(minimum: 0, maximum: 0)
         }
-        let index = min(levels.count - 1, max(0, level))
-        let values = levels[index]
-        guard !values.isEmpty else { return Peak(minimum: 0, maximum: 0) }
-        let secondsPerBin = Double(framesPerBin) * pow(2, Double(index)) / Double(frameCount) * duration
-        let lower = min(values.count - 1, max(0, Int(floor(start / secondsPerBin))))
-        let upper = min(values.count, max(lower + 1, Int(ceil(end / secondsPerBin))))
-        return values[lower..<upper].reduce(Peak(minimum: 0, maximum: 0)) {
+        return levels[index][bins].reduce(Peak(minimum: 0, maximum: 0)) {
             Peak(minimum: min($0.minimum, $1.minimum), maximum: max($0.maximum, $1.maximum))
         }
     }
+
+    /// Root mean square over a time range, or nil when the envelope has no power data.
+    func rms(from start: Double, to end: Double, level: Int) -> Float? {
+        guard !powerLevels.isEmpty else { return nil }
+        guard let (index, bins) = binRange(from: start, to: end, level: level) else { return 0 }
+        let power = powerLevels[index][bins]
+        return (power.reduce(0, +) / Float(power.count)).squareRoot()
+    }
+
+    /// Peak and RMS interpolated between neighbouring base bins, so a pixel
+    /// narrower than one bin follows a smooth outline instead of a step.
+    func interpolated(at time: Double) -> (peak: Peak, rms: Float?) {
+        guard let base = levels.first, !base.isEmpty, duration > 0 else {
+            return (Peak(minimum: 0, maximum: 0), powerLevels.isEmpty ? nil : 0)
+        }
+        guard time >= 0, time < duration else {
+            return (Peak(minimum: 0, maximum: 0), powerLevels.isEmpty ? nil : 0)
+        }
+        let position = min(Double(base.count - 1), max(0, time / secondsPerBin(level: 0) - 0.5))
+        let lower = Int(position)
+        let upper = min(base.count - 1, lower + 1)
+        let fraction = Float(position - Double(lower))
+        func mix(_ a: Float, _ b: Float) -> Float { a + (b - a) * fraction }
+        let peak = Peak(minimum: mix(base[lower].minimum, base[upper].minimum),
+                        maximum: mix(base[lower].maximum, base[upper].maximum))
+        guard let power = powerLevels.first else { return (peak, nil) }
+        return (peak, mix(power[lower], power[upper]).squareRoot())
+    }
+
+    private func binRange(from start: Double, to end: Double, level: Int) -> (Int, Range<Int>)? {
+        guard duration > 0, frameCount > 0, start < duration, end > 0 else { return nil }
+        let index = min(levels.count - 1, max(0, level))
+        let count = levels[index].count
+        guard count > 0 else { return nil }
+        let secondsPerBin = secondsPerBin(level: index)
+        let lower = min(count - 1, max(0, Int(floor(start / secondsPerBin))))
+        let upper = min(count, max(lower + 1, Int(ceil(end / secondsPerBin))))
+        return (index, lower..<upper)
+    }
 }
 
-/// A compact, versioned cache of base peaks. Coarser levels are rebuilt on load.
+/// A compact, versioned cache of base peaks and power. Coarser levels are rebuilt on load.
 /// Destinations belong to the preview cache's source fingerprint directory.
 enum WaveformEnvelopeCache {
-    private static let magic: UInt64 = 0x314B414550434D41 // "AMCPEAK1", little endian
+    private static let magic: UInt64 = 0x324B414550434D41 // "AMCPEAK2", little endian
     private static let headerSize = 40
+    private static let bytesPerBin = 12
+    private static let maximumBins = 2_000_000
 
     static func write(_ envelope: WaveformEnvelope, to url: URL) throws {
-        guard let peaks = envelope.levels.first else { return }
-        var data = Data(capacity: headerSize + peaks.count * 8)
+        guard let peaks = envelope.levels.first, let power = envelope.powerLevels.first,
+              power.count == peaks.count else { return }
+        var data = Data(capacity: headerSize + peaks.count * bytesPerBin)
         func append<T>(_ value: T) {
             var value = value
             withUnsafeBytes(of: &value) { data.append(contentsOf: $0) }
@@ -117,9 +201,10 @@ enum WaveformEnvelopeCache {
         append(UInt64(envelope.framesPerBin).littleEndian)
         append(envelope.duration.bitPattern.littleEndian)
         append(UInt64(peaks.count).littleEndian)
-        for peak in peaks {
+        for (peak, meanSquare) in zip(peaks, power) {
             append(peak.minimum.bitPattern.littleEndian)
             append(peak.maximum.bitPattern.littleEndian)
+            append(meanSquare.bitPattern.littleEndian)
         }
         try data.write(to: url, options: .atomic)
     }
@@ -127,12 +212,15 @@ enum WaveformEnvelopeCache {
     static func read(from url: URL) -> WaveformEnvelope? {
         // Reject oversized or truncated caches before allocating peak arrays.
         guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
-              size >= headerSize, size <= headerSize + 2_000_000 * 8,
+              size >= headerSize, size <= headerSize + maximumBins * bytesPerBin,
               let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return nil }
         return data.withUnsafeBytes { raw -> WaveformEnvelope? in
             guard raw.count >= headerSize else { return nil }
             func integer(_ offset: Int) -> UInt64 {
                 UInt64(littleEndian: raw.loadUnaligned(fromByteOffset: offset, as: UInt64.self))
+            }
+            func float(_ offset: Int) -> Float {
+                Float(bitPattern: UInt32(littleEndian: raw.loadUnaligned(fromByteOffset: offset, as: UInt32.self)))
             }
             let frames = integer(8)
             let binSize = integer(16)
@@ -140,30 +228,36 @@ enum WaveformEnvelopeCache {
             let count = integer(32)
             guard integer(0) == magic, frames > 0, frames <= UInt64(Int.max),
                   binSize > 0, binSize <= UInt64(Int.max), duration.isFinite, duration > 0,
-                  count > 0, count <= 2_000_000,
+                  count > 0, count <= UInt64(maximumBins),
                   count == (frames - 1) / binSize + 1,
-                  raw.count == headerSize + Int(count) * 8 else { return nil }
+                  raw.count == headerSize + Int(count) * bytesPerBin else { return nil }
             var peaks: [WaveformEnvelope.Peak] = []
+            var meanSquares: [Float] = []
             peaks.reserveCapacity(Int(count))
+            meanSquares.reserveCapacity(Int(count))
             for index in 0..<Int(count) {
-                let offset = headerSize + index * 8
-                let minimum = Float(bitPattern: UInt32(littleEndian: raw.loadUnaligned(fromByteOffset: offset, as: UInt32.self)))
-                let maximum = Float(bitPattern: UInt32(littleEndian: raw.loadUnaligned(fromByteOffset: offset + 4, as: UInt32.self)))
+                let offset = headerSize + index * bytesPerBin
+                let minimum = float(offset)
+                let maximum = float(offset + 4)
+                let meanSquare = float(offset + 8)
                 guard minimum.isFinite, maximum.isFinite, minimum >= -1, minimum <= 0,
-                      maximum >= 0, maximum <= 1 else { return nil }
+                      maximum >= 0, maximum <= 1,
+                      meanSquare.isFinite, meanSquare >= 0, meanSquare <= 1 else { return nil }
                 peaks.append(.init(minimum: minimum, maximum: maximum))
+                meanSquares.append(meanSquare)
             }
             let rate = Double(frames) / duration
             guard rate.isFinite, rate > 0 else { return nil }
-            return WaveformEnvelope(peaks: peaks, frameCount: Int(frames),
+            return WaveformEnvelope(peaks: peaks, meanSquares: meanSquares, frameCount: Int(frames),
                                     framesPerBin: Int(binSize), sampleRate: rate)
         }
     }
 }
 
-/// Consumes arbitrarily split PCM pipe chunks without retaining the recording.
-/// The lock protects the output callback and the final snapshot. Rebinning also
-/// bounds memory when the source's duration metadata underestimates its length.
+/// Consumes arbitrarily split PCM pipe chunks without retaining the recording,
+/// keeping one envelope per interleaved channel. The lock protects the output
+/// callback and the final snapshot. Rebinning also bounds memory when the
+/// source's duration metadata underestimates its length.
 final class StreamingWaveformEnvelope: @unchecked Sendable {
     private let lock = NSLock()
     private let channels: Int
@@ -172,14 +266,18 @@ final class StreamingWaveformEnvelope: @unchecked Sendable {
     private var framesPerBin: Int
     private var frameCount = 0
     private var pending = Data()
-    private var peaks: [WaveformEnvelope.Peak] = []
+    private var peaks: [[WaveformEnvelope.Peak]]
+    private var sumsOfSquares: [[Float]]
 
+    /// `maximumBins` is shared across channels.
     init(channelCount: Int, sampleRate: Double, duration: Double, maximumBins: Int = 2_000_000) {
         channels = max(1, channelCount)
         self.sampleRate = sampleRate
-        self.maximumBins = max(1, maximumBins)
+        self.maximumBins = max(1, maximumBins / channels)
         let expectedFrames = duration.isFinite ? max(0, duration) * sampleRate : 0
         framesPerBin = max(256, Int(ceil(min(Double(Int.max / 2), expectedFrames) / Double(self.maximumBins))))
+        peaks = Array(repeating: [], count: channels)
+        sumsOfSquares = Array(repeating: [], count: channels)
     }
 
     func append(_ data: Data) {
@@ -191,49 +289,83 @@ final class StreamingWaveformEnvelope: @unchecked Sendable {
         pending.withUnsafeBytes { raw in
             var offset = 0
             while offset < completeBytes {
-                if frameCount / framesPerBin >= maximumBins {
-                    var coarser: [WaveformEnvelope.Peak] = []
-                    coarser.reserveCapacity((peaks.count + 1) / 2)
-                    for index in stride(from: 0, to: peaks.count, by: 2) {
-                        let other = peaks[min(index + 1, peaks.count - 1)]
-                        coarser.append(.init(minimum: min(peaks[index].minimum, other.minimum),
-                                             maximum: max(peaks[index].maximum, other.maximum)))
-                    }
-                    peaks = coarser
-                    framesPerBin *= 2
-                }
+                if frameCount / framesPerBin >= maximumBins { halveResolution() }
                 let bin = frameCount / framesPerBin
-                if bin == peaks.count { peaks.append(.init(minimum: 0, maximum: 0)) }
-                // Update the retained peak once per bin, rather than once per frame.
-                // All interleaved channels contribute, so opposite-phase audio survives.
+                if bin == peaks[0].count {
+                    for channel in 0..<channels {
+                        peaks[channel].append(.init(minimum: 0, maximum: 0))
+                        sumsOfSquares[channel].append(0)
+                    }
+                }
+                // Update each retained bin once per chunk, rather than once per frame.
                 let frames = min(framesPerBin - frameCount % framesPerBin,
                                  (completeBytes - offset) / bytesPerFrame)
-                let end = offset + frames * bytesPerFrame
-                var peak = peaks[bin]
-                while offset < end {
-                    let value = raw.loadUnaligned(fromByteOffset: offset, as: Float.self)
-                    if value.isFinite {
-                        peak.minimum = min(peak.minimum, max(-1, value))
-                        peak.maximum = max(peak.maximum, min(1, value))
+                for channel in 0..<channels {
+                    var peak = peaks[channel][bin]
+                    var sum = sumsOfSquares[channel][bin]
+                    var position = offset + channel * MemoryLayout<Float>.size
+                    for _ in 0..<frames {
+                        let value = raw.loadUnaligned(fromByteOffset: position, as: Float.self)
+                        if value.isFinite {
+                            let clamped = min(1, max(-1, value))
+                            peak.minimum = min(peak.minimum, clamped)
+                            peak.maximum = max(peak.maximum, clamped)
+                            sum += clamped * clamped
+                        }
+                        position += bytesPerFrame
                     }
-                    offset += MemoryLayout<Float>.size
+                    peaks[channel][bin] = peak
+                    sumsOfSquares[channel][bin] = sum
                 }
-                peaks[bin] = peak
+                offset += frames * bytesPerFrame
                 frameCount += frames
             }
         }
         pending = Data(pending.suffix(pending.count - completeBytes))
     }
 
-    func envelope() -> WaveformEnvelope {
+    /// One envelope per decoded channel.
+    func channelEnvelopes() -> [WaveformEnvelope] {
         lock.lock()
         defer { lock.unlock() }
-        return WaveformEnvelope(peaks: peaks, frameCount: frameCount,
-                                framesPerBin: framesPerBin, sampleRate: sampleRate)
+        return (0..<channels).map { channel in
+            let sums = sumsOfSquares[channel]
+            let meanSquares = sums.indices.map { bin in
+                sums[bin] / Float(max(1, min(framesPerBin, frameCount - bin * framesPerBin)))
+            }
+            return WaveformEnvelope(peaks: peaks[channel], meanSquares: meanSquares, frameCount: frameCount,
+                                    framesPerBin: framesPerBin, sampleRate: sampleRate)
+        }
+    }
+
+    /// All channels in one envelope, so opposite-phase audio survives.
+    func envelope() -> WaveformEnvelope {
+        let channels = channelEnvelopes()
+        return WaveformEnvelope.merging(channels) ?? channels[0]
+    }
+
+    private func halveResolution() {
+        for channel in 0..<channels {
+            let previous = peaks[channel]
+            let sums = sumsOfSquares[channel]
+            var coarser: [WaveformEnvelope.Peak] = []
+            var coarserSums: [Float] = []
+            coarser.reserveCapacity((previous.count + 1) / 2)
+            coarserSums.reserveCapacity((previous.count + 1) / 2)
+            for index in stride(from: 0, to: previous.count, by: 2) {
+                let next = min(index + 1, previous.count - 1)
+                coarser.append(.init(minimum: min(previous[index].minimum, previous[next].minimum),
+                                     maximum: max(previous[index].maximum, previous[next].maximum)))
+                coarserSums.append(sums[index] + (next == index ? 0 : sums[next]))
+            }
+            peaks[channel] = coarser
+            sumsOfSquares[channel] = coarserSums
+        }
+        framesPerBin *= 2
     }
 }
 
-/// Renders audio waveform images natively in Swift from raw PCM data.
+/// Builds waveform envelopes and images natively in Swift from raw PCM data.
 /// Replaces FFmpeg's showwavespic filter for preview waveform generation.
 struct NativeWaveformRenderer {
 
@@ -253,30 +385,11 @@ struct NativeWaveformRenderer {
         colorHex: String = "FF2D78",
         subprocessRunner: any SubprocessRunning = SubprocessRunner()
     ) async throws -> NSImage {
-        try await generateWaveformAssets(url: url, ffmpegPath: ffmpegPath, streamIndex: streamIndex,
-                                        duration: duration, width: width, height: height,
-                                        colorHex: colorHex, includeEnvelope: false,
-                                        subprocessRunner: subprocessRunner).image
-    }
-
-    static nonisolated func generateWaveformAssets(
-        url: URL, ffmpegPath: String, streamIndex: Int, duration: Double, width: Int, height: Int,
-        colorHex: String = "FF2D78", includeEnvelope: Bool = true, channelCount: Int = 1,
-        envelopeCacheURL: URL? = nil,
-        subprocessRunner: any SubprocessRunning = SubprocessRunner()
-    ) async throws -> (image: NSImage, envelope: WaveformEnvelope?) {
-        if includeEnvelope {
-            return try await generateStreamingWaveform(
-                url: url, ffmpegPath: ffmpegPath, streamIndex: streamIndex,
-                duration: duration, width: width, height: height, colorHex: colorHex,
-                channelCount: channelCount, envelopeCacheURL: envelopeCacheURL,
-                subprocessRunner: subprocessRunner)
-        }
         let channels = 1
         let effectiveWidth = max(400, width)
 
         // Bitmap-only previews can use downsampled PCM. Timeline envelopes use
-        // the streaming full-rate path above to preserve short transients.
+        // the full-rate path in generateChannelWaveforms to preserve short transients.
         let idealRate = max(1000, min(48000, Int(ceil(Double(effectiveWidth) * 100.0 / max(duration, 0.1)))))
 
         let tempDir = FileManager.default.temporaryDirectory
@@ -331,67 +444,6 @@ struct NativeWaveformRenderer {
         }
 
         try Task.checkCancellation()
-        return (image, nil)
-    }
-
-    private static nonisolated func generateStreamingWaveform(
-        url: URL, ffmpegPath: String, streamIndex: Int, duration: Double,
-        width: Int, height: Int, colorHex: String, channelCount: Int, envelopeCacheURL: URL?,
-        subprocessRunner: any SubprocessRunning
-    ) async throws -> (image: NSImage, envelope: WaveformEnvelope?) {
-        try Task.checkCancellation()
-        if let envelopeCacheURL, let envelope = WaveformEnvelopeCache.read(from: envelopeCacheURL) {
-            let image = try renderEnvelope(envelope, width: max(400, width), height: height, colorHex: colorHex)
-            try Task.checkCancellation()
-            return (image, envelope)
-        }
-        let builder = StreamingWaveformEnvelope(channelCount: channelCount, sampleRate: 48000, duration: duration)
-        let request = SubprocessRequest(
-            executableURL: URL(fileURLWithPath: ffmpegPath),
-            arguments: ["-hide_banner", "-loglevel", "error", "-nostdin", "-i", url.path,
-                        "-vn", "-map", "0:a:\(streamIndex)", "-ac", "\(max(1, channelCount))",
-                        "-af", "aresample=48000:async=1:first_pts=0", "-ar", "48000",
-                        "-f", "f32le", "-c:a", "pcm_f32le", "pipe:1"],
-            timeout: .seconds(12 * 60 * 60), standardOutputCaptureLimit: 0,
-            standardErrorCaptureLimit: 64 * 1024, sensitiveValues: [ffmpegPath, url.path])
-        let result = try await subprocessRunner.run(request) { chunk in
-            if case .standardOutput = chunk.stream { builder.append(chunk.data) }
-        }
-        try Task.checkCancellation()
-        guard result.succeeded else {
-            throw PreviewAssetError.generationFailed(request.redactedDiagnostic(result.standardErrorText, limit: 2_000))
-        }
-        let envelope = builder.envelope()
-        guard envelope.frameCount > 0 else {
-            throw PreviewAssetError.generationFailed("No audio samples decoded")
-        }
-        let image = try renderEnvelope(envelope, width: max(400, width), height: height, colorHex: colorHex)
-        try Task.checkCancellation()
-        // Cache failures should never prevent displaying a successfully decoded waveform.
-        if let envelopeCacheURL { try? WaveformEnvelopeCache.write(envelope, to: envelopeCacheURL) }
-        return (image, envelope)
-    }
-
-    private static nonisolated func renderEnvelope(
-        _ envelope: WaveformEnvelope, width: Int, height: Int, colorHex: String
-    ) throws -> NSImage {
-        let secondsPerColumn = envelope.duration / Double(width)
-        let level = envelope.level(secondsPerPixel: secondsPerColumn)
-        var mins = [Float]()
-        var maxs = [Float]()
-        mins.reserveCapacity(width)
-        maxs.reserveCapacity(width)
-        for column in 0..<width {
-            let peak = envelope.peak(from: Double(column) * secondsPerColumn,
-                                     to: Double(column + 1) * secondsPerColumn, level: level)
-            mins.append(peak.minimum)
-            maxs.append(peak.maximum)
-        }
-        let (r, g, b) = parseHexColor(colorHex)
-        guard let image = renderWaveformImage(mins: mins, maxs: maxs, width: width,
-                                              height: height, r: r, g: g, b: b) else {
-            throw PreviewAssetError.generationFailed("Failed to render waveform image")
-        }
         return image
     }
 
@@ -489,103 +541,71 @@ struct NativeWaveformRenderer {
         return NSImage(cgImage: cgImage, size: NSSize(width: width, height: height))
     }
 
-    // MARK: - Per-Channel Generation
+    // MARK: - Per-Channel Envelopes
 
-    /// Generates one waveform image per audio channel for the given stream.
-    /// Unlike `generateWaveform()` which downmixes to mono, this preserves all channels.
-    static nonisolated func generatePerChannelWaveforms(
+    /// Decodes one audio stream once, at 48 kHz, and builds a peak and RMS envelope
+    /// per channel. Full-rate decoding keeps transients that a downsampled decode
+    /// would filter away; envelopes are cached per channel beside the preview assets.
+    static nonisolated func generateChannelWaveforms(
         url: URL,
         ffmpegPath: String,
         streamIndex: Int,
         channelCount: Int,
         channelLayout: String?,
         duration: Double,
-        width: Int,
-        heightPerChannel: Int,
-        colorHex: String = "FF2D78",
         envelopeCacheDirectory: URL? = nil,
         subprocessRunner: any SubprocessRunning = SubprocessRunner()
-    ) async throws -> ([NSImage], [String], [WaveformEnvelope]) {
-        let effectiveWidth = max(800, width)
-        let effectiveChannelCount = max(1, channelCount)
-
-        let cacheURLs = (0..<effectiveChannelCount).map { channel in
-            envelopeCacheDirectory?.appendingPathComponent("waveform_a\(streamIndex)_c\(channel)_of\(effectiveChannelCount)_peaks_v1.bin")
+    ) async throws -> SendableChannelWaveform {
+        let channels = max(1, channelCount)
+        let labels = channelNames(count: channels, layout: channelLayout)
+        let cacheURLs = (0..<channels).map { channel in
+            envelopeCacheDirectory?.appendingPathComponent("waveform_a\(streamIndex)_c\(channel)_of\(channels)_peaks_v2.bin")
         }
         let cachedEnvelopes = cacheURLs.compactMap { $0.flatMap { WaveformEnvelopeCache.read(from: $0) } }
-        if cachedEnvelopes.count == effectiveChannelCount {
+        if cachedEnvelopes.count == channels {
             try Task.checkCancellation()
-            let images = try cachedEnvelopes.map {
-                try renderEnvelope($0, width: effectiveWidth, height: heightPerChannel, colorHex: colorHex)
-            }
-            return (images, channelNames(count: effectiveChannelCount, layout: channelLayout), cachedEnvelopes)
+            return SendableChannelWaveform(channelLabels: labels, channelEnvelopes: cachedEnvelopes)
         }
 
-        let idealRate = max(1000, min(48000, Int(ceil(Double(effectiveWidth) * 100.0 / max(duration, 0.1)))))
-
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("com.aagedal.MediaConverter.waveforms.\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: tempDir) }
-
-        let pcmFile = tempDir.appendingPathComponent("audio.raw")
-
-        // Decode preserving all channels (no -ac 1)
-        let arguments: [String] = [
-            "-hide_banner", "-loglevel", "error",
-            "-i", url.path,
-            "-vn",
-            "-map", "0:a:\(streamIndex)",
-            "-af", "aresample=\(idealRate):async=1:first_pts=0",
-            "-ar", "\(idealRate)",
-            "-f", "f32le",
-            "-c:a", "pcm_f32le",
-            "-y", pcmFile.path
+        let sampleRate = 48000
+        let builder = StreamingWaveformEnvelope(channelCount: channels, sampleRate: Double(sampleRate),
+                                                duration: duration)
+        var arguments = ["-hide_banner", "-loglevel", "error", "-nostdin", "-i", url.path,
+                         "-vn", "-map", "0:a:\(streamIndex)"]
+        // Multichannel streams keep their layout; a stream of unknown width is
+        // mixed down so the interleaved PCM always matches the expected count.
+        if channels == 1 { arguments += ["-ac", "1"] }
+        arguments += [
+            // Preserve delayed tracks and timestamp gaps on the source timeline.
+            "-af", "aresample=\(sampleRate):async=1:first_pts=0", "-ar", "\(sampleRate)",
+            "-f", "f32le", "-c:a", "pcm_f32le", "pipe:1"
         ]
-
-        try await runFFmpeg(
-            path: ffmpegPath,
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: ffmpegPath),
             arguments: arguments,
-            inputURL: url,
-            outputURL: pcmFile,
-            subprocessRunner: subprocessRunner
-        )
+            timeout: .seconds(12 * 60 * 60), standardOutputCaptureLimit: 0,
+            standardErrorCaptureLimit: 64 * 1024, sensitiveValues: [ffmpegPath, url.path])
+        let result: SubprocessResult
+        do {
+            result = try await subprocessRunner.run(request) { chunk in
+                if case .standardOutput = chunk.stream { builder.append(chunk.data) }
+            }
+        } catch SubprocessRunnerError.timedOut {
+            throw PreviewAssetError.generationFailed("FFmpeg waveform decode timed out")
+        }
         try Task.checkCancellation()
-
-        let pcmData = try Data(contentsOf: pcmFile, options: .mappedIfSafe)
-        let floatCount = pcmData.count / MemoryLayout<Float>.size
-        let totalFrames = floatCount / effectiveChannelCount
-        guard totalFrames > 0 else {
+        guard result.succeeded else {
+            throw PreviewAssetError.generationFailed(request.redactedDiagnostic(result.standardErrorText, limit: 2_000))
+        }
+        let envelopes = builder.channelEnvelopes()
+        guard envelopes.first.map({ $0.frameCount > 0 }) == true else {
             throw PreviewAssetError.generationFailed("No audio samples decoded")
         }
-
-        let labels = channelNames(count: effectiveChannelCount, layout: channelLayout)
-        var images: [NSImage] = []
-        var envelopes: [WaveformEnvelope] = []
-        // Share the envelope memory budget across channels for long recordings.
-        let binSize = max(256, Int(ceil(Double(totalFrames) * Double(effectiveChannelCount) / 2_000_000)))
-
-        for ch in 0..<effectiveChannelCount {
-            try Task.checkCancellation()
-            let envelope = WaveformEnvelope(pcmData: pcmData, channelCount: effectiveChannelCount,
-                                            sampleRate: Double(idealRate), minimumFramesPerBin: binSize,
-                                            channel: ch)
-            images.append(try renderEnvelope(envelope, width: effectiveWidth,
-                                             height: heightPerChannel, colorHex: colorHex))
-            envelopes.append(envelope)
+        // Cache failures should never prevent displaying a successfully decoded waveform.
+        for (envelope, cacheURL) in zip(envelopes, cacheURLs) {
+            if let cacheURL { try? WaveformEnvelopeCache.write(envelope, to: cacheURL) }
         }
-
-        guard !images.isEmpty else {
-            throw PreviewAssetError.generationFailed("Failed to render any channel waveform images")
-        }
-
-        try Task.checkCancellation()
-        if envelopes.count == effectiveChannelCount {
-            for (envelope, cacheURL) in zip(envelopes, cacheURLs) {
-                if let cacheURL { try? WaveformEnvelopeCache.write(envelope, to: cacheURL) }
-            }
-        }
-        return (images, labels, envelopes)
+        return SendableChannelWaveform(channelLabels: labels, channelEnvelopes: envelopes)
     }
 
     // MARK: - Channel Labels
