@@ -366,6 +366,35 @@ final class StitchingTimelineTests: XCTestCase {
         XCTAssertNil(builder.snapshotIfDue())
     }
 
+    func testWaveformLogScaleFollowsDecibelsAndGain() {
+        let log = WaveformAmplitudeScale.logarithmic
+        XCTAssertEqual(log.height(1, gain: 1), 1)
+        XCTAssertEqual(log.height(0.1, gain: 1), 2.0 / 3, accuracy: 0.0001)
+        XCTAssertEqual(log.height(-0.1, gain: 1), 2.0 / 3, accuracy: 0.0001)
+        XCTAssertEqual(log.height(0.0001, gain: 1), 0)
+        XCTAssertEqual(log.height(0, gain: 4), 0)
+        // +20 dB of gain lifts −20 dBFS to full scale.
+        XCTAssertEqual(log.height(0.1, gain: 10), 1, accuracy: 0.0001)
+        XCTAssertEqual(WaveformAmplitudeScale.linear.height(0.5, gain: 4), 1)
+        XCTAssertEqual(WaveformAmplitudeScale.linear.height(0.5, gain: 0.5), 0.25)
+    }
+
+    func testVolumeLineMapsItsAxisInHalfDecibelSteps() {
+        XCTAssertEqual(WaveformVolumeLine.fraction(for: 24), 0)
+        XCTAssertEqual(WaveformVolumeLine.fraction(for: -30), 1)
+        XCTAssertEqual(WaveformVolumeLine.fraction(for: 99), 0)
+        let export = WaveformVolumeLine(decibels: 0, range: MediaAdjustments.audioGainRange, appliesToExport: true)
+        XCTAssertEqual(export.decibels(atFraction: WaveformVolumeLine.fraction(for: 6.2)), 6)
+        XCTAssertEqual(export.decibels(atFraction: 1.5), -30)
+        XCTAssertEqual(export.label, "0 dB")
+        // Display-only scaling never shrinks the waveform below its true size.
+        let display = WaveformVolumeLine(decibels: 12, range: WaveformVolumeLine.displayRange, appliesToExport: false)
+        XCTAssertEqual(display.decibels(atFraction: 0.9), 0)
+        XCTAssertEqual(display.label, "4×")
+        XCTAssertEqual(WaveformVolumeLine.decibels(forGain: 4), 12.04, accuracy: 0.01)
+        XCTAssertEqual(WaveformVolumeLine.gain(for: -20), 0.1, accuracy: 0.0001)
+    }
+
     func testStreamingWaveformBoundsMemoryWhenDurationIsUnderestimated() {
         var samples = [Float](repeating: 0, count: 4097)
         samples[0] = -0.75

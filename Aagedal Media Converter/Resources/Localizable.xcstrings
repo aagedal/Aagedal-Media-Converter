@@ -1133,6 +1133,64 @@
         }
       }
     },
+    "Apply volume to export" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lautstärke beim Export anwenden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aplicar volumen a la exportación"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Appliquer le volume à l'export"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Applica il volume all'esportazione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "書き出しに音量を適用"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "내보내기에 볼륨 적용"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bruk lydstyrken i eksporten"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aplicar volume à exportação"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "将音量应用于导出"
+          }
+        }
+      }
+    },
     "ATSC A/85 (−24 LUFS, −2 dBTP)" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2680,6 +2738,180 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "关闭调整而不保存"
+          }
+        }
+      }
+    },
+    "Export volume" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Exportlautstärke"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Volumen de exportación"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Volume d'export"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Volume di esportazione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "書き出し音量"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "내보내기 볼륨"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eksportlydstyrke"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Volume de exportação"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "导出音量"
+          }
+        }
+      }
+    },
+    "Log scale" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Logarithmische Skala"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Escala logarítmica"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Échelle logarithmique"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Scala logaritmica"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "対数スケール"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "로그 스케일"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logaritmisk skala"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Escala logarítmica"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "对数刻度"
+          }
+        }
+      }
+    },
+    "Loudness normalization sets this item's export level, so a volume change would have no effect. Turn it off for this item under Adjustments to use the volume line." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Die Lautheitsnormalisierung legt den Exportpegel dieses Objekts fest, daher hätte eine Lautstärkeänderung keine Wirkung. Schalte sie für dieses Objekt unter „Anpassungen“ aus, um die Lautstärkelinie zu verwenden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La normalización de sonoridad fija el nivel de exportación de este elemento, así que un cambio de volumen no tendría efecto. Desactívala para este elemento en Ajustes para usar la línea de volumen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La normalisation du volume sonore fixe le niveau d'export de cet élément, donc un changement de volume n'aurait aucun effet. Désactivez-la pour cet élément dans Réglages pour utiliser la ligne de volume."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La normalizzazione del loudness imposta il livello di esportazione di questo elemento, quindi una modifica del volume non avrebbe effetto. Disattivala per questo elemento in Regolazioni per usare la linea del volume."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ラウドネスノーマライズがこの項目の書き出しレベルを決めるため、音量を変更しても効果がありません。音量ラインを使うには、「調整」でこの項目のラウドネスノーマライズをオフにしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "라우드니스 정규화가 이 항목의 내보내기 레벨을 정하므로 볼륨을 바꿔도 효과가 없습니다. 볼륨 선을 사용하려면 조정에서 이 항목의 라우드니스 정규화를 끄세요."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lydnivånormalisering bestemmer eksportnivået for dette elementet, så en endring i lydstyrke ville ikke hatt noen virkning. Slå den av for dette elementet under Justeringer for å bruke lydstyrkelinjen."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "A normalização de loudness define o nível de exportação deste item, então uma mudança de volume não teria efeito. Desative-a para este item em Ajustes para usar a linha de volume."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "响度标准化会决定此项目的导出电平，因此更改音量不会生效。要使用音量线，请在“调整”中为此项目关闭响度标准化。"
           }
         }
       }
@@ -7217,6 +7449,64 @@
         }
       }
     },
+    "Show the waveform in decibels, so quiet passages stay visible. Playback and export are unchanged." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Zeigt die Wellenform in Dezibel an, damit leise Passagen sichtbar bleiben. Wiedergabe und Export bleiben unverändert."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Muestra la forma de onda en decibelios para que los pasajes suaves sigan visibles. La reproducción y la exportación no cambian."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Affiche la forme d'onde en décibels pour que les passages calmes restent visibles. La lecture et l'export ne changent pas."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mostra la forma d'onda in decibel, così i passaggi a basso volume restano visibili. Riproduzione ed esportazione non cambiano."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "波形をデシベルで表示し、静かな部分も見えるようにします。再生と書き出しは変わりません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "파형을 데시벨로 표시해 조용한 구간도 보이게 합니다. 재생과 내보내기는 바뀌지 않습니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis bølgeformen i desibel, slik at stille partier forblir synlige. Avspilling og eksport endres ikke."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mostra a forma de onda em decibéis para que trechos baixos continuem visíveis. A reprodução e a exportação não mudam."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "以分贝显示波形，让安静的段落也清晰可见。播放和导出不受影响。"
+          }
+        }
+      }
+    },
     "Size" : {
       "comment" : "Media analysis interface.",
       "extractionState" : "manual",
@@ -8935,6 +9225,72 @@
         }
       }
     },
+    "Volume %@" : {
+      "comment" : "Adjustment summary: export volume in decibels, for example +6 dB.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lautstärke %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volume %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Volumen %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Volume %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Volume %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "音量 %@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "볼륨 %@"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lydstyrke %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Volume %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "音量 %@"
+          }
+        }
+      }
+    },
     "Waiting for iCloud Drive to download this Mac’s history." : {
       "comment" : "Synced history device status: the file is not downloaded yet.",
       "localizations" : {
@@ -8990,6 +9346,64 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "正在等待 iCloud Drive 下载这台 Mac 的历史。"
+          }
+        }
+      }
+    },
+    "Waveform size" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Wellenformgröße"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tamaño de la forma de onda"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Taille de la forme d'onde"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dimensione della forma d'onda"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "波形のサイズ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "파형 크기"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bølgeformstørrelse"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tamanho da forma de onda"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "波形大小"
           }
         }
       }
@@ -9113,6 +9527,64 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "WebM 可在网页浏览器中播放。MKV 为其他播放器封装相同的 VP9 和 Opus 流。"
+          }
+        }
+      }
+    },
+    "When on, dragging the line over the waveform changes this item's export volume, and peaks that would clip are marked in yellow. When off, the line only enlarges the waveform. Double-click the line to reset it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Wenn aktiviert, ändert das Ziehen der Linie über der Wellenform die Exportlautstärke dieses Objekts, und Spitzen, die übersteuern würden, werden gelb markiert. Wenn deaktiviert, vergrößert die Linie nur die Wellenform. Doppelklicke auf die Linie, um sie zurückzusetzen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Si está activado, arrastrar la línea sobre la forma de onda cambia el volumen de exportación de este elemento y los picos que saturarían se marcan en amarillo. Si está desactivado, la línea solo agranda la forma de onda. Haz doble clic en la línea para restablecerla."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Si cette option est activée, faire glisser la ligne sur la forme d'onde modifie le volume d'export de cet élément, et les crêtes qui satureraient sont marquées en jaune. Si elle est désactivée, la ligne agrandit seulement la forme d'onde. Double-cliquez sur la ligne pour la réinitialiser."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se attivo, trascinare la linea sopra la forma d'onda cambia il volume di esportazione di questo elemento e i picchi che andrebbero in clipping sono segnati in giallo. Se disattivo, la linea ingrandisce solo la forma d'onda. Fai doppio clic sulla linea per reimpostarla."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "オンにすると、波形上のラインをドラッグしてこの項目の書き出し音量を変更でき、クリップするピークは黄色で示されます。オフのときは、ラインは波形を拡大するだけです。ラインをダブルクリックするとリセットされます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "켜면 파형 위의 선을 드래그해 이 항목의 내보내기 볼륨을 바꾸며, 클리핑될 피크는 노란색으로 표시됩니다. 끄면 선은 파형만 확대합니다. 선을 두 번 클릭하면 재설정됩니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Når dette er på, endrer du eksportlydstyrken for dette elementet ved å dra linjen over bølgeformen, og topper som ville klippet, merkes med gult. Når det er av, forstørrer linjen bare bølgeformen. Dobbeltklikk på linjen for å tilbakestille den."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quando ativado, arrastar a linha sobre a forma de onda muda o volume de exportação deste item, e os picos que clipariam são marcados em amarelo. Quando desativado, a linha apenas amplia a forma de onda. Clique duas vezes na linha para redefini-la."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "打开时，在波形上拖移这条线会更改此项目的导出音量，会削波的峰值以黄色标出。关闭时，这条线只放大波形。连按这条线可将其复位。"
           }
         }
       }

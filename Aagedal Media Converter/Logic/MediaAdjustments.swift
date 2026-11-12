@@ -10,8 +10,8 @@
 import Foundation
 
 /// Per-item picture and sound adjustments applied while re-encoding:
-/// rotation/flip, speed, fades, audio offset, replacement audio, burned-in
-/// subtitles and an optional loudness override.
+/// rotation/flip, speed, fades, audio offset, volume, replacement audio,
+/// burned-in subtitles and an optional loudness override.
 struct MediaAdjustments: Codable, Equatable, Hashable, Sendable {
     enum Rotation: Int, Codable, CaseIterable, Identifiable, Sendable {
         case none = 0
@@ -108,6 +108,8 @@ struct MediaAdjustments: Codable, Equatable, Hashable, Sendable {
 
     static let minimumSpeed = 0.25
     static let maximumSpeed = 4.0
+    /// Export volume range in dB, matching the trim view's volume line.
+    static let audioGainRange: ClosedRange<Double> = -30...24
 
     var rotation: Rotation = .none
     var flipHorizontal = false
@@ -120,6 +122,9 @@ struct MediaAdjustments: Codable, Equatable, Hashable, Sendable {
     var audioFadeOut: Double = 0
     /// Positive values delay the audio; negative values make it play earlier.
     var audioOffset: Double = 0
+    /// Export volume in dB, set with the trim view's volume line. Nil when the
+    /// line only scales the waveform display.
+    var audioGain: Double?
     var replacementAudio: ReplacementAudio?
     var burnInSubtitles: BurnInSubtitles?
     var loudness: LoudnessOverride = .useDefault
@@ -127,6 +132,9 @@ struct MediaAdjustments: Codable, Equatable, Hashable, Sendable {
     init() {}
 
     var changesSpeed: Bool { abs(speed - 1) > 0.0001 }
+
+    /// Whether the export volume differs audibly from the source.
+    var changesVolume: Bool { abs(audioGain ?? 0) >= 0.05 }
 
     var hasVideoAdjustments: Bool {
         rotation != .none || flipHorizontal || flipVertical || changesSpeed
@@ -136,10 +144,13 @@ struct MediaAdjustments: Codable, Equatable, Hashable, Sendable {
     /// Item-level audio changes. The loudness override is resolved separately.
     var hasAudioAdjustments: Bool {
         changesSpeed || audioFadeIn > 0 || audioFadeOut > 0
-            || abs(audioOffset) > 0.0001 || replacementAudio != nil
+            || abs(audioOffset) > 0.0001 || changesVolume || replacementAudio != nil
     }
 
-    var isActive: Bool { hasVideoAdjustments || hasAudioAdjustments || loudness != .useDefault }
+    /// An enabled export volume counts even at 0 dB, so the trim view's toggle survives editing.
+    var isActive: Bool {
+        hasVideoAdjustments || hasAudioAdjustments || audioGain != nil || loudness != .useDefault
+    }
 
     /// Short labels for the queue row and history summaries.
     var summary: [String] {
@@ -157,6 +168,9 @@ struct MediaAdjustments: Codable, Equatable, Hashable, Sendable {
         if abs(audioOffset) > 0.0001 {
             lines.append(String(localized: "Audio offset \(Self.formatted(audioOffset)) s", comment: "Adjustment summary."))
         }
+        if let audioGain {
+            lines.append(String(localized: "Volume \(Self.formattedGain(audioGain))", comment: "Adjustment summary: export volume in decibels, for example +6 dB."))
+        }
         if let replacementAudio {
             lines.append("\(replacementAudio.mode.displayName): \(replacementAudio.url.lastPathComponent)")
         }
@@ -171,6 +185,14 @@ struct MediaAdjustments: Codable, Equatable, Hashable, Sendable {
 
     private static func formatted(_ value: Double) -> String {
         value.formatted(.number.precision(.fractionLength(0...2)))
+    }
+
+    /// A signed decibel value, such as "+6 dB" or "−3.5 dB".
+    static func formattedGain(_ decibels: Double) -> String {
+        let rounded = (decibels * 10).rounded() / 10
+        let magnitude = abs(rounded).formatted(.number.precision(.fractionLength(0...1)))
+        let sign = rounded > 0 ? "+" : rounded < 0 ? "−" : ""
+        return "\(sign)\(magnitude) dB"
     }
 }
 
@@ -189,6 +211,9 @@ extension MediaAdjustments {
         audioFadeIn = max(0, c.decodeTolerant(Double.self, forKey: .audioFadeIn) ?? 0)
         audioFadeOut = max(0, c.decodeTolerant(Double.self, forKey: .audioFadeOut) ?? 0)
         audioOffset = c.decodeTolerant(Double.self, forKey: .audioOffset) ?? 0
+        audioGain = c.decodeTolerant(Double.self, forKey: .audioGain).flatMap { gain in
+            gain.isFinite ? min(max(gain, Self.audioGainRange.lowerBound), Self.audioGainRange.upperBound) : nil
+        }
         replacementAudio = c.decodeTolerant(ReplacementAudio.self, forKey: .replacementAudio)
         burnInSubtitles = c.decodeTolerant(BurnInSubtitles.self, forKey: .burnInSubtitles)
         loudness = c.decodeTolerant(LoudnessOverride.self, forKey: .loudness) ?? .useDefault

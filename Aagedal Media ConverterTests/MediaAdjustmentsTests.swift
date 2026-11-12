@@ -96,6 +96,32 @@ final class MediaAdjustmentsTests: XCTestCase {
             + "measured_thresh=-40.5:offset=0.3:linear=true:print_format=summary,aresample=48000")
     }
 
+    func testExportVolumePrecedesLoudnessAndFadesAndCountsOnlyWhenAudible() throws {
+        var adjustments = MediaAdjustments()
+        adjustments.audioGain = 6
+        adjustments.audioFadeIn = 1
+        let chain = try MediaAdjustmentsPlan.audioFilterChain(
+            for: adjustments, loudness: LoudnessNormalizationSettings(), measurement: nil,
+            context: .init(outputDuration: 8, sampleRate: 48000, fitsToDuration: false)
+        ).get()
+        XCTAssertEqual(chain, "volume=6dB,loudnorm=I=-23:TP=-1:LRA=20:print_format=json,aresample=48000,"
+            + "afade=t=in:st=0:d=1")
+        XCTAssertTrue(adjustments.hasAudioAdjustments)
+        XCTAssertEqual(adjustments.summary, ["Audio fade 1 s / 0 s", "Volume +6 dB"])
+
+        // An enabled volume at 0 dB keeps the item's setting without touching the audio.
+        var unity = MediaAdjustments()
+        unity.audioGain = 0.02
+        XCTAssertFalse(unity.hasAudioAdjustments)
+        XCTAssertTrue(unity.isActive)
+        XCTAssertNil(try MediaAdjustmentsPlan.audioFilterChain(
+            for: unity, loudness: nil, measurement: nil,
+            context: .init(outputDuration: nil, sampleRate: 48000, fitsToDuration: false)
+        ).get())
+        XCTAssertEqual(MediaAdjustments.formattedGain(-2.96), "−3 dB")
+        XCTAssertEqual(MediaAdjustments.formattedGain(0.02), "0 dB")
+    }
+
     func testOutputChainsExpandGenericMapsAndExtendRoutingGraphs() throws {
         var direct = ["-map", "0:v:0", "-map", "0:a?", "-c:v", "libx264", "-c:a", "aac"]
         let directCount = try MediaAdjustmentsPlan.applyAudioChains(
@@ -160,11 +186,15 @@ final class MediaAdjustmentsTests: XCTestCase {
         adjustments.speed = 1.5
         adjustments.replacementAudio = .init(path: "/tmp/voice.wav", mode: .add)
         adjustments.burnInSubtitles = .init(source: .file(path: "/tmp/subs.srt"), fontSize: 24, backgroundBox: true, position: .top)
+        adjustments.audioGain = -4.5
         let data = try JSONEncoder().encode(adjustments)
         XCTAssertEqual(try JSONDecoder().decode(MediaAdjustments.self, from: data), adjustments)
 
-        let future = Data(#"{"rotation": 45, "speed": 99, "videoFadeIn": -2, "loudness": "loud"}"#.utf8)
+        let future = Data(#"{"rotation": 45, "speed": 99, "videoFadeIn": -2, "loudness": "loud", "audioGain": 99}"#.utf8)
         let decoded = try JSONDecoder().decode(MediaAdjustments.self, from: future)
+        XCTAssertEqual(decoded.audioGain, MediaAdjustments.audioGainRange.upperBound)
+        let malformed = Data(#"{"audioGain": "loud"}"#.utf8)
+        XCTAssertNil(try JSONDecoder().decode(MediaAdjustments.self, from: malformed).audioGain)
         XCTAssertEqual(decoded.rotation, .none)
         XCTAssertEqual(decoded.speed, MediaAdjustments.maximumSpeed)
         XCTAssertEqual(decoded.videoFadeIn, 0)
@@ -221,6 +251,26 @@ final class MediaAdjustmentsTests: XCTestCase {
             let integrated = try await fixture.integratedLoudness(output, track: track)
             XCTAssertEqual(integrated, -23, accuracy: 1, "track \(track)")
         }
+    }
+
+    func testExportVolumeRaisesIntegratedLoudness() async throws {
+        let fixture = try await Fixture.make(audioTracks: 1)
+        defer { fixture.remove() }
+        let plain = fixture.directory.appendingPathComponent("plain.mkv")
+        _ = try await fixture.export(
+            preset: .lossless, adjustments: ResolvedMediaAdjustments(adjustments: nil, globalLoudness: .init()), to: plain
+        )
+        var adjustments = MediaAdjustments()
+        adjustments.audioGain = 6
+        let louder = fixture.directory.appendingPathComponent("louder.mkv")
+        let command = try await fixture.export(
+            preset: .lossless, adjustments: ResolvedMediaAdjustments(adjustments: adjustments, globalLoudness: .init()),
+            to: louder
+        )
+        XCTAssertTrue(command.arguments.contains { $0.contains("volume=6dB") })
+        let difference = try await fixture.integratedLoudness(louder, track: 0)
+            - fixture.integratedLoudness(plain, track: 0)
+        XCTAssertEqual(difference, 6, accuracy: 0.3)
     }
 
     func testReplacementAudioReplacesOrAddsTracksAndFollowsTheTrim() async throws {
