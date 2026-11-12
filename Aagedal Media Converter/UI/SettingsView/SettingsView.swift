@@ -803,8 +803,9 @@ struct SettingsView: View {
             }
             .background(Color(NSColor.windowBackgroundColor))
         }
-        .frame(minWidth: 780, idealWidth: 900, maxWidth: .infinity, minHeight: 540, idealHeight: 600, maxHeight: .infinity)
+        .frame(minWidth: 780, idealWidth: 900, maxWidth: .infinity, minHeight: 540, idealHeight: 720, maxHeight: .infinity)
         .navigationTitle("Settings – Aagedal Media Converter")
+        .background(SettingsWindowConfigurator())
         .background {
             // Keyboard shortcuts for tab switching (Control+1-9, 0 to avoid conflict with main window's CMD+1-9, 0 preset selection)
             VStack(spacing: 0) {
@@ -864,6 +865,26 @@ struct SettingsView: View {
             selectedTab = tab
         }
         requestedTab = ""
+    }
+}
+
+/// SwiftUI's Settings window isn't reliably user-resizable even with flexible
+/// content, so add the resizable style explicitly. Tall tabs such as
+/// Statistics then get the room they need.
+private struct SettingsWindowConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { configure(view.window) }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async { configure(nsView.window) }
+    }
+
+    private func configure(_ window: NSWindow?) {
+        guard let window, !window.styleMask.contains(.resizable) else { return }
+        window.styleMask.insert(.resizable)
     }
 }
 
