@@ -284,6 +284,17 @@ final class EncodeHistoryStore {
         )
     }
 
+    /// Detailed records of a period, oldest first, from every Mac or only the
+    /// Mac with `deviceID` (the same records `statistics(for:)` counts).
+    func records(for period: StatisticsPeriod, deviceID filter: String? = nil, now: Date = Date()) -> [EncodeRecord] {
+        let start = period.start(now: now, calendar: calendar)
+        return allRecords
+            .filter { record in
+                (filter == nil || record.deviceID == filter) && start.map { record.startedAt >= $0 } ?? true
+            }
+            .sorted { $0.startedAt < $1.startedAt }
+    }
+
     /// Whether a (merged) record was made on this Mac.
     func isFromThisMac(_ record: EncodeRecord) -> Bool {
         record.deviceID == nil || record.deviceID == deviceID

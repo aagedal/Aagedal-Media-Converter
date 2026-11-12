@@ -2568,6 +2568,65 @@
         }
       }
     },
+    "Couldn’t Export Statistics" : {
+      "comment" : "Alert title when saving the statistics fails.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kunne ikke eksportere statistikken"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Statistik konnte nicht exportiert werden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se pudieron exportar las estadísticas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Impossible d’exporter les statistiques"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Impossibile esportare le statistiche"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "統計を書き出せませんでした"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "통계를 내보낼 수 없음"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Não foi possível exportar as estatísticas"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "无法导出统计"
+          }
+        }
+      }
+    },
     "dBTP" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2880,6 +2939,183 @@
         }
       }
     },
+    "Encode Statistics" : {
+      "comment" : "Statistics window title and PDF report heading.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kodingsstatistikk"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Codierungsstatistik"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estadísticas de codificación"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Statistiques d’encodage"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Statistiche di codifica"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "エンコード統計"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "인코딩 통계"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estatísticas de codificação"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "编码统计"
+          }
+        }
+      }
+    },
+    "Encode Statistics %@ %@.csv" : {
+      "comment" : "Default file name of the statistics summary CSV.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kodingsstatistikk %@ %@.csv"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Codierungsstatistik %@ %@.csv"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estadísticas de codificación %@ %@.csv"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Statistiques d’encodage %@ %@.csv"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Statistiche di codifica %@ %@.csv"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "エンコード統計 %@ %@.csv"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "인코딩 통계 %@ %@.csv"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estatísticas de codificação %@ %@.csv"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "编码统计 %@ %@.csv"
+          }
+        }
+      }
+    },
+    "Encode Statistics %@ %@.pdf" : {
+      "comment" : "Default file name of the statistics PDF report.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kodingsstatistikk %@ %@.pdf"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Codierungsstatistik %@ %@.pdf"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estadísticas de codificación %@ %@.pdf"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Statistiques d’encodage %@ %@.pdf"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Statistiche di codifica %@ %@.pdf"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "エンコード統計 %@ %@.pdf"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "인코딩 통계 %@ %@.pdf"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estatísticas de codificação %@ %@.pdf"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "编码统计 %@ %@.pdf"
+          }
+        }
+      }
+    },
     "Encoded bitrate" : {
       "comment" : "Media analysis interface.",
       "extractionState" : "manual",
@@ -3078,6 +3314,124 @@
         }
       }
     },
+    "Encodes %@ %@.csv" : {
+      "comment" : "Default file name of the CSV with one row per encode.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kodinger %@ %@.csv"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Codierungen %@ %@.csv"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Codificaciones %@ %@.csv"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Encodages %@ %@.csv"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Codifiche %@ %@.csv"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "エンコード %@ %@.csv"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "인코딩 %@ %@.csv"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Codificações %@ %@.csv"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "编码记录 %@ %@.csv"
+          }
+        }
+      }
+    },
+    "Encodes as CSV…" : {
+      "comment" : "Statistics Export menu item: one spreadsheet row per encode.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kodinger som CSV…"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Codierungen als CSV…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Codificaciones como CSV…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Encodages en CSV…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Codifiche come CSV…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "エンコードをCSVで…"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "인코딩을 CSV로…"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Codificações como CSV…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "编码记录导出为 CSV…"
+          }
+        }
+      }
+    },
     "Encodes by Mac" : {
       "localizations" : {
         "de" : {
@@ -3198,6 +3552,65 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "每一帧"
+          }
+        }
+      }
+    },
+    "Export" : {
+      "comment" : "Statistics Export menu.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eksporter"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Exportieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Exportar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Exporter"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esporta"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "書き出す"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "내보내기"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Exportar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "导出"
           }
         }
       }
@@ -3907,6 +4320,65 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "历史同步已开启，因此统计数据包含你其他 Mac 的编码。"
+          }
+        }
+      }
+    },
+    "Includes monthly summaries of encodes older than the history retention period." : {
+      "comment" : "Note in the statistics PDF report.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inkluderer månedlige sammendrag av kodinger som er eldre enn oppbevaringstiden for historikken."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Enthält monatliche Übersichten von Codierungen, die älter als der Aufbewahrungszeitraum des Verlaufs sind."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Incluye resúmenes mensuales de codificaciones anteriores al periodo de conservación del historial."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Inclut les résumés mensuels des encodages plus anciens que la durée de conservation de l’historique."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Include i riepiloghi mensili delle codifiche più vecchie del periodo di conservazione della cronologia."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "履歴の保持期間より古いエンコードの月別サマリーを含みます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "기록 보존 기간보다 오래된 인코딩의 월별 요약이 포함되어 있습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Inclui resumos mensais de codificações mais antigas que o período de retenção do histórico."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "包含早于历史记录保留期的编码的月度摘要。"
           }
         }
       }
@@ -5303,6 +5775,65 @@
         }
       }
     },
+    "Open in Window" : {
+      "comment" : "Button in Settings › Statistics that opens the statistics window.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Åpne i vindu"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "In Fenster öffnen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abrir en ventana"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ouvrir dans une fenêtre"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Apri in una finestra"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ウインドウで開く"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "윈도우에서 열기"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abrir em janela"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "在窗口中打开"
+          }
+        }
+      }
+    },
     "Packet sizes are read from the container without decoding. Each point is the average bitrate over one window." : {
       "comment" : "Media analysis interface.",
       "extractionState" : "manual",
@@ -5365,6 +5896,65 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "数据包大小直接从封装中读取，无需解码。每个点是一个窗口内的平均码率。"
+          }
+        }
+      }
+    },
+    "PDF Report…" : {
+      "comment" : "Statistics Export menu item.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF-rapport…"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "PDF-Bericht…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Informe PDF…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rapport PDF…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Report PDF…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "PDFレポート…"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "PDF 보고서…"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Relatório PDF…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "PDF 报告…"
           }
         }
       }
@@ -6977,6 +7567,65 @@
         }
       }
     },
+    "Save these statistics as a PDF report or CSV for a spreadsheet" : {
+      "comment" : "Help for the statistics Export menu.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lagre statistikken som PDF-rapport eller som CSV for regneark"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Diese Statistik als PDF-Bericht oder als CSV für eine Tabellenkalkulation sichern"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Guardar estas estadísticas como informe PDF o como CSV para una hoja de cálculo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Enregistrer ces statistiques sous forme de rapport PDF ou de CSV pour un tableur"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Salva queste statistiche come report PDF o come CSV per un foglio di calcolo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "この統計をPDFレポートまたは表計算用のCSVとして保存"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "이 통계를 PDF 보고서 또는 스프레드시트용 CSV로 저장"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Salvar estas estatísticas como relatório PDF ou como CSV para uma planilha"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "将这些统计存储为 PDF 报告或用于电子表格的 CSV"
+          }
+        }
+      }
+    },
     "Show encoded bitrate under quality charts" : {
       "comment" : "Media analysis interface.",
       "extractionState" : "manual",
@@ -7039,6 +7688,65 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "在质量图表下方显示编码后码率"
+          }
+        }
+      }
+    },
+    "Show the statistics in a larger, resizable window" : {
+      "comment" : "Help for the Open in Window button in Settings › Statistics.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis statistikken i et større vindu som kan endre størrelse"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Statistik in einem größeren Fenster mit veränderbarer Größe anzeigen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mostrar las estadísticas en una ventana más grande y redimensionable"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Afficher les statistiques dans une fenêtre plus grande et redimensionnable"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mostra le statistiche in una finestra più grande e ridimensionabile"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "統計をサイズ変更できる大きなウインドウに表示"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "크기를 조절할 수 있는 더 큰 윈도우에 통계 표시"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mostrar as estatísticas em uma janela maior e redimensionável"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "在可调整大小的更大窗口中显示统计"
           }
         }
       }
@@ -7688,6 +8396,65 @@
         }
       }
     },
+    "Summary as CSV…" : {
+      "comment" : "Statistics Export menu item: the summary as a spreadsheet file.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sammendrag som CSV…"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Übersicht als CSV…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Resumen como CSV…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Résumé en CSV…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Riepilogo come CSV…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "概要をCSVで…"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "요약을 CSV로…"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Resumo como CSV…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "摘要导出为 CSV…"
+          }
+        }
+      }
+    },
     "Sync history with your other Macs" : {
       "localizations" : {
         "de" : {
@@ -7807,6 +8574,65 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "目标"
+          }
+        }
+      }
+    },
+    "The PDF report couldn’t be created." : {
+      "comment" : "Error when rendering the statistics PDF fails.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF-rapporten kunne ikke opprettes."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Der PDF-Bericht konnte nicht erstellt werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se pudo crear el informe PDF."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Impossible de créer le rapport PDF."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Impossibile creare il report PDF."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "PDFレポートを作成できませんでした。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "PDF 보고서를 생성할 수 없습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Não foi possível criar o relatório PDF."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "无法创建 PDF 报告。"
           }
         }
       }
