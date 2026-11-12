@@ -5250,14 +5250,15 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertFalse(request.redactedCommandDescription.contains(try XCTUnwrap(request.arguments.last)))
     }
 
-    func testNativeWaveformRendererProducesPerChannelImagesThroughSharedRunner() async throws {
-        let runner = RecordingSubprocessRunner { request, _ in
-            let outputPath = try XCTUnwrap(request.arguments.last)
+    func testNativeWaveformRendererStreamsPerChannelEnvelopesThroughSharedRunner() async throws {
+        let runner = RecordingSubprocessRunner { _, outputHandler in
             let samples = (0..<1_600).map { index in
                 Float(sin(Double(index) * 0.1))
             }
             let data = samples.withUnsafeBytes { Data($0) }
-            try data.write(to: URL(fileURLWithPath: outputPath))
+            // Split mid-sample so the decoder must reassemble frames.
+            outputHandler?(SubprocessOutputChunk(stream: .standardOutput, data: data.prefix(1_001)))
+            outputHandler?(SubprocessOutputChunk(stream: .standardOutput, data: data.dropFirst(1_001)))
             return SubprocessResult(
                 terminationStatus: 0,
                 termination: .exited,
@@ -5269,27 +5270,26 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             )
         }
 
-        let (images, labels, envelopes) = try await NativeWaveformRenderer.generatePerChannelWaveforms(
+        let waveform = try await NativeWaveformRenderer.generateChannelWaveforms(
             url: URL(fileURLWithPath: "/private/fixture/stereo.wav"),
             ffmpegPath: "/private/fixture/ffmpeg",
             streamIndex: 1,
             channelCount: 2,
             channelLayout: "stereo",
             duration: 1,
-            width: 32,
-            heightPerChannel: 30,
             subprocessRunner: runner
         )
 
-        XCTAssertEqual(images.count, 2)
-        XCTAssertEqual(images.map(\.size.width), [800, 800])
-        XCTAssertEqual(images.map(\.size.height), [30, 30])
-        XCTAssertEqual(labels, ["Left", "Right"])
-        XCTAssertEqual(envelopes.count, 2)
-        XCTAssertEqual(envelopes.map(\.frameCount), [800, 800])
+        XCTAssertEqual(waveform.channelLabels, ["Left", "Right"])
+        XCTAssertEqual(waveform.channelEnvelopes.map(\.frameCount), [800, 800])
+        XCTAssertTrue(waveform.channelEnvelopes.allSatisfy { !$0.powerLevels.isEmpty })
         let request = try XCTUnwrap(runner.lastRequest)
         XCTAssertTrue(request.arguments.contains("0:a:1"))
+        XCTAssertTrue(request.arguments.contains("aresample=48000:async=1:first_pts=0"))
+        XCTAssertEqual(request.arguments.last, "pipe:1")
+        // Multichannel streams keep their layout instead of being remixed.
         XCTAssertFalse(request.arguments.contains("-ac"))
+        XCTAssertFalse(request.redactedCommandDescription.contains("/private/fixture/stereo.wav"))
     }
 
     func testWaveformPCMDecoderBoundsAndRedactsFailureDiagnostic() async throws {

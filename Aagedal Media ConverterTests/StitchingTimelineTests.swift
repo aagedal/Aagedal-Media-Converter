@@ -290,6 +290,82 @@ final class StitchingTimelineTests: XCTestCase {
         XCTAssertEqual(streamed.levels, reference.levels)
     }
 
+    func testStreamingWaveformKeepsChannelsApartAndMeasuresRMS() {
+        // Left is a full-scale square wave, right a constant quarter level.
+        let frames = 1_024
+        var samples = [Float]()
+        for frame in 0..<frames { samples += [frame.isMultiple(of: 2) ? 1 : -1, 0.25] }
+        let builder = StreamingWaveformEnvelope(channelCount: 2, sampleRate: 48000, duration: 0)
+        builder.append(samples.withUnsafeBytes { Data($0) })
+        let channels = builder.channelEnvelopes()
+        XCTAssertEqual(channels.count, 2)
+        let end = channels[0].duration
+        XCTAssertEqual(channels[0].peak(from: 0, to: end, level: 0), .init(minimum: -1, maximum: 1))
+        XCTAssertEqual(channels[1].peak(from: 0, to: end, level: 0), .init(minimum: 0, maximum: 0.25))
+        XCTAssertEqual(try XCTUnwrap(channels[0].rms(from: 0, to: end, level: 0)), 1, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(channels[1].rms(from: 0, to: end, level: 2)), 0.25, accuracy: 0.0001)
+        let combined = builder.envelope()
+        XCTAssertEqual(combined.peak(from: 0, to: end, level: 0), .init(minimum: -1, maximum: 1))
+        // Combined power is the channel average: (1 + 0.0625) / 2.
+        XCTAssertEqual(try XCTUnwrap(combined.rms(from: 0, to: end, level: 0)),
+                       Float(0.53125).squareRoot(), accuracy: 0.0001)
+        let reference = WaveformEnvelope(pcmData: samples.withUnsafeBytes { Data($0) },
+                                         channelCount: 2, sampleRate: 48000)
+        XCTAssertEqual(combined.levels, reference.levels)
+        XCTAssertEqual(combined.powerLevels.count, reference.powerLevels.count)
+        for (merged, direct) in zip(combined.powerLevels[0], reference.powerLevels[0]) {
+            XCTAssertEqual(merged, direct, accuracy: 0.0001)
+        }
+    }
+
+    func testWaveformInterpolatesWithinBinsAndRejectsMismatchedMerges() throws {
+        let samples: [Float] = [0.2, 0.2, 0.6, 0.6]
+        let envelope = WaveformEnvelope(pcmData: samples.withUnsafeBytes { Data($0) },
+                                        channelCount: 1, sampleRate: 4, minimumFramesPerBin: 2)
+        XCTAssertEqual(envelope.secondsPerBin(level: 0), 0.5)
+        // Bin centres sit at 0.25 s and 0.75 s; halfway between them blends both.
+        let middle = envelope.interpolated(at: 0.5)
+        XCTAssertEqual(middle.peak.maximum, 0.4, accuracy: 0.0001)
+        XCTAssertEqual(middle.peak.minimum, 0)
+        XCTAssertEqual(try XCTUnwrap(middle.rms), Float(0.2).squareRoot(), accuracy: 0.0001)
+        XCTAssertEqual(envelope.interpolated(at: 0.1).peak.maximum, 0.2, accuracy: 0.0001)
+        XCTAssertEqual(envelope.interpolated(at: 2).peak, .init(minimum: 0, maximum: 0))
+        let shorter = WaveformEnvelope(pcmData: samples.prefix(2).withUnsafeBytes { Data($0) },
+                                       channelCount: 1, sampleRate: 4, minimumFramesPerBin: 2)
+        XCTAssertNil(WaveformEnvelope.merging([envelope, shorter]))
+        XCTAssertNil(WaveformEnvelope.merging([]))
+        XCTAssertEqual(WaveformEnvelope.merging([envelope]), envelope)
+    }
+
+    func testVectorAndScalarEnvelopePathsAgree() {
+        // Aligned whole chunks take the vDSP path; a NaN or an over forces the scalar path.
+        var samples = (0..<4_096).map { Float(sin(Double($0) * 0.37)) * 0.8 }
+        samples[1_001] = .nan
+        samples[3_000] = 1.5
+        samples[3_001] = -1.25
+        let data = samples.withUnsafeBytes { Data($0) }
+        let builder = StreamingWaveformEnvelope(channelCount: 2, sampleRate: 48000, duration: 0)
+        builder.append(data)
+        let streamed = builder.channelEnvelopes()
+        for channel in 0..<2 {
+            let reference = WaveformEnvelope(pcmData: data, channelCount: 2, sampleRate: 48000, channel: channel)
+            XCTAssertEqual(streamed[channel].levels, reference.levels, "channel \(channel)")
+            for (fast, exact) in zip(streamed[channel].powerLevels[0], reference.powerLevels[0]) {
+                XCTAssertEqual(fast, exact, accuracy: 0.00001, "channel \(channel)")
+            }
+        }
+    }
+
+    func testStreamingWaveformSnapshotsWhileDecoding() throws {
+        let builder = StreamingWaveformEnvelope(channelCount: 1, sampleRate: 48000, duration: 1)
+        builder.append([Float](repeating: 0.5, count: 512).withUnsafeBytes { Data($0) })
+        XCTAssertNil(builder.snapshotIfDue(), "snapshots wait for the interval")
+        Thread.sleep(forTimeInterval: 0.3)
+        let partial = try XCTUnwrap(builder.snapshotIfDue())
+        XCTAssertEqual(partial.first?.frameCount, 512)
+        XCTAssertNil(builder.snapshotIfDue())
+    }
+
     func testStreamingWaveformBoundsMemoryWhenDurationIsUnderestimated() {
         var samples = [Float](repeating: 0, count: 4097)
         samples[0] = -0.75
@@ -313,6 +389,7 @@ final class StitchingTimelineTests: XCTestCase {
         try WaveformEnvelopeCache.write(original, to: url)
         let restored = try XCTUnwrap(WaveformEnvelopeCache.read(from: url))
         XCTAssertEqual(restored.levels, original.levels)
+        XCTAssertEqual(restored.powerLevels, original.powerLevels)
         XCTAssertEqual(restored.frameCount, original.frameCount)
         XCTAssertEqual(restored.framesPerBin, original.framesPerBin)
         XCTAssertEqual(restored.duration, original.duration, accuracy: 0.000000001)
@@ -330,19 +407,21 @@ final class StitchingTimelineTests: XCTestCase {
         XCTAssertNil(WaveformEnvelopeCache.read(from: url))
     }
 
-    func testCachedWaveformSkipsDecoderAndRendersAtRequestedSize() async throws {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: url) }
+    func testCachedChannelWaveformsSkipDecoder() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
         let samples: [Float] = [0.8, -0.7, 0, 0]
         let envelope = WaveformEnvelope(pcmData: samples.withUnsafeBytes { Data($0) },
                                        channelCount: 1, sampleRate: 4, minimumFramesPerBin: 1)
-        try WaveformEnvelopeCache.write(envelope, to: url)
+        try WaveformEnvelopeCache.write(envelope, to: directory.appendingPathComponent("waveform_a0_c0_of1_peaks_v2.bin"))
         // An invalid decoder path proves a cache hit doesn't start a subprocess.
-        let cached = try await NativeWaveformRenderer.generateWaveformAssets(
+        let cached = try await NativeWaveformRenderer.generateChannelWaveforms(
             url: URL(fileURLWithPath: "/unused.mov"), ffmpegPath: "/unused-ffmpeg", streamIndex: 0,
-            duration: 1, width: 1200, height: 60, envelopeCacheURL: url)
-        XCTAssertEqual(cached.envelope?.levels, envelope.levels)
-        XCTAssertEqual(cached.image.size, NSSize(width: 1200, height: 60))
+            channelCount: 1, channelLayout: "mono", duration: 1, envelopeCacheDirectory: directory)
+        XCTAssertEqual(cached.channelLabels, ["Mono"])
+        XCTAssertEqual(cached.channelEnvelopes.map(\.levels), [envelope.levels])
+        XCTAssertEqual(cached.channelEnvelopes.map(\.powerLevels), [envelope.powerLevels])
     }
 
     func testWaveformLODPreservesQuietPeaksAndTransients() {
@@ -707,31 +786,27 @@ final class SourceAudioMeterTests: XCTestCase {
         let delayed = try await SourceAudioMeterDecoder.decode(.init(url: url, track: 1, channels: 8, window: 0))
         XCTAssertEqual(delayed.levels(at: 0.1), Array(repeating: -60, count: 8))
         XCTAssertEqual(delayed.levels(at: 0.75)[0], -20, accuracy: 0.01)
-        // Both waveform paths must keep the same source-time origin as playback and metering.
-        let waveform = try await NativeWaveformRenderer.generateWaveformAssets(
-            url: url, ffmpegPath: path, streamIndex: 1, duration: 10.5,
-            width: 800, height: 80, channelCount: 8,
-            envelopeCacheURL: directory.appendingPathComponent("merged-peaks.bin")
-        )
-        let envelope = try XCTUnwrap(waveform.envelope)
+        // Channel and combined waveforms must keep the same source-time origin as playback and metering.
+        let channelEnvelopes = try await NativeWaveformRenderer.generateChannelWaveforms(
+            url: url, ffmpegPath: path, streamIndex: 1, channelCount: 8,
+            channelLayout: "7.1", duration: 10.5, envelopeCacheDirectory: directory
+        ).channelEnvelopes
+        let envelope = try XCTUnwrap(WaveformEnvelope.merging(channelEnvelopes))
         XCTAssertEqual(envelope.duration, 10.5, accuracy: 0.01)
         XCTAssertEqual(envelope.peak(from: 0.1, to: 0.2, level: 0), .init(minimum: 0, maximum: 0))
         XCTAssertEqual(envelope.peak(from: 0.75, to: 0.8, level: 0).maximum, 0.8, accuracy: 0.001)
-        let (_, _, channelEnvelopes) = try await NativeWaveformRenderer.generatePerChannelWaveforms(
-            url: url, ffmpegPath: path, streamIndex: 1, channelCount: 8,
-            channelLayout: "7.1", duration: 10.5, width: 800, heightPerChannel: 40,
-            envelopeCacheDirectory: directory
-        )
-        let (_, _, cachedChannels) = try await NativeWaveformRenderer.generatePerChannelWaveforms(
+        let cachedChannels = try await NativeWaveformRenderer.generateChannelWaveforms(
             url: url, ffmpegPath: "/unused-ffmpeg", streamIndex: 1, channelCount: 8,
-            channelLayout: "7.1", duration: 10.5, width: 1200, heightPerChannel: 60,
-            envelopeCacheDirectory: directory)
+            channelLayout: "7.1", duration: 10.5, envelopeCacheDirectory: directory
+        ).channelEnvelopes
         XCTAssertEqual(cachedChannels.map(\.levels), channelEnvelopes.map(\.levels))
         XCTAssertEqual(channelEnvelopes.count, 8)
         for (index, channel) in channelEnvelopes.enumerated() {
             XCTAssertEqual(channel.duration, 10.5, accuracy: 0.01)
             XCTAssertEqual(channel.peak(from: 0.1, to: 0.2, level: 0), .init(minimum: 0, maximum: 0))
             XCTAssertEqual(channel.peak(from: 0.75, to: 0.8, level: 0).maximum,
+                           Float(index + 1) / 10, accuracy: 0.001)
+            XCTAssertEqual(try XCTUnwrap(channel.rms(from: 0.75, to: 0.8, level: 0)),
                            Float(index + 1) / 10, accuracy: 0.001)
         }
         let surround = try await SourceAudioMeterDecoder.decode(.init(url: url, track: 1, channels: 8, window: 1))

@@ -183,7 +183,7 @@ private actor ReadinessProbeGate {
 
 final class PreviewWaveformCacheTests: XCTestCase {
     private func waveform(_ value: Float = 0.5) -> SendableChannelWaveform {
-        SendableChannelWaveform(channelImages: [], channelLabels: ["L"], channelEnvelopes: [
+        SendableChannelWaveform(channelLabels: ["L"], channelEnvelopes: [
             WaveformEnvelope(peaks: [.init(minimum: -value, maximum: value)],
                              frameCount: 256, framesPerBin: 256, sampleRate: 48_000)
         ])

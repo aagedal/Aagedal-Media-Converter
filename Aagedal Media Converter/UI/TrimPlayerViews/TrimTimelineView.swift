@@ -107,8 +107,6 @@ struct TrimTimelineView: View {
     let waveformEnvelope: WaveformEnvelope?
     let channelWaveformEnvelopes: [WaveformEnvelope]
     let waveformVisualScale: Double
-    let nativeWaveformImage: NSImage?
-    let channelWaveformImages: [NSImage]
     let channelWaveformLabels: [String]
     let waveformURL: URL?
     let waveformChunks: [WaveformChunk]
@@ -163,8 +161,6 @@ struct TrimTimelineView: View {
         waveformEnvelope: WaveformEnvelope? = nil,
         channelWaveformEnvelopes: [WaveformEnvelope] = [],
         waveformVisualScale: Double = 4,
-        nativeWaveformImage: NSImage? = nil,
-        channelWaveformImages: [NSImage] = [],
         channelWaveformLabels: [String] = [],
         waveformURL: URL?,
         waveformChunks: [WaveformChunk] = [],
@@ -187,8 +183,6 @@ struct TrimTimelineView: View {
         self.waveformEnvelope = waveformEnvelope
         self.channelWaveformEnvelopes = channelWaveformEnvelopes
         self.waveformVisualScale = waveformVisualScale
-        self.nativeWaveformImage = nativeWaveformImage
-        self.channelWaveformImages = channelWaveformImages
         self.channelWaveformLabels = channelWaveformLabels
         self.waveformURL = waveformURL
         self.waveformChunks = waveformChunks
@@ -764,20 +758,15 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
 
     @ViewBuilder
     private func waveformContent(width: CGFloat, height: CGFloat) -> some View {
-        if !channelWaveformEnvelopes.isEmpty || !channelWaveformImages.isEmpty {
+        if !channelWaveformEnvelopes.isEmpty {
             // Per-channel waveform — one waveform per audio channel, stacked vertically
             perChannelWaveformContent(width: width, height: height)
+                .overlay(alignment: .leading) { decodeProgressOverlay(width: width) }
         } else if let waveformEnvelope {
             WaveformEnvelopeView(envelope: waveformEnvelope, sourceStart: 0,
                                  sourceDuration: duration, visualScale: waveformVisualScale)
+                .equatable()
                 .frame(width: width, height: height)
-        } else if let image = nativeWaveformImage {
-            // Native waveform — direct NSImage, no disk I/O (mono fallback)
-            Image(nsImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(width: width, height: height)
-                .clipped()
         } else if !waveformChunks.isEmpty || chunkTotalDuration > 0 || duration > 600 {
             // Fallback to chunked waveform (legacy/cached)
             chunkedWaveformContent(width: width, height: height)
@@ -805,19 +794,30 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
         }
     }
 
+    /// Marks the part still decoding while a waveform draws in progressively.
+    @ViewBuilder
+    private func decodeProgressOverlay(width: CGFloat) -> some View {
+        if isLoading, duration > 0, let decoded = channelWaveformEnvelopes.first?.duration,
+           decoded < duration * 0.98 {
+            let front = width * CGFloat(max(0, decoded) / duration)
+            ZStack {
+                Rectangle().fill(Color.white.opacity(0.05))
+                ProgressView().controlSize(.small)
+            }
+            .frame(width: max(0, width - front))
+            .offset(x: front)
+            .allowsHitTesting(false)
+        }
+    }
+
     @ViewBuilder
     private func perChannelWaveformContent(width: CGFloat, height: CGFloat) -> some View {
         VStack(spacing: 0) {
-            ForEach(0..<max(channelWaveformEnvelopes.count, channelWaveformImages.count), id: \.self) { index in
+            ForEach(channelWaveformEnvelopes.indices, id: \.self) { index in
                 ZStack(alignment: .leading) {
-                    if channelWaveformEnvelopes.indices.contains(index) {
-                        WaveformEnvelopeView(envelope: channelWaveformEnvelopes[index], sourceStart: 0,
-                                             sourceDuration: duration, visualScale: waveformVisualScale)
-                    } else if channelWaveformImages.indices.contains(index) {
-                        Image(nsImage: channelWaveformImages[index])
-                            .resizable()
-                            .interpolation(.medium)
-                    }
+                    WaveformEnvelopeView(envelope: channelWaveformEnvelopes[index], sourceStart: 0,
+                                         sourceDuration: duration, visualScale: waveformVisualScale)
+                        .equatable()
 
                     // Channel label (top-left)
                     if index < channelWaveformLabels.count {
@@ -830,7 +830,7 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
                     }
 
                     // Subtle separator line between channels
-                    if index < max(channelWaveformEnvelopes.count, channelWaveformImages.count) - 1 {
+                    if index < channelWaveformEnvelopes.count - 1 {
                         VStack {
                             Spacer()
                             Rectangle()
@@ -1378,7 +1378,10 @@ private struct TimelineKeyTrackerView: NSViewRepresentable {
 
 /// Shared by the Trim and encoding-group timelines. Draw at the actual display
 /// density so resizing preserves peaks instead of stretching a cached bitmap.
-struct WaveformEnvelopeView: View {
+/// Peaks form an antialiased outline and RMS a brighter core, as in most NLEs.
+/// Where a pixel is narrower than one envelope bin, the outline is interpolated
+/// rather than stepped.
+struct WaveformEnvelopeView: View, Equatable {
     let envelope: WaveformEnvelope?
     let sourceStart: Double
     let sourceDuration: Double
@@ -1386,28 +1389,73 @@ struct WaveformEnvelopeView: View {
     var visibleRange: ClosedRange<Double>? = nil
     @Environment(\.displayScale) private var displayScale
 
+    private static let peakColor = Color(red: 1, green: 0.18, blue: 0.47)
+    private static let rmsColor = Color(red: 1, green: 0.62, blue: 0.76)
+
+    // Playback ticks re-evaluate the timeline; an unchanged waveform skips its redraw.
+    // Envelope equality is cheap here because unchanged arrays share storage.
+    nonisolated static func == (lhs: WaveformEnvelopeView, rhs: WaveformEnvelopeView) -> Bool {
+        lhs.envelope == rhs.envelope && lhs.sourceStart == rhs.sourceStart
+            && lhs.sourceDuration == rhs.sourceDuration && lhs.visualScale == rhs.visualScale
+            && lhs.visibleRange == rhs.visibleRange
+    }
+
     var body: some View {
         Canvas { context, size in
             guard let envelope, size.width > 0 else { return }
             let duration = max(0.001, sourceDuration)
             let secondsPerPoint = duration / size.width
             let pixel = 1 / max(1, displayScale)
-            let level = envelope.level(secondsPerPixel: secondsPerPoint * pixel)
+            let secondsPerPixel = secondsPerPoint * pixel
+            let level = envelope.level(secondsPerPixel: secondsPerPixel)
+            let interpolate = secondsPerPixel < envelope.secondsPerBin(level: 0)
             let gain = visualScale.isFinite ? min(16, max(1, visualScale)) : 4
             let midY = size.height / 2
             let halfHeight = max(0, midY - 2)
             let start = max(0, floor((visibleRange?.lowerBound ?? 0) / pixel) * pixel)
             let end = min(size.width, (visibleRange?.upperBound ?? size.width))
             guard end > start else { return }
-            var path = Path()
-            for x in stride(from: start, to: end, by: pixel) {
+            let columns = Int(ceil((end - start) / pixel))
+            var peakTop: [CGPoint] = [], peakBottom: [CGPoint] = []
+            var rmsTop: [CGPoint] = [], rmsBottom: [CGPoint] = []
+            peakTop.reserveCapacity(columns)
+            peakBottom.reserveCapacity(columns)
+            for column in 0..<columns {
+                let x = start + CGFloat(column) * pixel
                 let time = sourceStart + x * secondsPerPoint
-                let peak = envelope.peak(from: time, to: time + pixel * secondsPerPoint, level: level)
-                let top = midY - min(1, Double(peak.maximum) * gain) * halfHeight
-                let bottom = midY - max(-1, Double(peak.minimum) * gain) * halfHeight
-                path.addRect(CGRect(x: x, y: top, width: pixel, height: max(pixel, bottom - top)))
+                let peak: WaveformEnvelope.Peak
+                let rms: Float?
+                if interpolate {
+                    (peak, rms) = envelope.interpolated(at: time + secondsPerPixel / 2)
+                } else {
+                    peak = envelope.peak(from: time, to: time + secondsPerPixel, level: level)
+                    rms = envelope.rms(from: time, to: time + secondsPerPixel, level: level)
+                }
+                // At least a hairline, so silence still reads as a track.
+                let top = min(midY - pixel / 2, midY - min(1, Double(peak.maximum) * gain) * halfHeight)
+                let bottom = max(midY + pixel / 2, midY - max(-1, Double(peak.minimum) * gain) * halfHeight)
+                let centre = x + pixel / 2
+                peakTop.append(CGPoint(x: centre, y: top))
+                peakBottom.append(CGPoint(x: centre, y: bottom))
+                if let rms {
+                    let extent = min(1, Double(rms) * gain) * halfHeight
+                    rmsTop.append(CGPoint(x: centre, y: max(top, midY - extent)))
+                    rmsBottom.append(CGPoint(x: centre, y: min(bottom, midY + extent)))
+                }
             }
-            context.fill(path, with: .color(Color(red: 1, green: 0.18, blue: 0.47)))
+            context.fill(Self.band(upper: peakTop, lower: peakBottom), with: .color(Self.peakColor))
+            if rmsTop.count == columns {
+                context.fill(Self.band(upper: rmsTop, lower: rmsBottom), with: .color(Self.rmsColor))
+            }
         }
+    }
+
+    /// Closes the upper edge, left to right, with the lower edge back again.
+    private static func band(upper: [CGPoint], lower: [CGPoint]) -> Path {
+        var path = Path()
+        guard !upper.isEmpty else { return path }
+        path.addLines(upper + lower.reversed())
+        path.closeSubpath()
+        return path
     }
 }

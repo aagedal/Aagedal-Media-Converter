@@ -1487,6 +1487,7 @@ private struct StitchingClipWaveform: View {
                              sourceStart: item.effectiveTrimStart,
                              sourceDuration: StitchingTimeline.duration(item),
                              visualScale: visualScale, visibleRange: visibleRange)
+        .equatable()
         .background(Color.black.opacity(0.8))
         .overlay {
             if assets?.waveformEnvelope == nil {
