@@ -6,7 +6,7 @@
       "identity": "mpvkit",
       "path": "SwiftPackages/mpvkit",
       "sourceURL": "https://github.com/aagedal/MPVKit.git",
-      "revision": "f957f4830d449e80723554cdc05ddc4138c1806e",
+      "revision": "d2680851a5a56dafb6be8df79989d69817dac891",
       "license": "GPL-3.0-or-later",
       "licenseFile": "Licenses/mpvkit-LICENSE.txt",
       "requiredSourceComponents": [
@@ -91,6 +91,7 @@
         "MPVKit Rust standard-library licensing/source reference (build-date inference)",
         "MPVKit crc-catalog upstream source (crate VCS revision)",
         "MPVKit 1.1.0 custom GPL build",
+        "MPVKit custom GPL libmpv with meter history",
         "MPVKit pinned wrapper and build sources"
       ]
     },
@@ -713,11 +714,18 @@
       "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-resize.1/mpvkit-n9.0.2-resize.1-sources.tar.gz"
     },
     {
+      "component": "MPVKit custom GPL libmpv with meter history",
+      "path": "build/attribution/mpvkit/mpvkit-n9.0.2-history.1-sources.tar.gz",
+      "bytes": 24790663,
+      "sha256": "b814d27ac34ca2f00a50691acd7dc5a0feb341aba65bc7685c8db4555610641a",
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-history.1/mpvkit-n9.0.2-history.1-sources.tar.gz"
+    },
+    {
       "component": "MPVKit pinned wrapper and build sources",
-      "path": "build/attribution/mpvkit/MPVKit-1.1.0-resize.1-pinned-source.tar.gz",
-      "bytes": 122735,
-      "sha256": "86b2fa4573fe799adbfec9a54f05597feffd243d46f54590f88145c8fa7b5b3c",
-      "url": "https://github.com/aagedal/MPVKit/tree/f957f4830d449e80723554cdc05ddc4138c1806e"
+      "path": "build/attribution/mpvkit/MPVKit-1.1.0-history.1-pinned-source.tar.gz",
+      "bytes": 127397,
+      "sha256": "54eb17df5865d77ada1ca36e532c0c5eb47642406aa398fd90441e1e7f62b742",
+      "url": "https://github.com/aagedal/MPVKit/tree/d2680851a5a56dafb6be8df79989d69817dac891"
     },
     {
       "component": "yt-dlp-rs MPL-2.0 crate sources",
@@ -1309,8 +1317,8 @@
     },
     {
       "path": "Licenses/mpvkit-LICENSE.txt",
-      "bytes": 2916645,
-      "sha256": "9dd9d038d152a59d0d8fc582e3b3f304bfceadf7c6720502bc8f73da5ca6f320"
+      "bytes": 2916702,
+      "sha256": "41b5c8fe946508078bd63b7b1515d4a2d558e21adeef34009bb5f81800170411"
     },
     {
       "path": "Licenses/nemo-speech-LICENSE.txt",

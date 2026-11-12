@@ -415,9 +415,8 @@ final class MPVPreviewObservationTests: XCTestCase {
 
     /// The Playback meter needs MPVKit's `amc-meter-history` lavfi option.
     private func requirePlaybackMeterHistory() throws {
-        guard MPVPlayer.supportsPlaybackMeterHistory else {
-            throw XCTSkip("Requires the MPVKit build with the amc-meter-history lavfi option")
-        }
+        XCTAssertTrue(MPVPlayer.supportsPlaybackMeterHistory,
+                      "The pinned MPVKit must provide the amc-meter-history lavfi option")
     }
 
     func testPlaybackMeterHistoryProbeRejectsUnknownFilterOptions() throws {

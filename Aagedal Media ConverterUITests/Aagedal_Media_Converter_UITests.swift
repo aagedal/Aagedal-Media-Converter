@@ -1469,11 +1469,6 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     /// actually pass its display gate, against independently authored AAC edges.
     @MainActor
     func testMPVPlaybackMeterHistoryTimingInNativePreview() throws {
-        // Playback metering needs MPVKit's `amc-meter-history` lavfi option.
-        // Until the app pins that build, run with TEST_RUNNER_AMC_METER_HISTORY_LIBRARY=1
-        // against a local MPVKit override (docs/dependency-patches/README.md).
-        try XCTSkipUnless(ProcessInfo.processInfo.environment["AMC_METER_HISTORY_LIBRARY"] == "1",
-                          "Needs the MPVKit build with amc-meter-history")
         do {
             let clock = "time-pos"
             launchApp(generatedFixture: true, realtimeInput: true,

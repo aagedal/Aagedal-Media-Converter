@@ -5,7 +5,7 @@
       "identity": "mpvkit",
       "path": "SwiftPackages/mpvkit",
       "sourceURL": "https://github.com/aagedal/MPVKit.git",
-      "revision": "f957f4830d449e80723554cdc05ddc4138c1806e",
+      "revision": "d2680851a5a56dafb6be8df79989d69817dac891",
       "license": "GPL-3.0-or-later",
       "licenseFile": "Licenses/mpvkit-LICENSE.txt",
       "requiredSourceComponents": [
@@ -90,6 +90,7 @@
         "MPVKit Rust standard-library licensing/source reference (build-date inference)",
         "MPVKit crc-catalog upstream source (crate VCS revision)",
         "MPVKit 1.1.0 custom GPL build",
+        "MPVKit custom GPL libmpv with meter history",
         "MPVKit pinned wrapper and build sources"
       ]
     },
