@@ -24,6 +24,13 @@ STANDARD_PATCHES = (
     "0003-enable-avfoundation-ao-tvos.patch",
     "0004-coreaudio-init-failure.patch",
     "0005-coreaudio-clear-failed-unit.patch",
+    "0006-moltenvk-follow-layer-resize.patch",
+)
+# Since aagedal-1.1.0-n9.0.2-history.1 the MPVKit recipe carries the meter inputs
+# itself. They must produce exactly the tree the repository inputs produce.
+RECIPE_METER_PATCHES = (
+    "0007-af-lavfi-meter-history.patch",
+    "0008-ad-lavc-aac-discard-priming.patch",
 )
 STANDARD_SOURCE_HASHES = {
     "filters/f_lavfi.c": "064f23b34cdf424a583d35d2d12d9a3760aff901f5ae15c82e30faa0cffcc80b",
@@ -150,7 +157,9 @@ def stage(recipe_root, source_cache, output, jobs=4, build=False):
     if git(source_cache, "rev-parse", "HEAD") != SOURCE_COMMIT or git(source_cache, "rev-parse", SOURCE_TAG + "^{commit}") != SOURCE_COMMIT:
         raise ValueError("MPV cache HEAD and tag must match the exact pinned source commit")
     recipe_patches = recipe_root / "Sources/BuildScripts/patch/libmpv"
-    if sorted(p.name for p in recipe_patches.glob("*.patch")) != sorted(STANDARD_PATCHES):
+    recipe_patch_names = sorted(p.name for p in recipe_patches.glob("*.patch"))
+    recipe_has_meter = recipe_patch_names == sorted(STANDARD_PATCHES + RECIPE_METER_PATCHES)
+    if recipe_patch_names != sorted(STANDARD_PATCHES) and not recipe_has_meter:
         raise ValueError("Unexpected standard MPV patch set")
     for name in EXTRA_INPUTS:
         if not (ROOT / "docs/dependency-patches" / name).is_file():
@@ -211,6 +220,16 @@ def stage(recipe_root, source_cache, output, jobs=4, build=False):
         if actual != STANDARD_SOURCE_HASHES:
             raise ValueError("Standard-patched MPV source hashes differ from qualified inputs")
         report["standard_patched_source_sha256"] = actual
+        recipe_check = None
+        if recipe_has_meter:
+            recipe_check = output / "recipe-meter-check"
+            shutil.copytree(source, recipe_check, symlinks=True)
+            report["recipe_meter_patch_sha256"] = {}
+            for name in RECIPE_METER_PATCHES:
+                patch = output / "Sources/BuildScripts/patch/libmpv" / name
+                report["recipe_meter_patch_sha256"][name] = digest(patch)
+                checked(["git", "apply", "--check", str(patch)], cwd=recipe_check)
+                checked(["git", "apply", str(patch)], cwd=recipe_check)
         extra = output / "meter-patches"
         extra.mkdir()
         report["extra_patch_sha256"] = {}
@@ -225,6 +244,11 @@ def stage(recipe_root, source_cache, output, jobs=4, build=False):
                 shutil.copyfile(patch, source / "filters" / name)
         ensure_owned_tree(source, output)
         report["patched_source_sha256"] = hash_tree(source)
+        if recipe_check is not None:
+            if hash_tree(recipe_check) != report["patched_source_sha256"]:
+                raise ValueError("Recipe meter patches differ from the repository patch inputs")
+            shutil.rmtree(recipe_check)
+            report["recipe_meter_patches_match_inputs"] = True
         rewrite_recipe(output, jobs)
         report["entrypoint_sha256"] = digest(output / "Sources/BuildScripts/XCFrameworkBuild/main.swift")
         report["base_recipe_sha256"] = digest(output / "Sources/BuildScripts/XCFrameworkBuild/base.swift")

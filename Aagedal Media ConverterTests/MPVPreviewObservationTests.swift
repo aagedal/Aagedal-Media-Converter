@@ -19,6 +19,7 @@ final class MPVPreviewObservationTests: XCTestCase {
 
     @MainActor
     func testPackagedMPVGroupedAudioAuditionAndSingleTrackRestoration() async throws {
+        try requirePlaybackMeterHistory()
         XCTAssertTrue(MPVPlayer.supportsGroupedAudioPresentation)
         let source = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-group-\(UUID().uuidString).mkv")
         defer { try? FileManager.default.removeItem(at: source) }
@@ -198,9 +199,7 @@ final class MPVPreviewObservationTests: XCTestCase {
 
     @MainActor
     func testTimestampHistoryMeasuresStartupAndResumeWithoutDecoderReadAheadGap() async throws {
-        guard ProcessInfo.processInfo.environment["AMC_PLAYBACK_METER_HISTORY"] == "1" else {
-            throw XCTSkip("Requires the isolated timestamp-history dependency and diagnostic opt-in")
-        }
+        try requirePlaybackMeterHistory()
         let source = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-history-resume-\(UUID().uuidString).mkv")
         defer { try? FileManager.default.removeItem(at: source) }
         let generated = try await SubprocessRunner().run(SubprocessRequest(
@@ -245,9 +244,7 @@ final class MPVPreviewObservationTests: XCTestCase {
 
     @MainActor
     func testTimestampHistorySurvivesRepeatedShuttleSpeedChanges() async throws {
-        guard ProcessInfo.processInfo.environment["AMC_PLAYBACK_METER_HISTORY"] == "1" else {
-            throw XCTSkip("Requires the isolated timestamp-history dependency and diagnostic opt-in")
-        }
+        try requirePlaybackMeterHistory()
         let source = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-history-speed-\(UUID().uuidString).mkv")
         defer { try? FileManager.default.removeItem(at: source) }
         let generated = try await SubprocessRunner().run(SubprocessRequest(
@@ -286,9 +283,7 @@ final class MPVPreviewObservationTests: XCTestCase {
 
     @MainActor
     func testTimestampHistoryDoesNotPublishDelayedAudioBeforeMeasuredInterval() async throws {
-        guard ProcessInfo.processInfo.environment["AMC_PLAYBACK_METER_HISTORY"] == "1" else {
-            throw XCTSkip("Requires the isolated timestamp-history dependency and diagnostic opt-in")
-        }
+        try requirePlaybackMeterHistory()
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-delayed-history-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -327,6 +322,7 @@ final class MPVPreviewObservationTests: XCTestCase {
 
     @MainActor
     func testPackagedMPVCompressedMonoMeter() async throws {
+        try requirePlaybackMeterHistory()
         let source = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-aac-meter-\(UUID().uuidString).mkv")
         defer { try? FileManager.default.removeItem(at: source) }
         let generated = try await SubprocessRunner().run(SubprocessRequest(
@@ -354,6 +350,7 @@ final class MPVPreviewObservationTests: XCTestCase {
 
     @MainActor
     func testPackagedMPVPlaybackMeterSignalAndLifecycle() async throws {
+        try requirePlaybackMeterHistory()
         XCTAssertTrue(MPVPlayer.supportsPlaybackMeter, "Pinned libavfilter must provide astats and ebur128")
         let source = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-meter-\(UUID().uuidString).mkv")
         defer { try? FileManager.default.removeItem(at: source) }
@@ -414,6 +411,24 @@ final class MPVPreviewObservationTests: XCTestCase {
         player.stop()
         try await Task.sleep(for: .milliseconds(200))
         XCTAssertNil(player.playbackMeterSample, "Stopping rejects late metadata")
+    }
+
+    /// The Playback meter needs MPVKit's `amc-meter-history` lavfi option.
+    private func requirePlaybackMeterHistory() throws {
+        guard MPVPlayer.supportsPlaybackMeterHistory else {
+            throw XCTSkip("Requires the MPVKit build with the amc-meter-history lavfi option")
+        }
+    }
+
+    func testPlaybackMeterHistoryProbeRejectsUnknownFilterOptions() throws {
+        // The capability probe relies on libmpv validating lavfi suboptions when
+        // the option is set, before the player is initialized.
+        let handle = try XCTUnwrap(mpv_create())
+        defer { mpv_terminate_destroy(handle) }
+        XCTAssertGreaterThanOrEqual(mpv_set_option_string(handle, "af", "lavfi=graph=[anull]"), 0)
+        XCTAssertLessThan(mpv_set_option_string(handle, "af", "lavfi=graph=[anull]:amc-no-such-option=yes"), 0)
+        XCTAssertEqual(MPVPlayer.supportsPlaybackMeter, MPVPlayer.supportsPlaybackMeterHistory,
+                       "The pinned filters exist, so only the history option decides availability")
     }
 
     @MainActor

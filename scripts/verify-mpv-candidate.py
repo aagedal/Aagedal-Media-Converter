@@ -21,6 +21,11 @@ PATCH = Path(__file__).resolve().parents[1] / "docs/dependency-patches/mpv-0.41.
 FOLLOWUP_PATCH = PATCH.with_name("mpv-0.41.0-coreaudio-clear-failed-unit.patch")
 SOURCE_DIFF = "source-before-coreaudio.patch"
 PATCHED_SOURCE = "dist/libmpv-v0.41.0/audio/out/ao_coreaudio.c"
+# Meter-history builds carry their inputs as MPVKit recipe patches instead.
+METER_INPUTS = ("mpv-0.41.0-meter-history.patch", "amc_meter_history.h",
+                "mpv-0.41.0-aac-discard-priming.patch")
+METER_SOURCES = ("dist/libmpv-v0.41.0/filters/f_lavfi.c", "dist/libmpv-v0.41.0/filters/amc_meter_history.h",
+                 "dist/libmpv-v0.41.0/audio/decode/ad_lavc.c", PATCHED_SOURCE)
 
 
 def archive_path(name):
@@ -68,14 +73,33 @@ def contained(root, name):
     return result
 
 
+def verify_meter_sources(root, evidence):
+    """Check the retained meter inputs and the built tree's patched sources."""
+    inputs, sources = evidence["meter_input_sha256"], evidence.get("patched_source_sha256", {})
+    if set(inputs) != set(METER_INPUTS) or set(sources) != set(METER_SOURCES):
+        raise ValueError("Evidence is missing meter input or patched source hashes")
+    for name in METER_INPUTS:
+        with (PATCH.parent / name).open("rb") as stream:
+            if digest(stream) != inputs[name]:
+                raise ValueError(f"Retained meter input hash mismatch: {name}")
+    for name in METER_SOURCES:
+        with contained(root, name).open("rb") as stream:
+            if digest(stream) != sources[name]:
+                raise ValueError(f"Patched meter source hash mismatch: {name}")
+
+
 def verify(root, evidence, architecture_reader=None):
     if evidence.get("status") != "build_succeeded" or evidence.get("exit_code") != 0:
         raise ValueError("Evidence does not describe a successful build")
-    source_checks = (
-        (PATCH, "patch_sha256", "Retained CoreAudio patch"),
-        (contained(root, SOURCE_DIFF), "source_before_coreaudio_diff_sha256", "Pre-patch source diff"),
-        (contained(root, PATCHED_SOURCE), "patched_coreaudio_sha256", "Patched CoreAudio source"),
-    )
+    if "meter_input_sha256" in evidence:
+        verify_meter_sources(root, evidence)
+        source_checks = ()
+    else:
+        source_checks = (
+            (PATCH, "patch_sha256", "Retained CoreAudio patch"),
+            (contained(root, SOURCE_DIFF), "source_before_coreaudio_diff_sha256", "Pre-patch source diff"),
+            (contained(root, PATCHED_SOURCE), "patched_coreaudio_sha256", "Patched CoreAudio source"),
+        )
     for path, key, label in source_checks:
         expected_hash = evidence.get(key)
         if not isinstance(expected_hash, str) or len(expected_hash) != 64:
@@ -145,6 +169,7 @@ def verify(root, evidence, architecture_reader=None):
                         raise ValueError(f"Archive binary differs from candidate: {member}")
     return {"status": "verified", "artifact_count": len(expected),
             "coreaudio_source_correspondence": True,
+            "meter_source_correspondence": "meter_input_sha256" in evidence,
             "framework_architectures": sorted(ARCHITECTURES),
             "thin_archive_architectures": {arch: [arch] for arch in sorted(ARCHITECTURES)},
             "archive_binary_correspondence": True, "release_ready": False}

@@ -11,6 +11,10 @@ final class AudioMeterBenchmarkTests: XCTestCase {
         let measuredSeconds: Double?
         let timestampHistory: Bool
         let historyIngestSeconds: Double?
+        /// Host plus reaped child CPU since the run started, for sustained runs.
+        let cpuSeconds: Double?
+        /// `ProcessInfo.ThermalState` raw value: 0 nominal … 3 critical.
+        let thermalState: Int?
     }
 
     private struct Run: Codable {
@@ -39,6 +43,9 @@ final class AudioMeterBenchmarkTests: XCTestCase {
             return
         }
         let rounds = min(5, max(1, Int(environment["AMC_AUDIO_METER_BENCHMARK_ROUNDS"] ?? "") ?? 3))
+        // Seventeen seconds matches the earlier evidence; sustained runs last minutes.
+        let seconds = min(1800, max(17, Double(environment["AMC_AUDIO_METER_BENCHMARK_SECONDS"] ?? "") ?? 17))
+        let sustained = seconds > 60
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("audio-meter-benchmark-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -50,16 +57,22 @@ final class AudioMeterBenchmarkTests: XCTestCase {
             let source = directory.appendingPathComponent(name + ".mkv")
             // Distinct, known levels every two seconds let the report measure
             // signal transitions rather than trusting the decoder's playhead label.
-            let tone = "pow(10,(-6-1.5*floor(t/2))/20)*sin(2*PI*1000*t)"
+            // The nine levels repeat every 18 seconds so long runs keep edges.
+            let tone = "pow(10,(-6-1.5*floor(mod(t,18)/2))/20)*sin(2*PI*1000*t)"
             let expressions = Array(repeating: tone, count: channels).joined(separator: "|")
+            let duration = Int(seconds) + 15
             var arguments = ["-nostdin", "-hide_banner", "-loglevel", "error", "-y",
-                             "-f", "lavfi", "-i", "aevalsrc='\(expressions)':s=48000:d=32:c=\(channels == 2 ? "stereo" : "5.1")"]
-            if channels == 2 {
-                arguments += ["-f", "lavfi", "-i", "testsrc2=size=640x360:rate=24:duration=32", "-c:v", "mpeg4"]
+                             "-f", "lavfi", "-i", "aevalsrc='\(expressions)':s=48000:d=\(duration):c=\(channels == 2 ? "stereo" : "5.1")"]
+            if channels == 2, sustained {
+                // Representative of camera files: hardware-decoded 1080p H.264.
+                arguments += ["-f", "lavfi", "-i", "testsrc2=size=1920x1080:rate=25:duration=\(duration)",
+                              "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-g", "50"]
+            } else if channels == 2 {
+                arguments += ["-f", "lavfi", "-i", "testsrc2=size=640x360:rate=24:duration=\(duration)", "-c:v", "mpeg4"]
             }
             arguments += ["-c:a", channels == 2 ? "aac" : "flac", source.path]
             let generated = try await SubprocessRunner().run(SubprocessRequest(
-                executableURL: ffmpeg, arguments: arguments, timeout: .seconds(60)))
+                executableURL: ffmpeg, arguments: arguments, timeout: .seconds(60 + 2 * duration)))
             XCTAssertTrue(generated.succeeded, generated.standardErrorText)
             guard generated.succeeded else { return }
             for round in 0..<rounds {
@@ -68,7 +81,7 @@ final class AudioMeterBenchmarkTests: XCTestCase {
                 for offset in 0..<modes.count {
                     let mode = modes[(round + offset) % modes.count]
                     let run = try await measure(source: source, name: name, channels: channels,
-                                                round: round + 1, mode: mode)
+                                                round: round + 1, mode: mode, seconds: seconds)
                     runs.append(run)
                     print("Audio meter benchmark: \(name), round \(round + 1), \(mode): \(run.hostCPUSeconds + run.childCPUSeconds) CPU seconds / \(run.wallSeconds) wall seconds")
                 }
@@ -81,7 +94,8 @@ final class AudioMeterBenchmarkTests: XCTestCase {
     }
 
     @MainActor
-    private func measure(source: URL, name: String, channels: Int, round: Int, mode: String) async throws -> Run {
+    private func measure(source: URL, name: String, channels: Int, round: Int, mode: String,
+                         seconds: Double) async throws -> Run {
         let player = MPVPlayer()
         let layer = MPVMetalLayer()
         player.attachDrawable(layer)
@@ -104,7 +118,7 @@ final class AudioMeterBenchmarkTests: XCTestCase {
         let start = ProcessInfo.processInfo.systemUptime
         player.setPlaybackMeterEnabled(mode == "playback")
         player.play()
-        while ProcessInfo.processInfo.systemUptime - start < 17 {
+        while ProcessInfo.processInfo.systemUptime - start < seconds {
             let time = player.timePos
             if mode == "source" {
                 let nextWindow = Int(max(0, time) / SourceAudioMeterRequest.windowDuration)
@@ -121,7 +135,9 @@ final class AudioMeterBenchmarkTests: XCTestCase {
             let sample = mode == "source" ? chunk?.sample(at: player.timePos) : player.playbackMeterSample
             readings.append(Reading(playhead: player.timePos, peak: sample?.peaks.first.flatMap { $0 },
                 measuredSeconds: sample?.seconds, timestampHistory: mode == "playback" && player.playbackMeterHasTimestampHistory,
-                historyIngestSeconds: mode == "playback" ? player.playbackMeterHistoryIngestSeconds : nil))
+                historyIngestSeconds: mode == "playback" ? player.playbackMeterHistoryIngestSeconds : nil,
+                cpuSeconds: try cpuSeconds(children: false) - hostStart + cpuSeconds(children: true) - childStart,
+                thermalState: ProcessInfo.processInfo.thermalState.rawValue))
             try await Task.sleep(for: .milliseconds(100))
         }
         let wall = ProcessInfo.processInfo.systemUptime - start
@@ -131,18 +147,21 @@ final class AudioMeterBenchmarkTests: XCTestCase {
         XCTAssertNotEqual(output, "unknown", "Capture the backend after playback actually initializes it")
         XCTAssertNil(player.error)
         XCTAssertTrue(player.isPlaying)
-        XCTAssertGreaterThan(player.timePos, 15, "A stalled output cannot produce a comparable run")
+        XCTAssertGreaterThan(player.timePos, seconds - 2, "A stalled output cannot produce a comparable run")
+        // About ten readings per second; require most of them.
+        let minimumReadings = Int(seconds * 6)
         if mode != "off" {
-            XCTAssertGreaterThan(readings.compactMap(\.peak).count, 100, "Meter must produce actual readings")
+            XCTAssertGreaterThan(readings.compactMap(\.peak).count, minimumReadings, "Meter must produce actual readings")
         }
-        if mode == "playback", ProcessInfo.processInfo.environment["AMC_PLAYBACK_METER_HISTORY"] == "1" {
-            XCTAssertGreaterThan(readings.filter(\.timestampHistory).count, 100, "Diagnostic run must use actual timestamp history")
+        if mode == "playback" {
+            XCTAssertGreaterThan(readings.filter(\.timestampHistory).count, minimumReadings, "Playback must use actual timestamp history")
             let measured = readings.filter { $0.timestampHistory && $0.measuredSeconds != nil }
-            XCTAssertGreaterThan(measured.filter { abs($0.playhead - ($0.measuredSeconds ?? $0.playhead)) > 0.000001 }.count, 80,
+            XCTAssertGreaterThan(measured.filter { abs($0.playhead - ($0.measuredSeconds ?? $0.playhead)) > 0.000001 }.count,
+                                 minimumReadings * 4 / 5,
                 "Measured frame ends must not be replaced with receipt-time playhead labels")
         }
         return Run(fixture: name, round: round, mode: mode, audioOutput: output,
-                   clock: mode == "playback" ? (ProcessInfo.processInfo.environment["AMC_PLAYBACK_METER_CLOCK"] ?? "time-pos") : "time-pos", wallSeconds: wall,
+                   clock: "time-pos", wallSeconds: wall,
                    hostCPUSeconds: host, childCPUSeconds: child, sourceWindows: windows, readings: readings)
     }
 

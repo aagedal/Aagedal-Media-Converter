@@ -51,6 +51,26 @@ class AudioMeterBenchmarkReportTests(unittest.TestCase):
         self.assertEqual(len(report["transitions"]), 1)
         self.assertEqual(report["transitions"][0]["sourceSeconds"], 4)
 
+    def test_repeating_level_cycle_maps_edges_to_their_cycle(self):
+        readings = [{"playhead": 17.9, "peak": -18}, {"playhead": 18.1, "peak": -6},
+                    {"playhead": 20.2, "peak": -7.5}, {"playhead": 35.9, "peak": -18},
+                    {"playhead": 36.3, "peak": -6}, {"playhead": 37.9, "peak": -7.5}]
+        report = BENCHMARK.summarize([self.run_sample(readings)])[0]
+        self.assertEqual([edge["sourceSeconds"] for edge in report["transitions"]], [20, 34, 38])
+        self.assertAlmostEqual(report["transitions"][0]["delaySeconds"], 0.2)
+        self.assertAlmostEqual(report["transitions"][2]["delaySeconds"], -0.1)
+
+    def test_sustained_runs_report_cpu_per_minute_and_worst_thermal_state(self):
+        readings = [{"playhead": index / 10, "cpuSeconds": index * 0.003,
+                     "thermalState": 1 if index == 900 else 0} for index in range(1500)]
+        run = self.run_sample(readings) | {"wallSeconds": 150}
+        report = BENCHMARK.summarize([run])[0]
+        self.assertEqual(len(report["cpuPercentPerMinute"]), 2)
+        self.assertAlmostEqual(report["cpuPercentPerMinute"][0], 2.995, places=2)
+        self.assertEqual(report["maxThermalState"], "fair")
+        self.assertEqual(report["readingsAboveNominalThermal"], 1)
+        self.assertEqual(BENCHMARK.summarize([self.run_sample(readings[:10])])[0]["cpuPercentPerMinute"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

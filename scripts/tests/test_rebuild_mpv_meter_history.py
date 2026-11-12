@@ -27,7 +27,8 @@ class CleanMPVBuilderTests(unittest.TestCase):
         self.output = self.root / "output"
         self.source.mkdir()
         subprocess.run(["git", "init", "-q", str(self.source)], check=True)
-        self.files = ["filters/f_lavfi.c", "audio/decode/ad_lavc.c", "audio/out/ao_coreaudio.c", "extra-a", "extra-b"]
+        self.files = ["filters/f_lavfi.c", "audio/decode/ad_lavc.c", "audio/out/ao_coreaudio.c", "extra-a", "extra-b",
+                      "extra-c"]
         for name in self.files:
             self.write(self.source / name, "upstream\n")
         subprocess.run(["git", "-C", str(self.source), "add", "."], check=True)
@@ -73,6 +74,27 @@ class CleanMPVBuilderTests(unittest.TestCase):
     def patch(path, before, after):
         return "".join(difflib.unified_diff(before.splitlines(keepends=True), after.splitlines(keepends=True),
                                            fromfile="a/" + path, tofile="b/" + path))
+
+    def add_recipe_meter_patches(self, history="history\n"):
+        patch_root = self.recipe / "Sources/BuildScripts/patch/libmpv"
+        header = "--- /dev/null\n+++ b/filters/amc_meter_history.h\n@@ -0,0 +1 @@\n+/* owned history header */\n"
+        self.write(patch_root / BUILDER.RECIPE_METER_PATCHES[0],
+                   self.patch(self.files[0], "standard\n", history) + header)
+        self.write(patch_root / BUILDER.RECIPE_METER_PATCHES[1], self.patch(self.files[1], "standard\n", "priming\n"))
+
+    def testRecipeCarriedMeterPatchesMustMatchRepositoryInputs(self):
+        self.add_recipe_meter_patches()
+        report = BUILDER.stage(self.recipe, self.source, self.output)
+        prepared = self.output / "dist/libmpv-v0.41.0"
+        self.assertEqual((prepared / self.files[0]).read_text(), "history\n")
+        self.assertTrue(report["recipe_meter_patches_match_inputs"])
+        self.assertFalse((self.output / "recipe-meter-check").exists())
+
+    def testDivergentRecipeMeterPatchIsRejected(self):
+        self.add_recipe_meter_patches(history="other history\n")
+        with self.assertRaisesRegex(ValueError, "differ from the repository"):
+            BUILDER.stage(self.recipe, self.source, self.output)
+        self.assertEqual(json.loads((self.output / "staging.json").read_text())["status"], "failed")
 
     def testDirtyCacheExportsCommittedTreeAndNeverWritesInputs(self):
         self.write(self.source / self.files[0], "dirty working tree\n")

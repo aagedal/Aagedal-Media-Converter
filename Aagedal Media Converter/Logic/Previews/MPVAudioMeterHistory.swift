@@ -4,8 +4,8 @@
 import CoreFoundation
 import Foundation
 
-/// Consumes the experimental filter-boundary transport. The supplied clock must
-/// be qualified separately: these measurements never establish device timing.
+/// Consumes MPVKit's `amc-meter-history-v1` filter-boundary transport. Frame
+/// times are media timestamps; the caller's clock decides when they are shown.
 struct MPVAudioMeterHistory: Sendable {
     struct Outcome: Equatable, Sendable {
         let accepted: Bool
