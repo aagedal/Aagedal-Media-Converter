@@ -1,6 +1,124 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@ (this Mac)" : {
+      "comment" : "Statistics Mac picker: the Mac the app runs on.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ (dieser Mac)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ (este Mac)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ (ce Mac)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ (questo Mac)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@（このMac）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@(이 Mac)"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (denne Mac-en)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ (este Mac)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@（这台 Mac）"
+          }
+        }
+      }
+    },
+    "+ %lld from other Macs" : {
+      "comment" : "History settings: number of synced encodes recorded on other Macs.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "+ %lld von anderen Macs"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "+ %lld de otros Mac"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "+ %lld d’autres Mac"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "+ %lld da altri Mac"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "+ 他のMacから%lld件"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "+ 다른 Mac에서 %lld개"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+ %lld fra andre Mac-er"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "+ %lld de outros Macs"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "+ 来自其他 Mac 的 %lld 个"
+          }
+        }
+      }
+    },
     "10-bit (VP9 profile 2) reduces banding, but not every player can decode it." : {
       "localizations" : {
         "de" : {
@@ -767,6 +885,64 @@
         }
       }
     },
+    "All Macs" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Alle Macs"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Todos los Mac"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tous les Mac"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tutti i Mac"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "すべてのMac"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "모든 Mac"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Mac-er"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Todos os Macs"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "所有 Mac"
+          }
+        }
+      }
+    },
     "Analysis Report" : {
       "comment" : "Media analysis interface.",
       "extractionState" : "manual",
@@ -829,6 +1005,65 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "分析报告"
+          }
+        }
+      }
+    },
+    "Another Mac" : {
+      "comment" : "Synced history device whose name isn't known yet.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Anderer Mac"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Otro Mac"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Autre Mac"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Altro Mac"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "別のMac"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "다른 Mac"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En annen Mac"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Outro Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "另一台 Mac"
           }
         }
       }
@@ -2464,6 +2699,64 @@
         }
       }
     },
+    "Each Mac writes its own history file to the sync folder set in Settings ▸ Sync (iCloud Drive unless you chose a custom folder) and shows the encodes of all your Macs. The file contains the paths and names of the source and output files of every recorded encode, so these are stored in iCloud Drive. Security bookmarks and the last-session queue stay on this Mac. Turning sync off removes this Mac’s file." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Jeder Mac schreibt seine eigene Verlaufsdatei in den unter Einstellungen ▸ Synchronisieren festgelegten Ordner (iCloud Drive, sofern du keinen eigenen Ordner gewählt hast) und zeigt die Codierungen all deiner Macs. Die Datei enthält Pfade und Namen der Quell- und Ausgabedateien jeder aufgezeichneten Codierung, die damit in iCloud Drive gespeichert werden. Sicherheits-Lesezeichen und die Warteschlange der letzten Sitzung bleiben auf diesem Mac. Wenn du die Synchronisierung ausschaltest, wird die Datei dieses Macs entfernt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cada Mac escribe su propio archivo de historial en la carpeta de sincronización definida en Ajustes ▸ Sincronizar (iCloud Drive salvo que hayas elegido una carpeta personalizada) y muestra las codificaciones de todos tus Mac. El archivo contiene las rutas y los nombres de los archivos de origen y de salida de cada codificación registrada, por lo que se guardan en iCloud Drive. Los marcadores de seguridad y la cola de la última sesión se quedan en este Mac. Al desactivar la sincronización se elimina el archivo de este Mac."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Chaque Mac écrit son propre fichier d’historique dans le dossier de synchronisation défini dans Réglages ▸ Synchroniser (iCloud Drive, sauf si vous avez choisi un dossier personnalisé) et affiche les encodages de tous vos Mac. Le fichier contient les chemins et les noms des fichiers source et de sortie de chaque encodage enregistré, qui sont donc stockés dans iCloud Drive. Les signets de sécurité et la file de la dernière session restent sur ce Mac. Désactiver la synchronisation supprime le fichier de ce Mac."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ogni Mac scrive il proprio file di cronologia nella cartella di sincronizzazione impostata in Impostazioni ▸ Sincronizzazione (iCloud Drive, a meno che tu non abbia scelto una cartella personalizzata) e mostra le codifiche di tutti i tuoi Mac. Il file contiene i percorsi e i nomi dei file sorgente e di output di ogni codifica registrata, che vengono quindi salvati in iCloud Drive. I segnalibri di sicurezza e la coda dell’ultima sessione restano su questo Mac. Disattivando la sincronizzazione il file di questo Mac viene rimosso."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "各Macは「設定」▸「同期」で指定した同期フォルダー（カスタムフォルダーを選んでいない場合は iCloud Drive）に自分の履歴ファイルを書き込み、すべてのMacのエンコードを表示します。ファイルには記録された各エンコードのソースファイルと出力ファイルのパスと名前が含まれるため、それらが iCloud Drive に保存されます。セキュリティブックマークと前回のセッションのキューはこのMacに残ります。同期をオフにすると、このMacのファイルは削除されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "각 Mac은 설정 ▸ 동기화에서 지정한 동기화 폴더(사용자 정의 폴더를 선택하지 않은 경우 iCloud Drive)에 자체 기록 파일을 쓰고 모든 Mac의 인코딩을 표시합니다. 파일에는 기록된 각 인코딩의 소스 및 출력 파일 경로와 이름이 포함되므로 이 정보가 iCloud Drive에 저장됩니다. 보안 북마크와 마지막 세션 대기열은 이 Mac에 남습니다. 동기화를 끄면 이 Mac의 파일이 제거됩니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hver Mac skriver sin egen historikkfil til synkroniseringsmappen som er valgt i Innstillinger ▸ Synkronisering (iCloud Drive med mindre du har valgt en egendefinert mappe), og viser kodingene fra alle Mac-ene dine. Filen inneholder stiene til og navnene på kilde- og utdatafilene for hver registrerte koding, så disse lagres i iCloud Drive. Sikkerhetsbokmerker og køen fra forrige økt blir på denne Mac-en. Når du slår av synkronisering, fjernes denne Mac-ens fil."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cada Mac grava seu próprio arquivo de histórico na pasta de sincronização definida em Ajustes ▸ Sincronizar (iCloud Drive, a menos que você tenha escolhido uma pasta personalizada) e mostra as codificações de todos os seus Macs. O arquivo contém os caminhos e os nomes dos arquivos de origem e de saída de cada codificação registrada, que portanto ficam armazenados no iCloud Drive. Os marcadores de segurança e a fila da última sessão ficam neste Mac. Desativar a sincronização remove o arquivo deste Mac."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "每台 Mac 会将自己的历史文件写入“设置 ▸ 同步”中设定的同步文件夹（除非你选择了自定义文件夹，否则为 iCloud Drive），并显示你所有 Mac 的编码。该文件包含每次记录的编码的源文件和输出文件的路径与名称，因此这些信息会存储在 iCloud Drive 中。安全书签和上次会话的队列保留在这台 Mac 上。关闭同步会移除这台 Mac 的文件。"
+          }
+        }
+      }
+    },
     "EBU R128 (−23 LUFS, −1 dBTP)" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2525,6 +2818,64 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "EBU R128 (−23 LUFS, −1 dBTP)"
+          }
+        }
+      }
+    },
+    "Encode history sync uses the same location, in a History subfolder." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Die Synchronisierung des Codierungsverlaufs nutzt denselben Ort, in einem Unterordner namens History."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La sincronización del historial de codificación usa la misma ubicación, en una subcarpeta llamada History."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La synchronisation de l’historique des encodages utilise le même emplacement, dans un sous-dossier History."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La sincronizzazione della cronologia codifiche usa la stessa posizione, in una sottocartella History."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "エンコード履歴の同期も同じ場所の History サブフォルダーを使用します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "인코딩 기록 동기화도 같은 위치의 History 하위 폴더를 사용합니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synkronisering av kodingshistorikk bruker samme plassering, i en undermappe som heter History."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "A sincronização do histórico de codificação usa o mesmo local, em uma subpasta chamada History."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "编码历史同步使用同一位置下的 History 子文件夹。"
           }
         }
       }
@@ -2723,6 +3074,64 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "编码后时间（秒）。根据数据包大小按 %@ 窗口取平均值。"
+          }
+        }
+      }
+    },
+    "Encodes by Mac" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Codierungen pro Mac"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Codificaciones por Mac"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Encodages par Mac"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Codifiche per Mac"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mac別のエンコード"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mac별 인코딩"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kodinger per Mac"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Codificações por Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "按 Mac 统计的编码"
           }
         }
       }
@@ -3440,6 +3849,64 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "字号：%lld"
+          }
+        }
+      }
+    },
+    "History sync is on, so the statistics include the encodes of your other Macs." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Die Verlaufssynchronisierung ist aktiv, daher enthält die Statistik die Codierungen deiner anderen Macs."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La sincronización del historial está activada, así que las estadísticas incluyen las codificaciones de tus otros Mac."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La synchronisation de l’historique est activée : les statistiques incluent donc les encodages de vos autres Mac."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La sincronizzazione della cronologia è attiva, quindi le statistiche includono le codifiche degli altri tuoi Mac."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "履歴の同期がオンのため、統計には他のMacのエンコードも含まれます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "기록 동기화가 켜져 있으므로 통계에 다른 Mac의 인코딩이 포함됩니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Historikksynkronisering er på, så statistikken inkluderer kodingene fra de andre Mac-ene dine."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "A sincronização do histórico está ativada, então as estatísticas incluem as codificações dos seus outros Macs."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "历史同步已开启，因此统计数据包含你其他 Mac 的编码。"
           }
         }
       }
@@ -4213,6 +4680,65 @@
         }
       }
     },
+    "Mac" : {
+      "comment" : "Statistics picker: which Mac's encodes to show.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mac"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mac"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mac"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mac"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mac"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mac"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mac"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mac"
+          }
+        }
+      }
+    },
     "Measure each audio track, then normalize it to the target (two-pass loudnorm). Applies to all re-encoding presets." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4397,6 +4923,64 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "MOV 适用于大多数剪辑软件。MXF 是 Avid Media Composer 的原生容器。"
+          }
+        }
+      }
+    },
+    "No other Mac has synced its history yet." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Noch kein anderer Mac hat seinen Verlauf synchronisiert."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ningún otro Mac ha sincronizado su historial todavía."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aucun autre Mac n’a encore synchronisé son historique."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nessun altro Mac ha ancora sincronizzato la sua cronologia."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "履歴を同期した他のMacはまだありません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "아직 기록을 동기화한 다른 Mac이 없습니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen annen Mac har synkronisert historikken sin ennå."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nenhum outro Mac sincronizou o histórico ainda."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "还没有其他 Mac 同步过历史。"
           }
         }
       }
@@ -5504,6 +6088,239 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "正在读取码率…"
+          }
+        }
+      }
+    },
+    "Recorded on" : {
+      "comment" : "Encode history details: the Mac an encode was recorded on.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aufgezeichnet auf"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registrado en"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Enregistré sur"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registrato su"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "記録したMac"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "기록한 Mac"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registrert på"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registrado em"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "记录于"
+          }
+        }
+      }
+    },
+    "Recorded on another Mac that syncs its history" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Auf einem anderen Mac aufgezeichnet, der seinen Verlauf synchronisiert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registrado en otro Mac que sincroniza su historial"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Enregistré sur un autre Mac qui synchronise son historique"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registrato su un altro Mac che sincronizza la sua cronologia"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "履歴を同期している別のMacで記録"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "기록을 동기화하는 다른 Mac에서 기록됨"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registrert på en annen Mac som synkroniserer historikken sin"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registrado em outro Mac que sincroniza seu histórico"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "在另一台同步历史的 Mac 上记录"
+          }
+        }
+      }
+    },
+    "Remove this Mac’s history from the sync folder?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Verlauf dieses Macs aus dem Synchronisierungsordner entfernen?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Eliminar el historial de este Mac de la carpeta de sincronización?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Retirer l’historique de ce Mac du dossier de synchronisation ?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rimuovere la cronologia di questo Mac dalla cartella di sincronizzazione?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "このMacの履歴を同期フォルダーから削除しますか？"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "이 Mac의 기록을 동기화 폴더에서 제거하시겠습니까?"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjerne denne Mac-ens historikk fra synkroniseringsmappen?"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Remover o histórico deste Mac da pasta de sincronização?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "要从同步文件夹中移除这台 Mac 的历史吗？"
+          }
+        }
+      }
+    },
+    "Remove…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Entfernen …"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Eliminar…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Retirer…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rimuovi…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "削除…"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "제거…"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjern …"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Remover…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "移除…"
           }
         }
       }
@@ -6871,6 +7688,64 @@
         }
       }
     },
+    "Sync history with your other Macs" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Verlauf mit deinen anderen Macs synchronisieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sincronizar el historial con tus otros Mac"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Synchroniser l’historique avec vos autres Mac"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sincronizza la cronologia con gli altri tuoi Mac"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "他のMacと履歴を同期"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "다른 Mac과 기록 동기화"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synkroniser historikken med de andre Mac-ene dine"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sincronizar o histórico com seus outros Macs"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "与你的其他 Mac 同步历史"
+          }
+        }
+      }
+    },
     "Target" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7326,6 +8201,123 @@
         }
       }
     },
+    "This Mac’s history file can’t be read. It is left as it is and read again when it changes." : {
+      "comment" : "Synced history device status: damaged or partially synced file.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Die Verlaufsdatei dieses Macs kann nicht gelesen werden. Sie bleibt unverändert und wird erneut gelesen, wenn sie sich ändert."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se puede leer el archivo de historial de este Mac. Se deja tal cual y se vuelve a leer cuando cambie."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Le fichier d’historique de ce Mac est illisible. Il est laissé tel quel et relu lorsqu’il change."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Impossibile leggere il file di cronologia di questo Mac. Viene lasciato com’è e riletto quando cambia."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "このMacの履歴ファイルを読み込めません。ファイルはそのまま残り、変更されたときに再度読み込まれます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "이 Mac의 기록 파일을 읽을 수 없습니다. 파일은 그대로 두며 변경되면 다시 읽습니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Historikkfilen til denne Mac-en kan ikke leses. Den blir latt være som den er og leses på nytt når den endres."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Não é possível ler o arquivo de histórico deste Mac. Ele é mantido como está e lido novamente quando mudar."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "无法读取这台 Mac 的历史文件。文件保持原样，并会在其更改时重新读取。"
+          }
+        }
+      }
+    },
+    "This removes the encodes recorded on this Mac and resets its statistics, also in its synced history file. History from other Macs isn’t affected. Encoded files are not affected." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dadurch werden die auf diesem Mac aufgezeichneten Codierungen entfernt und seine Statistik zurückgesetzt, auch in seiner synchronisierten Verlaufsdatei. Der Verlauf anderer Macs ist nicht betroffen. Codierte Dateien sind nicht betroffen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se eliminarán las codificaciones registradas en este Mac y se restablecerán sus estadísticas, también en su archivo de historial sincronizado. El historial de otros Mac no se ve afectado. Los archivos codificados no se ven afectados."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Les encodages enregistrés sur ce Mac seront supprimés et ses statistiques réinitialisées, y compris dans son fichier d’historique synchronisé. L’historique des autres Mac n’est pas concerné. Les fichiers encodés ne sont pas concernés."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Verranno rimosse le codifiche registrate su questo Mac e azzerate le sue statistiche, anche nel suo file di cronologia sincronizzato. La cronologia degli altri Mac non viene toccata. I file codificati non vengono toccati."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "このMacで記録されたエンコードを削除し、同期された履歴ファイルも含めて統計をリセットします。他のMacの履歴には影響しません。エンコード済みのファイルには影響しません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "이 Mac에서 기록된 인코딩이 제거되고, 동기화된 기록 파일을 포함해 통계가 초기화됩니다. 다른 Mac의 기록에는 영향이 없습니다. 인코딩된 파일에는 영향이 없습니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dette fjerner kodingene som er registrert på denne Mac-en og nullstiller statistikken, også i den synkroniserte historikkfilen. Historikk fra andre Mac-er påvirkes ikke. Kodede filer påvirkes ikke."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Isso remove as codificações registradas neste Mac e redefine suas estatísticas, inclusive no arquivo de histórico sincronizado. O histórico de outros Macs não é afetado. Os arquivos codificados não são afetados."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "这会移除这台 Mac 上记录的编码并重置其统计数据，包括已同步的历史文件。其他 Mac 的历史不受影响。已编码的文件不受影响。"
+          }
+        }
+      }
+    },
     "Top" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7456,6 +8448,65 @@
         }
       }
     },
+    "updated %@" : {
+      "comment" : "Synced history device status: when the Mac last wrote its history, e.g. “updated 5 minutes ago”.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "aktualisiert %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "actualizado %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mis à jour %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "aggiornato %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@に更新"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ 업데이트됨"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "oppdatert %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "atualizado %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@更新"
+          }
+        }
+      }
+    },
     "Use default (%@)" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7517,6 +8568,64 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "使用默认值（%@）"
+          }
+        }
+      }
+    },
+    "Use this for a Mac you no longer use. If that Mac still syncs its history, its file comes back the next time it records an encode. Encoded files are not affected." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Verwende dies für einen Mac, den du nicht mehr nutzt. Wenn dieser Mac seinen Verlauf noch synchronisiert, erscheint seine Datei bei der nächsten aufgezeichneten Codierung wieder. Codierte Dateien sind nicht betroffen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Úsalo para un Mac que ya no utilices. Si ese Mac sigue sincronizando su historial, su archivo volverá la próxima vez que registre una codificación. Los archivos codificados no se ven afectados."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "À utiliser pour un Mac dont vous ne vous servez plus. Si ce Mac synchronise encore son historique, son fichier reviendra au prochain encodage enregistré. Les fichiers encodés ne sont pas concernés."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usalo per un Mac che non usi più. Se quel Mac sincronizza ancora la sua cronologia, il suo file tornerà alla prossima codifica registrata. I file codificati non vengono toccati."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "使わなくなったMacに使用します。そのMacがまだ履歴を同期している場合、次にエンコードを記録したときにファイルが戻ります。エンコード済みのファイルには影響しません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "더 이상 사용하지 않는 Mac에 사용하십시오. 해당 Mac이 여전히 기록을 동기화하는 경우 다음에 인코딩을 기록할 때 파일이 다시 생깁니다. 인코딩된 파일에는 영향이 없습니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bruk dette for en Mac du ikke lenger bruker. Hvis den Mac-en fortsatt synkroniserer historikken sin, kommer filen tilbake neste gang den registrerer en koding. Kodede filer påvirkes ikke."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Use para um Mac que você não usa mais. Se esse Mac ainda sincronizar o histórico, o arquivo voltará na próxima vez que ele registrar uma codificação. Os arquivos codificados não são afetados."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "适用于不再使用的 Mac。如果该 Mac 仍在同步其历史，下次记录编码时其文件会重新出现。已编码的文件不受影响。"
           }
         }
       }
@@ -7652,6 +8761,65 @@
         }
       }
     },
+    "Waiting for iCloud Drive to download this Mac’s history." : {
+      "comment" : "Synced history device status: the file is not downloaded yet.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Warten, bis iCloud Drive den Verlauf dieses Macs geladen hat."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esperando a que iCloud Drive descargue el historial de este Mac."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "En attente du téléchargement de l’historique de ce Mac par iCloud Drive."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "In attesa che iCloud Drive scarichi la cronologia di questo Mac."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "iCloud Drive がこのMacの履歴をダウンロードするのを待っています。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "iCloud Drive가 이 Mac의 기록을 다운로드하기를 기다리는 중입니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Venter på at iCloud Drive skal laste ned historikken til denne Mac-en."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aguardando o iCloud Drive baixar o histórico deste Mac."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "正在等待 iCloud Drive 下载这台 Mac 的历史。"
+          }
+        }
+      }
+    },
     "Web and podcast (−16 LUFS, −1 dBTP)" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7771,6 +8939,65 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "WebM 可在网页浏览器中播放。MKV 为其他播放器封装相同的 VP9 和 Opus 流。"
+          }
+        }
+      }
+    },
+    "written by a newer app version, some details may be missing" : {
+      "comment" : "Synced history device status: the file has a newer format than this app understands.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "von einer neueren App-Version geschrieben, einige Details fehlen eventuell"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "escrito por una versión más reciente de la app, puede que falten algunos detalles"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "écrit par une version plus récente de l’app, certains détails peuvent manquer"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "scritto da una versione più recente dell’app, alcuni dettagli potrebbero mancare"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "新しいバージョンのアプリで書き込まれたため、一部の詳細が欠けている可能性があります"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "최신 버전의 앱에서 작성되어 일부 세부 정보가 누락될 수 있음"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "skrevet av en nyere appversjon, noen detaljer kan mangle"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "gravado por uma versão mais recente do app, alguns detalhes podem estar ausentes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "由较新版本的应用写入，可能缺少部分详细信息"
           }
         }
       }

@@ -1042,7 +1042,7 @@ struct ContentView: View {
                 .background(LiquidGlassToolbarConfigurator())
                 .overlay(alignment: .bottomLeading) {
                     HistoryCornerButtons(
-                        showHistoryButton: encodeHistoryEnabled || !historyStore.records.isEmpty,
+                        showHistoryButton: encodeHistoryEnabled || !historyStore.allRecords.isEmpty,
                         lastSessionCount: lastSessionStore.pending?.itemCount ?? 0,
                         onShowHistory: { showEncodeHistory = true },
                         onShowLastSession: { showLastSession = true }

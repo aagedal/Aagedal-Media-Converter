@@ -279,6 +279,10 @@ struct EncodeRecord: Codable, Identifiable, Equatable, Sendable {
     var outputPath: String?
     var outputSizeBytes: Int64?
     var deviceName: String
+    /// Stable id of the Mac that recorded it (`EncodeHistoryDevice.localID`).
+    /// Nil in records written before history sync; readers fill it in from
+    /// the file the record came from.
+    var deviceID: String?
 
     var preset: ExportPreset? { ExportPreset(rawValue: presetRawValue) }
     var sourceName: String { source.fileName }
@@ -298,6 +302,8 @@ struct HistorySession: Codable, Identifiable, Equatable, Sendable {
     var endedCleanly: Bool = false
     var deviceName: String
     var appVersion: String?
+    /// See `EncodeRecord.deviceID`.
+    var deviceID: String?
 }
 
 struct EncodeHistoryFile: Codable, Sendable {
@@ -309,11 +315,18 @@ struct EncodeHistoryFile: Codable, Sendable {
     var records: [EncodeRecord] = []
     /// Statistics for detailed records that retention already pruned.
     var rollups: [MonthlyRollup] = []
+    /// Header of a synced per-device file (`HistorySyncFolder`). Nil in the
+    /// local file, which only ever holds this Mac's history.
+    var deviceID: String?
+    var deviceName: String?
+    var modifiedAt: Date?
+    var appVersion: String?
     /// Elements that couldn't be decoded and were dropped. Not persisted.
     var droppedElementCount = 0
 
     private enum CodingKeys: String, CodingKey {
         case version, sessions, records, rollups
+        case deviceID, deviceName, modifiedAt, appVersion
     }
 
     init(version: Int = EncodeHistoryFile.currentVersion, sessions: [HistorySession] = [],
@@ -333,6 +346,10 @@ struct EncodeHistoryFile: Codable, Sendable {
         records = container.decodeLossyArray(EncodeRecord.self, forKey: .records, dropped: &dropped)
         rollups = container.decodeLossyArray(MonthlyRollup.self, forKey: .rollups, dropped: &dropped)
         droppedElementCount = dropped
+        deviceID = container.decodeTolerant(String.self, forKey: .deviceID)
+        deviceName = container.decodeTolerant(String.self, forKey: .deviceName)
+        modifiedAt = container.decodeTolerant(Date.self, forKey: .modifiedAt)
+        appVersion = container.decodeTolerant(String.self, forKey: .appVersion)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -341,6 +358,10 @@ struct EncodeHistoryFile: Codable, Sendable {
         try container.encode(sessions, forKey: .sessions)
         try container.encode(records, forKey: .records)
         try container.encode(rollups, forKey: .rollups)
+        try container.encodeIfPresent(deviceID, forKey: .deviceID)
+        try container.encodeIfPresent(deviceName, forKey: .deviceName)
+        try container.encodeIfPresent(modifiedAt, forKey: .modifiedAt)
+        try container.encodeIfPresent(appVersion, forKey: .appVersion)
     }
 }
 
@@ -353,6 +374,8 @@ struct MonthlyRollup: Codable, Equatable, Sendable {
     /// `yyyy-MM` in the calendar used when folding (the user's calendar).
     var month: String
     var deviceName: String
+    /// See `EncodeRecord.deviceID`.
+    var deviceID: String?
     var encodeCount = 0
     /// Keyed by `EncodeOutcome.rawValue`.
     var outcomeCounts: [String: Int] = [:]
@@ -376,15 +399,17 @@ struct MonthlyRollup: Codable, Equatable, Sendable {
     var sessionCount = 0
     var unexpectedExitCount = 0
 
-    init(month: String, deviceName: String) {
+    init(month: String, deviceName: String, deviceID: String? = nil) {
         self.month = month
         self.deviceName = deviceName
+        self.deviceID = deviceID
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         month = try c.decode(String.self, forKey: .month)
         deviceName = c.decodeTolerant(String.self, forKey: .deviceName) ?? ""
+        deviceID = c.decodeTolerant(String.self, forKey: .deviceID)
         encodeCount = c.decodeTolerant(Int.self, forKey: .encodeCount) ?? 0
         outcomeCounts = c.decodeTolerant([String: Int].self, forKey: .outcomeCounts) ?? [:]
         presetCounts = c.decodeTolerant([String: Int].self, forKey: .presetCounts) ?? [:]
@@ -671,6 +696,7 @@ extension EncodeRecord {
         outputPath = c.decodeTolerant(String.self, forKey: .outputPath)
         outputSizeBytes = c.decodeTolerant(Int64.self, forKey: .outputSizeBytes)
         deviceName = c.decodeTolerant(String.self, forKey: .deviceName) ?? ""
+        deviceID = c.decodeTolerant(String.self, forKey: .deviceID)
     }
 }
 
@@ -683,5 +709,6 @@ extension HistorySession {
         endedCleanly = c.decodeTolerant(Bool.self, forKey: .endedCleanly) ?? false
         deviceName = c.decodeTolerant(String.self, forKey: .deviceName) ?? ""
         appVersion = c.decodeTolerant(String.self, forKey: .appVersion)
+        deviceID = c.decodeTolerant(String.self, forKey: .deviceID)
     }
 }

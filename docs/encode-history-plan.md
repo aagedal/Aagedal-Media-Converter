@@ -1,6 +1,6 @@
 # Encode History & Last-Session Restore — Implementation Plan
 
-Status: phases 1–4 implemented (store, tracking, last-session snapshot, overlays, History settings tab, per-item preset override, monthly rollups + Statistics settings tab, tolerant/versioned decoding). Cloud sync deferred.
+Status: phases 1–5 implemented (store, tracking, last-session snapshot, overlays, History settings tab, per-item preset override, monthly rollups + Statistics settings tab, tolerant/versioned decoding, opt-in cloud sync with per-device files).
 
 ## Goals
 
@@ -17,7 +17,7 @@ Status: phases 1–4 implemented (store, tracking, last-session snapshot, overla
 | Topic | Decision |
 |---|---|
 | Storage | Plain JSON in `~/Library/Application Support/AagedalMediaConverter/History/`, atomic writes. No SwiftData. |
-| Cloud sync | Deferred. Later: per-device files in the CloudDocs folder, merged on read (no conflicts). Record carries `deviceName` from day one. |
+| Cloud sync | Opt-in, per Mac. One file per device in the settings-sync folder, merged on read (no conflicts). See Phase 5. |
 | What triggers a record | A row entering `.converting` (start) and leaving it for `.done/.failed/.cancelled` or being removed (finish). |
 | Where it is observed | A status diff in `ContentView` on `droppedFiles` / `encodingGroups` changes. Catches **both** engines (`ConversionManager` and `ApplicationJobService` projected rows) without touching either. |
 | Crash/interrupt detection | Records written as `running` at start. On launch, leftover `running` → `interrupted`. Sessions carry `endedCleanly`; an open session at launch = unexpected exit. |
@@ -119,6 +119,40 @@ Implemented rules:
 - Last-session items persist a raw `status` (localized at display) plus a source bookmark; snapshots
   from before that keep showing their stored `statusLabel`.
 
+### Phase 5 — Cloud sync (`Logic/History/EncodeHistorySync.swift`)
+The app has no iCloud entitlement, so like settings sync it writes plain files into the iCloud Drive folder
+on disk and lets the system sync them. It reuses `SettingsSyncService.syncFolderURL()`: by default
+`~/Library/Mobile Documents/com~apple~CloudDocs/Aagedal Media Converter/`, or the custom folder chosen in
+Settings ▸ Sync (the location section shows whenever settings or history sync is on).
+
+- **Opt-in**: Settings ▸ History ▸ "Sync history with your other Macs" (`encodeHistorySyncEnabled`, off, not in
+  the settings-sync allowlist, so each Mac decides). The footer states that source/output paths and names
+  end up in iCloud Drive.
+- **Device id**: SHA-256 of the hardware UUID with an app salt, first 16 bytes as hex (`EncodeHistoryDevice`).
+  Stable across reinstalls and renames; a Mac set up with Migration Assistant gets its own id. Fallback: a
+  random id in user defaults. New records, sessions and rollups carry `deviceID` next to `deviceName`.
+- **Layout**: `<sync folder>/History/<device id>.json`, the local `EncodeHistoryFile` (sessions, records,
+  rollups) plus a header (`deviceID`, `deviceName`, `modifiedAt`, `appVersion`), written atomically on the
+  history write queue (3 s debounce, synchronous at launch/quit/"Sync Now"). Bookmarks are stripped on write
+  and on read; the last-session snapshot is never synced. The local file stays the source of truth for this
+  Mac's file, and no Mac ever writes another Mac's file.
+- **Reading**: all other `*.json` files (including iCloud conflict copies `<id> 2.json`) are decoded off the
+  main actor, cached by modification date and size, on launch, app activation, folder changes (debounced)
+  and "Sync Now". Placeholders (`.<id>.json.icloud`) get a download request and show as "waiting for
+  iCloud Drive". Damaged or partial files show as unreadable and are left untouched; newer versions are
+  read as far as possible (same tolerant decoding as the local file) and flagged.
+- **Merge** (`EncodeHistoryMerge`, pure): local data plus every file; device ids filled in from the file;
+  records and sessions deduplicated by id (local copy wins, otherwise the more finished copy); rollups
+  deduplicated per device, month and name (larger wins). Result in `allRecords` / `allSessions` / `allRollups`.
+- **Retention**: each Mac prunes only its own file with its own setting. Remote data is additionally shown
+  through this Mac's retention: older remote records/sessions are folded into that device's rollups in
+  memory, so a retired Mac ages out of the browser but stays in statistics.
+- **Clear / remove**: Clear History clears this Mac only (its synced file is rewritten empty); other Macs'
+  records can't be removed from the browser. Turning sync off deletes this Mac's file. Settings ▸ History
+  lists the other Macs with a Remove… button for retired Macs (a Mac that still syncs writes its file again).
+- **UI**: the history browser shows the Mac on other Macs' sessions and in details; re-queueing goes through
+  the missing/Locate… flow (relinks of other Macs' records are kept for the run only). Statistics include all
+  Macs, with a Mac picker and an "Encodes by Mac" breakdown when more than one Mac has data.
+
 ### Later
-Cloud sync (per-device files), merge/stitch as one record with multiple inputs, DCP/IMF/image-sequence
-metadata restore, yt-dlp source URLs.
+Merge/stitch as one record with multiple inputs, DCP/IMF/image-sequence metadata restore, yt-dlp source URLs.

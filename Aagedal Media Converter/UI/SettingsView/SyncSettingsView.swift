@@ -10,6 +10,7 @@ import UniformTypeIdentifiers
 /// preferences, with manual export/import. Backed by `SettingsSyncService`.
 struct SyncSettingsView: View {
     @State private var sync = SettingsSyncService.shared
+    @State private var history = EncodeHistoryStore.shared
 
     @State private var alertMessage: String?
     @State private var showingAlert = false
@@ -17,8 +18,11 @@ struct SyncSettingsView: View {
     var body: some View {
         Form {
             syncSection
-            if sync.syncEnabled {
+            // Encode history sync (Settings ▸ History) uses the same folder.
+            if sync.syncEnabled || history.isSyncEnabled {
                 locationSection
+            }
+            if sync.syncEnabled {
                 statusSection
             }
             manualSection
@@ -53,7 +57,7 @@ struct SyncSettingsView: View {
     // MARK: - Location
 
     private var locationSection: some View {
-        Section(header: Text("Location")) {
+        Section {
             Picker("Store settings in:", selection: Binding(
                 get: { sync.locationMode },
                 set: { sync.setLocationMode($0) }
@@ -79,6 +83,14 @@ struct SyncSettingsView: View {
                     Spacer()
                     Button("Choose…") { chooseCustomFolder() }
                 }
+            }
+        } header: {
+            Text("Location")
+        } footer: {
+            if history.isSyncEnabled {
+                Text("Encode history sync uses the same location, in a History subfolder.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }
