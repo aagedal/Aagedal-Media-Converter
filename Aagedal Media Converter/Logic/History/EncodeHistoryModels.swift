@@ -21,6 +21,8 @@ extension AppConstants {
     /// Whether quitting while an encode is running asks for confirmation.
     static let confirmQuitWhileEncodingKey = "confirmQuitWhileEncoding"
     static let defaultConfirmQuitWhileEncoding = true
+    /// Period shown in Settings › Statistics and the statistics window.
+    static let encodeStatisticsPeriodKey = "encodeStatisticsPeriod"
 
     /// `~/Library/Application Support/AagedalMediaConverter/History`
     static var encodeHistoryDirectory: URL {
