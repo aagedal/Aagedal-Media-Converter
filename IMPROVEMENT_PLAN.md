@@ -15,22 +15,12 @@ work writing after cancellation must be fixed, or the affected path disabled,
 before a release. Record a disposition for unresolved risks; do not quietly
 reclassify them as polish.
 
-## Awaiting review or merge (2026-11-12)
-
-| Item | PR |
-| --- | --- |
-| Manual rows with per-item adjustments, global loudness or a matte sidecar stay on `ConversionManager` (they lost those settings on the shared job path; engine plan phase 0) | #107 |
-| `FFMPEGConverter` and `ConversionManager` split into area extensions; phased plan for one job engine in `docs/engine-unification-plan.md` | #108 |
-| Encode history sync between Macs (one file per Mac in the sync folder) | #109 |
-| Statistics window, PDF/CSV export, resizable Settings window (stacked on #109) | #110 |
-| Timestamped MPV playback meter as a Release opt-in (`time-pos` clock), pinned to the published MPVKit `aagedal-1.1.0-n9.0.2-history.1` | #111 |
-
 ## Architecture and change risk
 
 - **One conversion engine.** `ConversionManager` (queue UI) and `ApplicationJobService`
   (agent/MCP jobs, in `Logic/AgentAccess/ApplicationJobContract.swift`) both run
   conversions. Converge on one shared job service, following the phases in
-  `docs/engine-unification-plan.md` (in #108 until merged); next is a shared
+  `docs/engine-unification-plan.md`. Phase 0 (#107) is done; next is a shared
   request builder with a parity test (3.1).
 - **Large files.** `ApplicationJobContract`, `ContentView` and `FFMPEGCommandBuilder` are
   each 3,000–4,300 lines. Split along existing seams before adding features to them.
@@ -91,7 +81,7 @@ These need a person, real hardware or a live service:
 - Screen recording: live static/animated captures at each rate, long A/V sync,
   Auto/display behaviour, permission flows, midnight rollover in editors (4.3).
 - Playback meter: physical speaker/video synchronization on several outputs, including
-  Bluetooth and external interfaces (`docs/audio-playback-meter-sync-check.md`, in #111),
+  Bluetooth and external interfaces (`docs/audio-playback-meter-sync-check.md`),
   before considering Playback as the default.
 - Encode history sync and the statistics window: two-Mac checks and dragging the Settings
   window taller.
