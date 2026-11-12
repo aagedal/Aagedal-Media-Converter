@@ -415,11 +415,13 @@
 		ENCHIST0003BF0000000 /* EncodeHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0003FR0000000 /* EncodeHistoryStore.swift */; };
 		ENCHIST0020BF0000000 /* EncodeStatistics.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0020FR0000000 /* EncodeStatistics.swift */; };
 		ENCHIST0030BF0000000 /* EncodeHistorySync.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0030FR0000000 /* EncodeHistorySync.swift */; };
+		ENCHIST0032BF0000000 /* EncodeStatisticsExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0032FR0000000 /* EncodeStatisticsExport.swift */; };
 		ENCHIST0004BF0000000 /* LastSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0004FR0000000 /* LastSessionStore.swift */; };
 		ENCHIST0005BF0000000 /* QueueRestoreRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0005FR0000000 /* QueueRestoreRequest.swift */; };
 		ENCHIST0006BF0000000 /* HistoryOverlayComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0006FR0000000 /* HistoryOverlayComponents.swift */; };
 		ENCHIST0007BF0000000 /* LastSessionOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0007FR0000000 /* LastSessionOverlay.swift */; };
 		ENCHIST0008BF0000000 /* EncodeHistoryOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0008FR0000000 /* EncodeHistoryOverlay.swift */; };
+		ENCHIST0033BF0000000 /* EncodeStatisticsPDF.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0033FR0000000 /* EncodeStatisticsPDF.swift */; };
 		ENCHIST0009BF0000000 /* HistorySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0009FR0000000 /* HistorySettingsView.swift */; };
 		ENCHIST0021BF0000000 /* StatisticsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0021FR0000000 /* StatisticsSettingsView.swift */; };
 		ENCHIST0010BF0000000 /* EncodeHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0010FR0000000 /* EncodeHistoryTests.swift */; };
@@ -914,11 +916,13 @@
 		ENCHIST0003FR0000000 /* EncodeHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeHistoryStore.swift; sourceTree = "<group>"; };
 		ENCHIST0020FR0000000 /* EncodeStatistics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeStatistics.swift; sourceTree = "<group>"; };
 		ENCHIST0030FR0000000 /* EncodeHistorySync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeHistorySync.swift; sourceTree = "<group>"; };
+		ENCHIST0032FR0000000 /* EncodeStatisticsExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeStatisticsExport.swift; sourceTree = "<group>"; };
 		ENCHIST0004FR0000000 /* LastSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastSessionStore.swift; sourceTree = "<group>"; };
 		ENCHIST0005FR0000000 /* QueueRestoreRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueRestoreRequest.swift; sourceTree = "<group>"; };
 		ENCHIST0006FR0000000 /* HistoryOverlayComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryOverlayComponents.swift; sourceTree = "<group>"; };
 		ENCHIST0007FR0000000 /* LastSessionOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastSessionOverlay.swift; sourceTree = "<group>"; };
 		ENCHIST0008FR0000000 /* EncodeHistoryOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeHistoryOverlay.swift; sourceTree = "<group>"; };
+		ENCHIST0033FR0000000 /* EncodeStatisticsPDF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeStatisticsPDF.swift; sourceTree = "<group>"; };
 		ENCHIST0009FR0000000 /* HistorySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistorySettingsView.swift; sourceTree = "<group>"; };
 		ENCHIST0021FR0000000 /* StatisticsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatisticsSettingsView.swift; sourceTree = "<group>"; };
 		ENCHIST0010FR0000000 /* EncodeHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeHistoryTests.swift; sourceTree = "<group>"; };
@@ -1742,6 +1746,7 @@
 				ENCHIST0002FR0000000 /* EncodeHistoryTracker.swift */,
 				ENCHIST0003FR0000000 /* EncodeHistoryStore.swift */,
 				ENCHIST0030FR0000000 /* EncodeHistorySync.swift */,
+				ENCHIST0032FR0000000 /* EncodeStatisticsExport.swift */,
 				ENCHIST0020FR0000000 /* EncodeStatistics.swift */,
 				ENCHIST0004FR0000000 /* LastSessionStore.swift */,
 				ENCHIST0005FR0000000 /* QueueRestoreRequest.swift */,
@@ -1755,6 +1760,7 @@
 				ENCHIST0006FR0000000 /* HistoryOverlayComponents.swift */,
 				ENCHIST0007FR0000000 /* LastSessionOverlay.swift */,
 				ENCHIST0008FR0000000 /* EncodeHistoryOverlay.swift */,
+				ENCHIST0033FR0000000 /* EncodeStatisticsPDF.swift */,
 			);
 			path = History;
 			sourceTree = "<group>";
@@ -2051,11 +2057,13 @@
 				ENCHIST0003BF0000000 /* EncodeHistoryStore.swift in Sources */,
 				ENCHIST0020BF0000000 /* EncodeStatistics.swift in Sources */,
 				ENCHIST0030BF0000000 /* EncodeHistorySync.swift in Sources */,
+				ENCHIST0032BF0000000 /* EncodeStatisticsExport.swift in Sources */,
 				ENCHIST0004BF0000000 /* LastSessionStore.swift in Sources */,
 				ENCHIST0005BF0000000 /* QueueRestoreRequest.swift in Sources */,
 				ENCHIST0006BF0000000 /* HistoryOverlayComponents.swift in Sources */,
 				ENCHIST0007BF0000000 /* LastSessionOverlay.swift in Sources */,
 				ENCHIST0008BF0000000 /* EncodeHistoryOverlay.swift in Sources */,
+				ENCHIST0033BF0000000 /* EncodeStatisticsPDF.swift in Sources */,
 				ENCHIST0009BF0000000 /* HistorySettingsView.swift in Sources */,
 				ENCHIST0021BF0000000 /* StatisticsSettingsView.swift in Sources */,
 				7FFE54EBBEF744FBB7F6571B /* PackageMetadataSettings.swift in Sources */,

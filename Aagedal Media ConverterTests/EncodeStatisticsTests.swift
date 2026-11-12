@@ -1,4 +1,5 @@
 import Foundation
+import PDFKit
 import XCTest
 @testable import Aagedal_Media_Converter
 
@@ -236,6 +237,81 @@ final class EncodeStatisticsTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    // MARK: - Export
+
+    func testCSVFieldsQuoteSeparatorsAndDefuseFormulas() {
+        XCTAssertEqual(EncodeStatisticsExport.field("clip.mov"), "clip.mov")
+        XCTAssertEqual(EncodeStatisticsExport.field("a,b"), "\"a,b\"")
+        XCTAssertEqual(EncodeStatisticsExport.field("say \"hi\""), "\"say \"\"hi\"\"\"")
+        XCTAssertEqual(EncodeStatisticsExport.field("two\nlines"), "\"two\nlines\"")
+        XCTAssertEqual(EncodeStatisticsExport.field("=HYPERLINK(1)"), "'=HYPERLINK(1)")
+        XCTAssertEqual(EncodeStatisticsExport.field("@cmd"), "'@cmd")
+        // Negative numbers stay numbers.
+        XCTAssertEqual(EncodeStatisticsExport.field("-12.5"), "-12.5")
+    }
+
+    func testRecordsCSVHasOneRowPerEncodeWithRawValues() throws {
+        var record = makeRecord(daysAgo: 1, duration: 100, wall: 25, sizeIn: 1_000, sizeOut: 400,
+                                path: "/clips/a, b.mov")
+        record.recipe.trimStart = 10
+        let failed = makeRecord(daysAgo: 0, outcome: .failed)
+
+        let csv = EncodeStatisticsExport.recordsCSV([record, failed]) { $0.deviceName }
+        let lines = csv.components(separatedBy: "\r\n").filter { !$0.isEmpty }
+        XCTAssertEqual(lines.count, 3)
+        let header = lines[0].components(separatedBy: ",")
+        XCTAssertEqual(header.first, "started_at")
+        XCTAssertEqual(header.count, 25)
+
+        let row = lines[1]
+        XCTAssertTrue(row.contains(",completed,Test Mac,\"a, b.mov\",\"/clips/a, b.mov\","), row)
+        XCTAssertTrue(row.contains(",1000,400,100,90,25,mov,h264,1920,1080,"), row)
+        XCTAssertTrue(lines[2].contains(",failed,"))
+    }
+
+    func testSummaryCSVListsOverviewTimelineAndFullRankings() {
+        let records = (0..<7).map { index in
+            makeRecord(daysAgo: 0, outcome: index == 0 ? .failed : .completed, preset: "Preset \(index)")
+        }
+        let summary = EncodeStatistics.summarize(
+            records: records, sessions: [], rollups: [], period: .week,
+            currentSessionID: nil, now: now, calendar: calendar
+        )
+
+        let csv = EncodeStatisticsExport.summaryCSV(
+            summary, period: .week, macLabel: "All Macs", deviceLabel: { $0 }, generatedAt: now
+        )
+        let lines = csv.components(separatedBy: "\r\n")
+        XCTAssertEqual(lines.first, "section,key,value,completed,failed,other")
+        XCTAssertTrue(lines.contains("report,period,7d"))
+        XCTAssertTrue(lines.contains("overview,encodes,7"))
+        XCTAssertTrue(lines.contains("overview,failed,1"))
+        XCTAssertFalse(lines.contains { $0.hasPrefix("overview,running") })
+        // Rankings are not cut to the top five the view shows.
+        XCTAssertEqual(lines.filter { $0.hasPrefix("preset,") }.count, 7)
+        XCTAssertEqual(lines.filter { $0.hasPrefix("timeline,") }.count, summary.timeline.count)
+        XCTAssertTrue(lines.contains { $0.hasPrefix("timeline,") && $0.hasSuffix(",7,6,1,0") })
+    }
+
+    @MainActor
+    func testPDFReportHasOverviewAndRankingPages() throws {
+        let summary = EncodeStatistics.summarize(
+            records: [makeRecord(daysAgo: 0), makeRecord(daysAgo: 1, outcome: .failed)],
+            sessions: [], rollups: [], period: .week,
+            currentSessionID: nil, now: now, calendar: calendar
+        )
+        let data = try EncodeStatisticsPDF.render(
+            summary: summary, period: .week, macLabel: "All Macs", includeMacs: true,
+            deviceLabel: { $0 }, includesSync: false, generatedAt: now
+        )
+        let document = try XCTUnwrap(PDFDocument(data: data))
+        XCTAssertEqual(document.pageCount, 2)
+        XCTAssertEqual(document.page(at: 0)?.bounds(for: .mediaBox).size, CGSize(width: 595, height: 842))
+        let text = document.string ?? ""
+        XCTAssertTrue(text.contains("Encode Statistics"), text)
+        XCTAssertTrue(text.contains("HEVC"), text)
+    }
 
     private func makeStore() -> EncodeHistoryStore {
         EncodeHistoryStore(directory: directory, defaults: defaults, calendar: calendar)

@@ -109,6 +109,15 @@ Implemented rules:
   whole month is inside it, so 7d/30d (and usually 90d) come from live records only. "1 Year" = current
   month + 11 before it. Bars are daily for 7d/30d/90d, monthly for 1y/All.
 - The "N encodes didn't finish" notice in the history overlay surfaces `interruptedAtLaunchCount` until dismissed.
+- The same view (`EncodeStatisticsView`) also runs in its own resizable **Encode Statistics** window
+  (Open in Window, or the Window menu) with a taller chart; the chosen period is shared through
+  `encodeStatisticsPeriod`. The Settings window is explicitly made resizable so tall tabs fit.
+- **Export** (`EncodeStatisticsExport`, `EncodeStatisticsPDF`) for the current period and Mac filter:
+  a two-page A4 PDF report (overview + chart, then rankings); a summary CSV in long format
+  (`section,key,value` plus per-outcome timeline columns, full rankings rather than the top five); and an
+  encodes CSV with one row per detailed record. CSVs are UTF-8 with a BOM, English column names, ISO 8601
+  dates and raw numbers; text a spreadsheet would run as a formula gets a leading `'`. Monthly summaries
+  have no per-encode detail, so pruned months appear only in the summary CSV and the PDF.
 
 ### Robust decoding
 - Arrays (sessions, records, rollups, snapshot items/groups) decode element by element; a bad element is

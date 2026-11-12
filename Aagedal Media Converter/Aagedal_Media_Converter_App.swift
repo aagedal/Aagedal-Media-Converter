@@ -124,8 +124,12 @@ struct Aagedal_Media_Converter_App: App {
         Settings {
             SettingsView().keyboardShortcut(",",modifiers: .command)
         }
-        .defaultSize(width: 900, height: 600)
+        .defaultSize(width: 900, height: 720)
         .windowResizability(.contentMinSize)
+        Window("Encode Statistics", id: EncodeStatisticsWindow.id) {
+            EncodeStatisticsWindow()
+        }
+        .defaultSize(width: 720, height: 860)
         Window("DCP Validator", id: "dcpValidator") {
             DCPValidatorView()
         }
