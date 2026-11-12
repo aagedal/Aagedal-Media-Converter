@@ -223,6 +223,9 @@ actor PreviewAssetGenerator {
     /// In-memory cache for per-channel waveforms (keyed by URL, then stream index)
     /// Survives across trim view open/close cycles since PreviewAssetGenerator is a singleton actor
     private var channelWaveformCache = PreviewWaveformCache()
+    /// The first audio stream's waveform while it decodes, so the Trim view can
+    /// draw it progressively. Keyed by source; the ID ignores late snapshots.
+    private var partialChannelWaveforms: [URL: (id: UUID, waveform: SendableChannelWaveform?)] = [:]
 
     init(
         subprocessRunner: any SubprocessRunning = SubprocessRunner(),
@@ -501,7 +504,7 @@ actor PreviewAssetGenerator {
 
             // Merge in-memory channel waveform cache
             let cachedChannelWaveforms = channelWaveformCache.waveforms(for: url, fingerprint: fingerprint)
-            let channelWaveform = cachedChannelWaveforms[0]
+            let channelWaveform = cachedChannelWaveforms[0] ?? partialChannelWaveforms[url]?.waveform
             let perStreamChannelWaveforms = cachedChannelWaveforms.filter { $0.key != 0 || channelWaveform == nil }
 
             if rowURL == nil && thumbnailURLs.isEmpty && waveform == nil && audioWaveforms.isEmpty && waveformChunks.isEmpty && channelWaveform == nil {
@@ -663,7 +666,8 @@ actor PreviewAssetGenerator {
         streamIndex: Int,
         channelCount: Int,
         channelLayout: String?,
-        duration: Double
+        duration: Double,
+        onProgress: (@Sendable (SendableChannelWaveform) -> Void)? = nil
     ) async -> SendableChannelWaveform? {
         let access = startAccessingSecurityScope(for: url)
         defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
@@ -683,7 +687,8 @@ actor PreviewAssetGenerator {
                 channelCount: channelCount,
                 channelLayout: channelLayout,
                 duration: duration,
-                envelopeCacheDirectory: try? ensureAssetDirectory(for: url)
+                envelopeCacheDirectory: try? ensureAssetDirectory(for: url),
+                onProgress: onProgress
             )
 
             // Cache the result
@@ -698,6 +703,24 @@ actor PreviewAssetGenerator {
             logger.warning("On-demand per-channel waveform failed for stream \(streamIndex) of \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return nil
         }
+    }
+
+    /// Decodes the first audio stream's waveform, or returns nil when there is no audio.
+    /// Static and nonisolated, so it runs beside the actor's thumbnail work.
+    private nonisolated static func decodeFirstStreamWaveform(
+        _ url: URL?, ffmpegPath: String, channelCount: Int, channelLayout: String?, duration: Double,
+        envelopeCacheDirectory: URL, onProgress: @escaping @Sendable (SendableChannelWaveform) -> Void
+    ) async throws -> SendableChannelWaveform? {
+        guard let url else { return nil }
+        return try await NativeWaveformRenderer.generateChannelWaveforms(
+            url: url, ffmpegPath: ffmpegPath, streamIndex: 0, channelCount: channelCount,
+            channelLayout: channelLayout, duration: duration, envelopeCacheDirectory: envelopeCacheDirectory,
+            onProgress: onProgress)
+    }
+
+    private func storePartialWaveform(_ waveform: SendableChannelWaveform, for url: URL, id: UUID) {
+        guard partialChannelWaveforms[url]?.id == id else { return }
+        partialChannelWaveforms[url] = (id, waveform)
     }
 
     /// Internal implementation of asset generation, called only once per URL
@@ -734,6 +757,24 @@ actor PreviewAssetGenerator {
         let metadata = mediaFacts.metadata
         let hasVideoStream = mediaFacts.hasVideoStream
         let duration = mediaFacts.duration
+
+        // One full-rate decode of the first audio stream gives per-channel envelopes,
+        // and their merge drives the combined waveform. It runs while the filmstrip
+        // renders, and publishes snapshots so the Trim view can draw it as it decodes.
+        // Other streams are generated on demand when the user switches audio tracks.
+        let stream0 = metadata?.audioStreams.first
+        let channels0 = stream0?.channels ?? 1
+        let decodesWaveform = metadata?.audioStreams.isEmpty != true
+        let partialID = UUID()
+        if decodesWaveform { partialChannelWaveforms[url] = (partialID, nil) }
+        defer { if partialChannelWaveforms[url]?.id == partialID { partialChannelWaveforms[url] = nil } }
+        let waveformStart = CFAbsoluteTimeGetCurrent()
+        async let decodedWaveform = Self.decodeFirstStreamWaveform(
+            decodesWaveform ? url : nil, ffmpegPath: ffmpegPath, channelCount: channels0,
+            channelLayout: stream0?.channelLayout, duration: duration, envelopeCacheDirectory: assetDirectory
+        ) { [weak self] partial in
+            Task { await self?.storePartialWaveform(partial, for: url, id: partialID) }
+        }
 
         let rowThumbnailMissing = !fileManager.fileExists(atPath: rowThumbnailURL.path)
         let missingThumbnailIndices: [Int] = hasVideoStream ? expectedThumbnailURLs.enumerated().compactMap { index, url in
@@ -859,27 +900,13 @@ actor PreviewAssetGenerator {
             logger.info("Skipping filmstrip thumbnails for \(url.lastPathComponent, privacy: .public) because no video stream was detected")
         }
 
-        // One full-rate decode of the first audio stream gives per-channel envelopes,
-        // and their merge drives the combined waveform. Other streams are generated
-        // on demand when the user switches audio tracks.
         var nativeChannelWaveform: SendableChannelWaveform?
         var waveformEnvelope: WaveformEnvelope?
         let nativePerStreamChannelWaveforms: [Int: SendableChannelWaveform] = [:]
 
-        if metadata?.audioStreams.isEmpty != true {
-            let stream0 = metadata?.audioStreams.first
-            let channels0 = stream0?.channels ?? 1
+        if decodesWaveform {
             do {
-                let t0 = CFAbsoluteTimeGetCurrent()
-                let waveform = try await NativeWaveformRenderer.generateChannelWaveforms(
-                    url: url,
-                    ffmpegPath: ffmpegPath,
-                    streamIndex: 0,
-                    channelCount: channels0,
-                    channelLayout: stream0?.channelLayout,
-                    duration: duration,
-                    envelopeCacheDirectory: assetDirectory
-                )
+                guard let waveform = try await decodedWaveform else { throw CancellationError() }
                 nativeChannelWaveform = waveform
                 waveformEnvelope = WaveformEnvelope.merging(waveform.channelEnvelopes)
                 // Cache for persistence across trim view open/close cycles
@@ -888,7 +915,7 @@ actor PreviewAssetGenerator {
                     channelWaveformCache.insert(waveform, for: url, fingerprint: fingerprint, stream: 0)
                 }
                 let t1 = CFAbsoluteTimeGetCurrent()
-                logger.info("Per-channel waveform generated in \(String(format: "%.2f", t1 - t0))s (\(channels0) channels) for \(url.lastPathComponent, privacy: .public)")
+                logger.info("Per-channel waveform generated in \(String(format: "%.2f", t1 - waveformStart))s (\(channels0) channels) for \(url.lastPathComponent, privacy: .public)")
             } catch is CancellationError {
                 throw CancellationError()
             } catch {

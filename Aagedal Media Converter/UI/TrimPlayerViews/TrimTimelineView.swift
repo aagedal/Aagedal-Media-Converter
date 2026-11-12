@@ -761,6 +761,7 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
         if !channelWaveformEnvelopes.isEmpty {
             // Per-channel waveform — one waveform per audio channel, stacked vertically
             perChannelWaveformContent(width: width, height: height)
+                .overlay(alignment: .leading) { decodeProgressOverlay(width: width) }
         } else if let waveformEnvelope {
             WaveformEnvelopeView(envelope: waveformEnvelope, sourceStart: 0,
                                  sourceDuration: duration, visualScale: waveformVisualScale)
@@ -790,6 +791,22 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
                 text: isLoading ? "Generating waveform…" : "Waveform unavailable"
             )
             .frame(width: width, height: height)
+        }
+    }
+
+    /// Marks the part still decoding while a waveform draws in progressively.
+    @ViewBuilder
+    private func decodeProgressOverlay(width: CGFloat) -> some View {
+        if isLoading, duration > 0, let decoded = channelWaveformEnvelopes.first?.duration,
+           decoded < duration * 0.98 {
+            let front = width * CGFloat(max(0, decoded) / duration)
+            ZStack {
+                Rectangle().fill(Color.white.opacity(0.05))
+                ProgressView().controlSize(.small)
+            }
+            .frame(width: max(0, width - front))
+            .offset(x: front)
+            .allowsHitTesting(false)
         }
     }
 

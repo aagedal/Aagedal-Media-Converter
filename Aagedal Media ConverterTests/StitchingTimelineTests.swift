@@ -337,6 +337,35 @@ final class StitchingTimelineTests: XCTestCase {
         XCTAssertEqual(WaveformEnvelope.merging([envelope]), envelope)
     }
 
+    func testVectorAndScalarEnvelopePathsAgree() {
+        // Aligned whole chunks take the vDSP path; a NaN or an over forces the scalar path.
+        var samples = (0..<4_096).map { Float(sin(Double($0) * 0.37)) * 0.8 }
+        samples[1_001] = .nan
+        samples[3_000] = 1.5
+        samples[3_001] = -1.25
+        let data = samples.withUnsafeBytes { Data($0) }
+        let builder = StreamingWaveformEnvelope(channelCount: 2, sampleRate: 48000, duration: 0)
+        builder.append(data)
+        let streamed = builder.channelEnvelopes()
+        for channel in 0..<2 {
+            let reference = WaveformEnvelope(pcmData: data, channelCount: 2, sampleRate: 48000, channel: channel)
+            XCTAssertEqual(streamed[channel].levels, reference.levels, "channel \(channel)")
+            for (fast, exact) in zip(streamed[channel].powerLevels[0], reference.powerLevels[0]) {
+                XCTAssertEqual(fast, exact, accuracy: 0.00001, "channel \(channel)")
+            }
+        }
+    }
+
+    func testStreamingWaveformSnapshotsWhileDecoding() throws {
+        let builder = StreamingWaveformEnvelope(channelCount: 1, sampleRate: 48000, duration: 1)
+        builder.append([Float](repeating: 0.5, count: 512).withUnsafeBytes { Data($0) })
+        XCTAssertNil(builder.snapshotIfDue(), "snapshots wait for the interval")
+        Thread.sleep(forTimeInterval: 0.3)
+        let partial = try XCTUnwrap(builder.snapshotIfDue())
+        XCTAssertEqual(partial.first?.frameCount, 512)
+        XCTAssertNil(builder.snapshotIfDue())
+    }
+
     func testStreamingWaveformBoundsMemoryWhenDurationIsUnderestimated() {
         var samples = [Float](repeating: 0, count: 4097)
         samples[0] = -0.75

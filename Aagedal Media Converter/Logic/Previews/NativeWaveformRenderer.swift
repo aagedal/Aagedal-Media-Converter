@@ -5,6 +5,7 @@
 // Decodes audio to raw PCM via FFmpeg and builds waveform envelopes natively in Swift.
 // Ported from Aagedal Media Player's AudioWaveformGenerator for fast preview waveforms.
 
+import Accelerate
 import Foundation
 import AppKit
 import OSLog
@@ -268,6 +269,8 @@ final class StreamingWaveformEnvelope: @unchecked Sendable {
     private var pending = Data()
     private var peaks: [[WaveformEnvelope.Peak]]
     private var sumsOfSquares: [[Float]]
+    private var lastSnapshot = ContinuousClock.now
+    private var snapshotInterval = Duration.milliseconds(250)
 
     /// `maximumBins` is shared across channels.
     init(channelCount: Int, sampleRate: Double, duration: Double, maximumBins: Int = 2_000_000) {
@@ -303,16 +306,23 @@ final class StreamingWaveformEnvelope: @unchecked Sendable {
                 for channel in 0..<channels {
                     var peak = peaks[channel][bin]
                     var sum = sumsOfSquares[channel][bin]
-                    var position = offset + channel * MemoryLayout<Float>.size
-                    for _ in 0..<frames {
-                        let value = raw.loadUnaligned(fromByteOffset: position, as: Float.self)
-                        if value.isFinite {
-                            let clamped = min(1, max(-1, value))
-                            peak.minimum = min(peak.minimum, clamped)
-                            peak.maximum = max(peak.maximum, clamped)
-                            sum += clamped * clamped
+                    let start = offset + channel * MemoryLayout<Float>.size
+                    if let statistics = Self.vectorStatistics(raw, from: start, stride: channels, count: frames) {
+                        peak.minimum = min(peak.minimum, statistics.minimum)
+                        peak.maximum = max(peak.maximum, statistics.maximum)
+                        sum += statistics.squares
+                    } else {
+                        var position = start
+                        for _ in 0..<frames {
+                            let value = raw.loadUnaligned(fromByteOffset: position, as: Float.self)
+                            if value.isFinite {
+                                let clamped = min(1, max(-1, value))
+                                peak.minimum = min(peak.minimum, clamped)
+                                peak.maximum = max(peak.maximum, clamped)
+                                sum += clamped * clamped
+                            }
+                            position += bytesPerFrame
                         }
-                        position += bytesPerFrame
                     }
                     peaks[channel][bin] = peak
                     sumsOfSquares[channel][bin] = sum
@@ -328,10 +338,29 @@ final class StreamingWaveformEnvelope: @unchecked Sendable {
     func channelEnvelopes() -> [WaveformEnvelope] {
         lock.lock()
         defer { lock.unlock() }
-        return (0..<channels).map { channel in
+        return unlockedChannelEnvelopes()
+    }
+
+    /// The envelopes decoded so far, at most every interval, for drawing a waveform
+    /// while it decodes. The interval grows with the snapshot's own cost, so long
+    /// recordings don't spend their decode time copying envelopes.
+    func snapshotIfDue() -> [WaveformEnvelope]? {
+        lock.lock()
+        defer { lock.unlock() }
+        let start = ContinuousClock.now
+        guard frameCount > 0, start - lastSnapshot >= snapshotInterval else { return nil }
+        let envelopes = unlockedChannelEnvelopes()
+        let finished = ContinuousClock.now
+        lastSnapshot = finished
+        snapshotInterval = max(.milliseconds(250), (finished - start) * 4)
+        return envelopes
+    }
+
+    private func unlockedChannelEnvelopes() -> [WaveformEnvelope] {
+        (0..<channels).map { channel in
             let sums = sumsOfSquares[channel]
             let meanSquares = sums.indices.map { bin in
-                sums[bin] / Float(max(1, min(framesPerBin, frameCount - bin * framesPerBin)))
+                min(1, sums[bin] / Float(max(1, min(framesPerBin, frameCount - bin * framesPerBin))))
             }
             return WaveformEnvelope(peaks: peaks[channel], meanSquares: meanSquares, frameCount: frameCount,
                                     framesPerBin: framesPerBin, sampleRate: sampleRate)
@@ -342,6 +371,26 @@ final class StreamingWaveformEnvelope: @unchecked Sendable {
     func envelope() -> WaveformEnvelope {
         let channels = channelEnvelopes()
         return WaveformEnvelope.merging(channels) ?? channels[0]
+    }
+
+    /// Accelerate's minimum, maximum and sum of squares over one channel's samples.
+    /// Misaligned chunks, non-finite samples and overs beyond full scale return nil,
+    /// so the scalar path can skip or clamp them exactly as before.
+    private static func vectorStatistics(
+        _ raw: UnsafeRawBufferPointer, from offset: Int, stride: Int, count: Int
+    ) -> (minimum: Float, maximum: Float, squares: Float)? {
+        guard count > 0, let base = raw.baseAddress?.advanced(by: offset),
+              Int(bitPattern: base) % MemoryLayout<Float>.alignment == 0 else { return nil }
+        let samples = base.assumingMemoryBound(to: Float.self)
+        var minimum: Float = 0
+        var maximum: Float = 0
+        var squares: Float = 0
+        vDSP_minv(samples, vDSP_Stride(stride), &minimum, vDSP_Length(count))
+        vDSP_maxv(samples, vDSP_Stride(stride), &maximum, vDSP_Length(count))
+        vDSP_svesq(samples, vDSP_Stride(stride), &squares, vDSP_Length(count))
+        guard minimum.isFinite, maximum.isFinite, squares.isFinite,
+              minimum >= -1, maximum <= 1 else { return nil }
+        return (minimum, maximum, squares)
     }
 
     private func halveResolution() {
@@ -554,7 +603,8 @@ struct NativeWaveformRenderer {
         channelLayout: String?,
         duration: Double,
         envelopeCacheDirectory: URL? = nil,
-        subprocessRunner: any SubprocessRunning = SubprocessRunner()
+        subprocessRunner: any SubprocessRunning = SubprocessRunner(),
+        onProgress: (@Sendable (SendableChannelWaveform) -> Void)? = nil
     ) async throws -> SendableChannelWaveform {
         let channels = max(1, channelCount)
         let labels = channelNames(count: channels, layout: channelLayout)
@@ -588,7 +638,11 @@ struct NativeWaveformRenderer {
         let result: SubprocessResult
         do {
             result = try await subprocessRunner.run(request) { chunk in
-                if case .standardOutput = chunk.stream { builder.append(chunk.data) }
+                guard case .standardOutput = chunk.stream else { return }
+                builder.append(chunk.data)
+                if let onProgress, let partial = builder.snapshotIfDue() {
+                    onProgress(SendableChannelWaveform(channelLabels: labels, channelEnvelopes: partial))
+                }
             }
         } catch SubprocessRunnerError.timedOut {
             throw PreviewAssetError.generationFailed("FFmpeg waveform decode timed out")
