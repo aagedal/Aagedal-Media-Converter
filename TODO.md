@@ -19,7 +19,7 @@
 [x] Growing screen-recording presets support constant frame rate at Auto, 25,
 29.97, 50, 59.94, or 60 fps, with drop-frame timecode at the two NTSC rates.
 Non-growing presets intentionally retain variable frame rate. Live capture and
-editor validation remain tracked in `IMPROVEMENT_PLAN.md` §4.3.
+editor validation remain in the manual validation backlog in `IMPROVEMENT_PLAN.md`.
 
 ## Full Screen Player
 [x] Full Screen Playback: Fix it so that the Auto Next feature automatically plays next video, instead of the next video starting paused.
