@@ -146,6 +146,15 @@
 		8E545D872C33FD8C0088C274 /* VideoFilesUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E545D862C33FD8C0088C274 /* VideoFilesUtil.swift */; };
 		8E545D892C34030C0088C274 /* VideoFileListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E545D882C34030C0088C274 /* VideoFileListView.swift */; };
 		8E545D8B2C3404040088C274 /* FFMPEGConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E545D8A2C3404040088C274 /* FFMPEGConverter.swift */; };
+		FFCSPLIT000000000000001B /* FFMPEGConverter+OutputFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCSPLIT000000000000001F /* FFMPEGConverter+OutputFiles.swift */; };
+		FFCSPLIT000000000000002B /* FFMPEGConverter+ErrorReasons.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCSPLIT000000000000002F /* FFMPEGConverter+ErrorReasons.swift */; };
+		FFCSPLIT000000000000003B /* FFMPEGConverter+HelperPasses.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCSPLIT000000000000003F /* FFMPEGConverter+HelperPasses.swift */; };
+		FFCSPLIT000000000000004B /* FFMPEGConverter+AVCIntra.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCSPLIT000000000000004F /* FFMPEGConverter+AVCIntra.swift */; };
+		FFCSPLIT000000000000005B /* FFMPEGConverter+AV2.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCSPLIT000000000000005F /* FFMPEGConverter+AV2.swift */; };
+		FFCSPLIT000000000000006B /* FFMPEGConverter+AV2Chunked.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCSPLIT000000000000006F /* FFMPEGConverter+AV2Chunked.swift */; };
+		FFCSPLIT000000000000007B /* FFMPEGConverter+AV2Matroska.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCSPLIT000000000000007F /* FFMPEGConverter+AV2Matroska.swift */; };
+		FFCSPLIT000000000000008B /* FFMPEGConverter+NativeWaveform.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCSPLIT000000000000008F /* FFMPEGConverter+NativeWaveform.swift */; };
+		FFCSPLIT000000000000009B /* FFMPEGConverter+AudioExtraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCSPLIT000000000000009F /* FFMPEGConverter+AudioExtraction.swift */; };
 		8E545D942C3412AE0088C274 /* ConversionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E545D932C3412AE0088C274 /* ConversionManager.swift */; };
 		8E824ABA2EF8A9E1001A6B95 /* MPVKit-GPL in Frameworks */ = {isa = PBXBuildFile; productRef = 8E824AB92EF8A9E1001A6B95 /* MPVKit-GPL */; };
 		8E824ABF2EF8AB02001A6B95 /* MPVProperty.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E824ABD2EF8AB02001A6B95 /* MPVProperty.swift */; };
@@ -599,6 +608,15 @@
 		8E545D862C33FD8C0088C274 /* VideoFilesUtil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFilesUtil.swift; sourceTree = "<group>"; };
 		8E545D882C34030C0088C274 /* VideoFileListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFileListView.swift; sourceTree = "<group>"; };
 		8E545D8A2C3404040088C274 /* FFMPEGConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FFMPEGConverter.swift; sourceTree = "<group>"; };
+		FFCSPLIT000000000000001F /* FFMPEGConverter+OutputFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FFMPEGConverter+OutputFiles.swift"; sourceTree = "<group>"; };
+		FFCSPLIT000000000000002F /* FFMPEGConverter+ErrorReasons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FFMPEGConverter+ErrorReasons.swift"; sourceTree = "<group>"; };
+		FFCSPLIT000000000000003F /* FFMPEGConverter+HelperPasses.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FFMPEGConverter+HelperPasses.swift"; sourceTree = "<group>"; };
+		FFCSPLIT000000000000004F /* FFMPEGConverter+AVCIntra.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FFMPEGConverter+AVCIntra.swift"; sourceTree = "<group>"; };
+		FFCSPLIT000000000000005F /* FFMPEGConverter+AV2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FFMPEGConverter+AV2.swift"; sourceTree = "<group>"; };
+		FFCSPLIT000000000000006F /* FFMPEGConverter+AV2Chunked.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FFMPEGConverter+AV2Chunked.swift"; sourceTree = "<group>"; };
+		FFCSPLIT000000000000007F /* FFMPEGConverter+AV2Matroska.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FFMPEGConverter+AV2Matroska.swift"; sourceTree = "<group>"; };
+		FFCSPLIT000000000000008F /* FFMPEGConverter+NativeWaveform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FFMPEGConverter+NativeWaveform.swift"; sourceTree = "<group>"; };
+		FFCSPLIT000000000000009F /* FFMPEGConverter+AudioExtraction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FFMPEGConverter+AudioExtraction.swift"; sourceTree = "<group>"; };
 		8E545D932C3412AE0088C274 /* ConversionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionManager.swift; sourceTree = "<group>"; };
 		8E824ABB2EF8AB02001A6B95 /* MPVMetalLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVMetalLayer.swift; sourceTree = "<group>"; };
 		8E824ABC2EF8AB02001A6B95 /* MPVPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVPlayer.swift; sourceTree = "<group>"; };
@@ -1408,6 +1426,15 @@
 				C67C434261D841BD82FD8EEC /* AV2AACParser.swift */,
 				8EEE452A2EC138FA0049F017 /* ExportPreset.swift */,
 				8E545D8A2C3404040088C274 /* FFMPEGConverter.swift */,
+				FFCSPLIT000000000000001F /* FFMPEGConverter+OutputFiles.swift */,
+				FFCSPLIT000000000000002F /* FFMPEGConverter+ErrorReasons.swift */,
+				FFCSPLIT000000000000003F /* FFMPEGConverter+HelperPasses.swift */,
+				FFCSPLIT000000000000004F /* FFMPEGConverter+AVCIntra.swift */,
+				FFCSPLIT000000000000005F /* FFMPEGConverter+AV2.swift */,
+				FFCSPLIT000000000000006F /* FFMPEGConverter+AV2Chunked.swift */,
+				FFCSPLIT000000000000007F /* FFMPEGConverter+AV2Matroska.swift */,
+				FFCSPLIT000000000000008F /* FFMPEGConverter+NativeWaveform.swift */,
+				FFCSPLIT000000000000009F /* FFMPEGConverter+AudioExtraction.swift */,
 				63ABBF018D774A599B331811 /* ConversionDependencyPreflight.swift */,
 				67BAE582711E2F5E020591A9 /* ConversionRequest.swift */,
 				9609862A8EC6964A0A45885F /* WaveformPCMDecoder.swift */,
@@ -2136,6 +2163,15 @@
 				8E09F7442EC762C200E129CD /* AudioWaveformPreferences.swift in Sources */,
 				AA6E0F1B2F11C0DE00A1B2C3 /* GrowingRecordingTag.swift in Sources */,
 				8E545D8B2C3404040088C274 /* FFMPEGConverter.swift in Sources */,
+				FFCSPLIT000000000000001B /* FFMPEGConverter+OutputFiles.swift in Sources */,
+				FFCSPLIT000000000000002B /* FFMPEGConverter+ErrorReasons.swift in Sources */,
+				FFCSPLIT000000000000003B /* FFMPEGConverter+HelperPasses.swift in Sources */,
+				FFCSPLIT000000000000004B /* FFMPEGConverter+AVCIntra.swift in Sources */,
+				FFCSPLIT000000000000005B /* FFMPEGConverter+AV2.swift in Sources */,
+				FFCSPLIT000000000000006B /* FFMPEGConverter+AV2Chunked.swift in Sources */,
+				FFCSPLIT000000000000007B /* FFMPEGConverter+AV2Matroska.swift in Sources */,
+				FFCSPLIT000000000000008B /* FFMPEGConverter+NativeWaveform.swift in Sources */,
+				FFCSPLIT000000000000009B /* FFMPEGConverter+AudioExtraction.swift in Sources */,
 				3094266907AA46E2AD89E2EB /* ConversionDependencyPreflight.swift in Sources */,
 				67BAE582711E2F5E020591AA /* ConversionRequest.swift in Sources */,
 				978C1F6A9DF43EE4E1E9FDD4 /* WaveformPCMDecoder.swift in Sources */,
