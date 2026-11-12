@@ -1,0 +1,89 @@
+{
+  "date": "2026-11-12",
+  "mpvkit_base_revision": "f957f4830d449e80723554cdc05ddc4138c1806e",
+  "mpvkit_patch_revision": "bb2c1d160980431915bf727f2ab58128f0ee21e9",
+  "mpv_revision": "41f6a645068483470267271e1d09966ca3b9f413",
+  "ffmpeg_tag": "n9.0.2",
+  "recipe_changes_for_build": [
+    "FFmpeg standalone programs disabled (both architectures)",
+    "-Dcplayer=false for both architectures",
+    "TMPDIR and CLANG_MODULE_CACHE_PATH passed to tool processes"
+  ],
+  "command": "swift run --disable-sandbox --build-path .build --package-path Sources/BuildScripts build platform=macos enable-gpl",
+  "toolchain": "swift-driver version: 1.168.6 Apple Swift version 6.4.2 (swiftlang-6.4.2.1.9 clang-2100.4.1.1)",
+  "sdk": "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.2.sdk",
+  "status": "build_succeeded",
+  "exit_code": 0,
+  "release_ready": false,
+  "meter_input_sha256": {
+    "mpv-0.41.0-meter-history.patch": "6045e5cf778a58cd951c638df95786e3bf7cdba975db75ff83caf1e95db7bdf1",
+    "amc_meter_history.h": "93b1adf11a27b2f59d0298de0579bd50baf80d19d4e78cf500c376673cf62746",
+    "mpv-0.41.0-aac-discard-priming.patch": "9a9bcc00f23717b0a5f4a2a7cf12417737f0b85b667689f9849ac3c3fc4dfd98"
+  },
+  "recipe_patch_sha256": {
+    "0001-player-add-moltenvk-context.patch": "fc13e7c599c29df346643502c990ff8037a0adebdc09282c44e32cdb1ad935e4",
+    "0002-revert-build-static.patch": "39b5b1b2b201209ca68f7c01f4770dd4561a42c2b3072cc3f9b3c044f3391c40",
+    "0003-enable-avfoundation-ao-tvos.patch": "693e8ace8057ac46c42195949777159c5aa37f9b7ce81f488758481973da9312",
+    "0004-coreaudio-init-failure.patch": "09ce40634c7e45aec5a53c12c44666e02301c6581e4fdb334b7a792d3eb905db",
+    "0005-coreaudio-clear-failed-unit.patch": "c3cf61bcf29886ed664a6072f386df11ff02d5b84677b09a657c333a6b374079",
+    "0006-moltenvk-follow-layer-resize.patch": "5378a251f28e48c56f67d5caafe54aac0ba0a4e379fde1f2428e36313a78fa59",
+    "0007-af-lavfi-meter-history.patch": "b6208a57d31760cade9d7ab1d52a6f72bcd59514d07f334768aec9b56b2e03c6",
+    "0008-ad-lavc-aac-discard-priming.patch": "ee551535da27fd26e52f54ba0bef44dcaeeddbe80d3c03e7690d75a5a0be2fb2"
+  },
+  "patched_source_sha256": {
+    "dist/libmpv-v0.41.0/filters/f_lavfi.c": "6d8a4f7013812f802aebde46881583b631c746cbe76e6f62b18eac85c96d1b8c",
+    "dist/libmpv-v0.41.0/filters/amc_meter_history.h": "93b1adf11a27b2f59d0298de0579bd50baf80d19d4e78cf500c376673cf62746",
+    "dist/libmpv-v0.41.0/audio/decode/ad_lavc.c": "54f035d29adaf678d2d97b091bb38abaa567f2a66927be5d3bd9cdbdac9afdca",
+    "dist/libmpv-v0.41.0/audio/out/ao_coreaudio.c": "b952bfb9e46b34c5307633a37079790664c51f561cb3f9a53e0eba57e03e6383"
+  },
+  "source_correspondence": "dist/libmpv-v0.41.0 equals upstream v0.41.0 + recipe 0001-0006 + the repository meter inputs (diff -r, .git excluded)",
+  "meson_options": {
+    "arm64": {
+      "buildtype": "release",
+      "gpl": true,
+      "cplayer": false,
+      "libmpv": true,
+      "lua": "disabled",
+      "coreaudio": "enabled",
+      "avfoundation": "enabled",
+      "moltenvk": "enabled"
+    },
+    "x86_64": {
+      "buildtype": "release",
+      "gpl": true,
+      "cplayer": false,
+      "libmpv": true,
+      "lua": "disabled",
+      "coreaudio": "enabled",
+      "avfoundation": "enabled",
+      "moltenvk": "enabled"
+    }
+  },
+  "candidate_archives": [
+    {
+      "path": "dist/release/Libmpv.xcframework.zip",
+      "sha256": "1fb1dc97b90d2f703a334d38c81534c118f160d82c2b6d42fe5ebdd4a1ddfe93"
+    },
+    {
+      "path": "dist/release/libmpv-all.zip",
+      "sha256": "bd506bc308d31e0a747b9fbe03c17138545e7d139981a24933eb7468d27795d8"
+    }
+  ],
+  "candidate_binaries": [
+    {
+      "path": "dist/libmpv/macos/Libmpv.framework/Versions/A/Libmpv",
+      "sha256": "31d33b22b4baf2e1183315ba6dfec82a69e37840839c9dfc8989a37e5a9be6e2"
+    },
+    {
+      "path": "dist/libmpv/macos/thin/arm64/lib/libmpv.a",
+      "sha256": "ceee29dfcca766d80049df22a66307acbff5a877ce99befca8e1fc175f1cff32"
+    },
+    {
+      "path": "dist/libmpv/macos/thin/x86_64/lib/libmpv.a",
+      "sha256": "39b62062386f84f69a7b305286f97a3ef323afa3430e48cb4b99eeb5bb8bddd3"
+    }
+  ],
+  "shipped_ffmpeg": "Unchanged aagedal-1.1.0-n9.0.2-resize.1 GPL FFmpeg archives; their public headers equal this build's (only the internal config.h copies differ)",
+  "public_api": "55 exported mpv_* symbols per architecture, identical to resize.1; Headers identical",
+  "staging_directory": "~/Library/Caches/AagedalMediaConverter-MPVHistory/build-20261112"
+}

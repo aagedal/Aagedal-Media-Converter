@@ -1,0 +1,9 @@
+{
+  "status": "probe-built",
+  "arch": "x86_64",
+  "probe_sha256": "b6bd65fd158e127043cface4656eec8e5957a1bcb4fcac77ca3dd9955877a21e",
+  "probe_source_sha256": "e8b1c2d279e5f71c0a3871897790b50c32b04fe2a6713f61f719c2bc28c1ab48",
+  "library_sha256": "31d33b22b4baf2e1183315ba6dfec82a69e37840839c9dfc8989a37e5a9be6e2",
+  "libmpv": "aagedal-1.1.0-n9.0.2-history.1 candidate (unmodified XCFramework)",
+  "installed": false
+}

@@ -140,7 +140,7 @@ local stage, not a final app release.
 
 The opt-in `mpv-0.41.0-meter-history.patch` and `amc_meter_history.h` target the
 current pinned fork, separately from the historical CoreAudio rebuild recipe
-above. They are not installed into the app. See the [prototype instructions,
+above. They are now MPVKit recipe patches; see the 2026-11-12 release build below. See the [prototype instructions,
 transport schema, verification and remaining acceptance work](../audio-playback-timestamp-prototype-2026-10-17.md).
 Build candidates using `scripts/prototype-mpv-meter-history.py` with matching
 source, generated compile commands and static frameworks. The script stages
@@ -150,4 +150,119 @@ The builder also stages `mpv-0.41.0-aac-discard-priming.patch` against the exact
 pinned decoder source. It accounts for codec priming already consumed by discarded
 frames, including multi-frame skip budgets. See the [AAC startup diagnosis and
 nonperiodic peak/RMS validation](../audio-playback-aac-startup-validation-2026-10-17.md).
-This supplemental fix is isolated from the application's packaged dependency.
+It is part of the 2026-11-12 release build below.
+
+## Meter history release build — 2026-11-12
+
+The meter history and AAC priming inputs are now MPVKit recipe patches
+`0007-af-lavfi-meter-history.patch` and `0008-ad-lavc-aac-discard-priming.patch`
+(the repository inputs above, with a description header; `amc_meter_history.h`
+is part of 0007). They apply after the six patches of
+`aagedal-1.1.0-n9.0.2-resize.1` (`f957f48`), the app's current pin. Only the
+GPL `Libmpv` target is republished; the seven FFmpeg targets keep their
+resize.1 archives. Build record:
+[`mpv-meter-history-build-2026-11-12.json`](mpv-meter-history-build-2026-11-12.json).
+
+**Prepared, not published.** Nothing below has been pushed, tagged or uploaded.
+
+| Item | Value |
+| --- | --- |
+| MPVKit commits (local branch `amc/meter-history`) | `bb2c1d1` patches, `d2680851a5a56dafb6be8df79989d69817dac891` manifest |
+| Release tag (to create) | `aagedal-1.1.0-n9.0.2-history.1` at `d2680851` |
+| `Libmpv-GPL.xcframework.zip` | 5,812,616 bytes, SHA-256/SwiftPM `1fb1dc97b90d2f703a334d38c81534c118f160d82c2b6d42fe5ebdd4a1ddfe93` |
+| `mpvkit-n9.0.2-history.1-sources.tar.gz` | 24,790,663 bytes, `b814d27ac34ca2f00a50691acd7dc5a0feb341aba65bc7685c8db4555610641a` |
+| `MPVKit-1.1.0-history.1-pinned-source.tar.gz` | 127,397 bytes, `54eb17df5865d77ada1ca36e532c0c5eb47642406aa398fd90441e1e7f62b742` |
+
+Everything lives in `~/Library/Caches/AagedalMediaConverter-MPVHistory/`:
+`MPVKit/` (clone with the branch), `build-20261112/` (full build tree and
+`build.log`), `release-history.1/` (assets, `SHA256SUMS.txt`, a git bundle and
+`format-patch` copies of the two commits) and `override/` (local-override
+workspace).
+
+### Rebuild
+
+From a clone of the MPVKit branch, with Xcode's toolchain first in `PATH`
+(a swiftly toolchain on `PATH` fails with `unknown argument: '-target-arch-variant'`):
+
+```sh
+git archive --prefix=build/ d2680851 | tar -x -C "$WORK"   # or bb2c1d1; the recipe is identical
+cd "$WORK/build"
+# Same recipe changes as earlier rebuilds: no standalone FFmpeg/mpv programs,
+# TMPDIR and the module cache passed through (provenance/build-recipe-*.diff
+# in the source archive records them).
+mkdir tmp module-cache
+PATH="$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin:$PATH" \
+TMPDIR="$PWD/tmp" CLANG_MODULE_CACHE_PATH="$PWD/module-cache" \
+  swift run --disable-sandbox --build-path .build --package-path Sources/BuildScripts \
+  build platform=macos enable-gpl
+```
+
+This downloads the pinned auxiliary libraries, builds FFmpeg n9.0.2 and mpv
+v0.41.0 for arm64 and x86_64 (about 20 minutes on an M5 Pro) and writes
+`dist/release/Libmpv.xcframework.zip`. A later MPV-only rebuild against these
+FFmpeg outputs can use `scripts/rebuild-mpv-meter-history.py --recipe-root`
+on that tree; it now accepts the 0006–0008 recipe and checks that 0007/0008
+produce the same source as the repository inputs.
+
+Checks run on this build:
+
+- `dist/libmpv-v0.41.0` equals upstream `41f6a645` plus 0001–0006 plus the
+  three repository inputs (`diff -r`, `.git` excluded).
+- Both Meson configurations: `gpl: true`, `cplayer: false`, release build type.
+- Universal framework (arm64, x86_64), every object `minos 12.0`; 55 exported
+  `mpv_*` functions per architecture and the headers are identical to resize.1;
+  the option string is present in both slices.
+- The public FFmpeg headers used for the build equal the shipped resize.1
+  FFmpeg frameworks' headers. Only the internal `config.h` copies differ:
+  resize.1 built arm64 FFmpeg with `ffplay`, which mpv does not use.
+- The FFmpeg source tree is byte-identical to the resize.1 source archive's.
+- `scripts/verify-mpv-candidate.py` (now with a meter-history evidence mode)
+  and `scripts/prepare-mpv-gpl-release.py` pass.
+
+### Test against the app without publishing
+
+`override/AMC-meter-history.xcworkspace` contains the app project and a local
+`MPVKit` package whose `Libmpv-GPL` target is `path: "artifacts/Libmpv.xcframework"`
+(the extracted asset). A local package with the same identity replaces the
+remote one, so the app builds unchanged:
+
+```sh
+xcodebuild test -workspace override/AMC-meter-history.xcworkspace \
+  -scheme "Aagedal Media Converter Unit Tests" ...
+python3 scripts/benchmark-audio-meter.py --workspace override/AMC-meter-history.xcworkspace \
+  --configuration Release --seconds 300 --rounds 1 ...
+```
+
+Copy the workspace's `xcshareddata/swiftpm/Package.resolved` from the project
+(without the `mpvkit` pin) so the other packages keep their pinned revisions.
+
+### Publish (needs approval)
+
+```sh
+cd ~/Library/Caches/AagedalMediaConverter-MPVHistory/MPVKit
+git push origin amc/meter-history            # or merge into main first
+git tag aagedal-1.1.0-n9.0.2-history.1 d2680851a5a56dafb6be8df79989d69817dac891
+git push origin aagedal-1.1.0-n9.0.2-history.1
+cd ../release-history.1
+gh release create aagedal-1.1.0-n9.0.2-history.1 -R aagedal/MPVKit \
+  --title "MPVKit 1.1.0 · FFmpeg 9.0.2 · macOS GPL libmpv meter history" \
+  --notes-file RELEASE-NOTES.md \
+  Libmpv-GPL.xcframework.zip Libmpv-GPL.xcframework.checksum.txt \
+  mpvkit-n9.0.2-history.1-sources.tar.gz SHA256SUMS.txt
+# Download the assets again and compare with SHA256SUMS.txt.
+```
+
+Runtime results against this build (unit, Release, native UI, lifecycle probe
+on both architectures and the sustained benchmark) are in
+[the metering plan](../AUDIO-METERING-PLAN.md#playback-meter-from-measured-history-prepared-for-release--2026-11-12).
+`scripts/benchmark-mpv-meter-lifecycle.py` now attributes frames that a snapshot
+still holds from before mpv's graph reset to the original source; it had
+compared them with the replacement's reference.
+
+Then, in this repository, apply the prepared pin change (branch
+`t3/mpv-meter-history-pin`), copy the two new archives to
+`build/attribution/mpvkit/`, run `-resolvePackageDependencies` (it refreshes
+`Package.resolved`'s `originHash`), `scripts/generate-mpvkit-notices.py`,
+`scripts/bundled-dependency-manifest.py` and `scripts/ci-local.sh --release`.
+Keep `mpvkit-n9.0.2-resize.1-sources.tar.gz`: it remains the corresponding
+source of the shipped FFmpeg archives.
