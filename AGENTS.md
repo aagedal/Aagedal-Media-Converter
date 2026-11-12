@@ -23,10 +23,10 @@ Before pushing or opening a pull request, run `scripts/ci-local.sh` (add `--rele
 Use 4-space indentation and standard Swift/SwiftUI conventions. Types use `UpperCamelCase`, functions/vars use `lowerCamelCase`, and file names generally mirror the main type (e.g., `ConversionManager.swift`). Common suffixes include `*View`, `*Manager`, `*Service`, and `*SettingsView`. Prefer Swift concurrency (`async`/`await`, actors) where it already exists.
 
 ## Testing Guidelines
-Tests use XCTest. Keep new unit tests in `Aagedal Media ConverterTests/` with `test*` method names, and add UI coverage in `Aagedal Media ConverterUITests/` for user flows. Because coverage is light, also do manual checks in the app for preview playback, conversion, and sandboxed file access after changes.
+Tests use XCTest. Keep new unit tests in `Aagedal Media ConverterTests/` with `test*` method names, and add UI coverage in `Aagedal Media ConverterUITests/` for user flows. Many tests generate small media fixtures with the bundled ffmpeg. Also check preview playback (AVPlayer and MPV), conversion, and folder bookmark persistence in the app after changes.
 
 ## Commit & Pull Request Guidelines
 Recent commits are short, sentence-style descriptions, often past tense and sometimes ending with a period. Follow that style (e.g., "Fix metadata probe failure."). PRs should include a clear summary, the tests run (including the `scripts/ci-local.sh` result), and screenshots for UI changes. Call out any updates to bundled binaries or licenses.
 
 ## Security & Configuration Tips
-The app is sandboxed and relies on security-scoped bookmarks; avoid direct filesystem access outside approved URLs. When touching ffmpeg/ffprobe or other tools, keep references bundle-based rather than hardcoded paths.
+The app is not sandboxed (`ENABLE_APP_SANDBOX = NO`). Security-scoped bookmarks still persist user-chosen folders and files across launches, so keep the existing bookmark plumbing. When touching ffmpeg/ffprobe or other tools, keep references bundle-based rather than hardcoded paths.
