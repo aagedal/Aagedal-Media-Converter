@@ -13,6 +13,8 @@ struct StatisticsSettingsView: View {
 
     @State private var store = EncodeHistoryStore.shared
     @State private var period: StatisticsPeriod = .month
+    /// Nil for all Macs.
+    @State private var deviceFilter: String?
 
     private var completedSeries: String { String(localized: "Completed", comment: "Statistics chart series.") }
     private var failedSeries: String { String(localized: "Failed", comment: "Statistics chart series.") }
@@ -21,7 +23,8 @@ struct StatisticsSettingsView: View {
     }
 
     var body: some View {
-        let summary = store.statistics(for: period)
+        let summary = store.statistics(for: period, deviceID: deviceFilter)
+        let deviceIDs = store.historyDeviceIDs
         Form {
             Section {
                 Picker("Period", selection: $period) {
@@ -30,6 +33,14 @@ struct StatisticsSettingsView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                if deviceIDs.count > 1 {
+                    Picker("Mac", selection: $deviceFilter) {
+                        Text("All Macs").tag(String?.none)
+                        ForEach(deviceIDs, id: \.self) { id in
+                            Text(verbatim: deviceLabel(id)).tag(String?.some(id))
+                        }
+                    }
+                }
                 if !historyEnabled {
                     Text("History recording is off, so new encodes aren’t counted.")
                         .font(.caption).foregroundStyle(.secondary)
@@ -50,14 +61,27 @@ struct StatisticsSettingsView: View {
                 rankedSection("Top Video Codecs", summary.topVideoCodecs) { $0.uppercased() }
                 rankedSection("Top Containers", summary.topContainers) { $0.uppercased() }
                 rankedSection("Top Resolutions", summary.topResolutions) { ResolutionBucket.label(forKey: $0) }
+                if deviceFilter == nil && summary.topDevices.count > 1 {
+                    rankedSection("Encodes by Mac", summary.topDevices) { deviceLabel($0) }
+                }
             }
 
             Section {
                 Text("Statistics combine the detailed encode history with monthly summaries of encodes that are older than the history retention period. Monthly summaries only count toward a period when the whole month lies inside it, so the 7- and 30-day figures come from the detailed history alone. Clearing the history also resets the statistics.")
                     .font(.caption).foregroundStyle(.secondary)
+                if store.isSyncEnabled {
+                    Text("History sync is on, so the statistics include the encodes of your other Macs.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func deviceLabel(_ id: String) -> String {
+        let name = store.deviceName(for: id) ?? id
+        guard id == store.deviceID else { return name }
+        return String(localized: "\(name) (this Mac)", comment: "Statistics Mac picker: the Mac the app runs on.")
     }
 
     // MARK: - Sections

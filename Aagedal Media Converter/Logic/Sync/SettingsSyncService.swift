@@ -122,6 +122,7 @@ final class SettingsSyncService {
         guard mode != locationMode else { return }
         locationMode = mode
         defaults.set(mode.rawValue, forKey: AppConstants.settingsSyncLocationModeKey)
+        NotificationCenter.default.post(name: .syncLocationDidChange, object: nil)
         guard syncEnabled else { return }
         resetDestinationBaseline()
         // Re-point monitoring and reconcile against the new location.
@@ -136,6 +137,7 @@ final class SettingsSyncService {
         _ = bookmarkManager.saveWritableBookmark(for: url)
         customFolderPath = url.path
         defaults.set(url.path, forKey: AppConstants.settingsSyncCustomFolderPathKey)
+        NotificationCenter.default.post(name: .syncLocationDidChange, object: nil)
         guard syncEnabled, locationMode == .customFolder else { return }
         resetDestinationBaseline()
         stopMonitoring()
@@ -452,16 +454,20 @@ final class SettingsSyncService {
     /// The resolved snapshot file URL for the active location, or `nil` if the
     /// location isn't usable yet (iCloud Drive off, or no custom folder chosen).
     func snapshotFileURL() -> URL? {
+        syncFolderURL()?.appendingPathComponent(AppConstants.settingsSyncFileName)
+    }
+
+    /// The folder of the active sync location, shared by settings sync and
+    /// encode history sync (`EncodeHistoryStore`). Resolved even while settings
+    /// sync is off; `nil` when the location isn't usable.
+    func syncFolderURL() -> URL? {
         switch locationMode {
         case .iCloudDrive:
             guard let base = iCloudDriveBaseURL else { return nil }
-            return base
-                .appendingPathComponent(AppConstants.settingsSyncFolderName, isDirectory: true)
-                .appendingPathComponent(AppConstants.settingsSyncFileName)
+            return base.appendingPathComponent(AppConstants.settingsSyncFolderName, isDirectory: true)
         case .customFolder:
             guard let path = customFolderPath, !path.isEmpty else { return nil }
             return URL(fileURLWithPath: path, isDirectory: true)
-                .appendingPathComponent(AppConstants.settingsSyncFileName)
         }
     }
 

@@ -24,6 +24,8 @@ extension Notification.Name {
     /// local settings. `userInfo["deviceName"]` holds the source Mac's name so the
     /// UI can show an "updated from X" notice.
     static let settingsSyncedFromRemote = Notification.Name("settingsSyncedFromRemote")
+    /// The settings-sync location (iCloud Drive or custom folder) changed.
+    static let syncLocationDidChange = Notification.Name("syncLocationDidChange")
     /// Posted by the File menu "Export Settings…" command.
     static let exportSettingsRequested = Notification.Name("exportSettingsRequested")
     /// Posted by the File menu "Import Settings…" command.

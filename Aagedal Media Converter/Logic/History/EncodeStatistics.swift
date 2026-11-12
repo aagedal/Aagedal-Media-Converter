@@ -126,6 +126,8 @@ struct EncodeStatisticsSummary: Equatable, Sendable {
     var timeline: [StatisticsTimelineBucket] = []
     /// Whether pruned (rolled-up) months contributed to the totals.
     var includesRollups = false
+    /// Encodes per Mac, keyed by device id (device name for data without one).
+    var deviceCounts: [String: Int] = [:]
 
     var encodeCount: Int { totals.encodeCount }
     func count(_ outcome: EncodeOutcome) -> Int { totals.outcomeCounts[outcome.rawValue, default: 0] }
@@ -146,6 +148,7 @@ struct EncodeStatisticsSummary: Equatable, Sendable {
     var topVideoCodecs: [RankedCount] { Self.ranked(totals.videoCodecCounts) }
     var topContainers: [RankedCount] { Self.ranked(totals.containerCounts) }
     var topResolutions: [RankedCount] { Self.ranked(totals.resolutionCounts) }
+    var topDevices: [RankedCount] { Self.ranked(deviceCounts) }
 
     /// Highest count first; ties by name so the order is stable.
     static func ranked(_ counts: [String: Int], limit: Int = 5) -> [RankedCount] {
@@ -241,6 +244,11 @@ enum EncodeStatistics {
         session.endedAt != nil && !session.endedCleanly
     }
 
+    /// Key for the per-Mac breakdown.
+    static func deviceKey(id: String?, name: String) -> String {
+        id ?? name
+    }
+
     // MARK: Months
 
     static func monthKey(for date: Date, calendar: Calendar) -> String {
@@ -267,24 +275,26 @@ enum EncodeStatistics {
         guard !records.isEmpty || !sessions.isEmpty else { return }
         var index: [String: Int] = [:]
         for (position, rollup) in rollups.enumerated() {
-            index["\(rollup.month)|\(rollup.deviceName)"] = position
+            index["\(rollup.month)|\(rollup.deviceID ?? "")|\(rollup.deviceName)"] = position
         }
-        func withRollup(month: String, device: String, _ change: (inout MonthlyRollup) -> Void) {
-            let key = "\(month)|\(device)"
+        func withRollup(month: String, device: String, deviceID: String?, _ change: (inout MonthlyRollup) -> Void) {
+            let key = "\(month)|\(deviceID ?? "")|\(device)"
             if let position = index[key] {
                 change(&rollups[position])
             } else {
-                var rollup = MonthlyRollup(month: month, deviceName: device)
+                var rollup = MonthlyRollup(month: month, deviceName: device, deviceID: deviceID)
                 change(&rollup)
                 index[key] = rollups.count
                 rollups.append(rollup)
             }
         }
         for record in records {
-            withRollup(month: monthKey(for: record.startedAt, calendar: calendar), device: record.deviceName) { $0.add(record) }
+            withRollup(month: monthKey(for: record.startedAt, calendar: calendar), device: record.deviceName,
+                       deviceID: record.deviceID) { $0.add(record) }
         }
         for session in sessions {
-            withRollup(month: monthKey(for: session.startedAt, calendar: calendar), device: session.deviceName) { $0.add(session) }
+            withRollup(month: monthKey(for: session.startedAt, calendar: calendar), device: session.deviceName,
+                       deviceID: session.deviceID) { $0.add(session) }
         }
         rollups.sort { $0.month != $1.month ? $0.month < $1.month : $0.deviceName < $1.deviceName }
     }
@@ -305,7 +315,10 @@ enum EncodeStatistics {
 
         var summary = EncodeStatisticsSummary()
         let liveRecords = records.filter { inPeriod($0.startedAt) }
-        for record in liveRecords { summary.totals.add(record) }
+        for record in liveRecords {
+            summary.totals.add(record)
+            summary.deviceCounts[deviceKey(id: record.deviceID, name: record.deviceName), default: 0] += 1
+        }
         for session in sessions where session.id != currentSessionID && inPeriod(session.startedAt) {
             summary.totals.add(session)
         }
@@ -315,7 +328,12 @@ enum EncodeStatistics {
             guard let monthStart = monthStart(forKey: rollup.month, calendar: calendar), inPeriod(monthStart) else { return nil }
             return (monthStart, rollup)
         }
-        for entry in includedRollups { summary.totals.merge(entry.rollup) }
+        for (_, rollup) in includedRollups {
+            summary.totals.merge(rollup)
+            if rollup.encodeCount > 0 {
+                summary.deviceCounts[deviceKey(id: rollup.deviceID, name: rollup.deviceName), default: 0] += rollup.encodeCount
+            }
+        }
         summary.includesRollups = includedRollups.contains { $0.rollup.encodeCount > 0 || $0.rollup.sessionCount > 0 }
 
         summary.timeline = timeline(

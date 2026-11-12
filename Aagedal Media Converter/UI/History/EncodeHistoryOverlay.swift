@@ -40,7 +40,7 @@ struct EncodeHistoryOverlay: View {
             if store.interruptedAtLaunchCount > 0 {
                 interruptedNotice(count: store.interruptedAtLaunchCount)
             }
-            if !store.records.isEmpty {
+            if !store.allRecords.isEmpty {
                 TextField("Search file names, presets, codecs…", text: $searchText)
                     .textFieldStyle(.roundedBorder)
             }
@@ -91,23 +91,24 @@ struct EncodeHistoryOverlay: View {
                     : .default(Text("Skip Missing")) { finishRequeue(prompt.records, resolved: prompt.resolved) }
             )
         }
-        .task(id: store.records) { await refreshMissingSources() }
+        .task(id: store.allRecords) { await refreshMissingSources() }
     }
 
     // MARK: - Sections
 
     private var filteredRecords: [EncodeRecord] {
         let query = searchText.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !query.isEmpty else { return store.records }
-        return store.records.filter { record in
+        guard !query.isEmpty else { return store.allRecords }
+        return store.allRecords.filter { record in
             [record.sourceName, record.presetDisplayName, record.sourceFacts.videoCodec ?? "",
-             record.sourceFacts.container ?? "", record.groupName ?? "", record.outputURL?.lastPathComponent ?? ""]
+             record.sourceFacts.container ?? "", record.groupName ?? "", record.outputURL?.lastPathComponent ?? "",
+             record.deviceName]
                 .contains { $0.lowercased().contains(query) }
         }
     }
 
     private var sections: [SessionSection] {
-        let sessionsByID = Dictionary(store.sessions.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let sessionsByID = Dictionary(store.allSessions.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         var order: [UUID] = []
         var grouped: [UUID: [EncodeRecord]] = [:]
         for record in filteredRecords {
@@ -118,7 +119,7 @@ struct EncodeHistoryOverlay: View {
     }
 
     private var footerText: String {
-        let count = store.records.count
+        let count = store.allRecords.count
         let days = store.retentionDays
         if !store.isEnabled { return String(localized: "History recording is off") }
         let encodes = String(localized: "\(count) encodes", comment: "Encode history footer: number of stored encodes.")
@@ -181,9 +182,13 @@ struct EncodeHistoryOverlay: View {
                             .foregroundStyle(.orange)
                             .help("The app didn’t quit normally during this session")
                     }
-                    if session.deviceName != EncodeHistoryFormat.deviceName {
-                        Text(session.deviceName).font(.caption).foregroundStyle(.secondary)
-                    }
+                }
+                // A session holds the records of one Mac.
+                if let record = section.records.first, !store.isFromThisMac(record) {
+                    Label(store.deviceName(for: record.deviceID) ?? record.deviceName, systemImage: "desktopcomputer")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .help("Recorded on another Mac that syncs its history")
                 }
                 Spacer()
                 Button("Re-queue All") { requeue(section.records) }
@@ -246,8 +251,10 @@ struct EncodeHistoryOverlay: View {
                 Button("Show Output in Finder") { NSWorkspace.shared.activateFileViewerSelecting([output]) }
             }
             Button("Show Source in Finder") { revealSource(record) }
-            Divider()
-            Button("Remove from History", role: .destructive) { store.removeRecords([record.id]) }
+            if store.isFromThisMac(record) {
+                Divider()
+                Button("Remove from History", role: .destructive) { store.removeRecords([record.id]) }
+            }
         }
     }
 
@@ -303,6 +310,8 @@ struct EncodeHistoryOverlay: View {
                 detailRow("Merged", record.merged ? String(localized: "Part of a merged output") : nil)
                 detailRow("Result", EncodeOutcomeIcon(outcome: record.outcome).label)
                 detailRow("Error", record.errorMessage)
+                detailRow("Recorded on", store.isFromThisMac(record)
+                          ? nil : store.deviceName(for: record.deviceID) ?? record.deviceName)
             }
             .font(.caption)
             .textSelection(.enabled)
@@ -315,7 +324,9 @@ struct EncodeHistoryOverlay: View {
                         .disabled(!FileManager.default.fileExists(atPath: output.path))
                 }
                 Spacer()
-                Button("Remove", role: .destructive) { store.removeRecords([record.id]) }
+                if store.isFromThisMac(record) {
+                    Button("Remove", role: .destructive) { store.removeRecords([record.id]) }
+                }
             }
             .controlSize(.small)
         }
@@ -364,18 +375,18 @@ struct EncodeHistoryOverlay: View {
         relinks[first.source.path] = newURL
         // Update every record (not just these) that pointed at a relinked path.
         for (oldPath, url) in relinks {
-            let ids = Set(store.records.filter { $0.source.path == oldPath }.map(\.id))
+            let ids = Set(store.allRecords.filter { $0.source.path == oldPath }.map(\.id))
             store.relinkSource(of: ids, oldPath: oldPath, to: url)
         }
         // Records were updated in the store; retry with fresh copies after the alert closes.
         let ids = Set(prompt.records.map(\.id))
         DispatchQueue.main.async {
-            requeue(store.records.filter { ids.contains($0.id) })
+            requeue(store.allRecords.filter { ids.contains($0.id) })
         }
     }
 
     private func refreshMissingSources() async {
-        let sources = store.records.map { ($0.id, $0.source) }
+        let sources = store.allRecords.map { ($0.id, $0.source) }
         // Bookmark resolution touches the disk; keep it off the main actor.
         let missing = await Task.detached(priority: .utility) {
             Set(sources.compactMap { id, source in source.resolve() == nil ? id : nil })
