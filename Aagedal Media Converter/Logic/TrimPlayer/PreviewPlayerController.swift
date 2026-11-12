@@ -53,6 +53,24 @@ final class PreviewPlayerController: ObservableObject {
             }
         }
     }
+    /// Previews the item's export volume in dB while trimming; 0 leaves playback untouched.
+    var playbackGainDecibels: Double = 0 {
+        didSet {
+            guard playbackGainDecibels != oldValue else { return }
+            applyPlaybackGain()
+        }
+    }
+    private let playerAudioGain = PlayerItemAudioGain()
+    private let sequenceAudioGain = PlayerItemAudioGain()
+
+    private func applyPlaybackGain() {
+        playerAudioGain.decibels = playbackGainDecibels
+        playerAudioGain.apply(to: player?.currentItem)
+        sequenceAudioGain.decibels = playbackGainDecibels
+        sequenceAudioGain.apply(to: imageSequenceAudioPlayer?.currentItem)
+        mpvPlayer?.volumeGain = playbackGainDecibels
+    }
+
     @Published var isMuted: Bool = false {
         didSet {
             player?.isMuted = isMuted
@@ -342,6 +360,7 @@ final class PreviewPlayerController: ObservableObject {
         player.isMuted = isMuted
 
         self.player = player
+        applyPlaybackGain()
         
         // Monitor player item status for failures, fallback to MPV if needed
         installPlayerItemStatusObserver(for: playerItem, startTime: startTime)
@@ -394,6 +413,7 @@ final class PreviewPlayerController: ObservableObject {
 
         // Apply volume/mute state before loading
         mpv.volume = Self.mpvVolume(for: volume)
+        mpv.volumeGain = playbackGainDecibels
         mpv.isMuted = isMuted
 
         // Load without autostarting, with start time
@@ -448,6 +468,7 @@ final class PreviewPlayerController: ObservableObject {
             audioPlayer.volume = Float(volume / 100.0)
             audioPlayer.isMuted = isMuted
             self.imageSequenceAudioPlayer = audioPlayer
+            applyPlaybackGain()
 
             // Seek audio to start time
             let seekTime = CMTime(seconds: startTime, preferredTimescale: 600)

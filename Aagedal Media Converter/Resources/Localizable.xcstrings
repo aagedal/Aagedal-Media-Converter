@@ -9531,60 +9531,60 @@
         }
       }
     },
-    "When on, dragging the line over the waveform changes this item's export volume, and peaks that would clip are marked in yellow. When off, the line only enlarges the waveform. Double-click the line to reset it." : {
+    "When on, dragging the line over the waveform changes this item's export volume, and playback follows it. Peaks that would clip are marked in yellow. When off, the line only enlarges the waveform. Double-click the line to reset it." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Wenn aktiviert, ändert das Ziehen der Linie über der Wellenform die Exportlautstärke dieses Objekts, und Spitzen, die übersteuern würden, werden gelb markiert. Wenn deaktiviert, vergrößert die Linie nur die Wellenform. Doppelklicke auf die Linie, um sie zurückzusetzen."
+            "value" : "Wenn aktiviert, ändert das Ziehen der Linie über der Wellenform die Exportlautstärke dieses Objekts, und die Wiedergabe folgt ihr. Spitzen, die übersteuern würden, werden gelb markiert. Wenn deaktiviert, vergrößert die Linie nur die Wellenform. Doppelklicke auf die Linie, um sie zurückzusetzen."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Si está activado, arrastrar la línea sobre la forma de onda cambia el volumen de exportación de este elemento y los picos que saturarían se marcan en amarillo. Si está desactivado, la línea solo agranda la forma de onda. Haz doble clic en la línea para restablecerla."
+            "value" : "Si está activado, arrastrar la línea sobre la forma de onda cambia el volumen de exportación de este elemento y la reproducción lo sigue. Los picos que saturarían se marcan en amarillo. Si está desactivado, la línea solo agranda la forma de onda. Haz doble clic en la línea para restablecerla."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Si cette option est activée, faire glisser la ligne sur la forme d'onde modifie le volume d'export de cet élément, et les crêtes qui satureraient sont marquées en jaune. Si elle est désactivée, la ligne agrandit seulement la forme d'onde. Double-cliquez sur la ligne pour la réinitialiser."
+            "value" : "Si cette option est activée, faire glisser la ligne sur la forme d'onde modifie le volume d'export de cet élément, et la lecture le suit. Les crêtes qui satureraient sont marquées en jaune. Si elle est désactivée, la ligne agrandit seulement la forme d'onde. Double-cliquez sur la ligne pour la réinitialiser."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Se attivo, trascinare la linea sopra la forma d'onda cambia il volume di esportazione di questo elemento e i picchi che andrebbero in clipping sono segnati in giallo. Se disattivo, la linea ingrandisce solo la forma d'onda. Fai doppio clic sulla linea per reimpostarla."
+            "value" : "Se attivo, trascinare la linea sopra la forma d'onda cambia il volume di esportazione di questo elemento e la riproduzione lo segue. I picchi che andrebbero in clipping sono segnati in giallo. Se disattivo, la linea ingrandisce solo la forma d'onda. Fai doppio clic sulla linea per reimpostarla."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "オンにすると、波形上のラインをドラッグしてこの項目の書き出し音量を変更でき、クリップするピークは黄色で示されます。オフのときは、ラインは波形を拡大するだけです。ラインをダブルクリックするとリセットされます。"
+            "value" : "オンにすると、波形上のラインをドラッグしてこの項目の書き出し音量を変更でき、再生もそれに従います。クリップするピークは黄色で示されます。オフのときは、ラインは波形を拡大するだけです。ラインをダブルクリックするとリセットされます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "켜면 파형 위의 선을 드래그해 이 항목의 내보내기 볼륨을 바꾸며, 클리핑될 피크는 노란색으로 표시됩니다. 끄면 선은 파형만 확대합니다. 선을 두 번 클릭하면 재설정됩니다."
+            "value" : "켜면 파형 위의 선을 드래그해 이 항목의 내보내기 볼륨을 바꾸며, 재생도 이를 따릅니다. 클리핑될 피크는 노란색으로 표시됩니다. 끄면 선은 파형만 확대합니다. 선을 두 번 클릭하면 재설정됩니다."
           }
         },
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Når dette er på, endrer du eksportlydstyrken for dette elementet ved å dra linjen over bølgeformen, og topper som ville klippet, merkes med gult. Når det er av, forstørrer linjen bare bølgeformen. Dobbeltklikk på linjen for å tilbakestille den."
+            "value" : "Når dette er på, endrer du eksportlydstyrken for dette elementet ved å dra linjen over bølgeformen, og avspillingen følger etter. Topper som ville klippet, merkes med gult. Når det er av, forstørrer linjen bare bølgeformen. Dobbeltklikk på linjen for å tilbakestille den."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Quando ativado, arrastar a linha sobre a forma de onda muda o volume de exportação deste item, e os picos que clipariam são marcados em amarelo. Quando desativado, a linha apenas amplia a forma de onda. Clique duas vezes na linha para redefini-la."
+            "value" : "Quando ativado, arrastar a linha sobre a forma de onda muda o volume de exportação deste item, e a reprodução acompanha. Os picos que clipariam são marcados em amarelo. Quando desativado, a linha apenas amplia a forma de onda. Clique duas vezes na linha para redefini-la."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "打开时，在波形上拖移这条线会更改此项目的导出音量，会削波的峰值以黄色标出。关闭时，这条线只放大波形。连按这条线可将其复位。"
+            "value" : "打开时，在波形上拖移这条线会更改此项目的导出音量，播放也会随之变化。会削波的峰值以黄色标出。关闭时，这条线只放大波形。连按这条线可将其复位。"
           }
         }
       }

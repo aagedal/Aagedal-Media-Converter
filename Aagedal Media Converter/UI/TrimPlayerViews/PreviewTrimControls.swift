@@ -74,6 +74,11 @@ struct PreviewTrimControls: View {
                 .onReceive(controller.playbackTimePublisher) { time in
                     currentPlaybackTime = time
                 }
+                // Play what the export will sound like, following the line while it is dragged.
+                .onChange(of: previewGain, initial: true) { _, gain in
+                    controller.playbackGainDecibels = gain
+                }
+                .onDisappear { controller.playbackGainDecibels = 0 }
 
                 if !isCompactMode {
                     controlButtons
@@ -113,6 +118,11 @@ struct PreviewTrimControls: View {
         case .off: return false
         case .useDefault: return loudnessNormalizationByDefault
         }
+    }
+
+    private var previewGain: Double {
+        guard let gain = item.adjustments?.audioGain, !loudnessOverridesVolume else { return 0 }
+        return draggedVolumeLine ?? gain
     }
 
     private var volumeLine: WaveformVolumeLine? {
@@ -158,7 +168,7 @@ struct PreviewTrimControls: View {
             .accessibilityIdentifier("trim.volumeToExport")
             .help(loudnessOverridesVolume
                   ? Text("Loudness normalization sets this item's export level, so a volume change would have no effect. Turn it off for this item under Adjustments to use the volume line.")
-                  : Text("When on, dragging the line over the waveform changes this item's export volume, and peaks that would clip are marked in yellow. When off, the line only enlarges the waveform. Double-click the line to reset it."))
+                  : Text("When on, dragging the line over the waveform changes this item's export volume, and playback follows it. Peaks that would clip are marked in yellow. When off, the line only enlarges the waveform. Double-click the line to reset it."))
 
             Toggle("Log scale", isOn: $waveformLogScale)
                 .accessibilityIdentifier("trim.waveformLogScale")
