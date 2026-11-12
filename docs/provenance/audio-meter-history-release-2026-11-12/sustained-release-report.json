@@ -1,0 +1,2851 @@
+{
+  "platform": "macOS-27.2-arm64-arm-64bit-Mach-O",
+  "architecture": "arm64",
+  "configuration": "Release, ad hoc signed; serial muted MPV playback",
+  "rounds": 1,
+  "secondsPerRun": 300,
+  "thermal": "ProcessInfo.thermalState sampled with every reading; no sensor temperatures or fan speeds",
+  "timing": "Observed level-change playhead minus known source edge; negative means readings lead playback. Includes 100 ms measurement and polling granularity.",
+  "cpu": "Host plus reaped FFmpeg child user/system CPU; 100 percent means one core. Includes cold meter setup and source lookahead, excludes fixture generation and file load.",
+  "limitations": [
+    "No physical device latency measurement",
+    "Thermal state is the OS summary level, not temperature",
+    "No SwiftUI view rendering cost",
+    "Short generated local clips; filesystem/decoder caches may be warm",
+    "Source uses fresh analysis cache each run; sourceWindows counts window changes, not subprocesses"
+  ],
+  "runs": [
+    {
+      "childCPUSeconds": 0,
+      "clock": "time-pos",
+      "round": 1,
+      "sourceWindows": 0,
+      "fixture": "stereo-aac-video",
+      "wallSeconds": 300.02904987501097,
+      "audioOutput": "avfoundation",
+      "hostCPUSeconds": 8.654895,
+      "mode": "off",
+      "cpuPercentOfOneCore": 2.8846856674730468,
+      "readingCount": 0,
+      "transitions": [],
+      "medianTransitionDelaySeconds": null,
+      "historyIngestCount": 0,
+      "medianHistoryIngestSeconds": null,
+      "p95HistoryIngestSeconds": null,
+      "maxHistoryIngestSeconds": null,
+      "cpuPercentPerMinute": [
+        2.9421050000000073,
+        2.8806966666666747,
+        2.823510000000008,
+        2.861229999999987,
+        2.8930166666666444
+      ],
+      "maxThermalState": "fair",
+      "readingsAboveNominalThermal": 2889
+    },
+    {
+      "childCPUSeconds": 1.9471829999999954,
+      "clock": "time-pos",
+      "round": 1,
+      "sourceWindows": 38,
+      "fixture": "stereo-aac-video",
+      "audioOutput": "avfoundation",
+      "wallSeconds": 300.07835749996593,
+      "hostCPUSeconds": 8.727347,
+      "mode": "source",
+      "cpuPercentOfOneCore": 3.557247543252501,
+      "readingCount": 2866,
+      "transitions": [
+        {
+          "sourceSeconds": 2,
+          "observedPlayhead": 2.1999999999999997,
+          "delaySeconds": 0.19999999999999973
+        },
+        {
+          "sourceSeconds": 4,
+          "observedPlayhead": 4.16,
+          "delaySeconds": 0.16000000000000014
+        },
+        {
+          "sourceSeconds": 6,
+          "observedPlayhead": 6.12,
+          "delaySeconds": 0.1200000000000001
+        },
+        {
+          "sourceSeconds": 8,
+          "observedPlayhead": 8.16,
+          "delaySeconds": 0.16000000000000014
+        },
+        {
+          "sourceSeconds": 10,
+          "observedPlayhead": 10.16,
+          "delaySeconds": 0.16000000000000014
+        },
+        {
+          "sourceSeconds": 12,
+          "observedPlayhead": 12.12,
+          "delaySeconds": 0.11999999999999922
+        },
+        {
+          "sourceSeconds": 14,
+          "observedPlayhead": 14.2,
+          "delaySeconds": 0.1999999999999993
+        },
+        {
+          "sourceSeconds": 16,
+          "observedPlayhead": 16.2,
+          "delaySeconds": 0.1999999999999993
+        },
+        {
+          "sourceSeconds": 20,
+          "observedPlayhead": 20.16,
+          "delaySeconds": 0.16000000000000014
+        },
+        {
+          "sourceSeconds": 22,
+          "observedPlayhead": 22.16,
+          "delaySeconds": 0.16000000000000014
+        },
+        {
+          "sourceSeconds": 24,
+          "observedPlayhead": 24.2,
+          "delaySeconds": 0.1999999999999993
+        },
+        {
+          "sourceSeconds": 26,
+          "observedPlayhead": 26.16,
+          "delaySeconds": 0.16000000000000014
+        },
+        {
+          "sourceSeconds": 28,
+          "observedPlayhead": 28.16,
+          "delaySeconds": 0.16000000000000014
+        },
+        {
+          "sourceSeconds": 30,
+          "observedPlayhead": 30.16,
+          "delaySeconds": 0.16000000000000014
+        },
+        {
+          "sourceSeconds": 32,
+          "observedPlayhead": 32.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 34,
+          "observedPlayhead": 34.12,
+          "delaySeconds": 0.11999999999999744
+        },
+        {
+          "sourceSeconds": 38,
+          "observedPlayhead": 38.199999999999996,
+          "delaySeconds": 0.19999999999999574
+        },
+        {
+          "sourceSeconds": 40,
+          "observedPlayhead": 40.199999999999996,
+          "delaySeconds": 0.19999999999999574
+        },
+        {
+          "sourceSeconds": 42,
+          "observedPlayhead": 42.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 44,
+          "observedPlayhead": 44.12,
+          "delaySeconds": 0.11999999999999744
+        },
+        {
+          "sourceSeconds": 46,
+          "observedPlayhead": 46.199999999999996,
+          "delaySeconds": 0.19999999999999574
+        },
+        {
+          "sourceSeconds": 48,
+          "observedPlayhead": 48.12,
+          "delaySeconds": 0.11999999999999744
+        },
+        {
+          "sourceSeconds": 50,
+          "observedPlayhead": 50.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 52,
+          "observedPlayhead": 52.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 56,
+          "observedPlayhead": 56.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 58,
+          "observedPlayhead": 58.12,
+          "delaySeconds": 0.11999999999999744
+        },
+        {
+          "sourceSeconds": 60,
+          "observedPlayhead": 60.199999999999996,
+          "delaySeconds": 0.19999999999999574
+        },
+        {
+          "sourceSeconds": 62,
+          "observedPlayhead": 62.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 64,
+          "observedPlayhead": 64.2,
+          "delaySeconds": 0.20000000000000284
+        },
+        {
+          "sourceSeconds": 66,
+          "observedPlayhead": 66.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 68,
+          "observedPlayhead": 68.11999999999999,
+          "delaySeconds": 0.11999999999999034
+        },
+        {
+          "sourceSeconds": 70,
+          "observedPlayhead": 70.2,
+          "delaySeconds": 0.20000000000000284
+        },
+        {
+          "sourceSeconds": 74,
+          "observedPlayhead": 74.2,
+          "delaySeconds": 0.20000000000000284
+        },
+        {
+          "sourceSeconds": 76,
+          "observedPlayhead": 76.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 78,
+          "observedPlayhead": 78.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 80,
+          "observedPlayhead": 80.2,
+          "delaySeconds": 0.20000000000000284
+        },
+        {
+          "sourceSeconds": 82,
+          "observedPlayhead": 82.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 84,
+          "observedPlayhead": 84.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 86,
+          "observedPlayhead": 86.11999999999999,
+          "delaySeconds": 0.11999999999999034
+        },
+        {
+          "sourceSeconds": 88,
+          "observedPlayhead": 88.11999999999999,
+          "delaySeconds": 0.11999999999999034
+        },
+        {
+          "sourceSeconds": 92,
+          "observedPlayhead": 92.2,
+          "delaySeconds": 0.20000000000000284
+        },
+        {
+          "sourceSeconds": 94,
+          "observedPlayhead": 94.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 96,
+          "observedPlayhead": 96.19999999999999,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 98,
+          "observedPlayhead": 98.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 100,
+          "observedPlayhead": 100.11999999999999,
+          "delaySeconds": 0.11999999999999034
+        },
+        {
+          "sourceSeconds": 102,
+          "observedPlayhead": 102.19999999999999,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 104,
+          "observedPlayhead": 104.11999999999999,
+          "delaySeconds": 0.11999999999999034
+        },
+        {
+          "sourceSeconds": 106,
+          "observedPlayhead": 106.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 110,
+          "observedPlayhead": 110.11999999999999,
+          "delaySeconds": 0.11999999999999034
+        },
+        {
+          "sourceSeconds": 112,
+          "observedPlayhead": 112.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 114,
+          "observedPlayhead": 114.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 116,
+          "observedPlayhead": 116.11999999999999,
+          "delaySeconds": 0.11999999999999034
+        },
+        {
+          "sourceSeconds": 118,
+          "observedPlayhead": 118.19999999999999,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 120,
+          "observedPlayhead": 120.11999999999999,
+          "delaySeconds": 0.11999999999999034
+        },
+        {
+          "sourceSeconds": 122,
+          "observedPlayhead": 122.19999999999999,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 124,
+          "observedPlayhead": 124.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 128,
+          "observedPlayhead": 128.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 130,
+          "observedPlayhead": 130.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 132,
+          "observedPlayhead": 132.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 134,
+          "observedPlayhead": 134.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 136,
+          "observedPlayhead": 136.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 138,
+          "observedPlayhead": 138.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 140,
+          "observedPlayhead": 140.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 142,
+          "observedPlayhead": 142.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 146,
+          "observedPlayhead": 146.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 148,
+          "observedPlayhead": 148.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 150,
+          "observedPlayhead": 150.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 152,
+          "observedPlayhead": 152.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 154,
+          "observedPlayhead": 154.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 156,
+          "observedPlayhead": 156.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 158,
+          "observedPlayhead": 158.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 160,
+          "observedPlayhead": 160.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 164,
+          "observedPlayhead": 164.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 166,
+          "observedPlayhead": 166.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 168,
+          "observedPlayhead": 168.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 170,
+          "observedPlayhead": 170.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 172,
+          "observedPlayhead": 172.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 174,
+          "observedPlayhead": 174.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 176,
+          "observedPlayhead": 176.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 178,
+          "observedPlayhead": 178.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 182,
+          "observedPlayhead": 182.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 184,
+          "observedPlayhead": 184.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 186,
+          "observedPlayhead": 186.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 188,
+          "observedPlayhead": 188.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 190,
+          "observedPlayhead": 190.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 192,
+          "observedPlayhead": 192.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 194,
+          "observedPlayhead": 194.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 196,
+          "observedPlayhead": 196.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 200,
+          "observedPlayhead": 200.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 202,
+          "observedPlayhead": 202.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 204,
+          "observedPlayhead": 204.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 206,
+          "observedPlayhead": 206.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 208,
+          "observedPlayhead": 208.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 210,
+          "observedPlayhead": 210.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 212,
+          "observedPlayhead": 212.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 214,
+          "observedPlayhead": 214.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 218,
+          "observedPlayhead": 218.11999999999998,
+          "delaySeconds": 0.11999999999997613
+        },
+        {
+          "sourceSeconds": 220,
+          "observedPlayhead": 220.11999999999998,
+          "delaySeconds": 0.11999999999997613
+        },
+        {
+          "sourceSeconds": 222,
+          "observedPlayhead": 222.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 224,
+          "observedPlayhead": 224.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 226,
+          "observedPlayhead": 226.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 228,
+          "observedPlayhead": 228.11999999999998,
+          "delaySeconds": 0.11999999999997613
+        },
+        {
+          "sourceSeconds": 230,
+          "observedPlayhead": 230.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 232,
+          "observedPlayhead": 232.11999999999998,
+          "delaySeconds": 0.11999999999997613
+        },
+        {
+          "sourceSeconds": 236,
+          "observedPlayhead": 236.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 238,
+          "observedPlayhead": 238.11999999999998,
+          "delaySeconds": 0.11999999999997613
+        },
+        {
+          "sourceSeconds": 240,
+          "observedPlayhead": 240.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 242,
+          "observedPlayhead": 242.11999999999998,
+          "delaySeconds": 0.11999999999997613
+        },
+        {
+          "sourceSeconds": 244,
+          "observedPlayhead": 244.11999999999998,
+          "delaySeconds": 0.11999999999997613
+        },
+        {
+          "sourceSeconds": 246,
+          "observedPlayhead": 246.16,
+          "delaySeconds": 0.1599999999999966
+        },
+        {
+          "sourceSeconds": 248,
+          "observedPlayhead": 248.51999999999998,
+          "delaySeconds": 0.5199999999999818
+        },
+        {
+          "sourceSeconds": 250,
+          "observedPlayhead": 250.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 254,
+          "observedPlayhead": 254.11999999999998,
+          "delaySeconds": 0.11999999999997613
+        },
+        {
+          "sourceSeconds": 256,
+          "observedPlayhead": 256.15999999999997,
+          "delaySeconds": 0.15999999999996817
+        },
+        {
+          "sourceSeconds": 258,
+          "observedPlayhead": 258.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 260,
+          "observedPlayhead": 260.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 262,
+          "observedPlayhead": 262.15999999999997,
+          "delaySeconds": 0.15999999999996817
+        },
+        {
+          "sourceSeconds": 264,
+          "observedPlayhead": 264.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 266,
+          "observedPlayhead": 266.15999999999997,
+          "delaySeconds": 0.15999999999996817
+        },
+        {
+          "sourceSeconds": 268,
+          "observedPlayhead": 268.15999999999997,
+          "delaySeconds": 0.15999999999996817
+        },
+        {
+          "sourceSeconds": 272,
+          "observedPlayhead": 272.15999999999997,
+          "delaySeconds": 0.15999999999996817
+        },
+        {
+          "sourceSeconds": 274,
+          "observedPlayhead": 274.15999999999997,
+          "delaySeconds": 0.15999999999996817
+        },
+        {
+          "sourceSeconds": 276,
+          "observedPlayhead": 276.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 278,
+          "observedPlayhead": 278.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 280,
+          "observedPlayhead": 280.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 282,
+          "observedPlayhead": 282.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 284,
+          "observedPlayhead": 284.15999999999997,
+          "delaySeconds": 0.15999999999996817
+        },
+        {
+          "sourceSeconds": 286,
+          "observedPlayhead": 286.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 290,
+          "observedPlayhead": 290.15999999999997,
+          "delaySeconds": 0.15999999999996817
+        },
+        {
+          "sourceSeconds": 292,
+          "observedPlayhead": 292.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 294,
+          "observedPlayhead": 294.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 296,
+          "observedPlayhead": 296.12,
+          "delaySeconds": 0.12000000000000455
+        },
+        {
+          "sourceSeconds": 298,
+          "observedPlayhead": 298.12,
+          "delaySeconds": 0.12000000000000455
+        }
+      ],
+      "medianTransitionDelaySeconds": 0.1599999999999966,
+      "historyIngestCount": 0,
+      "medianHistoryIngestSeconds": null,
+      "p95HistoryIngestSeconds": null,
+      "maxHistoryIngestSeconds": null,
+      "cpuPercentPerMinute": [
+        3.5170466666666536,
+        3.4769466666666915,
+        3.474808333333357,
+        3.4415516666666455,
+        3.56560166666668
+      ],
+      "maxThermalState": "fair",
+      "readingsAboveNominalThermal": 2866
+    },
+    {
+      "childCPUSeconds": 0,
+      "clock": "time-pos",
+      "round": 1,
+      "sourceWindows": 0,
+      "fixture": "stereo-aac-video",
+      "audioOutput": "avfoundation",
+      "wallSeconds": 300.05271066667046,
+      "hostCPUSeconds": 12.204949,
+      "mode": "playback",
+      "cpuPercentOfOneCore": 4.067601646684844,
+      "readingCount": 2889,
+      "transitions": [
+        {
+          "sourceSeconds": 2,
+          "observedPlayhead": 2.28,
+          "delaySeconds": 0.2799999999999998
+        },
+        {
+          "sourceSeconds": 4,
+          "observedPlayhead": 4.28,
+          "delaySeconds": 0.28000000000000025
+        },
+        {
+          "sourceSeconds": 6,
+          "observedPlayhead": 6.239999999999999,
+          "delaySeconds": 0.23999999999999932
+        },
+        {
+          "sourceSeconds": 8,
+          "observedPlayhead": 8.2,
+          "delaySeconds": 0.1999999999999993
+        },
+        {
+          "sourceSeconds": 10,
+          "observedPlayhead": 10.28,
+          "delaySeconds": 0.27999999999999936
+        },
+        {
+          "sourceSeconds": 12,
+          "observedPlayhead": 12.24,
+          "delaySeconds": 0.2400000000000002
+        },
+        {
+          "sourceSeconds": 14,
+          "observedPlayhead": 14.2,
+          "delaySeconds": 0.1999999999999993
+        },
+        {
+          "sourceSeconds": 16,
+          "observedPlayhead": 16.2,
+          "delaySeconds": 0.1999999999999993
+        },
+        {
+          "sourceSeconds": 20,
+          "observedPlayhead": 20.24,
+          "delaySeconds": 0.23999999999999844
+        },
+        {
+          "sourceSeconds": 22,
+          "observedPlayhead": 22.2,
+          "delaySeconds": 0.1999999999999993
+        },
+        {
+          "sourceSeconds": 24,
+          "observedPlayhead": 24.279999999999998,
+          "delaySeconds": 0.2799999999999976
+        },
+        {
+          "sourceSeconds": 26,
+          "observedPlayhead": 26.279999999999998,
+          "delaySeconds": 0.2799999999999976
+        },
+        {
+          "sourceSeconds": 28,
+          "observedPlayhead": 28.2,
+          "delaySeconds": 0.1999999999999993
+        },
+        {
+          "sourceSeconds": 30,
+          "observedPlayhead": 30.279999999999998,
+          "delaySeconds": 0.2799999999999976
+        },
+        {
+          "sourceSeconds": 32,
+          "observedPlayhead": 32.24,
+          "delaySeconds": 0.240000000000002
+        },
+        {
+          "sourceSeconds": 34,
+          "observedPlayhead": 34.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 38,
+          "observedPlayhead": 38.239999999999995,
+          "delaySeconds": 0.23999999999999488
+        },
+        {
+          "sourceSeconds": 40,
+          "observedPlayhead": 40.239999999999995,
+          "delaySeconds": 0.23999999999999488
+        },
+        {
+          "sourceSeconds": 42,
+          "observedPlayhead": 42.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 44,
+          "observedPlayhead": 44.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 46,
+          "observedPlayhead": 46.239999999999995,
+          "delaySeconds": 0.23999999999999488
+        },
+        {
+          "sourceSeconds": 48,
+          "observedPlayhead": 48.199999999999996,
+          "delaySeconds": 0.19999999999999574
+        },
+        {
+          "sourceSeconds": 50,
+          "observedPlayhead": 50.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 52,
+          "observedPlayhead": 52.239999999999995,
+          "delaySeconds": 0.23999999999999488
+        },
+        {
+          "sourceSeconds": 56,
+          "observedPlayhead": 56.199999999999996,
+          "delaySeconds": 0.19999999999999574
+        },
+        {
+          "sourceSeconds": 58,
+          "observedPlayhead": 58.279999999999994,
+          "delaySeconds": 0.27999999999999403
+        },
+        {
+          "sourceSeconds": 60,
+          "observedPlayhead": 60.239999999999995,
+          "delaySeconds": 0.23999999999999488
+        },
+        {
+          "sourceSeconds": 62,
+          "observedPlayhead": 62.199999999999996,
+          "delaySeconds": 0.19999999999999574
+        },
+        {
+          "sourceSeconds": 64,
+          "observedPlayhead": 64.2,
+          "delaySeconds": 0.20000000000000284
+        },
+        {
+          "sourceSeconds": 66,
+          "observedPlayhead": 66.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 68,
+          "observedPlayhead": 68.24,
+          "delaySeconds": 0.23999999999999488
+        },
+        {
+          "sourceSeconds": 70,
+          "observedPlayhead": 70.24,
+          "delaySeconds": 0.23999999999999488
+        },
+        {
+          "sourceSeconds": 74,
+          "observedPlayhead": 74.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 76,
+          "observedPlayhead": 76.24,
+          "delaySeconds": 0.23999999999999488
+        },
+        {
+          "sourceSeconds": 78,
+          "observedPlayhead": 78.24,
+          "delaySeconds": 0.23999999999999488
+        },
+        {
+          "sourceSeconds": 80,
+          "observedPlayhead": 80.2,
+          "delaySeconds": 0.20000000000000284
+        },
+        {
+          "sourceSeconds": 82,
+          "observedPlayhead": 82.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 84,
+          "observedPlayhead": 84.24,
+          "delaySeconds": 0.23999999999999488
+        },
+        {
+          "sourceSeconds": 86,
+          "observedPlayhead": 86.2,
+          "delaySeconds": 0.20000000000000284
+        },
+        {
+          "sourceSeconds": 88,
+          "observedPlayhead": 88.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 92,
+          "observedPlayhead": 92.2,
+          "delaySeconds": 0.20000000000000284
+        },
+        {
+          "sourceSeconds": 94,
+          "observedPlayhead": 94.2,
+          "delaySeconds": 0.20000000000000284
+        },
+        {
+          "sourceSeconds": 96,
+          "observedPlayhead": 96.32,
+          "delaySeconds": 0.3199999999999932
+        },
+        {
+          "sourceSeconds": 98,
+          "observedPlayhead": 98.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 100,
+          "observedPlayhead": 100.24,
+          "delaySeconds": 0.23999999999999488
+        },
+        {
+          "sourceSeconds": 102,
+          "observedPlayhead": 102.19999999999999,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 104,
+          "observedPlayhead": 104.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 106,
+          "observedPlayhead": 106.24,
+          "delaySeconds": 0.23999999999999488
+        },
+        {
+          "sourceSeconds": 110,
+          "observedPlayhead": 110.19999999999999,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 112,
+          "observedPlayhead": 112.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 114,
+          "observedPlayhead": 114.24,
+          "delaySeconds": 0.23999999999999488
+        },
+        {
+          "sourceSeconds": 116,
+          "observedPlayhead": 116.19999999999999,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 118,
+          "observedPlayhead": 118.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 120,
+          "observedPlayhead": 120.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 122,
+          "observedPlayhead": 122.24,
+          "delaySeconds": 0.23999999999999488
+        },
+        {
+          "sourceSeconds": 124,
+          "observedPlayhead": 124.19999999999999,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 128,
+          "observedPlayhead": 128.23999999999998,
+          "delaySeconds": 0.23999999999998067
+        },
+        {
+          "sourceSeconds": 130,
+          "observedPlayhead": 130.23999999999998,
+          "delaySeconds": 0.23999999999998067
+        },
+        {
+          "sourceSeconds": 132,
+          "observedPlayhead": 132.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 134,
+          "observedPlayhead": 134.23999999999998,
+          "delaySeconds": 0.23999999999998067
+        },
+        {
+          "sourceSeconds": 136,
+          "observedPlayhead": 136.23999999999998,
+          "delaySeconds": 0.23999999999998067
+        },
+        {
+          "sourceSeconds": 138,
+          "observedPlayhead": 138.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 140,
+          "observedPlayhead": 140.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 142,
+          "observedPlayhead": 142.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 146,
+          "observedPlayhead": 146.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 148,
+          "observedPlayhead": 148.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 150,
+          "observedPlayhead": 150.23999999999998,
+          "delaySeconds": 0.23999999999998067
+        },
+        {
+          "sourceSeconds": 152,
+          "observedPlayhead": 152.23999999999998,
+          "delaySeconds": 0.23999999999998067
+        },
+        {
+          "sourceSeconds": 154,
+          "observedPlayhead": 154.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 156,
+          "observedPlayhead": 156.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 158,
+          "observedPlayhead": 158.23999999999998,
+          "delaySeconds": 0.23999999999998067
+        },
+        {
+          "sourceSeconds": 160,
+          "observedPlayhead": 160.23999999999998,
+          "delaySeconds": 0.23999999999998067
+        },
+        {
+          "sourceSeconds": 164,
+          "observedPlayhead": 164.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 166,
+          "observedPlayhead": 166.23999999999998,
+          "delaySeconds": 0.23999999999998067
+        },
+        {
+          "sourceSeconds": 168,
+          "observedPlayhead": 168.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 170,
+          "observedPlayhead": 170.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 172,
+          "observedPlayhead": 172.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 174,
+          "observedPlayhead": 174.23999999999998,
+          "delaySeconds": 0.23999999999998067
+        },
+        {
+          "sourceSeconds": 176,
+          "observedPlayhead": 176.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 178,
+          "observedPlayhead": 178.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 182,
+          "observedPlayhead": 182.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 184,
+          "observedPlayhead": 184.23999999999998,
+          "delaySeconds": 0.23999999999998067
+        },
+        {
+          "sourceSeconds": 186,
+          "observedPlayhead": 186.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 188,
+          "observedPlayhead": 188.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 190,
+          "observedPlayhead": 190.23999999999998,
+          "delaySeconds": 0.23999999999998067
+        },
+        {
+          "sourceSeconds": 192,
+          "observedPlayhead": 192.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 194,
+          "observedPlayhead": 194.32,
+          "delaySeconds": 0.3199999999999932
+        },
+        {
+          "sourceSeconds": 196,
+          "observedPlayhead": 196.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 200,
+          "observedPlayhead": 200.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 202,
+          "observedPlayhead": 202.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 204,
+          "observedPlayhead": 204.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 206,
+          "observedPlayhead": 206.23999999999998,
+          "delaySeconds": 0.23999999999998067
+        },
+        {
+          "sourceSeconds": 208,
+          "observedPlayhead": 208.23999999999998,
+          "delaySeconds": 0.23999999999998067
+        },
+        {
+          "sourceSeconds": 210,
+          "observedPlayhead": 210.32,
+          "delaySeconds": 0.3199999999999932
+        },
+        {
+          "sourceSeconds": 212,
+          "observedPlayhead": 212.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 214,
+          "observedPlayhead": 214.23999999999998,
+          "delaySeconds": 0.23999999999998067
+        },
+        {
+          "sourceSeconds": 218,
+          "observedPlayhead": 218.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 220,
+          "observedPlayhead": 220.23999999999998,
+          "delaySeconds": 0.23999999999998067
+        },
+        {
+          "sourceSeconds": 222,
+          "observedPlayhead": 222.23999999999998,
+          "delaySeconds": 0.23999999999998067
+        },
+        {
+          "sourceSeconds": 224,
+          "observedPlayhead": 224.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 226,
+          "observedPlayhead": 226.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 228,
+          "observedPlayhead": 228.23999999999998,
+          "delaySeconds": 0.23999999999998067
+        },
+        {
+          "sourceSeconds": 230,
+          "observedPlayhead": 230.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 232,
+          "observedPlayhead": 232.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 236,
+          "observedPlayhead": 236.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 238,
+          "observedPlayhead": 238.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 240,
+          "observedPlayhead": 240.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 242,
+          "observedPlayhead": 242.23999999999998,
+          "delaySeconds": 0.23999999999998067
+        },
+        {
+          "sourceSeconds": 244,
+          "observedPlayhead": 244.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 246,
+          "observedPlayhead": 246.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 248,
+          "observedPlayhead": 248.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 250,
+          "observedPlayhead": 250.28,
+          "delaySeconds": 0.28000000000000114
+        },
+        {
+          "sourceSeconds": 254,
+          "observedPlayhead": 254.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 256,
+          "observedPlayhead": 256.28,
+          "delaySeconds": 0.2799999999999727
+        },
+        {
+          "sourceSeconds": 258,
+          "observedPlayhead": 258.24,
+          "delaySeconds": 0.2400000000000091
+        },
+        {
+          "sourceSeconds": 260,
+          "observedPlayhead": 260.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 262,
+          "observedPlayhead": 262.28,
+          "delaySeconds": 0.2799999999999727
+        },
+        {
+          "sourceSeconds": 264,
+          "observedPlayhead": 264.28,
+          "delaySeconds": 0.2799999999999727
+        },
+        {
+          "sourceSeconds": 266,
+          "observedPlayhead": 266.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 268,
+          "observedPlayhead": 268.28,
+          "delaySeconds": 0.2799999999999727
+        },
+        {
+          "sourceSeconds": 272,
+          "observedPlayhead": 272.24,
+          "delaySeconds": 0.2400000000000091
+        },
+        {
+          "sourceSeconds": 274,
+          "observedPlayhead": 274.24,
+          "delaySeconds": 0.2400000000000091
+        },
+        {
+          "sourceSeconds": 276,
+          "observedPlayhead": 276.32,
+          "delaySeconds": 0.3199999999999932
+        },
+        {
+          "sourceSeconds": 278,
+          "observedPlayhead": 278.28,
+          "delaySeconds": 0.2799999999999727
+        },
+        {
+          "sourceSeconds": 280,
+          "observedPlayhead": 280.24,
+          "delaySeconds": 0.2400000000000091
+        },
+        {
+          "sourceSeconds": 282,
+          "observedPlayhead": 282.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 284,
+          "observedPlayhead": 284.32,
+          "delaySeconds": 0.3199999999999932
+        },
+        {
+          "sourceSeconds": 286,
+          "observedPlayhead": 286.28,
+          "delaySeconds": 0.2799999999999727
+        },
+        {
+          "sourceSeconds": 290,
+          "observedPlayhead": 290.2,
+          "delaySeconds": 0.19999999999998863
+        },
+        {
+          "sourceSeconds": 292,
+          "observedPlayhead": 292.28,
+          "delaySeconds": 0.2799999999999727
+        },
+        {
+          "sourceSeconds": 294,
+          "observedPlayhead": 294.24,
+          "delaySeconds": 0.2400000000000091
+        },
+        {
+          "sourceSeconds": 296,
+          "observedPlayhead": 296.24,
+          "delaySeconds": 0.2400000000000091
+        },
+        {
+          "sourceSeconds": 298,
+          "observedPlayhead": 298.28,
+          "delaySeconds": 0.2799999999999727
+        }
+      ],
+      "medianTransitionDelaySeconds": 0.23999999999999488,
+      "historyIngestCount": 2889,
+      "medianHistoryIngestSeconds": 0.0005800416693091393,
+      "p95HistoryIngestSeconds": 0.0006902083405293524,
+      "maxHistoryIngestSeconds": 0.0009994999854825437,
+      "cpuPercentPerMinute": [
+        4.081345000000003,
+        4.104481666666662,
+        4.051965,
+        4.038111666666684,
+        4.024058333333329
+      ],
+      "maxThermalState": "fair",
+      "readingsAboveNominalThermal": 2891
+    },
+    {
+      "childCPUSeconds": 0,
+      "clock": "time-pos",
+      "round": 1,
+      "sourceWindows": 0,
+      "fixture": "surround-flac-audio",
+      "audioOutput": "coreaudio",
+      "wallSeconds": 300.06252812501043,
+      "hostCPUSeconds": 4.471597999999997,
+      "mode": "off",
+      "cpuPercentOfOneCore": 1.4902220640282893,
+      "readingCount": 0,
+      "transitions": [],
+      "medianTransitionDelaySeconds": null,
+      "historyIngestCount": 0,
+      "medianHistoryIngestSeconds": null,
+      "p95HistoryIngestSeconds": null,
+      "maxHistoryIngestSeconds": null,
+      "cpuPercentPerMinute": [
+        1.4215933333333435,
+        1.4045916666666851,
+        1.4183083333333475,
+        1.5216766666666597,
+        1.6738566666667036
+      ],
+      "maxThermalState": "fair",
+      "readingsAboveNominalThermal": 2880
+    },
+    {
+      "wallSeconds": 300.0124439166975,
+      "audioOutput": "coreaudio",
+      "mode": "source",
+      "hostCPUSeconds": 5.2973110000000005,
+      "clock": "time-pos",
+      "round": 1,
+      "childCPUSeconds": 4.846924999999999,
+      "sourceWindows": 38,
+      "fixture": "surround-flac-audio",
+      "cpuPercentOfOneCore": 3.381271745786879,
+      "readingCount": 2843,
+      "transitions": [
+        {
+          "sourceSeconds": 2,
+          "observedPlayhead": 2.130148376333335,
+          "delaySeconds": 0.13014837633333487
+        },
+        {
+          "sourceSeconds": 4,
+          "observedPlayhead": 4.210480751333332,
+          "delaySeconds": 0.210480751333332
+        },
+        {
+          "sourceSeconds": 6,
+          "observedPlayhead": 6.162156251333361,
+          "delaySeconds": 0.16215625133336076
+        },
+        {
+          "sourceSeconds": 8,
+          "observedPlayhead": 8.146136251333372,
+          "delaySeconds": 0.14613625133337216
+        },
+        {
+          "sourceSeconds": 10,
+          "observedPlayhead": 10.215471792666651,
+          "delaySeconds": 0.2154717926666514
+        },
+        {
+          "sourceSeconds": 12,
+          "observedPlayhead": 12.199521376666597,
+          "delaySeconds": 0.1995213766665973
+        },
+        {
+          "sourceSeconds": 14,
+          "observedPlayhead": 14.183481376666544,
+          "delaySeconds": 0.18348137666654374
+        },
+        {
+          "sourceSeconds": 16,
+          "observedPlayhead": 16.114438417333186,
+          "delaySeconds": 0.11443841733318649
+        },
+        {
+          "sourceSeconds": 20,
+          "observedPlayhead": 20.19947904266675,
+          "delaySeconds": 0.19947904266674854
+        },
+        {
+          "sourceSeconds": 22,
+          "observedPlayhead": 22.18347604266686,
+          "delaySeconds": 0.1834760426668609
+        },
+        {
+          "sourceSeconds": 24,
+          "observedPlayhead": 24.146134543333638,
+          "delaySeconds": 0.14613454333363762
+        },
+        {
+          "sourceSeconds": 26,
+          "observedPlayhead": 26.21546866666709,
+          "delaySeconds": 0.21546866666708908
+        },
+        {
+          "sourceSeconds": 28,
+          "observedPlayhead": 28.1994859176672,
+          "delaySeconds": 0.19948591766720014
+        },
+        {
+          "sourceSeconds": 30,
+          "observedPlayhead": 30.16214775133398,
+          "delaySeconds": 0.16214775133397907
+        },
+        {
+          "sourceSeconds": 32,
+          "observedPlayhead": 32.12480050200069,
+          "delaySeconds": 0.1248005020006886
+        },
+        {
+          "sourceSeconds": 34,
+          "observedPlayhead": 34.1301498763338,
+          "delaySeconds": 0.13014987633380315
+        },
+        {
+          "sourceSeconds": 38,
+          "observedPlayhead": 38.18346545866669,
+          "delaySeconds": 0.18346545866668862
+        },
+        {
+          "sourceSeconds": 40,
+          "observedPlayhead": 40.16745175066647,
+          "delaySeconds": 0.16745175066647278
+        },
+        {
+          "sourceSeconds": 42,
+          "observedPlayhead": 42.130156876332926,
+          "delaySeconds": 0.13015687633292572
+        },
+        {
+          "sourceSeconds": 44,
+          "observedPlayhead": 44.22080625199936,
+          "delaySeconds": 0.2208062519993632
+        },
+        {
+          "sourceSeconds": 46,
+          "observedPlayhead": 46.204796709999144,
+          "delaySeconds": 0.2047967099991439
+        },
+        {
+          "sourceSeconds": 48,
+          "observedPlayhead": 48.19972500066559,
+          "delaySeconds": 0.19972500066558752
+        },
+        {
+          "sourceSeconds": 50,
+          "observedPlayhead": 50.10880533499871,
+          "delaySeconds": 0.10880533499871348
+        },
+        {
+          "sourceSeconds": 52,
+          "observedPlayhead": 52.156801125998484,
+          "delaySeconds": 0.15680112599848428
+        },
+        {
+          "sourceSeconds": 56,
+          "observedPlayhead": 56.103469459664716,
+          "delaySeconds": 0.10346945966471566
+        },
+        {
+          "sourceSeconds": 58,
+          "observedPlayhead": 58.15146675166449,
+          "delaySeconds": 0.15146675166449342
+        },
+        {
+          "sourceSeconds": 60,
+          "observedPlayhead": 60.17820004333093,
+          "delaySeconds": 0.1782000433309321
+        },
+        {
+          "sourceSeconds": 62,
+          "observedPlayhead": 62.11948529266405,
+          "delaySeconds": 0.11948529266405217
+        },
+        {
+          "sourceSeconds": 64,
+          "observedPlayhead": 64.18880058499717,
+          "delaySeconds": 0.18880058499716768
+        },
+        {
+          "sourceSeconds": 66,
+          "observedPlayhead": 66.10880429299695,
+          "delaySeconds": 0.10880429299695038
+        },
+        {
+          "sourceSeconds": 68,
+          "observedPlayhead": 68.1354673346634,
+          "delaySeconds": 0.135467334663403
+        },
+        {
+          "sourceSeconds": 70,
+          "observedPlayhead": 70.11948787666319,
+          "delaySeconds": 0.11948787666318594
+        },
+        {
+          "sourceSeconds": 74,
+          "observedPlayhead": 74.17279287599607,
+          "delaySeconds": 0.1727928759960662
+        },
+        {
+          "sourceSeconds": 76,
+          "observedPlayhead": 76.15680791799585,
+          "delaySeconds": 0.1568079179958488
+        },
+        {
+          "sourceSeconds": 78,
+          "observedPlayhead": 78.14080520899563,
+          "delaySeconds": 0.14080520899562998
+        },
+        {
+          "sourceSeconds": 80,
+          "observedPlayhead": 80.1888005839954,
+          "delaySeconds": 0.1888005839954019
+        },
+        {
+          "sourceSeconds": 82,
+          "observedPlayhead": 82.15146566866186,
+          "delaySeconds": 0.1514656686618565
+        },
+        {
+          "sourceSeconds": 84,
+          "observedPlayhead": 84.13546362566164,
+          "delaySeconds": 0.13546362566164305
+        },
+        {
+          "sourceSeconds": 86,
+          "observedPlayhead": 86.11946541766142,
+          "delaySeconds": 0.1194654176614165
+        },
+        {
+          "sourceSeconds": 88,
+          "observedPlayhead": 88.1357646266612,
+          "delaySeconds": 0.13576462666119937
+        },
+        {
+          "sourceSeconds": 92,
+          "observedPlayhead": 92.15679062699408,
+          "delaySeconds": 0.15679062699408064
+        },
+        {
+          "sourceSeconds": 94,
+          "observedPlayhead": 94.11946541866054,
+          "delaySeconds": 0.11946541866053906
+        },
+        {
+          "sourceSeconds": 96,
+          "observedPlayhead": 96.18883670899365,
+          "delaySeconds": 0.18883670899364802
+        },
+        {
+          "sourceSeconds": 98,
+          "observedPlayhead": 98.17279504199342,
+          "delaySeconds": 0.17279504199342455
+        },
+        {
+          "sourceSeconds": 100,
+          "observedPlayhead": 100.17813383532653,
+          "delaySeconds": 0.17813383532653404
+        },
+        {
+          "sourceSeconds": 102,
+          "observedPlayhead": 102.14081604199299,
+          "delaySeconds": 0.14081604199299136
+        },
+        {
+          "sourceSeconds": 104,
+          "observedPlayhead": 104.10345487565944,
+          "delaySeconds": 0.10345487565943756
+        },
+        {
+          "sourceSeconds": 106,
+          "observedPlayhead": 106.19413450132588,
+          "delaySeconds": 0.19413450132587684
+        },
+        {
+          "sourceSeconds": 110,
+          "observedPlayhead": 110.1408035009921,
+          "delaySeconds": 0.14080350099210648
+        },
+        {
+          "sourceSeconds": 112,
+          "observedPlayhead": 112.18913791899188,
+          "delaySeconds": 0.18913791899187515
+        },
+        {
+          "sourceSeconds": 114,
+          "observedPlayhead": 114.15146525065833,
+          "delaySeconds": 0.15146525065833316
+        },
+        {
+          "sourceSeconds": 116,
+          "observedPlayhead": 116.17814166832477,
+          "delaySeconds": 0.17814166832476985
+        },
+        {
+          "sourceSeconds": 118,
+          "observedPlayhead": 118.11947058465789,
+          "delaySeconds": 0.11947058465788984
+        },
+        {
+          "sourceSeconds": 120,
+          "observedPlayhead": 120.16750937665766,
+          "delaySeconds": 0.1675093766576623
+        },
+        {
+          "sourceSeconds": 122,
+          "observedPlayhead": 122.15147316765746,
+          "delaySeconds": 0.151473167657457
+        },
+        {
+          "sourceSeconds": 124,
+          "observedPlayhead": 124.13547795965724,
+          "delaySeconds": 0.13547795965723708
+        },
+        {
+          "sourceSeconds": 128,
+          "observedPlayhead": 128.16746391865678,
+          "delaySeconds": 0.1674639186567788
+        },
+        {
+          "sourceSeconds": 130,
+          "observedPlayhead": 130.10880195898991,
+          "delaySeconds": 0.10880195898991474
+        },
+        {
+          "sourceSeconds": 132,
+          "observedPlayhead": 132.11414083432302,
+          "delaySeconds": 0.11414083432302391
+        },
+        {
+          "sourceSeconds": 134,
+          "observedPlayhead": 134.11947246065614,
+          "delaySeconds": 0.11947246065614081
+        },
+        {
+          "sourceSeconds": 136,
+          "observedPlayhead": 136.14612525032257,
+          "delaySeconds": 0.1461252503225694
+        },
+        {
+          "sourceSeconds": 138,
+          "observedPlayhead": 138.15146170965568,
+          "delaySeconds": 0.15146170965567762
+        },
+        {
+          "sourceSeconds": 140,
+          "observedPlayhead": 140.20819308465545,
+          "delaySeconds": 0.2081930846554485
+        },
+        {
+          "sourceSeconds": 142,
+          "observedPlayhead": 142.19121291865525,
+          "delaySeconds": 0.19121291865525336
+        },
+        {
+          "sourceSeconds": 146,
+          "observedPlayhead": 146.13789204332147,
+          "delaySeconds": 0.13789204332147165
+        },
+        {
+          "sourceSeconds": 148,
+          "observedPlayhead": 148.19944154265457,
+          "delaySeconds": 0.1994415426545686
+        },
+        {
+          "sourceSeconds": 150,
+          "observedPlayhead": 150.16211275132102,
+          "delaySeconds": 0.16211275132101832
+        },
+        {
+          "sourceSeconds": 152,
+          "observedPlayhead": 152.2101182513208,
+          "delaySeconds": 0.2101182513208073
+        },
+        {
+          "sourceSeconds": 154,
+          "observedPlayhead": 154.2154330846539,
+          "delaySeconds": 0.21543308465390965
+        },
+        {
+          "sourceSeconds": 156,
+          "observedPlayhead": 156.17813887632036,
+          "delaySeconds": 0.17813887632036085
+        },
+        {
+          "sourceSeconds": 158,
+          "observedPlayhead": 158.16992991832015,
+          "delaySeconds": 0.16992991832015036
+        },
+        {
+          "sourceSeconds": 160,
+          "observedPlayhead": 160.21010883431993,
+          "delaySeconds": 0.2101088343199251
+        },
+        {
+          "sourceSeconds": 164,
+          "observedPlayhead": 164.1219544183195,
+          "delaySeconds": 0.12195441831948983
+        },
+        {
+          "sourceSeconds": 166,
+          "observedPlayhead": 166.22610900131926,
+          "delaySeconds": 0.2261090013192586
+        },
+        {
+          "sourceSeconds": 168,
+          "observedPlayhead": 168.21011208531905,
+          "delaySeconds": 0.21011208531905368
+        },
+        {
+          "sourceSeconds": 170,
+          "observedPlayhead": 170.19410841731883,
+          "delaySeconds": 0.1941084173188301
+        },
+        {
+          "sourceSeconds": 172,
+          "observedPlayhead": 172.1004681259853,
+          "delaySeconds": 0.10046812598528732
+        },
+        {
+          "sourceSeconds": 174,
+          "observedPlayhead": 174.16217925131838,
+          "delaySeconds": 0.16217925131837774
+        },
+        {
+          "sourceSeconds": 176,
+          "observedPlayhead": 176.12479379298483,
+          "delaySeconds": 0.12479379298483195
+        },
+        {
+          "sourceSeconds": 178,
+          "observedPlayhead": 178.10881858498462,
+          "delaySeconds": 0.10881858498461838
+        },
+        {
+          "sourceSeconds": 182,
+          "observedPlayhead": 182.11948016865085,
+          "delaySeconds": 0.11948016865085265
+        },
+        {
+          "sourceSeconds": 184,
+          "observedPlayhead": 184.18879933498394,
+          "delaySeconds": 0.18879933498394053
+        },
+        {
+          "sourceSeconds": 186,
+          "observedPlayhead": 186.1514455026504,
+          "delaySeconds": 0.1514455026504038
+        },
+        {
+          "sourceSeconds": 188,
+          "observedPlayhead": 188.1890755849835,
+          "delaySeconds": 0.18907558498349886
+        },
+        {
+          "sourceSeconds": 190,
+          "observedPlayhead": 190.18345733464994,
+          "delaySeconds": 0.18345733464994396
+        },
+        {
+          "sourceSeconds": 192,
+          "observedPlayhead": 192.14610696031642,
+          "delaySeconds": 0.14610696031641623
+        },
+        {
+          "sourceSeconds": 194,
+          "observedPlayhead": 194.13806666831618,
+          "delaySeconds": 0.13806666831618486
+        },
+        {
+          "sourceSeconds": 196,
+          "observedPlayhead": 196.11415954331596,
+          "delaySeconds": 0.11415954331596367
+        },
+        {
+          "sourceSeconds": 200,
+          "observedPlayhead": 200.14619291831553,
+          "delaySeconds": 0.14619291831553483
+        },
+        {
+          "sourceSeconds": 202,
+          "observedPlayhead": 202.17284712698196,
+          "delaySeconds": 0.17284712698196358
+        },
+        {
+          "sourceSeconds": 204,
+          "observedPlayhead": 204.15678916798174,
+          "delaySeconds": 0.15678916798174214
+        },
+        {
+          "sourceSeconds": 206,
+          "observedPlayhead": 206.20481712698154,
+          "delaySeconds": 0.20481712698153842
+        },
+        {
+          "sourceSeconds": 208,
+          "observedPlayhead": 208.16745654264798,
+          "delaySeconds": 0.16745654264798304
+        },
+        {
+          "sourceSeconds": 210,
+          "observedPlayhead": 210.1088192929811,
+          "delaySeconds": 0.10881929298111004
+        },
+        {
+          "sourceSeconds": 212,
+          "observedPlayhead": 212.19944870964753,
+          "delaySeconds": 0.1994487096475268
+        },
+        {
+          "sourceSeconds": 214,
+          "observedPlayhead": 214.1194938336473,
+          "delaySeconds": 0.11949383364731148
+        },
+        {
+          "sourceSeconds": 218,
+          "observedPlayhead": 218.13013912631354,
+          "delaySeconds": 0.1301391263135372
+        },
+        {
+          "sourceSeconds": 220,
+          "observedPlayhead": 220.12234375131334,
+          "delaySeconds": 0.12234375131333763
+        },
+        {
+          "sourceSeconds": 222,
+          "observedPlayhead": 222.2261097503131,
+          "delaySeconds": 0.22610975031309977
+        },
+        {
+          "sourceSeconds": 224,
+          "observedPlayhead": 224.18878370997956,
+          "delaySeconds": 0.1887837099795604
+        },
+        {
+          "sourceSeconds": 226,
+          "observedPlayhead": 226.17282116797932,
+          "delaySeconds": 0.1728211679793219
+        },
+        {
+          "sourceSeconds": 228,
+          "observedPlayhead": 228.13546912664577,
+          "delaySeconds": 0.13546912664577349
+        },
+        {
+          "sourceSeconds": 230,
+          "observedPlayhead": 230.14077616797888,
+          "delaySeconds": 0.14077616797888481
+        },
+        {
+          "sourceSeconds": 232,
+          "observedPlayhead": 232.16743537564534,
+          "delaySeconds": 0.16743537564533995
+        },
+        {
+          "sourceSeconds": 236,
+          "observedPlayhead": 236.22082362697822,
+          "delaySeconds": 0.22082362697821623
+        },
+        {
+          "sourceSeconds": 238,
+          "observedPlayhead": 238.18346604264468,
+          "delaySeconds": 0.1834660426446817
+        },
+        {
+          "sourceSeconds": 240,
+          "observedPlayhead": 240.10346612664446,
+          "delaySeconds": 0.10346612664446297
+        },
+        {
+          "sourceSeconds": 242,
+          "observedPlayhead": 242.21544929264422,
+          "delaySeconds": 0.21544929264422308
+        },
+        {
+          "sourceSeconds": 244,
+          "observedPlayhead": 244.17811821031069,
+          "delaySeconds": 0.17811821031068575
+        },
+        {
+          "sourceSeconds": 246,
+          "observedPlayhead": 246.1194479186438,
+          "delaySeconds": 0.11944791864380022
+        },
+        {
+          "sourceSeconds": 248,
+          "observedPlayhead": 248.21012558431025,
+          "delaySeconds": 0.21012558431024786
+        },
+        {
+          "sourceSeconds": 250,
+          "observedPlayhead": 250.18368479364335,
+          "delaySeconds": 0.18368479364335144
+        },
+        {
+          "sourceSeconds": 254,
+          "observedPlayhead": 254.14077066797626,
+          "delaySeconds": 0.14077066797625548
+        },
+        {
+          "sourceSeconds": 256,
+          "observedPlayhead": 256.1357542516432,
+          "delaySeconds": 0.1357542516432204
+        },
+        {
+          "sourceSeconds": 258,
+          "observedPlayhead": 258.21544758464574,
+          "delaySeconds": 0.21544758464574443
+        },
+        {
+          "sourceSeconds": 260,
+          "observedPlayhead": 260.1994536676482,
+          "delaySeconds": 0.19945366764818573
+        },
+        {
+          "sourceSeconds": 262,
+          "observedPlayhead": 262.1621297933172,
+          "delaySeconds": 0.1621297933172059
+        },
+        {
+          "sourceSeconds": 264,
+          "observedPlayhead": 264.10347062665295,
+          "delaySeconds": 0.1034706266529497
+        },
+        {
+          "sourceSeconds": 266,
+          "observedPlayhead": 266.13013250132207,
+          "delaySeconds": 0.13013250132206622
+        },
+        {
+          "sourceSeconds": 268,
+          "observedPlayhead": 268.1141303773245,
+          "delaySeconds": 0.11413037732449993
+        },
+        {
+          "sourceSeconds": 272,
+          "observedPlayhead": 272.1248336259961,
+          "delaySeconds": 0.12483362599607517
+        },
+        {
+          "sourceSeconds": 274,
+          "observedPlayhead": 274.1301329173319,
+          "delaySeconds": 0.1301329173318777
+        },
+        {
+          "sourceSeconds": 276,
+          "observedPlayhead": 276.22078137600107,
+          "delaySeconds": 0.22078137600107084
+        },
+        {
+          "sourceSeconds": 278,
+          "observedPlayhead": 278.18345312667014,
+          "delaySeconds": 0.18345312667014468
+        },
+        {
+          "sourceSeconds": 280,
+          "observedPlayhead": 280.12483391800583,
+          "delaySeconds": 0.12483391800583377
+        },
+        {
+          "sourceSeconds": 282,
+          "observedPlayhead": 282.151477417675,
+          "delaySeconds": 0.15147741767498246
+        },
+        {
+          "sourceSeconds": 284,
+          "observedPlayhead": 284.1354679186774,
+          "delaySeconds": 0.13546791867742058
+        },
+        {
+          "sourceSeconds": 286,
+          "observedPlayhead": 286.11946312567983,
+          "delaySeconds": 0.11946312567982886
+        },
+        {
+          "sourceSeconds": 290,
+          "observedPlayhead": 290.15146679268474,
+          "delaySeconds": 0.15146679268474372
+        },
+        {
+          "sourceSeconds": 292,
+          "observedPlayhead": 292.1781197923539,
+          "delaySeconds": 0.17811979235392528
+        },
+        {
+          "sourceSeconds": 294,
+          "observedPlayhead": 294.16210200035636,
+          "delaySeconds": 0.1621020003563558
+        },
+        {
+          "sourceSeconds": 296,
+          "observedPlayhead": 296.2101375433588,
+          "delaySeconds": 0.21013754335882595
+        },
+        {
+          "sourceSeconds": 298,
+          "observedPlayhead": 298.1727705850279,
+          "delaySeconds": 0.17277058502787668
+        }
+      ],
+      "medianTransitionDelaySeconds": 0.1568079179958488,
+      "historyIngestCount": 0,
+      "medianHistoryIngestSeconds": null,
+      "p95HistoryIngestSeconds": null,
+      "maxHistoryIngestSeconds": null,
+      "cpuPercentPerMinute": [
+        2.687683333333316,
+        2.913320000000018,
+        3.211598333333351,
+        3.8777833333333454,
+        3.6654983333333746
+      ],
+      "maxThermalState": "fair",
+      "readingsAboveNominalThermal": 1764
+    },
+    {
+      "wallSeconds": 300.0174819166423,
+      "mode": "playback",
+      "audioOutput": "coreaudio",
+      "hostCPUSeconds": 16.605027999999997,
+      "clock": "time-pos",
+      "round": 1,
+      "childCPUSeconds": 0,
+      "sourceWindows": 0,
+      "fixture": "surround-flac-audio",
+      "cpuPercentOfOneCore": 5.534686810221808,
+      "readingCount": 2882,
+      "transitions": [
+        {
+          "sourceSeconds": 2,
+          "observedPlayhead": 2.2154566266666667,
+          "delaySeconds": 0.21545662666666665
+        },
+        {
+          "sourceSeconds": 4,
+          "observedPlayhead": 4.1652144589999995,
+          "delaySeconds": 0.16521445899999954
+        },
+        {
+          "sourceSeconds": 6,
+          "observedPlayhead": 6.151448126666667,
+          "delaySeconds": 0.15144812666666674
+        },
+        {
+          "sourceSeconds": 8,
+          "observedPlayhead": 8.114113876333331,
+          "delaySeconds": 0.11411387633333092
+        },
+        {
+          "sourceSeconds": 10,
+          "observedPlayhead": 10.215460917666666,
+          "delaySeconds": 0.21546091766666642
+        },
+        {
+          "sourceSeconds": 12,
+          "observedPlayhead": 12.167464083666664,
+          "delaySeconds": 0.16746408366666365
+        },
+        {
+          "sourceSeconds": 14,
+          "observedPlayhead": 14.151445292666663,
+          "delaySeconds": 0.15144529266666318
+        },
+        {
+          "sourceSeconds": 16,
+          "observedPlayhead": 16.114132043333335,
+          "delaySeconds": 0.11413204333333482
+        },
+        {
+          "sourceSeconds": 20,
+          "observedPlayhead": 20.167438877666665,
+          "delaySeconds": 0.16743887766666532
+        },
+        {
+          "sourceSeconds": 22,
+          "observedPlayhead": 22.151429333666666,
+          "delaySeconds": 0.1514293336666661
+        },
+        {
+          "sourceSeconds": 24,
+          "observedPlayhead": 24.252790709999996,
+          "delaySeconds": 0.25279070999999576
+        },
+        {
+          "sourceSeconds": 26,
+          "observedPlayhead": 26.215445085666666,
+          "delaySeconds": 0.21544508566666565
+        },
+        {
+          "sourceSeconds": 28,
+          "observedPlayhead": 28.167438876666665,
+          "delaySeconds": 0.16743887666666524
+        },
+        {
+          "sourceSeconds": 30,
+          "observedPlayhead": 30.151472459666664,
+          "delaySeconds": 0.1514724596666639
+        },
+        {
+          "sourceSeconds": 32,
+          "observedPlayhead": 32.252777126,
+          "delaySeconds": 0.252777125999998
+        },
+        {
+          "sourceSeconds": 34,
+          "observedPlayhead": 34.172771585999996,
+          "delaySeconds": 0.1727715859999961
+        },
+        {
+          "sourceSeconds": 38,
+          "observedPlayhead": 38.126067500666665,
+          "delaySeconds": 0.1260675006666645
+        },
+        {
+          "sourceSeconds": 40,
+          "observedPlayhead": 40.11410570933333,
+          "delaySeconds": 0.1141057093333302
+        },
+        {
+          "sourceSeconds": 42,
+          "observedPlayhead": 42.21544979266667,
+          "delaySeconds": 0.21544979266666786
+        },
+        {
+          "sourceSeconds": 44,
+          "observedPlayhead": 44.167436667666664,
+          "delaySeconds": 0.16743666766666365
+        },
+        {
+          "sourceSeconds": 46,
+          "observedPlayhead": 46.215433876666665,
+          "delaySeconds": 0.21543387666666547
+        },
+        {
+          "sourceSeconds": 48,
+          "observedPlayhead": 48.165074501,
+          "delaySeconds": 0.16507450099999943
+        },
+        {
+          "sourceSeconds": 50,
+          "observedPlayhead": 50.21544216866666,
+          "delaySeconds": 0.21544216866666233
+        },
+        {
+          "sourceSeconds": 52,
+          "observedPlayhead": 52.16744016766666,
+          "delaySeconds": 0.16744016766666192
+        },
+        {
+          "sourceSeconds": 56,
+          "observedPlayhead": 56.16743241766667,
+          "delaySeconds": 0.16743241766666728
+        },
+        {
+          "sourceSeconds": 58,
+          "observedPlayhead": 58.151450000666664,
+          "delaySeconds": 0.1514500006666637
+        },
+        {
+          "sourceSeconds": 60,
+          "observedPlayhead": 60.114125626333326,
+          "delaySeconds": 0.11412562633332612
+        },
+        {
+          "sourceSeconds": 62,
+          "observedPlayhead": 62.21544866866667,
+          "delaySeconds": 0.21544866866666723
+        },
+        {
+          "sourceSeconds": 64,
+          "observedPlayhead": 64.16743629266668,
+          "delaySeconds": 0.1674362926666788
+        },
+        {
+          "sourceSeconds": 66,
+          "observedPlayhead": 66.15146533466668,
+          "delaySeconds": 0.15146533466668188
+        },
+        {
+          "sourceSeconds": 68,
+          "observedPlayhead": 68.11413479333333,
+          "delaySeconds": 0.11413479333333498
+        },
+        {
+          "sourceSeconds": 70,
+          "observedPlayhead": 70.21544591766667,
+          "delaySeconds": 0.21544591766667054
+        },
+        {
+          "sourceSeconds": 74,
+          "observedPlayhead": 74.15143941766668,
+          "delaySeconds": 0.1514394176666798
+        },
+        {
+          "sourceSeconds": 76,
+          "observedPlayhead": 76.252777793,
+          "delaySeconds": 0.252777793000007
+        },
+        {
+          "sourceSeconds": 78,
+          "observedPlayhead": 78.17278758500001,
+          "delaySeconds": 0.1727875850000089
+        },
+        {
+          "sourceSeconds": 80,
+          "observedPlayhead": 80.16744579366667,
+          "delaySeconds": 0.16744579366667267
+        },
+        {
+          "sourceSeconds": 82,
+          "observedPlayhead": 82.12629945966668,
+          "delaySeconds": 0.12629945966668288
+        },
+        {
+          "sourceSeconds": 84,
+          "observedPlayhead": 84.16743708466667,
+          "delaySeconds": 0.16743708466667329
+        },
+        {
+          "sourceSeconds": 86,
+          "observedPlayhead": 86.15144179266667,
+          "delaySeconds": 0.1514417926666738
+        },
+        {
+          "sourceSeconds": 88,
+          "observedPlayhead": 88.25279608400001,
+          "delaySeconds": 0.2527960840000105
+        },
+        {
+          "sourceSeconds": 92,
+          "observedPlayhead": 92.16490108500001,
+          "delaySeconds": 0.164901085000011
+        },
+        {
+          "sourceSeconds": 94,
+          "observedPlayhead": 94.15143700166668,
+          "delaySeconds": 0.15143700166667884
+        },
+        {
+          "sourceSeconds": 96,
+          "observedPlayhead": 96.252786294,
+          "delaySeconds": 0.2527862940000034
+        },
+        {
+          "sourceSeconds": 98,
+          "observedPlayhead": 98.21545204266667,
+          "delaySeconds": 0.21545204266666929
+        },
+        {
+          "sourceSeconds": 100,
+          "observedPlayhead": 100.16743941866667,
+          "delaySeconds": 0.16743941866667456
+        },
+        {
+          "sourceSeconds": 102,
+          "observedPlayhead": 102.15145341766667,
+          "delaySeconds": 0.15145341766667286
+        },
+        {
+          "sourceSeconds": 104,
+          "observedPlayhead": 104.16746995966668,
+          "delaySeconds": 0.16746995966667555
+        },
+        {
+          "sourceSeconds": 106,
+          "observedPlayhead": 106.15144866766667,
+          "delaySeconds": 0.15144866766667064
+        },
+        {
+          "sourceSeconds": 110,
+          "observedPlayhead": 110.21545233466667,
+          "delaySeconds": 0.21545233466666502
+        },
+        {
+          "sourceSeconds": 112,
+          "observedPlayhead": 112.16744025066667,
+          "delaySeconds": 0.16744025066667234
+        },
+        {
+          "sourceSeconds": 114,
+          "observedPlayhead": 114.15144520966668,
+          "delaySeconds": 0.15144520966667585
+        },
+        {
+          "sourceSeconds": 116,
+          "observedPlayhead": 116.252777627,
+          "delaySeconds": 0.2527776270000004
+        },
+        {
+          "sourceSeconds": 118,
+          "observedPlayhead": 118.21545266866667,
+          "delaySeconds": 0.21545266866667134
+        },
+        {
+          "sourceSeconds": 120,
+          "observedPlayhead": 120.16743725066667,
+          "delaySeconds": 0.1674372506666657
+        },
+        {
+          "sourceSeconds": 122,
+          "observedPlayhead": 122.172777627,
+          "delaySeconds": 0.1727776270000021
+        },
+        {
+          "sourceSeconds": 124,
+          "observedPlayhead": 124.16744704266667,
+          "delaySeconds": 0.16744704266666588
+        },
+        {
+          "sourceSeconds": 128,
+          "observedPlayhead": 128.11410970933332,
+          "delaySeconds": 0.1141097093333201
+        },
+        {
+          "sourceSeconds": 130,
+          "observedPlayhead": 130.21544566866666,
+          "delaySeconds": 0.2154456686666606
+        },
+        {
+          "sourceSeconds": 132,
+          "observedPlayhead": 132.16745304366665,
+          "delaySeconds": 0.16745304366665437
+        },
+        {
+          "sourceSeconds": 134,
+          "observedPlayhead": 134.15143441766662,
+          "delaySeconds": 0.15143441766662136
+        },
+        {
+          "sourceSeconds": 136,
+          "observedPlayhead": 136.252782126,
+          "delaySeconds": 0.2527821259999996
+        },
+        {
+          "sourceSeconds": 138,
+          "observedPlayhead": 138.21545100166665,
+          "delaySeconds": 0.21545100166665065
+        },
+        {
+          "sourceSeconds": 140,
+          "observedPlayhead": 140.16743616766664,
+          "delaySeconds": 0.1674361676666365
+        },
+        {
+          "sourceSeconds": 142,
+          "observedPlayhead": 142.15145079366664,
+          "delaySeconds": 0.1514507936666405
+        },
+        {
+          "sourceSeconds": 146,
+          "observedPlayhead": 146.21542637666667,
+          "delaySeconds": 0.2154263766666702
+        },
+        {
+          "sourceSeconds": 148,
+          "observedPlayhead": 148.16741929266664,
+          "delaySeconds": 0.16741929266663647
+        },
+        {
+          "sourceSeconds": 150,
+          "observedPlayhead": 150.15145312666664,
+          "delaySeconds": 0.15145312666663813
+        },
+        {
+          "sourceSeconds": 152,
+          "observedPlayhead": 152.1140926683333,
+          "delaySeconds": 0.11409266833331344
+        },
+        {
+          "sourceSeconds": 154,
+          "observedPlayhead": 154.21543695966668,
+          "delaySeconds": 0.21543695966667542
+        },
+        {
+          "sourceSeconds": 156,
+          "observedPlayhead": 156.16744758466663,
+          "delaySeconds": 0.16744758466663257
+        },
+        {
+          "sourceSeconds": 158,
+          "observedPlayhead": 158.15144029166663,
+          "delaySeconds": 0.1514402916666313
+        },
+        {
+          "sourceSeconds": 160,
+          "observedPlayhead": 160.1141160003333,
+          "delaySeconds": 0.11411600033329705
+        },
+        {
+          "sourceSeconds": 164,
+          "observedPlayhead": 164.16745750166663,
+          "delaySeconds": 0.16745750166663242
+        },
+        {
+          "sourceSeconds": 166,
+          "observedPlayhead": 166.17277370999997,
+          "delaySeconds": 0.17277370999997288
+        },
+        {
+          "sourceSeconds": 168,
+          "observedPlayhead": 168.25279271,
+          "delaySeconds": 0.25279270999999426
+        },
+        {
+          "sourceSeconds": 170,
+          "observedPlayhead": 170.21544708466666,
+          "delaySeconds": 0.21544708466666407
+        },
+        {
+          "sourceSeconds": 172,
+          "observedPlayhead": 172.16744945966664,
+          "delaySeconds": 0.16744945966664204
+        },
+        {
+          "sourceSeconds": 174,
+          "observedPlayhead": 174.15145416766663,
+          "delaySeconds": 0.15145416766662834
+        },
+        {
+          "sourceSeconds": 176,
+          "observedPlayhead": 176.16744750166666,
+          "delaySeconds": 0.16744750166665767
+        },
+        {
+          "sourceSeconds": 178,
+          "observedPlayhead": 178.15144029166663,
+          "delaySeconds": 0.1514402916666313
+        },
+        {
+          "sourceSeconds": 182,
+          "observedPlayhead": 182.21545466766668,
+          "delaySeconds": 0.21545466766667687
+        },
+        {
+          "sourceSeconds": 184,
+          "observedPlayhead": 184.16744737566665,
+          "delaySeconds": 0.16744737566665435
+        },
+        {
+          "sourceSeconds": 186,
+          "observedPlayhead": 186.15143654266663,
+          "delaySeconds": 0.1514365426666302
+        },
+        {
+          "sourceSeconds": 188,
+          "observedPlayhead": 188.16743633466663,
+          "delaySeconds": 0.16743633466663255
+        },
+        {
+          "sourceSeconds": 190,
+          "observedPlayhead": 190.15143637666662,
+          "delaySeconds": 0.15143637666662357
+        },
+        {
+          "sourceSeconds": 192,
+          "observedPlayhead": 192.25280396,
+          "delaySeconds": 0.2528039599999943
+        },
+        {
+          "sourceSeconds": 194,
+          "observedPlayhead": 194.21548295866666,
+          "delaySeconds": 0.21548295866665512
+        },
+        {
+          "sourceSeconds": 196,
+          "observedPlayhead": 196.16747779266663,
+          "delaySeconds": 0.16747779266663088
+        },
+        {
+          "sourceSeconds": 200,
+          "observedPlayhead": 200.16747970866663,
+          "delaySeconds": 0.1674797086666331
+        },
+        {
+          "sourceSeconds": 202,
+          "observedPlayhead": 202.15147433466663,
+          "delaySeconds": 0.15147433466663074
+        },
+        {
+          "sourceSeconds": 204,
+          "observedPlayhead": 204.16747933466664,
+          "delaySeconds": 0.16747933466663767
+        },
+        {
+          "sourceSeconds": 206,
+          "observedPlayhead": 206.21551316766667,
+          "delaySeconds": 0.21551316766667128
+        },
+        {
+          "sourceSeconds": 208,
+          "observedPlayhead": 208.16744216866664,
+          "delaySeconds": 0.1674421686666392
+        },
+        {
+          "sourceSeconds": 210,
+          "observedPlayhead": 210.11976887666663,
+          "delaySeconds": 0.11976887666662606
+        },
+        {
+          "sourceSeconds": 212,
+          "observedPlayhead": 212.25283770899998,
+          "delaySeconds": 0.2528377089999765
+        },
+        {
+          "sourceSeconds": 214,
+          "observedPlayhead": 214.21548241866665,
+          "delaySeconds": 0.21548241866665307
+        },
+        {
+          "sourceSeconds": 218,
+          "observedPlayhead": 218.21549612566668,
+          "delaySeconds": 0.2154961256666752
+        },
+        {
+          "sourceSeconds": 220,
+          "observedPlayhead": 220.16747058566665,
+          "delaySeconds": 0.16747058566664919
+        },
+        {
+          "sourceSeconds": 222,
+          "observedPlayhead": 222.15150412766664,
+          "delaySeconds": 0.1515041276666409
+        },
+        {
+          "sourceSeconds": 224,
+          "observedPlayhead": 224.1141385423333,
+          "delaySeconds": 0.11413854233330767
+        },
+        {
+          "sourceSeconds": 226,
+          "observedPlayhead": 226.21548812566667,
+          "delaySeconds": 0.21548812566666697
+        },
+        {
+          "sourceSeconds": 228,
+          "observedPlayhead": 228.16748208466663,
+          "delaySeconds": 0.16748208466663073
+        },
+        {
+          "sourceSeconds": 230,
+          "observedPlayhead": 230.15146900166664,
+          "delaySeconds": 0.15146900166664068
+        },
+        {
+          "sourceSeconds": 232,
+          "observedPlayhead": 232.252797626,
+          "delaySeconds": 0.2527976259999889
+        },
+        {
+          "sourceSeconds": 236,
+          "observedPlayhead": 236.16747287566665,
+          "delaySeconds": 0.16747287566664681
+        },
+        {
+          "sourceSeconds": 238,
+          "observedPlayhead": 238.15149558466663,
+          "delaySeconds": 0.15149558466663393
+        },
+        {
+          "sourceSeconds": 240,
+          "observedPlayhead": 240.16745795966665,
+          "delaySeconds": 0.167457959666649
+        },
+        {
+          "sourceSeconds": 242,
+          "observedPlayhead": 242.15148512566662,
+          "delaySeconds": 0.15148512566662475
+        },
+        {
+          "sourceSeconds": 244,
+          "observedPlayhead": 244.25280320899998,
+          "delaySeconds": 0.2528032089999783
+        },
+        {
+          "sourceSeconds": 246,
+          "observedPlayhead": 246.21549866866667,
+          "delaySeconds": 0.2154986686666689
+        },
+        {
+          "sourceSeconds": 248,
+          "observedPlayhead": 248.16746145966664,
+          "delaySeconds": 0.16746145966664017
+        },
+        {
+          "sourceSeconds": 250,
+          "observedPlayhead": 250.15151795966662,
+          "delaySeconds": 0.15151795966662007
+        },
+        {
+          "sourceSeconds": 254,
+          "observedPlayhead": 254.17282316799998,
+          "delaySeconds": 0.17282316799997943
+        },
+        {
+          "sourceSeconds": 256,
+          "observedPlayhead": 256.1674726676667,
+          "delaySeconds": 0.16747266766668645
+        },
+        {
+          "sourceSeconds": 258,
+          "observedPlayhead": 258.1264109186667,
+          "delaySeconds": 0.12641091866669285
+        },
+        {
+          "sourceSeconds": 260,
+          "observedPlayhead": 260.252817085,
+          "delaySeconds": 0.25281708500000377
+        },
+        {
+          "sourceSeconds": 262,
+          "observedPlayhead": 262.21546966766664,
+          "delaySeconds": 0.215469667666639
+        },
+        {
+          "sourceSeconds": 264,
+          "observedPlayhead": 264.1674687096667,
+          "delaySeconds": 0.16746870966670713
+        },
+        {
+          "sourceSeconds": 266,
+          "observedPlayhead": 266.1514976266667,
+          "delaySeconds": 0.1514976266666963
+        },
+        {
+          "sourceSeconds": 268,
+          "observedPlayhead": 268.16536733400005,
+          "delaySeconds": 0.16536733400005232
+        },
+        {
+          "sourceSeconds": 272,
+          "observedPlayhead": 272.25281600100004,
+          "delaySeconds": 0.252816001000042
+        },
+        {
+          "sourceSeconds": 274,
+          "observedPlayhead": 274.2155022516667,
+          "delaySeconds": 0.2155022516666918
+        },
+        {
+          "sourceSeconds": 276,
+          "observedPlayhead": 276.16747012666673,
+          "delaySeconds": 0.16747012666672845
+        },
+        {
+          "sourceSeconds": 278,
+          "observedPlayhead": 278.15148395966673,
+          "delaySeconds": 0.15148395966673434
+        },
+        {
+          "sourceSeconds": 280,
+          "observedPlayhead": 280.252817418,
+          "delaySeconds": 0.25281741800000646
+        },
+        {
+          "sourceSeconds": 282,
+          "observedPlayhead": 282.21547475066666,
+          "delaySeconds": 0.2154747506666581
+        },
+        {
+          "sourceSeconds": 284,
+          "observedPlayhead": 284.1674553766667,
+          "delaySeconds": 0.16745537666668042
+        },
+        {
+          "sourceSeconds": 286,
+          "observedPlayhead": 286.15149000166673,
+          "delaySeconds": 0.15149000166672977
+        },
+        {
+          "sourceSeconds": 290,
+          "observedPlayhead": 290.2154726686667,
+          "delaySeconds": 0.2154726686666777
+        },
+        {
+          "sourceSeconds": 292,
+          "observedPlayhead": 292.1674588356667,
+          "delaySeconds": 0.16745883566670727
+        },
+        {
+          "sourceSeconds": 294,
+          "observedPlayhead": 294.1514781676667,
+          "delaySeconds": 0.15147816766670985
+        },
+        {
+          "sourceSeconds": 296,
+          "observedPlayhead": 296.1141312513334,
+          "delaySeconds": 0.11413125133339008
+        },
+        {
+          "sourceSeconds": 298,
+          "observedPlayhead": 298.17280333400004,
+          "delaySeconds": 0.17280333400003656
+        }
+      ],
+      "medianTransitionDelaySeconds": 0.16744758466663257,
+      "historyIngestCount": 2882,
+      "medianHistoryIngestSeconds": 0.001357249973807484,
+      "p95HistoryIngestSeconds": 0.0021620833431370556,
+      "maxHistoryIngestSeconds": 0.0024167916853912175,
+      "cpuPercentPerMinute": [
+        5.997211666666686,
+        6.282069999999986,
+        5.331229999999986,
+        5.161833333333353,
+        4.853571666666691
+      ],
+      "maxThermalState": "nominal",
+      "readingsAboveNominalThermal": 0
+    }
+  ]
+}

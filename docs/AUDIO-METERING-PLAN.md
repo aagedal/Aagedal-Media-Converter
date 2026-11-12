@@ -1,5 +1,93 @@
 # Audio metering and analysis
 
+## Playback meter from measured history, prepared for release — 2026-11-12
+
+The Playback meter now always uses the timestamped history and shows each
+reading when `time-pos` reaches the measured frame. Source stays the default;
+Playback (β) is the opt-in, in Debug and Release alike. The Debug-only
+`AMC_PLAYBACK_METER_HISTORY` and `AMC_PLAYBACK_METER_CLOCK` switches are
+removed, and so is the old latest-metadata path that ran seconds ahead.
+`MPVPlayer.supportsPlaybackMeterHistory` parses the `lavfi` suboption on an
+uninitialized handle; a libmpv without it makes Playback report "unavailable".
+The panel text no longer warns that readings run ahead.
+
+**Clock: `time-pos`.** In mpv 0.41 both candidates subtract the audio output
+delay: `audio-pts` is `written - speed × ao_delay`, while `time-pos` is the
+playback position the playhead, Source meter and video use. Every measurement
+so far differs between them by less than the 100 ms polling step (0.167/0.183 s
+vs 0.208/0.188 s median edge delay; the native UI test passes with either), so
+the evidence gives no timing reason to prefer `audio-pts`. `time-pos` is the one
+with full coverage (startup, seek, speed, delayed audio, optimized and sustained
+runs), it is always available, and `audio-pts` is unavailable until audio
+starts. Physical sync, below, is the remaining check of this choice.
+
+**Dependency.** MPVKit carries the history and AAC priming inputs as recipe
+patches 0007/0008. Only `Libmpv-GPL` is rebuilt (arm64 + x86_64); the FFmpeg
+targets keep their resize.1 archives. The AAC priming fix is included: it fixed
+the 21.3 ms startup gap in all six AAC matrix cases and every later AAC check,
+and it also corrects the start of normal AAC playback. Build, checksums, source
+archive, local override and publish steps: [dependency-patches/README.md](dependency-patches/README.md#meter-history-release-build--2026-11-12).
+**Nothing is published and the app still pins resize.1** (`f957f48`); until the
+pin changes, Playback reports unavailable and the meter tests skip.
+
+### Qualification on this Mac (M5 Pro, macOS 27.2)
+
+All against the unpublished library through the local package override.
+Evidence: [provenance/audio-meter-history-release-2026-11-12/](provenance/audio-meter-history-release-2026-11-12/).
+
+- Debug: 48/48 MPV player and history tests pass, none skipped (startup/resume,
+  shuttle speed changes, twelve-second delayed audio, grouped audition, packaged
+  signal/lifecycle, probe rejection of unknown options).
+- Release configuration (`ENABLE_TESTABILITY=YES` on the command line): 54/54
+  MPV, history and seek-scheduler tests pass. A plain Release build passes
+  `verify-release-bundle.py` (60 Mach-O images, 15 notices); bundled ffmpeg has
+  no Homebrew paths.
+- Native SwiftUI preview (Debug UI test, `time-pos`, AVFoundation): first
+  reading ends at 0.079 s; the 4/7/10 s edges appear 0.08–0.29 s after their
+  authored times and never before; after the rewind the 4 s edge repeats after
+  0.17 s; no shown reading leads the playhead by more than 4 ms.
+- Lifecycle probe linked against the unmodified candidate XCFramework: two full
+  arm64 runs pass all six cases (null/CoreAudio/AVFoundation × lossless/AAC,
+  202–320 frames each, zero signal errors) and both x86_64 cases pass under
+  Rosetta. A first arm64 run, straight after the sustained benchmark, failed
+  three null/CoreAudio cases because the probe process stopped polling for
+  4.7–5.7 s; its signal checks had no errors. The cause is unknown. That
+  analysis also exposed a runner bug, now fixed: snapshots between a replace
+  command and mpv's graph reset still hold the original source's frames, and
+  were compared with the replacement's reference. The app is not affected; it
+  removes the filter on every load.
+
+Sustained run, Release configuration, 300 s per run, muted, one round
+(`scripts/benchmark-audio-meter.py --configuration Release --seconds 300`).
+CPU is host plus FFmpeg-child CPU as a percentage of one core:
+
+| Fixture / output | Off | Source | Playback | Playback per minute | Edge delay median (range), 133 edges |
+| --- | ---: | ---: | ---: | --- | --- |
+| 1080p25 H.264 + stereo AAC / AVFoundation | 2.88% | 3.56% | 4.07% | 4.08, 4.10, 4.05, 4.04, 4.02 | 0.24 s (0.20–0.32) |
+| 5.1 FLAC, audio only / CoreAudio | 1.49% | 3.38% | 5.53% | 6.00, 6.28, 5.33, 5.16, 4.85 | 0.17 s (0.11–0.25) |
+
+Playback adds about 1.2 (AAC) and 4.0 (5.1) percentage points of one core over
+playback alone, flat or falling over five minutes. History ingest P95 is 0.69
+and 2.16 ms (maximum 2.42 ms). Source edge delays are 0.16 s median for both.
+Delays include the 100 ms polling step and the meter's 100 ms windows.
+
+Thermal: `ProcessInfo.thermalState` never went above "fair". An unrelated
+compile in another project kept the load average at 18–31 for the first
+25 minutes; "fair" covers all of that. The 5.1 Playback run, after that build
+finished (load 2–5), stayed "nominal" throughout. This is the OS thermal
+summary, not temperatures, and the results are a stress case for timing, not a
+quiet-machine baseline. Physical Intel hardware was not tested.
+
+### Remaining
+
+- Publish MPVKit `aagedal-1.1.0-n9.0.2-history.1` and apply the prepared pin
+  commit (local branch `t3/mpv-meter-history-pin`), then rerun
+  `scripts/ci-local.sh --release` and the MPV UI tests on the pinned package.
+- Physical speaker/video synchronization: see the [manual check](audio-playback-meter-sync-check.md).
+  Bluetooth and external interfaces in particular.
+- Keep Source as the default until the physical check has been done on a few
+  outputs. A changelog entry belongs with the release that ships the pin.
+
 ## Measured playback-history consumer — 2026-10-18
 
 The [app-consumer continuation](audio-playback-lifecycle-validation-2026-10-18.md#app-history-consumer-continuation)
@@ -138,9 +226,10 @@ remain required before considering it as the default meter.
 - [x] Enable `astats` and `ebur128` in the MPVKit fork; preserve the CoreAudio initialization and failed-unit cleanup patches. Produce versioned, checksummed artifacts and update provenance, notices and the exact package pin together.
 - [x] Probe actual filter availability in the packaged libavfilter and prototype `af-metadata/<label>` polling for MPV playback. Account for decoder/output buffering, channel conversion, pause, seeking, track changes and stale metadata before adopting it.
 - [x] Add a repeatable software CPU and signal-transition comparison against the windowed FFmpeg path, including source lookahead and child-process CPU. See [method and evidence](audio-meter-comparison-2026-10-15.md). Native-player metering and stitching source-channel inspection remain available.
-- [ ] Investigate timestamped decoder measurements and buffering before claiming playhead alignment for Playback; the generated AAC/video benchmark observed readings about 3.4 seconds ahead. Do not infer measurement time from the current playhead or apply one fixed correction across outputs. [Source/API investigation](audio-playback-timing-2026-10-16.md) identifies the missing timestamp/history transport and the dependency instrumentation needed next; alignment remains unqualified. The [isolated timestamp/history prototype](audio-playback-timestamp-prototype-2026-10-17.md) now implements bounded, sequenced dependency capture and diagnostic player-state telemetry, with arm64/x86_64 builds and matched audio-only output checks. The [matched-output history matrix](audio-playback-history-matrix-2026-10-17.md) adds isolated video on/off, delayed-audio, impulse and polling-stall checks: eighteen lossless cases pass final acceptance, while six AAC cases expose an unmeasured 21.333 ms startup prefix. The [AAC startup continuation](audio-playback-aac-startup-validation-2026-10-17.md) identifies decoder priming double-skipping, stages an isolated correction, and adds nonperiodic per-channel peak/RMS checks with arm64/x86_64 evidence. This correction is not installed in the app. App-renderer integration, presentation-clock buffering and loudness continuity remain open.
+- [x] Investigate timestamped decoder measurements and buffering before claiming playhead alignment for Playback (shipped as the Playback implementation, 2026-11-12, pending the MPVKit publish and pin); the generated AAC/video benchmark observed readings about 3.4 seconds ahead. Do not infer measurement time from the current playhead or apply one fixed correction across outputs. [Source/API investigation](audio-playback-timing-2026-10-16.md) identifies the missing timestamp/history transport and the dependency instrumentation needed next; alignment remains unqualified. The [isolated timestamp/history prototype](audio-playback-timestamp-prototype-2026-10-17.md) now implements bounded, sequenced dependency capture and diagnostic player-state telemetry, with arm64/x86_64 builds and matched audio-only output checks. The [matched-output history matrix](audio-playback-history-matrix-2026-10-17.md) adds isolated video on/off, delayed-audio, impulse and polling-stall checks: eighteen lossless cases pass final acceptance, while six AAC cases expose an unmeasured 21.333 ms startup prefix. The [AAC startup continuation](audio-playback-aac-startup-validation-2026-10-17.md) identifies decoder priming double-skipping, stages an isolated correction, and adds nonperiodic per-channel peak/RMS checks with arm64/x86_64 evidence. This correction is not installed in the app. App-renderer integration, presentation-clock buffering and loudness continuity remain open.
 - The [lifecycle continuation](audio-playback-lifecycle-validation-2026-10-18.md) adds explicit bounded command/event evidence, source replacement and per-generation peak/RMS checks. All eight cross-output/architecture matrix cases and one separate track-switch case pass. Event causality, loudness resets, app-renderer integration and physical synchronization remain unqualified; the experimental dependency is still not installed in the app.
-- [ ] Qualify Release CPU/thermal behavior and physical-device synchronization on longer representative media before considering Playback as the default.
+- [x] Qualify Release CPU/thermal behavior on longer representative media: five-minute Release runs on 1080p H.264 + AAC and 5.1 FLAC (2026-11-12, above).
+- [ ] Physical-device synchronization before considering Playback as the default: [manual check](audio-playback-meter-sync-check.md).
 - [ ] If useful, add running integrated playback-session LUFS, clearly distinguish it from whole-program analysis, and reset it explicitly after seeking, changing source/track or restarting the measurement.
 - [x] Silence detection with navigable timeline markers and configurable thresholds/durations. Audio Analysis → Detect Silence scans a complete selected track, includes every channel, and retains file-relative timestamps for delayed audio. Threshold choices span −30 to −80 dBFS; minimum durations span 0.1–5 seconds. Intervals offer paused start/end navigation and a clickable timeline. The UI supports one track, a custom mono pair or six mono tracks assigned to 5.1 roles. Grouped scans and preview require matching sample rates and decoded start times.
 - [x] Source sample-peak threshold intervals and per-channel imbalance checks, with paused preview navigation and whole-track unweighted RMS levels.
