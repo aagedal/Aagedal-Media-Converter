@@ -80,10 +80,13 @@ quiet-machine baseline. Physical Intel hardware was not tested.
 
 ### Remaining
 
-- Rerun `scripts/ci-local.sh --release` and the MPV UI tests on the pinned
-  package after resolving it from the published release.
-- Physical speaker/video synchronization: see the [manual check](audio-playback-meter-sync-check.md).
-  Bluetooth and external interfaces in particular.
+- Physical speaker/video synchronization on Bluetooth and external interfaces: see the
+  [manual check](audio-playback-meter-sync-check.md). On 2026-11-12 the user checked a
+  Debug build of `main` (6c6d2723) by eye and ear on a non-Bluetooth output and found
+  the meter in sync.
+- `scripts/ci-local.sh --release` passed on the published pin (#111). The MPV UI tests
+  have so far run only against the local override of the same build; rerun them on
+  the pinned package.
 - Keep Source as the default until the physical check has been done on a few
   outputs. A changelog entry belongs with the release that ships the pin.
 
@@ -228,7 +231,7 @@ remain required before considering it as the default meter.
 - [x] Investigate timestamped decoder measurements and buffering before claiming playhead alignment for Playback (shipped as the Playback implementation, 2026-11-12, pending the MPVKit publish and pin); the generated AAC/video benchmark observed readings about 3.4 seconds ahead. Do not infer measurement time from the current playhead or apply one fixed correction across outputs. [Source/API investigation](audio-playback-timing-2026-10-16.md) identifies the missing timestamp/history transport and the dependency instrumentation needed next; alignment remains unqualified. The [isolated timestamp/history prototype](audio-playback-timestamp-prototype-2026-10-17.md) now implements bounded, sequenced dependency capture and diagnostic player-state telemetry, with arm64/x86_64 builds and matched audio-only output checks. The [matched-output history matrix](audio-playback-history-matrix-2026-10-17.md) adds isolated video on/off, delayed-audio, impulse and polling-stall checks: eighteen lossless cases pass final acceptance, while six AAC cases expose an unmeasured 21.333 ms startup prefix. The [AAC startup continuation](audio-playback-aac-startup-validation-2026-10-17.md) identifies decoder priming double-skipping, stages an isolated correction, and adds nonperiodic per-channel peak/RMS checks with arm64/x86_64 evidence. This correction is not installed in the app. App-renderer integration, presentation-clock buffering and loudness continuity remain open.
 - The [lifecycle continuation](audio-playback-lifecycle-validation-2026-10-18.md) adds explicit bounded command/event evidence, source replacement and per-generation peak/RMS checks. All eight cross-output/architecture matrix cases and one separate track-switch case pass. Event causality, loudness resets, app-renderer integration and physical synchronization remain unqualified; the experimental dependency is still not installed in the app.
 - [x] Qualify Release CPU/thermal behavior on longer representative media: five-minute Release runs on 1080p H.264 + AAC and 5.1 FLAC (2026-11-12, above).
-- [ ] Physical-device synchronization before considering Playback as the default: [manual check](audio-playback-meter-sync-check.md).
+- [ ] Physical-device synchronization before considering Playback as the default: [manual check](audio-playback-meter-sync-check.md). Non-Bluetooth output checked 2026-11-12; Bluetooth and external interfaces remain.
 - [ ] If useful, add running integrated playback-session LUFS, clearly distinguish it from whole-program analysis, and reset it explicitly after seeking, changing source/track or restarting the measurement.
 - [x] Silence detection with navigable timeline markers and configurable thresholds/durations. Audio Analysis → Detect Silence scans a complete selected track, includes every channel, and retains file-relative timestamps for delayed audio. Threshold choices span −30 to −80 dBFS; minimum durations span 0.1–5 seconds. Intervals offer paused start/end navigation and a clickable timeline. The UI supports one track, a custom mono pair or six mono tracks assigned to 5.1 roles. Grouped scans and preview require matching sample rates and decoded start times.
 - [x] Source sample-peak threshold intervals and per-channel imbalance checks, with paused preview navigation and whole-track unweighted RMS levels.
