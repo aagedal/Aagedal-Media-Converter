@@ -1,3 +1,51 @@
+# v.4.8.0 (Unreleased)
+
+### Adjustments
+
+- New Adjustments… window for each queued file (right-click a file): rotate 90° or 180° and flip, change speed from 0.25× to 4× with pitch-preserved audio, fade the picture from or to black, fade audio in and out, offset the audio, and replace the audio or add tracks from another file. Added audio follows the trim and is fitted to the video's length.
+- Burn in subtitles from a text track or an SRT, ASS or VTT file, with font size, outline or box, and position. Picture subtitles (PGS, DVD) can't be burned in; convert them with subtitle OCR first.
+- Adjustments need a re-encoding preset. Stream Copy, DCP, IMF, AV2, merges and generated waveform video refuse files with adjustments before encoding starts. Speed changes leave out soft subtitles.
+
+### Loudness normalization
+
+- New Loudness Normalization setting in Settings › Presets: EBU R128, ATSC A/85, −14 LUFS, −16 LUFS or a custom target, with a per-file override.
+- Each audio track is measured first, then the encode brings it to the target, with a plain gain change wherever the audio allows it. Presets with mono tracks (AVC-Intra, XDCAM, split-to-mono routing) are measured before the split, so the balance between channels is kept.
+- The setting is skipped for outputs it can't apply to. Shortcuts and agent jobs don't use it.
+
+### New presets
+
+- DNxHR LB, SQ, HQ, HQX and 444, in MOV or MXF.
+- XDCAM HD422: 50 Mbps MPEG-2 4:2:2 in MXF, 1080i, 1080p and 720p, with 4 or 8 mono PCM tracks.
+- VP9 / WebM with a quality (CRF) setting, 8 or 10-bit, and Opus audio.
+- CineForm: 10-bit 4:2:2, 12-bit RGB or RGB with alpha, quality from Low to Film Scan 3+.
+- Agent access lists the new presets too.
+
+### Trim waveform
+
+- The waveform is much sharper. Each audio track is read at full rate, so short sounds show up as separate peaks, and a lighter core shows the average level. Waveforms load faster, draw in from left to right while they load, and other audio tracks are only read when you select them.
+- A line across the waveform replaces the Waveform height menu. Drag it to enlarge the waveform (up to +24 dB); double-click resets it.
+- Turn on Apply volume to export to use the same line as the file's export volume, from −30 to +24 dB. The waveform shows the new level, peaks that would clip are marked in yellow, and playback in the Trim view follows the volume. While loudness normalization applies to the file, the line is disabled, since normalization would undo it.
+- New Log scale option draws the waveform in dB down to −60 dB, so quiet passages stay readable.
+
+### Analysis
+
+- Media Analysis › Video can detect black frames and scene cuts. Click a result to jump to it; scene cuts show a thumbnail. Results can be exported as JSON or as markers in a DaVinci Resolve EDL.
+
+### Encode history and statistics
+
+- Encode history can be synced between Macs (Settings › History, off by default) through the settings-sync folder. Each Mac writes only its own file, so syncing never conflicts. The history shows which Mac encoded each file, Statistics can show one Mac or all of them, and Macs you no longer use can be removed. Clear History affects only this Mac.
+- Statistics open in their own resizable window with a larger chart, and export the selected period and Mac as a PDF report, a summary CSV or a CSV with one row per encode.
+- The Settings window can be resized and opens taller.
+
+### MPV preview
+
+- Updated MPV to 0.42.0 in a new build of MPVKit with FFmpeg 9.0.2 and libplacebo 7.387.0. HTTPS streams previewed through MPV, such as clip previews from downloads, now have their certificates checked.
+- The Playback audio meter (β) shows each reading when the playhead reaches the measured audio. It used to run several seconds ahead of what you heard.
+
+### Other fixes
+
+- Exports with Export matte sidecar turned on always write the `_matte` file. Some ordinary queue conversions went through the shared job engine, which left it out.
+
 # v.4.7.0
 
 ### Crop

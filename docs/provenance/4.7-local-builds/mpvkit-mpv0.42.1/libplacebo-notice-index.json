@@ -1,0 +1,37 @@
+{
+  "revision": "v7.387.0",
+  "notices": [
+    {
+      "sources": [
+        "libplacebo-7.387.0/LICENSE"
+      ],
+      "sha256": "b3aa400aca6d2ba1f0bd03bd98d03d1fe7489a3bbb26969d72016360af8a5c9d"
+    },
+    {
+      "sources": [
+        "libplacebo-7.387.0/demos/LICENSE"
+      ],
+      "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499"
+    },
+    {
+      "sources": [
+        "libplacebo-7.387.0/3rdparty/json.h:6"
+      ],
+      "sha256": "3aaec1cd7d7291d905591025f297f298aafc433d1604cce4a02254029c3fc87a"
+    },
+    {
+      "sources": [
+        "libplacebo-7.387.0/src/include/libplacebo/shaders/deinterlacing.h:2",
+        "libplacebo-7.387.0/src/include/libplacebo/shaders/film_grain.h:1"
+      ],
+      "sha256": "9ba32904b86159cbc7e9d49da3cf13ffc463d601636b67a4ec378286642bd789"
+    },
+    {
+      "sources": [
+        "libplacebo-7.387.0/src/shaders/film_grain_av1.c:1"
+      ],
+      "sha256": "48a8e35ce0d9b3869f14fdbc11b049884c7e39eeb678f059bac0fce589431cab"
+    }
+  ],
+  "containerSHA256": "5e5c261fe7b850e4c6fde006b36a1a2b511f89e0b9b09b78b6b0de509b45bc0a"
+}

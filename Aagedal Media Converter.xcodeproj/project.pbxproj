@@ -2917,7 +2917,7 @@
 			repositoryURL = "https://github.com/aagedal/MPVKit.git";
 			requirement = {
 				kind = revision;
-				revision = d2680851a5a56dafb6be8df79989d69817dac891;
+				revision = 1802ca65fd03742c664f049a66fb714eba1d61f9;
 			};
 		};
 		8ED369EF2F8CEFFC00FB9A33 /* XCRemoteSwiftPackageReference "SwiftMediaMetadata" */ = {

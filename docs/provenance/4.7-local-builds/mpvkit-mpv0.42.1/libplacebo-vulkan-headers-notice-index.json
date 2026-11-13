@@ -1,0 +1,24 @@
+{
+  "revision": "74d8a6cb930c68ef617b202c3ff3c59d919e086b",
+  "notices": [
+    {
+      "sources": [
+        "Vulkan-Headers-74d8a6cb930c68ef617b202c3ff3c59d919e086b/LICENSE.md"
+      ],
+      "sha256": "ac24e5ea920e4318e4d02c4086ae51f53cfb03feed06c18df1019e7ada1ec7bc"
+    },
+    {
+      "sources": [
+        "Vulkan-Headers-74d8a6cb930c68ef617b202c3ff3c59d919e086b/LICENSES/Apache-2.0.txt"
+      ],
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "sources": [
+        "Vulkan-Headers-74d8a6cb930c68ef617b202c3ff3c59d919e086b/LICENSES/MIT.txt"
+      ],
+      "sha256": "1ca3502222d967f3be5751c55f6b7ee735b5383909c3b501495f54b216dbf227"
+    }
+  ],
+  "containerSHA256": "e6d2d6aaaf9e720e9b550acc442f1272c7bf23ee42b9ef83b7175904019ef9c6"
+}

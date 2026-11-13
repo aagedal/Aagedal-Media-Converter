@@ -1,0 +1,27 @@
+{
+  "revision": "1802ca65fd03742c664f049a66fb714eba1d61f9",
+  "release": "aagedal-1.1.0-n9.0.2-mpv0.42.1",
+  "collections": [
+    "mpv-NOTICES.txt",
+    "x264-NOTICES.txt",
+    "libplacebo-NOTICES.txt",
+    "libplacebo-Vulkan-Headers-NOTICES.txt"
+  ],
+  "targets": {
+    "Libmpv-GPL": {
+      "sha256": "3c419acb0f864122a06d03fcd80fe3213742045fb3c3f17ce3cc6e8fa7539d08",
+      "retainedCollections": ["MPVKit"],
+      "collections": ["mpv-NOTICES.txt"]
+    },
+    "Libx264-GPL": {
+      "sha256": "a031320df0afc6f3d3a59911996930b2ac3aa3532d03e775c1fbb97f93ddf3d9",
+      "retainedCollections": [],
+      "collections": ["x264-NOTICES.txt"]
+    },
+    "Libplacebo": {
+      "sha256": "d643739f1097107265b14f1964b9c8058e73bc360ced0660bdadce5f0e4d6433",
+      "retainedCollections": ["libplacebo-fast_float", "libplacebo-glad", "libplacebo-jinja", "libplacebo-markupsafe", "spirv-cross"],
+      "collections": ["libplacebo-NOTICES.txt", "libplacebo-Vulkan-Headers-NOTICES.txt"]
+    }
+  }
+}
