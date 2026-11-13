@@ -1,0 +1,89 @@
+{
+  "revision": "b0841e8c4d156b8403dc1876c4cbd9011eb583f3",
+  "notices": [
+    {
+      "sources": [
+        "Copyright"
+      ],
+      "sha256": "bfe9ee4cceabcb8ecbfadf208d04156f73d801e6a57369a5606bb8341e204a23"
+    },
+    {
+      "sources": [
+        "LICENSE.GPL"
+      ],
+      "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6"
+    },
+    {
+      "sources": [
+        "LICENSE.LGPL"
+      ],
+      "sha256": "72b672113d642cbb8ef5dcc76938db801983c56e50b1400ab930f1a64d6dc8d9"
+    },
+    {
+      "sources": [
+        "audio/filter/af_scaletempo2_internals.h:1"
+      ],
+      "sha256": "6e41a99411cae2af53cfeb409e13c992b9de7b45864b8a0c3c91241f66727da7"
+    },
+    {
+      "sources": [
+        "audio/out/ao_sndio.c:1"
+      ],
+      "sha256": "938edf556cebedf39159f3775beefb453b27d55f8b6ac1a94320e35de6da2e17"
+    },
+    {
+      "sources": [
+        "include/mpv/client.h:1",
+        "include/mpv/stream_cb.h:1",
+        "player/client.c:1",
+        "ta/ta.c:1",
+        "ta/ta.h:1",
+        "ta/ta_talloc.c:1",
+        "ta/ta_talloc.h:1",
+        "ta/ta_utils.c:1"
+      ],
+      "sha256": "cbb8851d5bbbd25629889d1f9d38b6fa7615292ff31ee0c8f50d1f239db97a79"
+    },
+    {
+      "sources": [
+        "include/mpv/render.h:1",
+        "include/mpv/render_gl.h:1",
+        "misc/thread_pool.c:1",
+        "misc/thread_tools.c:1"
+      ],
+      "sha256": "25c7a411527a03c095975c2ee369a351ca9d2f4a117f8b42d9dec4c1ad0a2cd4"
+    },
+    {
+      "sources": [
+        "include/mpv/render_d3d11.h:1"
+      ],
+      "sha256": "abd5ee000d864388ac25a0142c904957671e916f63b294657157e3cee46848c9"
+    },
+    {
+      "sources": [
+        "osdep/android/strnlen.c:1",
+        "osdep/android/strnlen.h:1"
+      ],
+      "sha256": "e1f33d33d9ec49bfa0a7d83db7088c597b9b66ba90ef4212e9ac21b2cdca7755"
+    },
+    {
+      "sources": [
+        "osdep/timer-darwin.c:1"
+      ],
+      "sha256": "40b654d93b0318442b3355c0793ec003e922f879c085fe61996b7b97f7fc21c6"
+    },
+    {
+      "sources": [
+        "osdep/win32-console-wrapper.c:1"
+      ],
+      "sha256": "0a4a547396dea2610ac3dad4da2fa0290e45c70d8d11e1c5a9c78bc5efcf50ab"
+    },
+    {
+      "sources": [
+        "player/lua/console.lua:1"
+      ],
+      "sha256": "a5921af557068e39ea48a971cd5a569e175f66421f5d4ead1d97d50b0ebcbc3e"
+    }
+  ],
+  "containerSHA256": "8e076bfeeb9a01a1b39bad11801ee02d9a29c84907df12753ee328754a5c2700"
+}

@@ -29,6 +29,9 @@ and it also corrects the start of normal AAC playback. Build, checksums, source
 archive, local override and publish steps: [dependency-patches/README.md](dependency-patches/README.md#meter-history-release-build--2026-11-12).
 The app pins MPVKit `d2680851` (`aagedal-1.1.0-n9.0.2-history.1`); the meter
 tests now require the history option instead of skipping without it.
+Since 2026-11-12 it pins `1802ca65` (`aagedal-1.1.0-n9.0.2-mpv0.42.1`), which
+carries the same two patches (0010/0011) on mpv 0.42.0, Apple Silicon only; see
+[the update record](mpvkit-mpv0.42-update-2026-11-12.md).
 
 ### Qualification on this Mac (M5 Pro, macOS 27.2)
 

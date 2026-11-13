@@ -1,0 +1,48 @@
+{
+  "revision": "b35605ace3ddf7c1a5d67a2eb553f034aef41d55",
+  "notices": [
+    {
+      "sources": [
+        "COPYING"
+      ],
+      "sha256": "32b1062f7da84967e7019d01ab805935caa7ab7321a7ced0e30ebe75e5df1670"
+    },
+    {
+      "sources": [
+        "AUTHORS"
+      ],
+      "sha256": "783150c1bef404fc7140924f3006eff27c940ea73ef38b3bc76fcb9c173229a5"
+    },
+    {
+      "sources": [
+        "common/loongarch/loongson_asm.S:1"
+      ],
+      "sha256": "f02202f0a7e387ad0db5143b439ef1b20912a146fa044b9529691c3c0433d6a9"
+    },
+    {
+      "sources": [
+        "common/x86/x86inc.asm:1"
+      ],
+      "sha256": "269f6ed1e67f5b7aabf2beae22bf7f6b81efdfdee4731ee0194807a997911760"
+    },
+    {
+      "sources": [
+        "extras/cl.h:1"
+      ],
+      "sha256": "4d74f684f1086012dbaec5dab18a2f55879800c9c1ac319417d4985e21e8a418"
+    },
+    {
+      "sources": [
+        "extras/cl_platform.h:1"
+      ],
+      "sha256": "eb78b0c1d0afa2721252f8f00ffe5f00bd3f12023728dddbc778486699151d70"
+    },
+    {
+      "sources": [
+        "extras/inttypes.h:1"
+      ],
+      "sha256": "8010715c530844d1ca18225e97d5a22a7aa50421c1e1d2f238d1e12a27a550d5"
+    }
+  ],
+  "containerSHA256": "648d9825244e5fd360d2330f1e5cde2a3880da79ff13ab3ce3bb4b61b4f1d699"
+}

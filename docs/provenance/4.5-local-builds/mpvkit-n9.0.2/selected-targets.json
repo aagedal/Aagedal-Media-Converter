@@ -1,46 +1,51 @@
 {
-  "revision": "d2680851a5a56dafb6be8df79989d69817dac891",
+  "revision": "1802ca65fd03742c664f049a66fb714eba1d61f9",
   "product": "MPVKit-GPL",
   "targets": [
     {
       "target": "Libmpv-GPL",
-      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-history.1/Libmpv-GPL.xcframework.zip",
-      "sha256": "1fb1dc97b90d2f703a334d38c81534c118f160d82c2b6d42fe5ebdd4a1ddfe93"
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-mpv0.42.1/Libmpv-GPL.xcframework.zip",
+      "sha256": "3c419acb0f864122a06d03fcd80fe3213742045fb3c3f17ce3cc6e8fa7539d08"
     },
     {
       "target": "Libavcodec-GPL",
-      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-resize.1/Libavcodec-GPL.xcframework.zip",
-      "sha256": "352ea36b9899a3025377bb272327afcb7e8e885929a02dca2b20dc5c11609f64"
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-mpv0.42.1/Libavcodec-GPL.xcframework.zip",
+      "sha256": "d3a3037ae8d9ab624340a932a5f28f213bd2d3c3a4919ea2d1afd6a4f6e3e4f7"
     },
     {
       "target": "Libavdevice-GPL",
-      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-resize.1/Libavdevice-GPL.xcframework.zip",
-      "sha256": "662eabb62ce7481afafaf83b2a2f0c4be81aa2f5ad0c5f9c29c66f15adc14a18"
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-mpv0.42.1/Libavdevice-GPL.xcframework.zip",
+      "sha256": "00e6450f7ff8e70e8c725840285263ccaf606b95b8a2210c984e6ebb853747e8"
     },
     {
       "target": "Libavfilter-GPL",
-      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-resize.1/Libavfilter-GPL.xcframework.zip",
-      "sha256": "46a5b76c9b22d21c7cdedf1d4a1235e664b2f39744976a9448d1c05f5f7f5c25"
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-mpv0.42.1/Libavfilter-GPL.xcframework.zip",
+      "sha256": "a14f8ad346bab78eb5f890de8b4696395fb317a02a850136aa5a6823a5347c56"
     },
     {
       "target": "Libavformat-GPL",
-      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-resize.1/Libavformat-GPL.xcframework.zip",
-      "sha256": "34f1d2ef8133ca3ea6ce9b0d179879ec78724aad2249539580d9f8ec80fecf96"
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-mpv0.42.1/Libavformat-GPL.xcframework.zip",
+      "sha256": "e4d5a14d4f4210a3f1ee520141b93a4ddc09a6c7bbd0b2b815e4d2a28f318ecd"
     },
     {
       "target": "Libavutil-GPL",
-      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-resize.1/Libavutil-GPL.xcframework.zip",
-      "sha256": "3bc5c507516e89649527238a7aa37c71708a05710fd5664d46ed2f45738aee83"
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-mpv0.42.1/Libavutil-GPL.xcframework.zip",
+      "sha256": "87b497f404659fb1d6780cf50272f139618e23418347bbaf7241f4ddb5bdf7b1"
     },
     {
       "target": "Libswresample-GPL",
-      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-resize.1/Libswresample-GPL.xcframework.zip",
-      "sha256": "d9e691fa3384ae553284e330b99fa1aad1901d1883bc1acf5df864de96fb1c98"
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-mpv0.42.1/Libswresample-GPL.xcframework.zip",
+      "sha256": "7ec5419b5c7f09e734656e372534b7fabdd50cfa1087c8c11def2d07fc68688b"
     },
     {
       "target": "Libswscale-GPL",
-      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-resize.1/Libswscale-GPL.xcframework.zip",
-      "sha256": "89d045937ce309bfa1f212d2eb7c8bcceae449cdc9c303619f9a71379f681fd6"
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-mpv0.42.1/Libswscale-GPL.xcframework.zip",
+      "sha256": "51337382b142e58bf4ef104e13adc5cc73f3e77963c8f3f16dadbb8fae2509a5"
+    },
+    {
+      "target": "Libx264-GPL",
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-mpv0.42.1/Libx264-GPL.xcframework.zip",
+      "sha256": "a031320df0afc6f3d3a59911996930b2ac3aa3532d03e775c1fbb97f93ddf3d9"
     },
     {
       "target": "Libssl",
@@ -89,8 +94,8 @@
     },
     {
       "target": "Libplacebo",
-      "url": "https://github.com/mpvkit/libplacebo-build/releases/download/7.360.1/Libplacebo.xcframework.zip",
-      "sha256": "2fa3d54cb81f302d6f11c7b2f509af30944381c3b11ee9d35096eb4637a6e2dd"
+      "url": "https://github.com/aagedal/libplacebo-build/releases/download/7.387.0/Libplacebo.xcframework.zip",
+      "sha256": "d643739f1097107265b14f1964b9c8058e73bc360ced0660bdadce5f0e4d6433"
     },
     {
       "target": "Libdovi",

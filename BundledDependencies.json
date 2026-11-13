@@ -6,7 +6,7 @@
       "identity": "mpvkit",
       "path": "SwiftPackages/mpvkit",
       "sourceURL": "https://github.com/aagedal/MPVKit.git",
-      "revision": "d2680851a5a56dafb6be8df79989d69817dac891",
+      "revision": "1802ca65fd03742c664f049a66fb714eba1d61f9",
       "license": "GPL-3.0-or-later",
       "licenseFile": "Licenses/mpvkit-LICENSE.txt",
       "requiredSourceComponents": [
@@ -90,8 +90,7 @@
         "MPVKit recipe: openssl-build",
         "MPVKit Rust standard-library licensing/source reference (build-date inference)",
         "MPVKit crc-catalog upstream source (crate VCS revision)",
-        "MPVKit 1.1.0 custom GPL build",
-        "MPVKit custom GPL libmpv with meter history",
+        "MPVKit 1.1.0 custom GPL build with mpv 0.42.0 and x264",
         "MPVKit pinned wrapper and build sources"
       ]
     },
@@ -232,10 +231,10 @@
     },
     {
       "component": "MPVKit: libplacebo",
-      "path": "build/attribution/mpvkit/libplacebo-source.tar.gz",
-      "bytes": 862269,
-      "sha256": "d05fdf90bea2f629eaa2d115e909fd356388ac639e54f77b87a018a6d76224bd",
-      "url": "https://codeload.github.com/haasn/libplacebo/tar.gz/refs/tags/v7.360.1"
+      "path": "build/attribution/mpvkit/libplacebo-7.387.0-source.tar.gz",
+      "bytes": 972798,
+      "sha256": "f9e62d3774a9c4cfd198ec3abaa88294aaade2e31c04d5ab02bcf4abc98b1df5",
+      "url": "https://codeload.github.com/haasn/libplacebo/tar.gz/refs/tags/v7.387.0"
     },
     {
       "component": "MPVKit: spirv-cross",
@@ -393,10 +392,10 @@
     },
     {
       "component": "MPVKit: libplacebo-Vulkan-Headers",
-      "path": "build/attribution/mpvkit/libplacebo-Vulkan-Headers-source.tar.gz",
-      "bytes": 2940820,
-      "sha256": "26df9841c30806a994e2fdf42f7c87bcb1ced9db9a06033469123939fb3fa075",
-      "url": "https://codeload.github.com/KhronosGroup/Vulkan-Headers/tar.gz/450bd2232225d6c7728a4108055ac2e37cef6475"
+      "path": "build/attribution/mpvkit/libplacebo-Vulkan-Headers-74d8a6cb-source.tar.gz",
+      "bytes": 3029927,
+      "sha256": "75967a8288ff16044a86d1af462b96d2e75c435937efb75f2bb4102ab0382f29",
+      "url": "https://codeload.github.com/KhronosGroup/Vulkan-Headers/tar.gz/74d8a6cb930c68ef617b202c3ff3c59d919e086b"
     },
     {
       "component": "MPVKit: libplacebo-fast_float",
@@ -645,10 +644,10 @@
     },
     {
       "component": "MPVKit recipe: libplacebo-build",
-      "path": "build/attribution/mpvkit/libplacebo-build-7.360.1.tar.gz",
-      "bytes": 6549,
-      "sha256": "7712d9827f229213fc0f92d9250c5e8c503a0e3632323cd4971e34d62b37ed90",
-      "url": "https://codeload.github.com/mpvkit/libplacebo-build/tar.gz/refs/tags/7.360.1"
+      "path": "build/attribution/mpvkit/libplacebo-build-aagedal-7.387.0.tar.gz",
+      "bytes": 6271,
+      "sha256": "84bab930dc0ea37e59bdd808fbc9daa39dea38637bec67693168a78736436af4",
+      "url": "https://codeload.github.com/aagedal/libplacebo-build/tar.gz/refs/tags/7.387.0"
     },
     {
       "component": "MPVKit recipe: libshaderc-build",
@@ -707,25 +706,18 @@
       "url": "https://codeload.github.com/akhilles/crc-catalog/tar.gz/b500ea693c552f8d946e290722a7b3ee8b9a7ee2"
     },
     {
-      "component": "MPVKit 1.1.0 custom GPL build",
-      "path": "build/attribution/mpvkit/mpvkit-n9.0.2-resize.1-sources.tar.gz",
-      "bytes": 26506689,
-      "sha256": "8c82737847482824982302a2a123c0b2e8517671a76f712abf26ca29fda9d50a",
-      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-resize.1/mpvkit-n9.0.2-resize.1-sources.tar.gz"
-    },
-    {
-      "component": "MPVKit custom GPL libmpv with meter history",
-      "path": "build/attribution/mpvkit/mpvkit-n9.0.2-history.1-sources.tar.gz",
-      "bytes": 24790663,
-      "sha256": "b814d27ac34ca2f00a50691acd7dc5a0feb341aba65bc7685c8db4555610641a",
-      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-history.1/mpvkit-n9.0.2-history.1-sources.tar.gz"
+      "component": "MPVKit 1.1.0 custom GPL build with mpv 0.42.0 and x264",
+      "path": "build/attribution/mpvkit/mpvkit-n9.0.2-mpv0.42.1-sources.tar.gz",
+      "bytes": 26429166,
+      "sha256": "64ee54a84065aa56194bf520f1f9e41f165463a04ae9f21bb66b8c0e258bfe1b",
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-mpv0.42.1/mpvkit-n9.0.2-mpv0.42.1-sources.tar.gz"
     },
     {
       "component": "MPVKit pinned wrapper and build sources",
-      "path": "build/attribution/mpvkit/MPVKit-1.1.0-history.1-pinned-source.tar.gz",
-      "bytes": 127397,
-      "sha256": "54eb17df5865d77ada1ca36e532c0c5eb47642406aa398fd90441e1e7f62b742",
-      "url": "https://github.com/aagedal/MPVKit/tree/d2680851a5a56dafb6be8df79989d69817dac891"
+      "path": "build/attribution/mpvkit/MPVKit-1.1.0-mpv0.42.1-pinned-source.tar.gz",
+      "bytes": 150650,
+      "sha256": "96eba2ff0e3b08644a66cbf2542194893d910ffc5a0d4310b7bfd5dfc62bb99a",
+      "url": "https://github.com/aagedal/MPVKit/tree/1802ca65fd03742c664f049a66fb714eba1d61f9"
     },
     {
       "component": "yt-dlp-rs MPL-2.0 crate sources",
@@ -1317,8 +1309,8 @@
     },
     {
       "path": "Licenses/mpvkit-LICENSE.txt",
-      "bytes": 2916702,
-      "sha256": "41b5c8fe946508078bd63b7b1515d4a2d558e21adeef34009bb5f81800170411"
+      "bytes": 3053704,
+      "sha256": "0da438dfeffed9f8e0545c7aa7b05f31f39adcb5545d4660ffeecc762010fcbb"
     },
     {
       "path": "Licenses/nemo-speech-LICENSE.txt",
