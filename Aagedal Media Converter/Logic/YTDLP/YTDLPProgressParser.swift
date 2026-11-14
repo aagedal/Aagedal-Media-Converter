@@ -218,6 +218,16 @@ struct YTDLPProgressParser: Sendable {
         return seconds
     }
 
+    /// The file name in `[download] NAME has already been downloaded` (`--no-overwrites`),
+    /// relative to the working directory. `--print` implies quiet, so both yt-dlp and
+    /// yt-dlp-rs print it on stderr.
+    static func parseAlreadyDownloaded(_ line: String) -> String? {
+        let prefix = "[download] ", suffix = " has already been downloaded"
+        guard line.hasPrefix(prefix), line.hasSuffix(suffix),
+              line.count > prefix.count + suffix.count else { return nil }
+        return String(line.dropFirst(prefix.count).dropLast(suffix.count))
+    }
+
     /// Parses the output position from an ffmpeg stats line
     /// (`frame=  209 fps= 83 ... time=00:00:12.85 bitrate=... speed=1.7x`).
     /// Section downloads run through ffmpeg, which reports no percentage of its own.

@@ -21,6 +21,8 @@ enum YTDLPEngineOperation: Sendable, Equatable {
     case playlistListing
     /// `--flat-playlist --ignore-no-formats-error -J` for multi-video posts.
     case postListing
+    /// `-j --ignore-no-formats-error` for a scheduled stream's title and start.
+    case upcomingStreamInfo
     case download(Download)
 
     struct Download: Sendable, Equatable {
@@ -108,10 +110,10 @@ enum YTDLPEngineRouter {
         if let minimum = site.minimumVersion, !isAtLeast(minimum, version: rsVersion) {
             return ytdlp("\(site.id) needs yt-dlp-rs \(minimum)+")
         }
-        // Carousel probes depend on --ignore-no-formats-error, which yt-dlp-rs accepts
-        // but ignores, so posts with photo slides would fail outright.
-        if site.id == "instagram", isInstagramPost(url) {
-            return ytdlp("Instagram posts need --ignore-no-formats-error")
+        // Carousel probes depend on --ignore-no-formats-error, which yt-dlp-rs ignored
+        // before 1.0, so posts with photo slides failed outright.
+        if site.id == "instagram", isInstagramPost(url), !supportsIgnoreNoFormats(version: rsVersion) {
+            return ytdlp("Instagram posts need yt-dlp-rs \(AppConstants.ytdlpRSIgnoreNoFormatsMinimumVersion)+")
         }
         switch operation {
         case .metadata:
@@ -119,7 +121,13 @@ enum YTDLPEngineRouter {
         case .playlistListing:
             guard site.supportsListing else { return ytdlp("listings are not ported for \(site.id)") }
         case .postListing:
-            guard site.id == "twitter" else { return ytdlp("post listing is not ported for \(site.id)") }
+            guard site.id == "twitter" || site.id == "instagram" else {
+                return ytdlp("post listing is not ported for \(site.id)")
+            }
+        case .upcomingStreamInfo:
+            guard supportsIgnoreNoFormats(version: rsVersion) else {
+                return ytdlp("upcoming streams need yt-dlp-rs \(AppConstants.ytdlpRSIgnoreNoFormatsMinimumVersion)+")
+            }
         case .download(let options):
             // 0.6 finishes a stopped --live-from-start recording (merge and metadata)
             // like yt-dlp; earlier versions only had a hidden beta generator.
@@ -129,8 +137,12 @@ enum YTDLPEngineRouter {
             // yt-dlp-rs never looks up ffmpeg itself; merging, -x and --embed-metadata
             // all need --ffmpeg-location.
             if !options.hasFFmpeg { return ytdlp("no ffmpeg for merging and metadata") }
-            // yt-dlp-rs -x requires ffprobe (no ffmpeg fallback); the bundled ffmpeg has none.
-            if options.audioOnly, !options.hasFFprobe { return ytdlp("audio extraction needs ffprobe") }
+            // yt-dlp-rs -x required ffprobe until the `ffmpeg -i` fallback in 1.0.0-rc.2;
+            // the bundled ffmpeg has none.
+            if options.audioOnly, !options.hasFFprobe,
+               !isAtLeast(AppConstants.ytdlpRSAudioWithoutFFprobeMinimumVersion, version: rsVersion) {
+                return ytdlp("audio extraction needs ffprobe before yt-dlp-rs \(AppConstants.ytdlpRSAudioWithoutFFprobeMinimumVersion)")
+            }
         }
         return .init(engine: .ytdlpRS, reason: "\(site.id) is supported by yt-dlp-rs")
     }
@@ -144,6 +156,12 @@ enum YTDLPEngineRouter {
     /// Whether a yt-dlp-rs version has `--keep-partial-on-stop`. An unknown version does not.
     static func supportsKeepPartialOnStop(version: String?) -> Bool {
         isAtLeast(AppConstants.ytdlpRSKeepPartialMinimumVersion, version: version)
+    }
+
+    /// Whether a yt-dlp-rs version honours `--ignore-no-formats-error` (Instagram photo
+    /// slides, scheduled streams). An unknown version does not.
+    static func supportsIgnoreNoFormats(version: String?) -> Bool {
+        isAtLeast(AppConstants.ytdlpRSIgnoreNoFormatsMinimumVersion, version: version)
     }
 
     private static func isAtLeast(_ minimum: String, version: String?) -> Bool {

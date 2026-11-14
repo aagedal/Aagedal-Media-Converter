@@ -42,6 +42,14 @@
 - Updated MPV to 0.42.0 in a new build of MPVKit with FFmpeg 9.0.2 and libplacebo 7.387.0. HTTPS streams previewed through MPV, such as clip previews from downloads, now have their certificates checked.
 - The Playback audio meter (β) shows each reading when the playhead reaches the measured audio. It used to run several seconds ahead of what you heard.
 
+### Downloads
+
+- yt-dlp-rs is on by default for supported sites, with yt-dlp as the fallback. If you turned the setting off, it stays off.
+- Updated yt-dlp-rs to 1.0.0-rc.2, a release candidate for its first stable release. It now also handles Instagram posts with photos and video, the start time of scheduled live streams, and audio-only downloads. Stopping a live stream recorded from its start now keeps the picture and sound the same length; before, the video could stop minutes before the audio.
+- Live streams recorded as growing files keep their length and timecode in a DaVinci Resolve timeline when the recording stops. Before, the title and other metadata were added by rewriting the finished file, and a clip already edited into a timeline could end at the wrong time. A recording from the start of a stream that has been live for more than five days now gets the timecode of its first frame.
+- Downloading a video that is already in the output folder shows File already exists with a Redownload button again, instead of adding the existing file as a new download.
+- Cancelling a live stream recorded from its start with yt-dlp-rs gives it up to 10 seconds to finish the file, instead of 2.
+
 ### Other fixes
 
 - Exports with Export matte sidecar turned on always write the `_matte` file. Some ordinary queue conversions went through the shared job engine, which left it out.

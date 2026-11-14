@@ -7853,6 +7853,21 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertEqual(YTDLPProgressParser.parseLiveStatus("unrelated output"), nil)
     }
 
+    func testYTDLPAlreadyDownloadedNamesTheExistingFile() {
+        // Printed on stderr by yt-dlp 2026.10.26 and yt-dlp-rs 1.0.0-rc.1 with --print.
+        XCTAssertEqual(
+            YTDLPProgressParser.parseAlreadyDownloaded("[download] Me at the zoo.webm has already been downloaded"),
+            "Me at the zoo.webm"
+        )
+        XCTAssertEqual(
+            YTDLPProgressParser.parseAlreadyDownloaded("[download] /tmp/out/a has already been downloaded"),
+            "/tmp/out/a"
+        )
+        XCTAssertNil(YTDLPProgressParser.parseAlreadyDownloaded("[download] Destination: a.webm"))
+        XCTAssertNil(YTDLPProgressParser.parseAlreadyDownloaded("[info] x has already been downloaded and merged"))
+        XCTAssertNil(YTDLPProgressParser.parseAlreadyDownloaded("[download]  has already been downloaded"))
+    }
+
     func testYTDLPFFmpegStatsCarryLiveRecordingDurationAndSize() throws {
         let stats = try XCTUnwrap(YTDLPProgressParser.parseFFmpegStats(
             "frame= 1499 fps= 42 q=-1.0 size=    5632KiB time=00:00:49.99 bitrate= 922.9kbits/s speed=1.39x elapsed=0:00:36.03"
