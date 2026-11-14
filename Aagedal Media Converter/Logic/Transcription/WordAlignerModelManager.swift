@@ -32,8 +32,8 @@ struct WordAlignerModel: Identifiable, Hashable, Sendable {
             languages: ["no", "nb"],
             sourceRepository: "NbAiLab/nb-wav2vec2-300m-bokmaal-v2",
             license: "Apache-2.0",
-            archiveSHA256: "",
-            archiveBytes: 0
+            archiveSHA256: "0c4e1ffb1669d65f7e931804a8a35a3208ea7f188910f4081c3fd37a4026d962",
+            archiveBytes: 584_328_647
         ),
         WordAlignerModel(
             id: "nn-nynorsk-300m",
@@ -41,8 +41,8 @@ struct WordAlignerModel: Identifiable, Hashable, Sendable {
             languages: ["nn"],
             sourceRepository: "NbAiLab/nb-wav2vec2-300m-nynorsk",
             license: "Apache-2.0",
-            archiveSHA256: "",
-            archiveBytes: 0
+            archiveSHA256: "c2eb5171009a499729f08af38d51b8332bfb250e6256223f4fd8e4be5ac5afb9",
+            archiveBytes: 584_434_843
         ),
         WordAlignerModel(
             id: "sv-voxrex-large",
@@ -50,8 +50,8 @@ struct WordAlignerModel: Identifiable, Hashable, Sendable {
             languages: ["sv"],
             sourceRepository: "KBLab/wav2vec2-large-voxrex-swedish",
             license: "CC0-1.0",
-            archiveSHA256: "",
-            archiveBytes: 0
+            archiveSHA256: "636fe7f3fc57cefbb8e585d29e40796c2c85842246df855cf28870e4eac74a25",
+            archiveBytes: 584_398_895
         ),
         WordAlignerModel(
             id: "en-base-960h",
@@ -59,8 +59,8 @@ struct WordAlignerModel: Identifiable, Hashable, Sendable {
             languages: ["en"],
             sourceRepository: "facebook/wav2vec2-base-960h",
             license: "Apache-2.0",
-            archiveSHA256: "",
-            archiveBytes: 0
+            archiveSHA256: "abc050fa89f6e1555872d0ee13b13e5d412839921087bb619375465d3c68500d",
+            archiveBytes: 175_081_458
         ),
     ]
 

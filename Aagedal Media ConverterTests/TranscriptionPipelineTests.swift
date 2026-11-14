@@ -438,8 +438,25 @@ final class TranscriptionPipelineTests: XCTestCase {
     /// of silence. Whisper-like times that start too early must move into the
     /// speech. Skipped when the aligner or the Norwegian voice is missing.
     func testInstalledNorwegianAlignerMovesWordsIntoSpeech() async throws {
-        guard let directory = WordAlignerModelManager.shared.installedDirectory(forLanguage: "no") else {
-            throw XCTSkip("Norwegian word aligner is not installed")
+        try await assertInstalledAlignerMovesWordsIntoSpeech(
+            language: "no", voice: "Nora", sentence: "Hei, jeg heter Nora og dette er en test."
+        )
+    }
+
+    func testInstalledEnglishAlignerMovesWordsIntoSpeech() async throws {
+        try await assertInstalledAlignerMovesWordsIntoSpeech(
+            language: "en", voice: "Samantha", sentence: "Hello, my name is Samantha and this is a test."
+        )
+    }
+
+    /// Runs an installed Core ML aligner on synthetic speech after two seconds
+    /// of silence. Whisper-like times that start too early must move into the
+    /// speech. Skipped when the aligner or the voice is missing.
+    private func assertInstalledAlignerMovesWordsIntoSpeech(
+        language: String, voice: String, sentence: String
+    ) async throws {
+        guard let directory = WordAlignerModelManager.shared.installedDirectory(forLanguage: language) else {
+            throw XCTSkip("The \(language) word aligner is not installed")
         }
         let work = FileManager.default.temporaryDirectory.appendingPathComponent("AlignerTest-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
@@ -448,10 +465,10 @@ final class TranscriptionPipelineTests: XCTestCase {
         let speech = work.appendingPathComponent("speech.aiff")
         let say = try await SubprocessRunner().run(SubprocessRequest(
             executableURL: URL(fileURLWithPath: "/usr/bin/say"),
-            arguments: ["-v", "Nora", "-o", speech.path, "Hei, jeg heter Nora og dette er en test."],
+            arguments: ["-v", voice, "-o", speech.path, sentence],
             timeout: .seconds(60), standardOutputCaptureLimit: 0, standardErrorCaptureLimit: 4096
         ))
-        guard say.succeeded else { throw XCTSkip("The Norwegian voice Nora is not installed") }
+        guard say.succeeded else { throw XCTSkip("The voice \(voice) is not installed") }
         let wave = work.appendingPathComponent("audio.wav")
         let ffmpeg = try await SubprocessRunner().run(SubprocessRequest(
             executableURL: ffmpegURL,
@@ -463,7 +480,7 @@ final class TranscriptionPipelineTests: XCTestCase {
         XCTAssertTrue(ffmpeg.succeeded, ffmpeg.standardErrorText)
 
         let audio = try PCMWaveFile(url: wave)
-        let text = ["Hei,", "jeg", "heter", "Nora", "og", "dette", "er", "en", "test."]
+        let text = sentence.split(separator: " ").map(String.init)
         // Pretend Whisper put the words 1.2 s early and evenly spaced.
         let rough = text.enumerated().map { index, word in
             TranscriptWord(text: word, start: 0.8 + Double(index) * 0.3, end: 1.05 + Double(index) * 0.3)

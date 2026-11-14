@@ -71,22 +71,29 @@ All on a synthetic clip with a known layout (two `say` voices, 4 s or 6 s pauses
 blank and delimiter tokens. The app downloads the zip, checks its SHA-256 and
 compiles it. `Install from File…` installs a zip directly.
 
-| Aligner | Source | License | Status |
+| Aligner | Source | License | Archive |
 |---|---|---|---|
-| `nb-bokmaal-300m` | NbAiLab/nb-wav2vec2-300m-bokmaal-v2 | Apache-2.0 | converted (584 MB zip), not yet hosted |
-| `nn-nynorsk-300m` | NbAiLab/nb-wav2vec2-300m-nynorsk | Apache-2.0 | to convert |
-| `sv-voxrex-large` | KBLab/wav2vec2-large-voxrex-swedish | CC0-1.0 | to convert |
-| `en-base-960h` | facebook/wav2vec2-base-960h | Apache-2.0 | to convert |
+| `nb-bokmaal-300m` | NbAiLab/nb-wav2vec2-300m-bokmaal-v2 | Apache-2.0 | 584 MB |
+| `nn-nynorsk-300m` | NbAiLab/nb-wav2vec2-300m-nynorsk | Apache-2.0 | 584 MB |
+| `sv-voxrex-large` | KBLab/wav2vec2-large-voxrex-swedish | CC0-1.0 | 584 MB |
+| `en-base-960h` | facebook/wav2vec2-base-960h | Apache-2.0 | 175 MB |
+
+All four are hosted at
+[huggingface.co/taagedal/wav2vec2-word-aligners-coreml](https://huggingface.co/taagedal/wav2vec2-word-aligners-coreml)
+(2026-11-14), with a model card listing sources, revisions and licences. The app
+downloads from a pinned commit (`AppConstants.wordAlignerDownloadBaseURL`), so a
+later upload can't change what a released version gets; publishing a new
+aligner means uploading it, then moving the pin and adding its SHA-256 and size
+to `WordAlignerModel.allModels`. Every conversion matched PyTorch's best token on
+every frame at 3 s and 17 s.
 
 Meta's MMS forced aligner covers 1,100 languages in one model but is
-CC-BY-NC-4.0, so it is not used. Hosting is pending: `AppConstants.wordAlignerDownloadBaseURL`
-points at a Hugging Face repository that still has to be created; each entry in
-`WordAlignerModel.allModels` needs its archive SHA-256 and size once uploaded.
+CC-BY-NC-4.0, so it is not used.
 
 ## Next steps
 
-- **Publish aligners** (above), then add Danish, Finnish and German from the
-  WhisperX table after checking licences.
+- **More aligners:** Danish, Finnish and German from the WhisperX table, after
+  checking licences.
 - **Nemotron and Parakeet** can feed the same cue builder: `nemo-speech transcribe
   --format json --diarize` already returns words with speakers, and parakeet-mlx
   has word timestamps in its JSON output.

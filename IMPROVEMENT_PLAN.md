@@ -73,8 +73,8 @@ reclassify them as polish.
 - **Playback metering:** optional running playback-session LUFS, clearly separate from
   whole-program analysis; evaluate newer MPVKit/FFmpeg for ProRes RAW VideoToolbox
   decoding and animated WebP ([plan](docs/AUDIO-METERING-PLAN.md#deferred-improvements)).
-- **Transcription pipeline:** host the converted wav2vec2 aligners (before 4.8.0
-  ships; the changelog promises downloads) and add more languages; move Nemotron and Parakeet onto the word-level cue builder; live
+- **Transcription pipeline:** test on real interviews; add more aligner
+  languages (nb, nn, sv and en are hosted on Hugging Face); move Nemotron and Parakeet onto the word-level cue builder; live
   transcript with in-run corrections; optional Foundation Models clean-up on macOS 27
   ([plan](docs/transcription-pipeline-plan.md)).
 - **First-run diagnostics:** model availability and feature-level codec/architecture

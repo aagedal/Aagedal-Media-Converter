@@ -969,8 +969,10 @@ enum AppConstants {
             .appendingPathComponent("AagedalMediaConverter", isDirectory: true)
             .appendingPathComponent("word-aligners", isDirectory: true)
     }()
+    /// Pinned to a commit so a later upload can never change what a released
+    /// app version downloads (each archive is also checked against its SHA-256).
     static let wordAlignerDownloadBaseURL = URL(string:
-        "https://huggingface.co/aagedal/wav2vec2-word-aligners-coreml/resolve/main")!
+        "https://huggingface.co/taagedal/wav2vec2-word-aligners-coreml/resolve/6e99081bb1c613cba8905446e2f1b377a4e7fa1c")!
     static let embedSubtitlesKey = "embedSubtitles"
     static let defaultEmbedSubtitles = false
 
