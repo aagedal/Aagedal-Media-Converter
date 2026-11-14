@@ -2742,6 +2742,242 @@
         }
       }
     },
+    "Dialogue dashes" : {
+      "comment" : "Option: two speakers in one subtitle get lines starting with a dash.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dialogstriche"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Guiones de diálogo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tirets de dialogue"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Trattini di dialogo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "会話ダッシュ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "대화 대시"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Replikkstreker"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Travessões de diálogo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "对话破折号"
+          }
+        }
+      }
+    },
+    "Dialogue dashes put two speakers who share a subtitle on separate lines starting with “– ”. Speaker names label each change of voice. The NeMo Speech diarization model tells up to four speakers apart; it is a 112 MB download on first use." : {
+      "comment" : "Explains the speaker change options.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mit Dialogstrichen stehen zwei Sprecher in einem Untertitel auf getrennten Zeilen, die mit „– “ beginnen. Sprechernamen kennzeichnen jeden Stimmwechsel. Das Diarisierungsmodell von NeMo Speech unterscheidet bis zu vier Sprecher; es wird bei der ersten Verwendung geladen (112 MB)."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Con guiones de diálogo, dos hablantes que comparten un subtítulo aparecen en líneas separadas que empiezan con «– ». Los nombres de hablantes marcan cada cambio de voz. El modelo de diarización de NeMo Speech distingue hasta cuatro hablantes; se descarga la primera vez que se usa (112 MB)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Avec les tirets de dialogue, deux locuteurs partageant un sous-titre sont placés sur des lignes séparées commençant par « – ». Les noms des locuteurs signalent chaque changement de voix. Le modèle de diarisation de NeMo Speech distingue jusqu’à quatre locuteurs ; il est téléchargé à la première utilisation (112 Mo)."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Con i trattini di dialogo, due parlanti nello stesso sottotitolo vanno su righe separate che iniziano con «– ». I nomi dei parlanti segnalano ogni cambio di voce. Il modello di diarizzazione di NeMo Speech distingue fino a quattro parlanti e viene scaricato al primo utilizzo (112 MB)."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "会話ダッシュでは、1つの字幕を共有する2人の話者をそれぞれ「– 」で始まる別の行に表示します。話者名では声が切り替わるたびに名前を付けます。NeMo Speech の話者分離モデルが最大4人の話者を区別します。このモデル（112 MB）は初回使用時にダウンロードされます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "대화 대시를 사용하면 한 자막을 공유하는 두 화자가 “– ”로 시작하는 별도의 줄에 표시됩니다. 화자 이름은 목소리가 바뀔 때마다 표시됩니다. NeMo Speech 화자 분리 모델이 최대 4명의 화자를 구분하며, 이 모델(112MB)은 처음 사용할 때 다운로드됩니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Med replikkstreker får to talere som deler en undertekst, hver sin linje som starter med «– ». Talernavn merker hvert stemmebytte. Diariseringsmodellen i NeMo Speech skiller opptil fire talere fra hverandre; den lastes ned første gang den brukes (112 MB)."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Com travessões de diálogo, dois falantes que compartilham uma legenda ficam em linhas separadas começando com “– ”. Os nomes dos falantes indicam cada troca de voz. O modelo de diarização do NeMo Speech diferencia até quatro falantes; ele é baixado no primeiro uso (112 MB)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "使用对话破折号时，同一条字幕中的两位说话人会分行显示，每行以“– ”开头。说话人名称会在每次换人说话时标注。NeMo Speech 说话人分离模型最多可区分四位说话人，该模型（112 MB）会在首次使用时下载。"
+          }
+        }
+      }
+    },
+    "Download cancelled." : {
+      "comment" : "Status after the user cancels a model download.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Download abgebrochen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descarga cancelada."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Téléchargement annulé."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Download annullato."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ダウンロードをキャンセルしました。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "다운로드가 취소되었습니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nedlastingen ble avbrutt."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Download cancelado."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "下载已取消。"
+          }
+        }
+      }
+    },
+    "Download speaker detection model" : {
+      "comment" : "Button that downloads the NeMo Speech diarization model used to find speech.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sprechererkennungsmodell laden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descargar modelo de detección de hablantes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Télécharger le modèle de détection des locuteurs"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Scarica il modello di rilevamento dei parlanti"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "話者検出モデルをダウンロード"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "화자 감지 모델 다운로드"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Last ned modell for talergjenkjenning"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Baixar modelo de detecção de falantes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "下载说话人检测模型"
+          }
+        }
+      }
+    },
     "Export volume" : {
       "localizations" : {
         "de" : {
@@ -2796,6 +3032,124 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "导出音量"
+          }
+        }
+      }
+    },
+    "Finds speech with the built-in Silero voice detector and gives Whisper only that, which prevents invented text during silence and music." : {
+      "comment" : "Explains the speech-only transcription toggle.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Erkennt Sprache mit dem integrierten Silero-Sprachdetektor und übergibt nur diese an Whisper. So erfindet Whisper bei Stille und Musik keinen Text."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Detecta la voz con el detector de voz Silero integrado y solo entrega esa parte a Whisper, lo que evita texto inventado durante silencios y música."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Repère la parole avec le détecteur vocal Silero intégré et ne transmet qu’elle à Whisper, ce qui évite du texte inventé pendant les silences et la musique."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Individua il parlato con il rilevatore vocale Silero integrato e passa a Whisper solo quello, evitando testo inventato durante silenzi e musica."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "内蔵の Silero 音声検出器で音声区間を検出し、その部分だけを Whisper に渡します。無音や音楽の間に架空のテキストが生成されるのを防ぎます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "내장된 Silero 음성 감지기로 음성을 찾아 해당 부분만 Whisper에 전달하므로 무음이나 음악 구간에서 없는 텍스트가 만들어지지 않습니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Finner tale med den innebygde Silero-taledetektoren og gir bare den til Whisper, slik at Whisper ikke dikter opp tekst i stillhet og musikk."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Detecta a fala com o detector de voz Silero integrado e envia apenas ela ao Whisper, evitando texto inventado durante silêncio e música."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "使用内置的 Silero 语音检测器查找语音，只将语音交给 Whisper，从而避免在静音和音乐中凭空生成文字。"
+          }
+        }
+      }
+    },
+    "Install from File…" : {
+      "comment" : "Button that installs a word aligner from a local zip file.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aus Datei installieren …"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Instalar desde archivo…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Installer depuis un fichier…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Installa da file…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ファイルからインストール…"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "파일에서 설치…"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Installer fra fil …"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Instalar de arquivo…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "从文件安装…"
           }
         }
       }
@@ -2912,6 +3266,65 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "响度标准化会决定此项目的导出电平，因此更改音量不会生效。要使用音量线，请在“调整”中为此项目关闭响度标准化。"
+          }
+        }
+      }
+    },
+    "Not available yet" : {
+      "comment" : "Shown for a word aligner that has not been published for download.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Noch nicht verfügbar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aún no disponible"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pas encore disponible"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Non ancora disponibile"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "まだ利用できません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "아직 사용할 수 없음"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ikke tilgjengelig ennå"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ainda não disponível"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "暂不可用"
           }
         }
       }
@@ -6367,6 +6780,65 @@
         }
       }
     },
+    "Processes 30-second chunks instead of 20-second ones, which is slightly faster." : {
+      "comment" : "Explains the faster Whisper transcription toggle.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Verarbeitet 30-Sekunden-Abschnitte statt 20-Sekunden-Abschnitten, was etwas schneller ist."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Procesa fragmentos de 30 segundos en lugar de 20, lo que es algo más rápido."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Traite des segments de 30 secondes au lieu de 20, ce qui est un peu plus rapide."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Elabora segmenti da 30 secondi invece che da 20, un po’ più velocemente."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "20秒ではなく30秒単位で処理するため、少し速くなります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "20초 대신 30초 단위로 처리하여 조금 더 빠릅니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Behandler biter på 30 sekunder i stedet for 20 sekunder, noe som går litt raskere."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Processa trechos de 30 segundos em vez de 20, o que é um pouco mais rápido."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "以 30 秒而非 20 秒的片段处理，速度稍快。"
+          }
+        }
+      }
+    },
     "Programmes whose range or true peak cannot meet the target with a single gain are normalized dynamically instead. Not applied to Stream Copy, DCP, IMF, AV2, merges or generated waveform video." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6428,6 +6900,65 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "如果节目的范围或真峰值无法通过单一增益达到目标，将改为动态标准化。不适用于 Stream Copy、DCP、IMF、AV2、合并或生成的波形视频。"
+          }
+        }
+      }
+    },
+    "Re-times each word with a wav2vec2 aligner for the transcript's language, so subtitles start and end with the speech. Languages without an installed aligner keep Whisper's timing." : {
+      "comment" : "Explains the word timing toggle.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bestimmt die Zeit jedes Worts mit einem wav2vec2-Aligner für die Sprache des Transkripts neu, damit Untertitel mit der Sprache beginnen und enden. Sprachen ohne installierten Aligner behalten das Timing von Whisper."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vuelve a sincronizar cada palabra con un alineador wav2vec2 para el idioma de la transcripción, de modo que los subtítulos empiecen y terminen con la voz. Los idiomas sin alineador instalado conservan la sincronización de Whisper."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Resynchronise chaque mot avec un aligneur wav2vec2 pour la langue de la transcription, afin que les sous-titres commencent et se terminent avec la parole. Les langues sans aligneur installé conservent la synchronisation de Whisper."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Risincronizza ogni parola con un allineatore wav2vec2 per la lingua della trascrizione, così i sottotitoli iniziano e finiscono con il parlato. Le lingue senza allineatore installato mantengono la sincronizzazione di Whisper."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "文字起こしの言語に対応した wav2vec2 アライナーで各単語のタイミングを付け直し、字幕が発話に合わせて始まり終わるようにします。アライナーがインストールされていない言語では Whisper のタイミングを使います。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "전사 언어에 맞는 wav2vec2 정렬기로 각 단어의 타이밍을 다시 맞춰 자막이 발화와 함께 시작하고 끝나도록 합니다. 정렬기가 설치되지 않은 언어는 Whisper의 타이밍을 유지합니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Gir hvert ord ny timing med en wav2vec2-aligner for språket i transkripsjonen, slik at undertekstene starter og slutter med talen. Språk uten installert aligner beholder timingen fra Whisper."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ressincroniza cada palavra com um alinhador wav2vec2 para o idioma da transcrição, para que as legendas comecem e terminem junto com a fala. Idiomas sem alinhador instalado mantêm a sincronização do Whisper."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "使用对应转写语言的 wav2vec2 对齐器重新确定每个单词的时间，使字幕随语音开始和结束。未安装对齐器的语言将保留 Whisper 的时间。"
           }
         }
       }
@@ -6611,6 +7142,65 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "在另一台同步历史的 Mac 上记录"
+          }
+        }
+      }
+    },
+    "Refine word timing" : {
+      "comment" : "Toggle that re-times Whisper's words with a wav2vec2 aligner.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Wort-Timing verfeinern"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Afinar la sincronización de palabras"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Affiner la synchronisation des mots"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Perfeziona la sincronizzazione delle parole"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "単語のタイミングを補正"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "단어 타이밍 보정"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Finjuster ordtiming"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Refinar a sincronização das palavras"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "细化单词时间"
           }
         }
       }
@@ -7631,6 +8221,301 @@
         }
       }
     },
+    "Speaker %lld" : {
+      "comment" : "Speaker label written into subtitles when speaker names are on; the number counts speakers in order of appearance.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sprecher %lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hablante %lld"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Locuteur %lld"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Parlante %lld"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "話者 %lld"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "화자 %lld"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Taler %lld"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Falante %lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "说话人 %lld"
+          }
+        }
+      }
+    },
+    "Speaker changes:" : {
+      "comment" : "Picker label for how subtitles show a change of speaker.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sprecherwechsel:"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cambios de hablante:"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Changements de locuteur :"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cambi di parlante:"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "話者の切り替え:"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "화자 전환:"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Talerbytte:"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Troca de falante:"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "说话人切换："
+          }
+        }
+      }
+    },
+    "Speaker names" : {
+      "comment" : "Option: subtitles name the speaker when the voice changes.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sprechernamen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nombres de hablantes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Noms des locuteurs"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nomi dei parlanti"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "話者名"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "화자 이름"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Talernavn"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nomes dos falantes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "说话人名称"
+          }
+        }
+      }
+    },
+    "Speaker detection model is ready." : {
+      "comment" : "Status after the speech detection model has downloaded.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Das Sprechererkennungsmodell ist bereit."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El modelo de detección de hablantes está listo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Le modèle de détection des locuteurs est prêt."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Il modello di rilevamento dei parlanti è pronto."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "話者検出モデルの準備ができました。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "화자 감지 모델이 준비되었습니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Modellen for talergjenkjenning er klar."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "O modelo de detecção de falantes está pronto."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "说话人检测模型已就绪。"
+          }
+        }
+      }
+    },
+    "Speech, Timing and Speakers" : {
+      "comment" : "Section header for Whisper's speech-only, word timing and speaker settings.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sprache, Timing und Sprecher"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Voz, sincronización y hablantes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Parole, synchronisation et locuteurs"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Parlato, sincronizzazione e parlanti"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "音声・タイミング・話者"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "음성, 타이밍 및 화자"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tale, timing og talere"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fala, sincronização e falantes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "语音、时间轴和说话人"
+          }
+        }
+      }
+    },
     "Speed" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8275,6 +9160,124 @@
         }
       }
     },
+    "The aligner archive does not contain a Core ML model and manifest." : {
+      "comment" : "Error when a word aligner archive is malformed.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Das Aligner-Archiv enthält kein Core-ML-Modell mit Manifest."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El archivo del alineador no contiene un modelo de Core ML y un manifiesto."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "L’archive de l’aligneur ne contient pas de modèle Core ML ni de manifeste."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "L’archivio dell’allineatore non contiene un modello Core ML e un manifest."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "アライナーのアーカイブに Core ML モデルとマニフェストが含まれていません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "정렬기 아카이브에 Core ML 모델과 매니페스트가 없습니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aligner-arkivet inneholder ikke en Core ML-modell og et manifest."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "O arquivo do alinhador não contém um modelo do Core ML e um manifesto."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "对齐器归档中不包含 Core ML 模型和清单。"
+          }
+        }
+      }
+    },
+    "The downloaded aligner does not match its published checksum." : {
+      "comment" : "Error when a downloaded word aligner fails verification.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Der geladene Aligner stimmt nicht mit seiner veröffentlichten Prüfsumme überein."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El alineador descargado no coincide con su suma de verificación publicada."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "L’aligneur téléchargé ne correspond pas à sa somme de contrôle publiée."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "L’allineatore scaricato non corrisponde al checksum pubblicato."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ダウンロードしたアライナーが公開されているチェックサムと一致しません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "다운로드한 정렬기가 게시된 체크섬과 일치하지 않습니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Den nedlastede aligneren samsvarer ikke med den publiserte sjekksummen."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "O alinhador baixado não corresponde à soma de verificação publicada."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "下载的对齐器与其发布的校验和不匹配。"
+          }
+        }
+      }
+    },
     "The replacement audio file cannot be read." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8600,6 +9603,124 @@
         }
       }
     },
+    "This aligner has not been published yet." : {
+      "comment" : "Error when downloading a word aligner that has no published archive.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dieser Aligner wurde noch nicht veröffentlicht."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Este alineador aún no se ha publicado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cet aligneur n’a pas encore été publié."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Questo allineatore non è ancora stato pubblicato."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "このアライナーはまだ公開されていません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "이 정렬기는 아직 게시되지 않았습니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Denne aligneren er ikke publisert ennå."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Este alinhador ainda não foi publicado."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "此对齐器尚未发布。"
+          }
+        }
+      }
+    },
+    "This archive is not one of the app's word aligners." : {
+      "comment" : "Error when installing an archive whose manifest names an unknown aligner.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dieses Archiv ist keiner der Wort-Aligner der App."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Este archivo no es uno de los alineadores de palabras de la app."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cette archive ne fait pas partie des aligneurs de mots de l’app."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Questo archivio non è uno degli allineatori di parole dell’app."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "このアーカイブはアプリの単語アライナーではありません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "이 아카이브는 앱의 단어 정렬기가 아닙니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dette arkivet er ikke en av appens ord-alignere."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Este arquivo não é um dos alinhadores de palavras do app."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "此归档不是本应用的单词对齐器。"
+          }
+        }
+      }
+    },
     "This custom preset does not allow the app to add filters, so adjustments cannot be applied." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8908,6 +10029,65 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "轨道 %lld"
+          }
+        }
+      }
+    },
+    "Transcribe speech only" : {
+      "comment" : "Toggle that makes Whisper transcribe only detected speech.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nur Sprache transkribieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Transcribir solo la voz"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Transcrire uniquement la parole"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Trascrivi solo il parlato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "音声部分のみ文字起こし"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "음성 구간만 전사"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Transkriber bare tale"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Transcrever somente a fala"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "仅转写语音部分"
           }
         }
       }
@@ -137764,64 +138944,6 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "完整文件 • %@"
-          }
-        }
-      }
-    },
-    "May reduce subtitle timing precision. Leave off when timing is the priority." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Kann die Genauigkeit des Untertitel-Timings verringern. Deaktiviert lassen, wenn das Timing Vorrang hat."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Puede reducir la precisión de la sincronización de los subtítulos. Déjalo desactivado si la sincronización es la prioridad."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Peut réduire la précision de la synchronisation des sous-titres. Laissez désactivé si la synchronisation est prioritaire."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Può ridurre la precisione della sincronizzazione dei sottotitoli. Lascia disattivato se la sincronizzazione è la priorità."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "字幕のタイミング精度が低下する場合があります。タイミングを優先する場合はオフのままにしてください。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "자막 타이밍 정확도가 떨어질 수 있습니다. 타이밍이 중요하다면 끈 상태로 두세요."
-          }
-        },
-        "nb" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Kan gi mindre presis timing for undertekstene. La være avslått når timing er viktigst."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Pode reduzir a precisão do tempo das legendas. Deixe desativado quando o tempo for a prioridade."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "可能会降低字幕时间轴的精度。如果时间精度优先，请保持关闭。"
           }
         }
       }

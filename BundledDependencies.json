@@ -1323,6 +1323,11 @@
       "sha256": "5cafe245a21a2bd4a3e494784f9eca91efd8d180f95ad7e4115320baf1c7a022"
     },
     {
+      "path": "Licenses/silero-vad-LICENSE.txt",
+      "bytes": 1468,
+      "sha256": "ffa23c2eca1f421e1d7e21d031c4359ba5a742933a279be706cc10749aee6af8"
+    },
+    {
       "path": "Licenses/sparkle-LICENSE.txt",
       "bytes": 6154,
       "sha256": "389a4e4e9a32f059775b13a06e25a591445ba229d2838d26dd3e7c0c45127cfe"

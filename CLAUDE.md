@@ -17,7 +17,7 @@ Aagedal Media Converter is a macOS application for batch video encoding, built i
 
 - `IMPROVEMENT_PLAN.md` — the current, short backlog. Keep it short; put details in a dated `docs/` file and link it.
 - `docs/improvement-history-2026.md` — the detailed work log up to 2026-10-18 (the former plan). Section numbers such as "2.2" refer to it.
-- `docs/` also holds feature plans (`AUDIO-METERING-PLAN.md`, `encode-history-plan.md`, `ytdlp-rs-integration.md`), report formats, validation records and dependency provenance.
+- `docs/` also holds feature plans (`AUDIO-METERING-PLAN.md`, `encode-history-plan.md`, `transcription-pipeline-plan.md`, `ytdlp-rs-integration.md`), report formats, validation records and dependency provenance.
 - `CHANGELOG.md` — user-facing release notes, newest first.
 - `TODO.md` — historical checklist; all items are done.
 
@@ -162,6 +162,7 @@ Aagedal Media Converter/
 │   ├── Upload/             # rclone uploads and FileZilla import
 │   ├── WatchFolder/        # Watch-folder import (FSEvents + ledger)
 │   ├── Whisper/, Parakeet/, Nemotron/   # Transcription engines
+│   ├── Transcription/      # Word-level Whisper pipeline: speech-only audio, wav2vec2 alignment, speakers, cues
 │   ├── YTDLP/              # Downloads (yt-dlp, yt-dlp-rs) and managed tool updates
 │   ├── ConversionManager.swift, VideoFilesUtil.swift, VideoMetadataService.swift,
 │   └── ScreenCaptureManager.swift, AudioRoutingModels.swift, …

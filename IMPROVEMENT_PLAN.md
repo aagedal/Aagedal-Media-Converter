@@ -62,6 +62,8 @@ reclassify them as polish.
   strings (comparison metadata, warnings, some track labels), and review of the eight
   non-English/Norwegian languages flagged for review (4.2). The user is handling
   translation work directly.
+- Language pass over the string catalog. Known error: Korean "Browse…" is "먹다…"
+  ("eat"); look for similar machine-translation mistakes in all eight languages.
 
 ## Features and polish
 
@@ -71,6 +73,10 @@ reclassify them as polish.
 - **Playback metering:** optional running playback-session LUFS, clearly separate from
   whole-program analysis; evaluate newer MPVKit/FFmpeg for ProRes RAW VideoToolbox
   decoding and animated WebP ([plan](docs/AUDIO-METERING-PLAN.md#deferred-improvements)).
+- **Transcription pipeline:** host the converted wav2vec2 aligners (before 4.8.0
+  ships; the changelog promises downloads) and add more languages; move Nemotron and Parakeet onto the word-level cue builder; live
+  transcript with in-run corrections; optional Foundation Models clean-up on macOS 27
+  ([plan](docs/transcription-pipeline-plan.md)).
 - **First-run diagnostics:** model availability and feature-level codec/architecture
   compatibility preflight (4.4).
 
