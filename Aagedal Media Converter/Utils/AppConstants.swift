@@ -804,14 +804,14 @@ enum AppConstants {
     // yt-dlp-rs (bundled; newer releases can be downloaded into ytdlpToolsDirectory)
     /// Use yt-dlp-rs for supported sites, falling back to yt-dlp.
     static let ytdlpRSEnabledKey = "ytdlpRSEnabled"
-    /// Off until yt-dlp-rs reaches 1.0: downloads use yt-dlp unless the user opts in.
-    /// Users who changed the setting keep their choice.
-    static let defaultYTDLPRSEnabled = false
+    /// On from 4.8, with the 1.0 release candidates: supported sites use yt-dlp-rs and
+    /// fall back to yt-dlp. Users who changed the setting keep their choice.
+    static let defaultYTDLPRSEnabled = true
     static let ytdlpRSLastUpdateCheckKey = "ytdlpRSLastUpdateCheck"
-    /// Includes pre-releases: yt-dlp-rs is in beta.
+    /// Includes pre-releases (betas and release candidates).
     static let ytdlpRSGitHubReleasesURL = "https://api.github.com/repos/aagedal/yt-dlp-rs/releases?per_page=20"
     /// Version of `Binaries/yt-dlp-rs`; scripts/update-ytdlp-rs.sh keeps it in sync.
-    static let bundledYTDLPRSVersion = "0.9.0-beta.1"
+    static let bundledYTDLPRSVersion = "1.0.0-rc.2"
     /// Oldest yt-dlp-rs that records `--live-from-start` (stopped with SIGINT) and
     /// supports `--growing-file`. A pinned older update keeps those on yt-dlp.
     static let ytdlpRSLiveRecordingMinimumVersion = "0.6.0-beta.1"
@@ -819,6 +819,12 @@ enum AppConstants {
     static let ytdlpRSKeepPartialMinimumVersion = "0.8.0-beta.1"
     /// Oldest yt-dlp-rs that gets Dailymotion's top-quality variants (yt-dlp-rs#74).
     static let ytdlpRSDailymotionMinimumVersion = "0.9.0-beta.1"
+    /// Oldest yt-dlp-rs that honours `--ignore-no-formats-error`: Instagram posts with
+    /// photo slides and scheduled-stream probes. Checked on 1.0.0-rc.1, 2026-11-13.
+    static let ytdlpRSIgnoreNoFormatsMinimumVersion = "1.0.0-rc.1"
+    /// Oldest yt-dlp-rs whose `-x` falls back to `ffmpeg -i` when no ffprobe sits beside
+    /// ffmpeg (yt-dlp-rs#92); 1.0.0-rc.1 still fails there.
+    static let ytdlpRSAudioWithoutFFprobeMinimumVersion = "1.0.0-rc.2"
 
     // Managed tool versions (yt-dlp, deno, yt-dlp-rs). Auto-update keys default to true.
     static let ytdlpAutoUpdateKey = "ytdlpAutoUpdate"

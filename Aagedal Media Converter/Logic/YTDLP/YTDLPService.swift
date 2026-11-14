@@ -1023,24 +1023,25 @@ actor YTDLPService {
         )
     }
 
-    /// Title, thumbnail and announced start of a scheduled stream or premiere. Always
-    /// uses yt-dlp: yt-dlp-rs ignores `--ignore-no-formats-error` and would only fail.
+    /// Title, thumbnail and announced start of a scheduled stream or premiere. Uses
+    /// yt-dlp-rs from 1.0.0-rc.1, which honours `--ignore-no-formats-error`; older
+    /// versions failed on a stream without formats.
     func fetchUpcomingStreamInfo(url: String) async throws -> YTDLPUpcomingStreamInfo {
-        guard let ytdlpPath = await updateService.resolveYTDLPPath() else {
-            throw YTDLPError.binaryNotFound
-        }
         let cookies = try YTDLPCookieSource.configured()
         defer { cookies.cleanup() }
-        let probe = try await runProbe(
-            ytdlpPath: ytdlpPath,
-            arguments: await commonArguments(engine: .ytdlp) + cookies.arguments
-                + ["-j", "--no-download", "--no-warnings", "--ignore-no-formats-error", "--no-playlist", "--", url]
-        )
-        guard probe.subprocess.succeeded,
-              let json = try? JSONSerialization.jsonObject(with: probe.subprocess.standardOutput) as? [String: Any]
-        else {
-            throw YTDLPError.metadataFetchFailed(probe.safeStandardError.isEmpty ? "Unknown error" : probe.safeStandardError)
-        }
+        let json = try await withEngineFallback(url: url, operation: .upcomingStreamInfo) { engine, ytdlpPath in
+            let probe = try await runProbe(
+                ytdlpPath: ytdlpPath,
+                arguments: await commonArguments(engine: engine) + cookies.arguments
+                    + ["-j", "--no-download", "--no-warnings", "--ignore-no-formats-error", "--no-playlist", "--", url]
+            )
+            guard probe.subprocess.succeeded,
+                  let json = try? JSONSerialization.jsonObject(with: probe.subprocess.standardOutput) as? [String: Any]
+            else {
+                throw YTDLPError.metadataFetchFailed(probe.safeStandardError.isEmpty ? "Unknown error" : probe.safeStandardError)
+            }
+            return json
+        }.value
         return YTDLPUpcomingStreamInfo(json: json)
     }
 
@@ -1252,7 +1253,9 @@ actor YTDLPService {
 
         if keepPartialOnStop {
             // On SIGINT (Stop) yt-dlp-rs keeps what was downloaded at the final name and
-            // prints its after_move path; it exits 1 with "Interrupted by user".
+            // prints its after_move path; it exits 1 with "Interrupted by user". Live
+            // recordings through ffmpeg (growing files, live HLS) ignore the flag and
+            // exit 0 after a stop.
             args.append("--keep-partial-on-stop")
         }
 
@@ -1329,8 +1332,10 @@ actor YTDLPService {
             environment: configuration.environment,
             currentDirectoryURL: outputFolder,
             // With --keep-partial-on-stop, Cancel's SIGTERM also makes yt-dlp-rs merge what
-            // it has; let it finish and remove its private files before SIGKILL.
-            terminationGracePeriod: keepPartialOnStop ? Self.keepPartialTerminationGracePeriod : .seconds(2),
+            // it has, and it merges a --live-from-start recording on SIGTERM as on SIGINT;
+            // let it finish and remove its private files before SIGKILL.
+            terminationGracePeriod: keepPartialOnStop || (liveFromStart && engine == .ytdlpRS)
+                ? Self.keepPartialTerminationGracePeriod : .seconds(2),
             sensitiveArgumentNames: ["--cookies", "--cookies-from-browser"],
             signalHandle: signalHandle
         )
@@ -1615,16 +1620,14 @@ actor YTDLPService {
                 parsedState.lock.unlock()
             }
 
-            // Check for "already been downloaded" message (stdout only)
-            if !isStderr && trimmed.contains("has already been downloaded") {
+            // --no-overwrites found the file (stderr with both engines).
+            if let filename = YTDLPProgressParser.parseAlreadyDownloaded(trimmed) {
                 logger.info("File already exists detected")
                 parsedState.lock.lock()
                 parsedState.fileAlreadyExists = true
-                if let range = trimmed.range(of: "] "),
-                   let endRange = trimmed.range(of: " has already been downloaded") {
-                    let filename = String(trimmed[range.upperBound..<endRange.lowerBound])
-                    parsedState.existingFilePath = filename
-                }
+                // The name is relative to the working directory (the output folder).
+                parsedState.existingFilePath = filename.hasPrefix("/")
+                    ? filename : outputFolder.appendingPathComponent(filename).path
                 parsedState.lock.unlock()
             }
 

@@ -68,16 +68,18 @@ final class YTDLPEngineRouterTests: XCTestCase {
         XCTAssertEqual(engine("https://soundcloud.com/a/sets/b", .playlistListing), .ytdlp)
 
         XCTAssertEqual(engine("https://x.com/a/status/1", .postListing), .ytdlpRS)
-        XCTAssertEqual(engine("https://www.instagram.com/p/abc/", .postListing), .ytdlp)
-        XCTAssertEqual(engine("https://www.instagram.com/p/abc/?img_index=2", .metadata), .ytdlp)
-        XCTAssertEqual(engine("https://www.instagram.com/p/abc/", .download(.init())), .ytdlp)
+        XCTAssertEqual(engine("https://www.instagram.com/p/abc/", .postListing), .ytdlpRS)
+        XCTAssertEqual(engine("https://www.instagram.com/p/abc/?img_index=2", .metadata), .ytdlpRS)
+        XCTAssertEqual(engine("https://www.instagram.com/p/abc/", .download(.init())), .ytdlpRS)
         XCTAssertEqual(engine("https://www.instagram.com/reel/abc/", .download(.init())), .ytdlpRS)
+        XCTAssertEqual(engine("https://vimeo.com/1", .postListing), .ytdlp)
+        XCTAssertEqual(engine(youtube, .upcomingStreamInfo), .ytdlpRS)
+        XCTAssertEqual(engine("https://example.com/live", .upcomingStreamInfo), .ytdlp)
 
         XCTAssertEqual(engine(youtube, .download(.init())), .ytdlpRS)
         XCTAssertEqual(engine(youtube, .download(.init(section: true))), .ytdlpRS)
         XCTAssertEqual(engine(youtube, .download(.init(liveFromStart: true))), .ytdlpRS)
         XCTAssertEqual(engine(youtube, .download(.init(hasFFmpeg: false))), .ytdlp)
-        XCTAssertEqual(engine(youtube, .download(.init(audioOnly: true, hasFFprobe: false))), .ytdlp)
         XCTAssertEqual(engine(youtube, .download(.init(audioOnly: true, hasFFprobe: true))), .ytdlpRS)
         XCTAssertEqual(engine(youtube, .download(.init(audioOnly: false, hasFFprobe: false))), .ytdlpRS)
     }
@@ -94,6 +96,39 @@ final class YTDLPEngineRouterTests: XCTestCase {
         // Other sites still use an older yt-dlp-rs.
         XCTAssertEqual(YTDLPEngineRouter.decide(url: "https://www.youtube.com/watch?v=abc", operation: .metadata,
                                                 rsAvailable: true, rsVersion: "0.8.0-beta.1").engine, .ytdlpRS)
+    }
+
+    /// Instagram photo slides and scheduled streams were re-checked on 1.0.0-rc.1 against
+    /// yt-dlp 2026.10.26 on 2026-11-13: identical listings, metadata and downloads.
+    func testIgnoreNoFormatsRoutesNeedRC1() {
+        func engine(_ url: String, _ operation: YTDLPEngineOperation, version: String?) -> YTDLPEngine {
+            YTDLPEngineRouter.decide(url: url, operation: operation, rsAvailable: true, rsVersion: version).engine
+        }
+        let post = "https://www.instagram.com/p/abc/"
+        let upcoming = "https://www.youtube.com/watch?v=abc"
+        for operation: YTDLPEngineOperation in [.postListing, .metadata, .download(.init())] {
+            XCTAssertEqual(engine(post, operation, version: "1.0.0-rc.1"), .ytdlpRS)
+            XCTAssertEqual(engine(post, operation, version: "1.0.0"), .ytdlpRS)
+            XCTAssertEqual(engine(post, operation, version: "0.10.0-beta.1"), .ytdlp)
+            XCTAssertEqual(engine(post, operation, version: nil), .ytdlp)
+        }
+        XCTAssertEqual(engine(upcoming, .upcomingStreamInfo, version: "1.0.0-rc.1"), .ytdlpRS)
+        XCTAssertEqual(engine(upcoming, .upcomingStreamInfo, version: "0.9.0-beta.1"), .ytdlp)
+        // Instagram reels never needed it.
+        XCTAssertEqual(engine("https://www.instagram.com/reel/abc/", .download(.init()), version: "0.9.0-beta.1"), .ytdlpRS)
+    }
+
+    func testAudioWithoutFFprobeNeedsRC2() {
+        func engine(version: String?, hasFFprobe: Bool = false) -> YTDLPEngine {
+            YTDLPEngineRouter.decide(url: "https://www.youtube.com/watch?v=abc",
+                                     operation: .download(.init(audioOnly: true, hasFFprobe: hasFFprobe)),
+                                     rsAvailable: true, rsVersion: version).engine
+        }
+        XCTAssertEqual(engine(version: "1.0.0-rc.2"), .ytdlpRS)
+        XCTAssertEqual(engine(version: "1.0.0"), .ytdlpRS)
+        XCTAssertEqual(engine(version: "1.0.0-rc.1"), .ytdlp)
+        XCTAssertEqual(engine(version: nil), .ytdlp)
+        XCTAssertEqual(engine(version: "0.9.0-beta.1", hasFFprobe: true), .ytdlpRS)
     }
 
     func testLiveFromStartNeedsLiveRecordingVersion() {
@@ -475,11 +510,15 @@ final class YTDLPEngineRouterTests: XCTestCase {
         XCTAssertEqual(rs.terminationGracePeriod, .seconds(10))
         let liveFromStart = try await request(liveFromStart: true)
         XCTAssertFalse(liveFromStart.arguments.contains("--keep-partial-on-stop"))
-        XCTAssertEqual(liveFromStart.terminationGracePeriod, .seconds(2))
+        // yt-dlp-rs merges a --live-from-start recording on Cancel's SIGTERM too.
+        XCTAssertEqual(liveFromStart.terminationGracePeriod, .seconds(10))
         let oldRS = try await request(rsVersion: "0.7.0-beta.1")
         XCTAssertFalse(oldRS.arguments.contains("--keep-partial-on-stop"))
         let ytdlp = try await request(url: "https://example.com/video.mp4")
         XCTAssertFalse(ytdlp.arguments.contains("--keep-partial-on-stop"))
+        XCTAssertEqual(ytdlp.terminationGracePeriod, .seconds(2))
+        let ytdlpLiveFromStart = try await request(liveFromStart: true, url: "https://example.com/video.mp4")
+        XCTAssertEqual(ytdlpLiveFromStart.terminationGracePeriod, .seconds(2))
     }
 
     /// v0.8.0-beta.1 with --keep-partial-on-stop, stopped with SIGINT during a YouTube
