@@ -1226,6 +1226,7 @@ struct VideoFileListView: View {
                 operationID: operationID,
                 audioStreamIndex: audioStreamIndex,
                 fasterTranscription: settings.whisperFasterTranscription,
+                pipeline: settings.whisperPipeline,
                 publicationIsCurrent: {
                     droppedFiles.contains {
                         $0.id == itemID && $0.url == inputURL && $0.subtitleOperationID == operationID

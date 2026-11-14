@@ -27,6 +27,7 @@ struct WhisperSettingsView: View {
             whisperStatusSection
             modelManagementSection
             defaultSettingsSection
+            WhisperPipelineSettingsSection()
             aboutSection
         }
         .task {
@@ -305,7 +306,7 @@ struct WhisperSettingsView: View {
 
                 Toggle("Faster transcription (30-second chunks)", isOn: $fasterTranscription)
 
-                Text("May reduce subtitle timing precision. Leave off when timing is the priority.")
+                Text("Processes 30-second chunks instead of 20-second ones, which is slightly faster.")
                     .font(.caption)
                     .foregroundColor(.secondary)
 
@@ -597,4 +598,169 @@ struct WhisperSettingsView: View {
         WhisperSettingsView()
     }
     .formStyle(.grouped)
+}
+
+/// Speech-only transcription, word timing and speaker changes around Whisper.
+struct WhisperPipelineSettingsSection: View {
+    @AppStorage(AppConstants.whisperSpeechOnlyKey) private var speechOnly = AppConstants.defaultWhisperSpeechOnly
+    @AppStorage(AppConstants.whisperRefineWordTimingKey) private var refineTiming = AppConstants.defaultWhisperRefineWordTiming
+    @AppStorage(AppConstants.whisperSpeakerStyleKey) private var speakerStyle = AppConstants.defaultWhisperSpeakerStyle
+    @AppStorage(AppConstants.whisperVocabularyKey) private var vocabulary = ""
+
+    @State private var speechModelReady = SpeakerDiarizer.isModelCached
+    @State private var speechModelTask: Task<Void, Never>?
+    @State private var installed: Set<String> = []
+    @State private var progress: [String: Double] = [:]
+    @State private var downloads: [String: Task<Void, Never>] = [:]
+    @State private var message: String?
+
+    var body: some View {
+        Section(header: Text("Speech, Timing and Speakers")) {
+            VStack(alignment: .leading, spacing: 12) {
+                Toggle("Transcribe speech only", isOn: $speechOnly)
+                Text("Finds speech with the built-in Silero voice detector and gives Whisper only that, which prevents invented text during silence and music.")
+                    .font(.caption).foregroundStyle(.secondary)
+
+                TextField("Names and terms:", text: $vocabulary, prompt: Text(verbatim: "Mette Qvigstad, Kvæfjord, Nordlys"))
+                Text("Whisper reads these before each part of the audio, which nudges it toward your spelling but does not guarantee it. Separate them with commas.")
+                    .font(.caption).foregroundStyle(.secondary)
+
+                Picker("Speaker changes:", selection: $speakerStyle) {
+                    Text("Off").tag(SubtitleSpeakerStyle.off.rawValue)
+                    Text("Dialogue dashes").tag(SubtitleSpeakerStyle.dashes.rawValue)
+                    Text("Speaker names").tag(SubtitleSpeakerStyle.names.rawValue)
+                }
+                .pickerStyle(.menu)
+                .frame(maxWidth: 320)
+                Text("Dialogue dashes put two speakers who share a subtitle on separate lines starting with “– ”. Speaker names label each change of voice. The NeMo Speech diarization model tells up to four speakers apart; it is a 112 MB download on first use.")
+                    .font(.caption).foregroundStyle(.secondary)
+
+                if speakerStyle != SubtitleSpeakerStyle.off.rawValue && !speechModelReady {
+                    HStack {
+                        Button(speechModelTask == nil ? "Download speaker detection model" : "Downloading…") {
+                            downloadSpeechModel()
+                        }
+                        .disabled(speechModelTask != nil || BinaryPathResolver.nemotronPath == nil)
+                        if speechModelTask != nil {
+                            ProgressView().controlSize(.small)
+                            Button("Cancel") { speechModelTask?.cancel() }
+                        }
+                    }
+                }
+
+                Divider()
+
+                Toggle("Refine word timing", isOn: $refineTiming)
+                Text("Re-times each word with a wav2vec2 aligner for the transcript's language, so subtitles start and end with the speech. Languages without an installed aligner keep Whisper's timing.")
+                    .font(.caption).foregroundStyle(.secondary)
+
+                if refineTiming {
+                    ForEach(WordAlignerModel.allModels) { model in
+                        alignerRow(model)
+                    }
+                    Button("Install from File…") { installFromFile() }
+                }
+
+                if let message {
+                    Text(message).font(.caption).textSelection(.enabled)
+                }
+            }
+            .padding(8)
+        }
+        .onAppear(perform: refresh)
+        .onDisappear {
+            speechModelTask?.cancel()
+            for task in downloads.values { task.cancel() }
+        }
+    }
+
+    private func alignerRow(_ model: WordAlignerModel) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(model.displayName)
+                Link(model.license, destination: model.sourceURL).font(.caption)
+            }
+            Spacer()
+            if installed.contains(model.id) {
+                Text("Ready").foregroundStyle(.secondary)
+                Button("Delete") {
+                    Task {
+                        try? await WordAlignerModelManager.shared.delete(model)
+                        refresh()
+                    }
+                }
+            } else if let fraction = progress[model.id] {
+                ProgressView(value: fraction).frame(width: 80)
+                Button("Cancel") { downloads[model.id]?.cancel() }
+            } else if model.archiveSHA256.isEmpty {
+                Text("Not available yet").foregroundStyle(.secondary)
+            } else {
+                Text(ByteCountFormatter.string(fromByteCount: model.archiveBytes, countStyle: .file))
+                    .foregroundStyle(.secondary)
+                Button("Download") { download(model) }
+            }
+        }
+    }
+
+    private func refresh() {
+        installed = Set(WordAlignerModel.allModels.filter {
+            WordAlignerModelManager.shared.isInstalled($0)
+        }.map(\.id))
+        speechModelReady = SpeakerDiarizer.isModelCached
+    }
+
+    private func download(_ model: WordAlignerModel) {
+        message = nil
+        progress[model.id] = 0
+        downloads[model.id] = Task { @MainActor in
+            defer {
+                progress.removeValue(forKey: model.id)
+                downloads.removeValue(forKey: model.id)
+                refresh()
+            }
+            do {
+                try await WordAlignerModelManager.shared.download(model) { fraction in
+                    Task { @MainActor in
+                        if progress[model.id] != nil { progress[model.id] = fraction }
+                    }
+                }
+            } catch is CancellationError {
+                message = String(localized: "Download cancelled.")
+            } catch {
+                message = error.localizedDescription
+            }
+        }
+    }
+
+    private func installFromFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.zip]
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        message = nil
+        Task { @MainActor in
+            do {
+                _ = try await WordAlignerModelManager.shared.install(archive: url)
+            } catch {
+                message = error.localizedDescription
+            }
+            refresh()
+        }
+    }
+
+    private func downloadSpeechModel() {
+        guard let path = BinaryPathResolver.nemotronPath else { return }
+        message = nil
+        speechModelTask = Task { @MainActor in
+            defer { speechModelTask = nil; refresh() }
+            do {
+                try await SpeakerDiarizer.pullModel(executablePath: path)
+                message = String(localized: "Speaker detection model is ready.")
+            } catch is CancellationError {
+                message = String(localized: "Download cancelled.")
+            } catch {
+                message = error.localizedDescription
+            }
+        }
+    }
 }

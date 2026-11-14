@@ -861,7 +861,7 @@
     {
       "path": "Aagedal Media Converter/Binaries/ffmpeg",
       "bytes": 60211280,
-      "sha256": "21f5d3fbea60883e280b54bcff32670d672ac8f49c996e330df34b4a7d471484",
+      "sha256": "f3fc4f2e78018af48e18c70a7f5a1b8af9a4f4de77a2f1406e607cbf50bfdcf1",
       "mode": "0755",
       "architectures": [
         "arm64"
@@ -1321,6 +1321,11 @@
       "path": "Licenses/rclone-LICENSE.txt",
       "bytes": 1182659,
       "sha256": "5cafe245a21a2bd4a3e494784f9eca91efd8d180f95ad7e4115320baf1c7a022"
+    },
+    {
+      "path": "Licenses/silero-vad-LICENSE.txt",
+      "bytes": 1468,
+      "sha256": "ffa23c2eca1f421e1d7e21d031c4359ba5a742933a279be706cc10749aee6af8"
     },
     {
       "path": "Licenses/sparkle-LICENSE.txt",
