@@ -956,6 +956,7 @@ enum AppConstants {
     static let defaultWhisperRefineWordTiming = true
     static let whisperSpeakerStyleKey = "whisperSpeakerStyle"
     static let defaultWhisperSpeakerStyle = "dashes"
+    static let whisperVocabularyKey = "whisperVocabulary"
     /// Silero VAD (MIT), bundled: the pipeline finds speech with it and the
     /// whisper filter uses it to end its chunks in pauses.
     static let whisperVADModelURL = Bundle.main.url(forResource: "ggml-silero-v6.2.0", withExtension: "bin")

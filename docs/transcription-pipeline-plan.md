@@ -13,6 +13,14 @@ voice activity detection, Whisper, wav2vec2 forced alignment and diarization:
 2. **Whisper.** The FFmpeg filter writes one JSON line per word
    (`format=json:max_len=1`). With speech-only on, it also gets the Silero
    model, which makes each 20 s queue end in a pause instead of mid-word.
+   Our FFmpeg build (ffmpeg-apple-silicon PR #7, `af_whisper` patches) writes
+   `{"start":ms,"end":ms,"text":"…","p":0.81,"language":"no"}` with proper
+   escaping, and takes `initial_prompt`, which conditions every chunk. The
+   Names and terms setting feeds that prompt; the detected language picks the
+   aligner when Language is Auto. `p` (mean token probability) is not used
+   yet; it is meant for flagging uncertain words in a live transcript.
+   DTW token timestamps were left out: they need a per-model alignment-heads
+   preset and are off while flash attention is on.
 3. **Word timing.** A wav2vec2 CTC model for the transcript's language, converted
    to Core ML, gives per-frame character probabilities; `CTCForcedAligner` runs
    Viterbi over them to place every word. Without an aligner for the language,
@@ -88,7 +96,8 @@ points at a Hugging Face repository that still has to be created; each entry in
   can be stopped after seconds instead of after the whole file.
 - **Corrections while it runs.** With a live transcript, the user could fix names
   and terms as they appear; corrections would apply to the rest of the run as
-  whisper.cpp prompt text and to the finished words as replacements.
+  prompt text (the filter's `initial_prompt` already conditions each chunk, but
+  is fixed for the run) and to the finished words as replacements.
 - **Clean-up with Apple Foundation Models (macOS 27+).** After alignment, an
   optional on-device pass could correct names, places and punctuation using the
   user's context and corrections. It must only rewrite word text, never timing,

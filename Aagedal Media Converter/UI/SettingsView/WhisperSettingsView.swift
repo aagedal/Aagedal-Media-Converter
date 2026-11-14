@@ -605,6 +605,7 @@ struct WhisperPipelineSettingsSection: View {
     @AppStorage(AppConstants.whisperSpeechOnlyKey) private var speechOnly = AppConstants.defaultWhisperSpeechOnly
     @AppStorage(AppConstants.whisperRefineWordTimingKey) private var refineTiming = AppConstants.defaultWhisperRefineWordTiming
     @AppStorage(AppConstants.whisperSpeakerStyleKey) private var speakerStyle = AppConstants.defaultWhisperSpeakerStyle
+    @AppStorage(AppConstants.whisperVocabularyKey) private var vocabulary = ""
 
     @State private var speechModelReady = SpeakerDiarizer.isModelCached
     @State private var speechModelTask: Task<Void, Never>?
@@ -618,6 +619,10 @@ struct WhisperPipelineSettingsSection: View {
             VStack(alignment: .leading, spacing: 12) {
                 Toggle("Transcribe speech only", isOn: $speechOnly)
                 Text("Finds speech with the built-in Silero voice detector and gives Whisper only that, which prevents invented text during silence and music.")
+                    .font(.caption).foregroundStyle(.secondary)
+
+                TextField("Names and terms:", text: $vocabulary, prompt: Text(verbatim: "Mette Qvigstad, Kvæfjord, Nordlys"))
+                Text("Whisper reads these before each part of the audio, which nudges it toward your spelling but does not guarantee it. Separate them with commas.")
                     .font(.caption).foregroundStyle(.secondary)
 
                 Picker("Speaker changes:", selection: $speakerStyle) {

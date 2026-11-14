@@ -15,6 +15,9 @@ struct WhisperPipelineOptions: Sendable, Equatable {
     var refineWordTiming: Bool
     var speakerStyle: SubtitleSpeakerStyle
     var maxLineLength: Int
+    /// Names and terms passed to Whisper as its initial prompt, which nudges
+    /// their spelling in every chunk.
+    var vocabulary: String
 
     /// Whisper's own word times laid out by the cue builder, with no extra tools.
     static let plain = WhisperPipelineOptions(
@@ -22,11 +25,15 @@ struct WhisperPipelineOptions: Sendable, Equatable {
         maxLineLength: AppConstants.defaultWhisperMaxLineLength
     )
 
-    init(speechOnly: Bool, refineWordTiming: Bool, speakerStyle: SubtitleSpeakerStyle, maxLineLength: Int) {
+    init(
+        speechOnly: Bool, refineWordTiming: Bool, speakerStyle: SubtitleSpeakerStyle, maxLineLength: Int,
+        vocabulary: String = ""
+    ) {
         self.speechOnly = speechOnly
         self.refineWordTiming = refineWordTiming
         self.speakerStyle = speakerStyle
         self.maxLineLength = maxLineLength
+        self.vocabulary = vocabulary
     }
 
     init(defaults: UserDefaults) {
@@ -39,7 +46,8 @@ struct WhisperPipelineOptions: Sendable, Equatable {
             refineWordTiming: bool(AppConstants.whisperRefineWordTimingKey, AppConstants.defaultWhisperRefineWordTiming),
             speakerStyle: SubtitleSpeakerStyle(rawValue: defaults.string(forKey: AppConstants.whisperSpeakerStyleKey)
                 ?? AppConstants.defaultWhisperSpeakerStyle) ?? .dashes,
-            maxLineLength: (20...80).contains(lineLength) ? lineLength : AppConstants.defaultWhisperMaxLineLength
+            maxLineLength: (20...80).contains(lineLength) ? lineLength : AppConstants.defaultWhisperMaxLineLength,
+            vocabulary: defaults.string(forKey: AppConstants.whisperVocabularyKey) ?? ""
         )
     }
 
@@ -152,7 +160,8 @@ struct WhisperTranscriptionPipeline: Sendable {
             language: request.language,
             audioStreamIndex: transcriptionStream,
             fasterTranscription: request.fasterTranscription,
-            vadModelPath: vadModel?.path
+            vadModelPath: vadModel?.path,
+            initialPrompt: options.vocabulary
         ) { update in
             var scaled = update
             scaled.percentage = preparation + update.percentage * span
@@ -161,11 +170,14 @@ struct WhisperTranscriptionPipeline: Sendable {
         guard FileManager.default.fileExists(atPath: request.wordsFile.path) else {
             throw WhisperServiceError.srtGenerationFailed
         }
-        var words = WhisperWordJSONParser.parse(try Data(contentsOf: request.wordsFile))
+        let transcript = WhisperWordJSONParser.parse(try Data(contentsOf: request.wordsFile))
+        var words = transcript.words
         if let speechMap { words = speechMap.sourceWords(words) }
 
         if options.refineWordTiming, let audio, !words.isEmpty,
-           let language = TranscriptLanguage.resolve(setting: request.language, model: request.model, words: words),
+           let language = TranscriptLanguage.resolve(
+               setting: request.language, model: request.model, words: words, detected: transcript.language
+           ),
            let directory = tools.alignerDirectory(language) {
             do {
                 let aligner = try Wav2Vec2WordAligner(directory: directory)

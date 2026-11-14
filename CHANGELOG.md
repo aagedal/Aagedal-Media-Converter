@@ -38,6 +38,9 @@
 - Subtitle cues are laid out by the app: the Max line length setting now works, cues keep to two lines, break at sentence and clause ends and stay on screen long enough to read.
 - Speaker changes: a question and a short reply share a subtitle with "– " dialogue dashes, or subtitles can name the speakers (Speaker 1, Speaker 2). Up to four speakers are told apart by NeMo Speech (a 112 MB model, downloaded on first use).
 - Faster transcription now switches between 30- and 20-second chunks; the old 3-second chunks are gone, which improves recognition.
+- New Names and terms field: Whisper reads them before each part of the audio, which nudges it toward your spelling of names and places.
+- With Language set to Auto, word timing uses the language Whisper detected.
+- The bundled FFmpeg (still 9.0.2) has an updated whisper filter: correctly escaped output, an initial prompt, and word confidence and language in its word list. A failed transcription now stops with an error instead of leaving partial subtitles.
 
 ### Encode history and statistics
 

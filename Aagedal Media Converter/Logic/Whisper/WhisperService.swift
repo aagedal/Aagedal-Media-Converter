@@ -314,6 +314,7 @@ struct WhisperFFmpegTranscriber: Sendable {
         audioStreamIndex: Int?,
         fasterTranscription: Bool = false,
         vadModelPath: String? = nil,
+        initialPrompt: String = "",
         progress: @escaping @Sendable (WhisperProgress) -> Void
     ) async throws {
         try Task.checkCancellation()
@@ -323,7 +324,8 @@ struct WhisperFFmpegTranscriber: Sendable {
             outputPath: outputFile.path,
             language: language,
             fasterTranscription: fasterTranscription,
-            vadModelPath: vadModelPath
+            vadModelPath: vadModelPath,
+            initialPrompt: initialPrompt
         )
         var arguments = ["-nostdin", "-i", inputFile.path]
         if let audioStreamIndex {
@@ -388,11 +390,13 @@ struct WhisperFFmpegTranscriber: Sendable {
     /// Writes one JSON line per word (`max_len=1`); `SubtitleCueBuilder` lays
     /// out the cues, so the queue no longer has to be short to keep cues short.
     /// With a VAD model the filter ends each queue in a pause instead of
-    /// cutting through a word.
+    /// cutting through a word. `initialPrompt` (an option of our FFmpeg build)
+    /// conditions every chunk, so names and terms are spelled as given.
     static func filter(
         modelPath: String, outputPath: String, language: String,
         fasterTranscription: Bool = false,
-        vadModelPath: String? = nil
+        vadModelPath: String? = nil,
+        initialPrompt: String = ""
     ) -> String {
         var components = [
             "model=\(escapeFilterOptionValue(modelPath))",
@@ -404,6 +408,11 @@ struct WhisperFFmpegTranscriber: Sendable {
         ]
         if let vadModelPath {
             components.append("vad_model=\(escapeFilterOptionValue(vadModelPath))")
+        }
+        let prompt = initialPrompt.split(whereSeparator: \.isNewline).joined(separator: " ")
+            .trimmingCharacters(in: .whitespaces)
+        if !prompt.isEmpty {
+            components.append("initial_prompt=\(escapeFilterOptionValue(prompt))")
         }
         components.append("queue=\(fasterTranscription ? 30 : 20)")
         return "whisper=" + components.joined(separator: ":")

@@ -163543,6 +163543,122 @@
           }
         }
       }
+    },
+    "Names and terms:" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Namen und Begriffe:"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nombres y términos:"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Noms et termes :"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nomi e termini:"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "名前と用語:"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "이름과 용어:"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Navn og begreper:"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nomes e termos:"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "名称和术语："
+          }
+        }
+      }
+    },
+    "Whisper reads these before each part of the audio, which nudges it toward your spelling but does not guarantee it. Separate them with commas." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Whisper liest diese vor jedem Abschnitt der Aufnahme. Das lenkt die Schreibweise in Ihre Richtung, garantiert sie aber nicht. Trennen Sie die Einträge mit Kommas."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Whisper los lee antes de cada parte del audio, lo que lo orienta hacia tu ortografía, pero no la garantiza. Sepáralos con comas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Whisper les lit avant chaque partie de l’audio, ce qui l’oriente vers votre orthographe sans la garantir. Séparez-les par des virgules."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Whisper li legge prima di ogni parte dell’audio: questo lo orienta verso la tua grafia, ma non la garantisce. Separali con virgole."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Whisper は音声の各部分の前にこれらを読み込みます。指定した表記に近づきますが、保証はされません。カンマで区切ってください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Whisper는 오디오의 각 부분 앞에서 이 항목을 읽어 입력한 표기에 가깝게 쓰도록 유도하지만 보장하지는 않습니다. 쉼표로 구분하세요."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Whisper leser disse før hver del av lyden, noe som dytter den mot din stavemåte, men ikke garanterer den. Skill dem med komma."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "O Whisper lê estes itens antes de cada parte do áudio, o que o orienta para a sua grafia, mas não a garante. Separe-os com vírgulas."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Whisper 会在处理每段音频前读取这些内容，使其更倾向于你的拼写，但不能保证。请用逗号分隔。"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

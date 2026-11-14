@@ -13,24 +13,33 @@ final class TranscriptionPipelineTests: XCTestCase {
 
     func testWhisperWordParserReadsFilterLinesInSeconds() {
         let data = Data("""
-        {"start":330,"end":900,"text":"there,"}
-        {"start":50,"end":330,"text":" Hello"}
+        {"start":330,"end":900,"text":" there,","p":0.8057,"language":"no"}
+        {"start":50,"end":330,"text":" Hello","p":0.91,"language":"no"}
         not json
-        {"start":900,"end":1000,"text":""}
-        {"start":1000,"end":1500,"text":"say "quoted""}
+        {"start":900,"end":1000,"text":"","p":null,"language":"no"}
+        {"start":1000,"end":1500,"text":" say \\"quoted\\" c\\\\d","p":0.5,"language":"en"}
+        {"start":1500,"end":1600,"text":"broken "quote""}
         """.utf8)
 
-        let words = WhisperWordJSONParser.parse(data)
+        let transcript = WhisperWordJSONParser.parse(data)
 
-        XCTAssertEqual(words.map(\.text), ["Hello", "there,", "say \"quoted\""])
-        XCTAssertEqual(words[0].start, 0.05, accuracy: 1e-9)
-        XCTAssertEqual(words[0].end, 0.33, accuracy: 1e-9)
-        XCTAssertEqual(words[2].end, 1.5, accuracy: 1e-9)
+        XCTAssertEqual(transcript.words.map(\.text), ["Hello", "there,", #"say "quoted" c\d"#])
+        XCTAssertEqual(transcript.words[0].start, 0.05, accuracy: 1e-9)
+        XCTAssertEqual(transcript.words[0].end, 0.33, accuracy: 1e-9)
+        XCTAssertEqual(transcript.words[2].end, 1.5, accuracy: 1e-9)
+        XCTAssertEqual(transcript.language, "no")
     }
 
-    func testWhisperWordParserUnescapesLenientLines() {
-        let word = WhisperWordJSONParser.parseLine(#"{"start":0,"end":10,"text":"a \"b\" c\\d"}"#)
-        XCTAssertEqual(word?.text, #"a "b" c\d"#)
+    func testWhisperWordParserDropsNonSpeechMarkers() {
+        let data = Data("""
+        {"start":0,"end":100,"text":" [BLANK_AUDIO]"}
+        {"start":100,"end":200,"text":" Hei"}
+        {"start":200,"end":300,"text":" ["}
+        {"start":300,"end":400,"text":"BLANK_AUDIO"}
+        {"start":400,"end":500,"text":"]"}
+        {"start":500,"end":600,"text":" igjen."}
+        """.utf8)
+        XCTAssertEqual(WhisperWordJSONParser.parse(data).words.map(\.text), ["Hei", "igjen."])
     }
 
     func testWhisperFilterRequestsWordJSONAndOptionalVAD() {
@@ -45,6 +54,19 @@ final class TranscriptionPipelineTests: XCTestCase {
         )
         XCTAssertTrue(vad.contains(#":vad_model=/models/vad\\: v6.bin:"#), vad)
         XCTAssertTrue(vad.hasSuffix(":queue=30"))
+    }
+
+    func testWhisperFilterPassesNamesAsInitialPrompt() {
+        let empty = WhisperFFmpegTranscriber.filter(
+            modelPath: "/m.bin", outputPath: "/w.json", language: "no", initialPrompt: "  \n "
+        )
+        XCTAssertFalse(empty.contains("initial_prompt"))
+
+        let named = WhisperFFmpegTranscriber.filter(
+            modelPath: "/m.bin", outputPath: "/w.json", language: "no",
+            initialPrompt: "Mette Qvigstad, Kvæfjord\nNRK: Nordlys"
+        )
+        XCTAssertTrue(named.contains(#":initial_prompt=Mette Qvigstad\, Kvæfjord NRK\\: Nordlys:"#), named)
     }
 
     // MARK: - Cue builder
@@ -325,6 +347,8 @@ final class TranscriptionPipelineTests: XCTestCase {
         XCTAssertEqual(TranscriptLanguage.resolve(setting: "sv", model: .base, words: []), "sv")
         XCTAssertEqual(TranscriptLanguage.resolve(setting: "auto", model: .norwegianLarge, words: []), "no")
         XCTAssertEqual(TranscriptLanguage.resolve(setting: "auto", model: .base, words: norwegian), "no")
+        XCTAssertEqual(TranscriptLanguage.resolve(setting: "auto", model: .base, words: norwegian, detected: "sv"), "sv")
+        XCTAssertEqual(TranscriptLanguage.resolve(setting: "en", model: .base, words: [], detected: "sv"), "en")
         XCTAssertEqual(WordAlignerModel.model(forLanguage: "nb")?.id, "nb-bokmaal-300m")
     }
 
