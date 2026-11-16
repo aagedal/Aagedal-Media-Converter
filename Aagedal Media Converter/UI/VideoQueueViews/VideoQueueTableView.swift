@@ -1277,6 +1277,9 @@ struct VideoQueueTableView: NSViewRepresentable {
                     parent.encodingGroups[idx].sequentialNamingEnabled = false
                     parent.encodingGroups[idx].normalizeSequentialNaming()
                 }
+                parent.encodingGroups[idx].separateClipOutputNames(
+                    preset: parent.encodingGroups[idx].preset ?? parent.preset
+                )
             case .toggleGroupUpload(let optionPressed):
                 if optionPressed {
                     let failedItemIDs = parent.encodingGroups[idx].items

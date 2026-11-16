@@ -250,6 +250,33 @@ final class StitchingTimelineTests: XCTestCase {
         XCTAssertEqual(items.reduce(0) { $0 + StitchingTimeline.duration($1) }, 35)
     }
 
+    func testSplitClipsGetTheirOwnOutputNamesOnlyWithoutAMerge() {
+        var source = clip(duration: 60)
+        source.outputFileNameOverride = "Card_001"
+        var group = EncodingGroup(name: "Card", items: [source], concatEnabled: false)
+        StitchingTimeline.split(&group.items, at: 30)
+        group.separateClipOutputNames(preset: .streamCopy)
+        XCTAssertEqual(group.items.map(\.outputFileNameOverride), ["Card_001", "Card_001_2"])
+
+        // A later split of the first part skips the name already in use.
+        StitchingTimeline.split(&group.items, at: 10)
+        group.separateClipOutputNames(preset: .streamCopy)
+        XCTAssertEqual(group.items.map(\.outputFileNameOverride), ["Card_001", "Card_001_3", "Card_001_2"])
+
+        // Names differing only in case are the same file on macOS.
+        var other = clip(duration: 10)
+        other.outputFileNameOverride = "card_001"
+        group.items.append(other)
+        group.separateClipOutputNames(preset: .streamCopy)
+        XCTAssertEqual(group.items.last?.outputFileNameOverride, "card_001_4")
+
+        // A merge writes one file, so its parts keep the shared name.
+        var merged = EncodingGroup(name: "Card", items: [source], concatEnabled: true)
+        StitchingTimeline.split(&merged.items, at: 30)
+        merged.separateClipOutputNames(preset: .streamCopy)
+        XCTAssertEqual(merged.items.map(\.outputFileNameOverride), ["Card_001", "Card_001"])
+    }
+
     func testSplitRejectsBoundariesInvalidTimesAndBusyItems() {
         var items = [clip(duration: 20), clip(duration: 10)]
         for time in [0.0, 20, 30, -1, Double.nan, Double.infinity] {

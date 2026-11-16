@@ -316,6 +316,9 @@ struct StitchingEditHistory {
 struct StitchingEditorView<FileList: View>: View {
     @Binding var group: EncodingGroup
     let isStreamCopy: Bool
+    /// False when each clip is saved as its own file: timecode is shown per clip, and
+    /// markers, which only merged files carry, can't be added.
+    var mergesClips = true
     @State private var rangeMode = false
     @State private var selectedRange: ClipRange?
     @State private var keyframes: [URL: [Double]] = [:]
@@ -375,24 +378,45 @@ struct StitchingEditorView<FileList: View>: View {
         group.items.firstIndex { $0.id == selectedID } ?? group.items.indices.first
     }
     private var total: Double { group.items.reduce(0) { $0 + StitchingTimeline.duration($1) } }
-    private var sequenceFrameRate: Double? {
-        guard let first = group.items.first, let rate = StitchingTimeline.frameRate(for: first),
-              group.items.allSatisfy({ item in
+    private func commonFrameRate(_ items: [VideoItem]) -> Double? {
+        guard let first = items.first, let rate = StitchingTimeline.frameRate(for: first),
+              items.allSatisfy({ item in
                   guard let candidate = StitchingTimeline.frameRate(for: item) else { return false }
                   return abs(candidate - rate) < 0.0001
               }) else { return nil }
         return rate
     }
+    private var sequenceFrameRate: Double? { commonFrameRate(group.items) }
     @AppStorage(AppConstants.ignoreStitchTimecodeTrimOffsetKey) private var ignoreStitchTimecodeTrimOffset = false
     private var sequenceStartTimecode: String? {
         StitchingTimeline.outputStartTimecode(for: group.items, ignoreTrimOffset: ignoreStitchTimecodeTrimOffset)
     }
+    /// The ruler counts from the start of the timeline; only a merge has a timecode there.
     private func sequenceTimeDisplay(_ seconds: Double) -> String {
-        StitchingTimeline.sequenceTimeDisplay(seconds, frameRate: sequenceFrameRate, startTimecode: sequenceStartTimecode)
+        guard mergesClips else { return StitchingTimeline.timeDisplay(seconds, frameRate: sequenceFrameRate) }
+        return StitchingTimeline.sequenceTimeDisplay(seconds, frameRate: sequenceFrameRate, startTimecode: sequenceStartTimecode)
     }
+    /// The clips the playhead readout describes: the whole merge, or the selected clip alone.
+    private var readoutItems: [VideoItem] {
+        guard !mergesClips else { return group.items }
+        return selectedIndex.map { [group.items[$0]] } ?? []
+    }
+    private var readoutFrameRate: Double? { commonFrameRate(readoutItems) }
+    private var readoutStartTimecode: String? {
+        // A clip saved on its own starts at its trimmed in-point's timecode.
+        StitchingTimeline.outputStartTimecode(for: readoutItems, ignoreTrimOffset: mergesClips && ignoreStitchTimecodeTrimOffset)
+    }
+    private var readoutTime: Double {
+        guard !mergesClips, let index = selectedIndex else { return sequenceTime }
+        return sequenceTime - offset(index)
+    }
+    private var readoutTotal: Double { readoutItems.reduce(0) { $0 + StitchingTimeline.duration($1) } }
     private var sequenceTimecodeHelp: String {
-        if sequenceFrameRate == nil {
+        if readoutFrameRate == nil {
             return String(localized: "Relative time · mixed or unknown frame rates")
+        }
+        if !mergesClips {
+            return String(localized: "Each clip is saved as its own file. The time is the selected clip’s output timecode, and the value after / is that clip’s length.")
         }
         if sequenceStartTimecode == nil {
             return String(localized: "Relative timecode · no starting timecode on the first clip")
@@ -428,7 +452,7 @@ struct StitchingEditorView<FileList: View>: View {
                             onShuttle: shuttle,
                             onFit: fitTimeline,
                             onZoom: { keyboardZoomSteps += $0 },
-                            onAddMarker: addMarker,
+                            onAddMarker: { if mergesClips { addMarker() } },
                             onSplit: splitAtPlayhead,
                             onDeleteSelection: deleteSelection,
                             onClearRange: clearSelectedRange,
@@ -460,11 +484,11 @@ struct StitchingEditorView<FileList: View>: View {
                         Label(isPlaying ? "Pause" : "Play sequence", systemImage: isPlaying ? "pause.fill" : "play.fill")
                     }
                     .accessibilityIdentifier("stitching.play")
-                    Text(sequenceFrameRate != nil && sequenceStartTimecode != nil ? "Output TC" : "Relative TC")
+                    Text(readoutFrameRate != nil && readoutStartTimecode != nil ? "Output TC" : "Relative TC")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .help(sequenceTimecodeHelp)
-                    Text("\(sequenceTimeDisplay(sequenceTime)) / \(StitchingTimeline.timeDisplay(total, frameRate: sequenceFrameRate))")
+                    Text("\(StitchingTimeline.sequenceTimeDisplay(readoutTime, frameRate: readoutFrameRate, startTimecode: readoutStartTimecode)) / \(StitchingTimeline.timeDisplay(readoutTotal, frameRate: readoutFrameRate))")
                         .monospacedDigit()
                         .accessibilityIdentifier("stitching.timecode")
                         .help(sequenceTimecodeHelp)
@@ -495,11 +519,13 @@ struct StitchingEditorView<FileList: View>: View {
                     .disabled(group.status == .converting || StitchingTimeline.splitPoint(at: sequenceTime, in: group.items) == nil)
                     .help("Split the clip at the playhead (⌘B). Trim either part independently.")
                     .accessibilityIdentifier("stitching.split")
-                    Button(action: addMarker) {
-                        Label("Marker", systemImage: "bookmark.fill")
+                    if mergesClips {
+                        Button(action: addMarker) {
+                            Label("Marker", systemImage: "bookmark.fill")
+                        }
+                        .help("Add a marker at the playhead (M). Click a timeline marker to edit its note.")
+                        .accessibilityIdentifier("stitching.addMarker")
                     }
-                    .help("Add a marker at the playhead (M). Click a timeline marker to edit its note.")
-                    .accessibilityIdentifier("stitching.addMarker")
                     Text("Zoom").foregroundStyle(.secondary)
                     Slider(value: $zoom, in: 1...32).frame(width: 110)
                         .help("Zoom the timeline (⌘+ / ⌘−)")
