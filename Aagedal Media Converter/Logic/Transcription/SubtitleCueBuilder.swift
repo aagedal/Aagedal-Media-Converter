@@ -25,14 +25,16 @@ struct SubtitleCue: Sendable, Equatable {
 /// boundaries; one implementation applies line length, reading time and
 /// speaker rules to every word-level transcript.
 struct SubtitleCueBuilder: Sendable {
+    /// Characters per line in Latin scripts; `script` scales it for Japanese,
+    /// Chinese and Korean.
     var maxLineLength = AppConstants.defaultWhisperMaxLineLength
+    var script: TranscriptScript = .spaced
     var maxLines = 2
     var maxDuration = 7.0
     var minDuration = 1.0
     /// Pauses longer than this always end the cue.
     var maxPauseInCue = 1.2
     var minGapBetweenCues = 0.08
-    var charactersPerSecond = 17.0
     var speakerStyle: SubtitleSpeakerStyle = .off
     var speakerName: @Sendable (Int) -> String = { "\($0 + 1)" }
 
@@ -71,7 +73,7 @@ struct SubtitleCueBuilder: Sendable {
 
     // MARK: - Grouping
 
-    private var lineLength: Int { max(maxLineLength, 10) }
+    private var lineLength: Int { script.lineLength(forLatin: max(maxLineLength, 10)) }
     private var dialogueLineLength: Int { lineLength - Self.dialogueDash.count }
 
     private func group(_ words: [TranscriptWord]) -> [[TranscriptWord]] {
@@ -92,7 +94,7 @@ struct SubtitleCueBuilder: Sendable {
             case .full:
                 // Move the words after the last clause end into the next cue
                 // rather than splitting mid-phrase, if enough text stays behind.
-                if let clauseEnd = current.lastIndex(where: { $0.endsSentence || $0.endsClause }),
+                if let clauseEnd = current.lastIndex(where: { $0.endsSentence || endsClause($0) }),
                    length(of: current[...clauseEnd]) >= lineLength {
                     groups.append(Array(current[...clauseEnd]))
                     current = Array(current[(clauseEnd + 1)...])
@@ -168,8 +170,12 @@ struct SubtitleCueBuilder: Sendable {
         }
         let characters = length(of: cue)
         if last.endsSentence { return characters >= lineLength / 2 }
-        if last.endsClause { return characters >= lineLength * 3 / 2 }
+        if endsClause(last) { return characters >= lineLength * 3 / 2 }
         return false
+    }
+
+    private func endsClause(_ word: TranscriptWord) -> Bool {
+        word.endsClause || word.endsPhrase
     }
 
     // MARK: - Layout
@@ -178,12 +184,12 @@ struct SubtitleCueBuilder: Sendable {
         let turns = speakerTurns(words)
         let lines: [String]
         if speakerStyle == .dashes, turns.count == 2 {
-            lines = turns.map { Self.dialogueDash + $0.map(\.text).joined(separator: " ") }
+            lines = turns.map { Self.dialogueDash + TranscriptText.join($0.map(\.text)) }
         } else {
             let texts = words.map(\.text)
             let indent = naming ? prefixLength(for: words) : 0
             var laidOut = layoutLines(texts, width: lineLength, firstLineIndent: indent)
-                ?? [texts.joined(separator: " ")]
+                ?? [TranscriptText.join(texts)]
             if speakerStyle == .names, naming, let speaker = words.lazy.compactMap(\.speaker).first {
                 laidOut[0] = speakerName(speaker) + ": " + laidOut[0]
             }
@@ -196,18 +202,21 @@ struct SubtitleCueBuilder: Sendable {
     /// choosing the most balanced break and favouring breaks after punctuation.
     /// The first line also leaves room for a prefix such as a speaker name.
     /// Returns nil when the words cannot fit. A single overlong word is allowed
-    /// on a line of its own.
+    /// on a line of its own. Words in Japanese and Chinese join without spaces.
     func layoutLines(_ words: [String], width: Int, firstLineIndent: Int = 0) -> [String]? {
-        let joined = words.joined(separator: " ")
+        let joined = TranscriptText.join(words)
         if joined.count + firstLineIndent <= width || words.count == 1 { return [joined] }
         guard maxLines >= 2 else { return nil }
         var best: (score: Double, lines: [String])?
         for split in 1..<words.count {
-            let first = words[..<split].joined(separator: " ")
-            let second = words[split...].joined(separator: " ")
+            let first = TranscriptText.join(words[..<split])
+            let second = TranscriptText.join(words[split...])
             guard first.count + firstLineIndent <= width, second.count <= width else { continue }
             var score = Double(abs(first.count + firstLineIndent - second.count))
-            if let last = words[split - 1].last, ".?!…,;:".contains(last) { score -= Double(width) / 2 }
+            if let last = words[split - 1].last,
+               TranscriptWord.sentenceEnds.contains(last) || TranscriptWord.clauseEnds.contains(last) {
+                score -= Double(width) / 2
+            }
             // Bottom-heavy lines are easier to read than top-heavy ones.
             if first.count > second.count { score += 2 }
             if best == nil || score < best!.score { best = (score, [first, second]) }
@@ -239,7 +248,7 @@ struct SubtitleCueBuilder: Sendable {
     }
 
     private func length(of words: some Collection<TranscriptWord>) -> Int {
-        words.reduce(0) { $0 + $1.text.count } + max(words.count - 1, 0)
+        TranscriptText.join(words.map(\.text)).count
     }
 
     // MARK: - Timing
@@ -248,7 +257,7 @@ struct SubtitleCueBuilder: Sendable {
     private func applyTiming(_ cues: inout [SubtitleCue]) {
         for index in cues.indices {
             let characters = cues[index].lines.reduce(0) { $0 + $1.count }
-            let readable = min(max(minDuration, Double(characters) / charactersPerSecond), maxDuration)
+            let readable = min(max(minDuration, Double(characters) / script.charactersPerSecond), maxDuration)
             var end = max(cues[index].end, cues[index].start + readable)
             if index + 1 < cues.count {
                 end = min(end, cues[index + 1].start - minGapBetweenCues)

@@ -14,6 +14,10 @@ struct TranscriptWord: Sendable, Equatable {
     var end: Double
     /// Zero-based speaker index from diarization, or nil when unknown.
     var speaker: Int?
+    /// Whisper ended a phrase here. Set only where a phrase was split into
+    /// words (Japanese and Chinese), since Whisper often leaves out 。 and 、
+    /// there and the phrase end is the best clue to where a clause ends.
+    var endsPhrase = false
 
     init(text: String, start: Double, end: Double, speaker: Int? = nil) {
         self.text = text
@@ -24,15 +28,20 @@ struct TranscriptWord: Sendable, Equatable {
 
     var endsSentence: Bool {
         guard let last = text.trimmingCharacters(in: Self.closingQuotes).last else { return false }
-        return ".?!…".contains(last)
+        return Self.sentenceEnds.contains(last)
     }
 
     var endsClause: Bool {
         guard let last = text.trimmingCharacters(in: Self.closingQuotes).last else { return false }
-        return ",;:–—".contains(last)
+        return Self.clauseEnds.contains(last)
     }
 
-    private static let closingQuotes = CharacterSet(charactersIn: "\"'»”’)")
+    var endsSentenceOrClause: Bool { endsSentence || endsClause }
+
+    /// Includes the full-width marks of Chinese and Japanese (。！？ and 、，；：).
+    static let sentenceEnds: Set<Character> = [".", "?", "!", "…", "。", "！", "？", "．"]
+    static let clauseEnds: Set<Character> = [",", ";", ":", "–", "—", "、", "，", "；", "："]
+    private static let closingQuotes = CharacterSet(charactersIn: "\"'»”’)」』）》〉】")
 }
 
 /// Words from the FFmpeg whisper filter and the language Whisper heard.

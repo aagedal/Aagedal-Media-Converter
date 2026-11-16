@@ -25,21 +25,38 @@ struct CTCForcedAligner: Sendable {
     private static let spelledOut: [String: String] = ["ß": "ss", "æ": "ae", "œ": "oe"]
 
     /// Characters of `word` the model can emit. Letters the vocabulary lacks
-    /// fall back to their base letter (é → e) or their spelled-out form
-    /// (ß → ss); anything else, such as digits or punctuation, is skipped.
+    /// fall back to their base letter (é → e), their spelled-out form (ß → ss)
+    /// and, for Traditional Chinese characters, to Simplified (電 → 电);
+    /// anything else, such as digits or punctuation, is skipped. Kana keep
+    /// their voicing marks (が never becomes か).
     func tokens(for word: String) -> [Int] {
-        let text = lowercase ? word.lowercased() : word.uppercased()
+        var text = (lowercase ? word.lowercased() : word.uppercased()).precomposedStringWithCanonicalMapping
+        // Half-width katakana write voicing as a separate character (ｶﾞ), so
+        // they are widened as a whole before characters are looked up.
+        if text.unicodeScalars.contains(where: { (0xFF61...0xFF9F).contains($0.value) }) {
+            text = text.folding(options: .widthInsensitive, locale: nil)
+        }
         return text.flatMap { character -> [Int] in
             let key = String(character)
-            if let id = vocabulary[key], id != blankTokenID, id != wordDelimiterID { return [id] }
+            if let id = token(key) { return [id] }
             let base = key.folding(options: [.diacriticInsensitive, .widthInsensitive], locale: nil)
-            if base != key, let id = vocabulary[base], id != blankTokenID { return [id] }
+            if base != key, let id = token(base) { return [id] }
             if let spelled = Self.spelledOut[key.lowercased()] {
-                let letters = (lowercase ? spelled : spelled.uppercased()).map { vocabulary[String($0)] }
-                if letters.allSatisfy({ $0 != nil && $0 != blankTokenID }) { return letters.compactMap { $0 } }
+                let letters = (lowercase ? spelled : spelled.uppercased()).map { token(String($0)) }
+                if letters.allSatisfy({ $0 != nil }) { return letters.compactMap { $0 } }
+            }
+            if character.cjkScript == .han,
+               let simplified = key.applyingTransform(StringTransform("Hant-Hans"), reverse: false),
+               simplified != key, let id = token(simplified) {
+                return [id]
             }
             return []
         }
+    }
+
+    private func token(_ key: String) -> Int? {
+        guard let id = vocabulary[key], id != blankTokenID, id != wordDelimiterID else { return nil }
+        return id
     }
 
     /// Aligns `words` against `frameCount` × `vocabularySize` log probabilities
@@ -57,15 +74,20 @@ struct CTCForcedAligner: Sendable {
         // Token sequence with the owning word for each token.
         var sequence: [Int] = []
         var owners: [Int?] = []
+        var previousWord: String?
         for (index, word) in words.enumerated() {
             let wordTokens = tokens(for: word)
             guard !wordTokens.isEmpty else { continue }
-            if let delimiter = wordDelimiterID, !sequence.isEmpty {
+            // Japanese and Chinese models never heard a delimiter between
+            // words, so it is only placed where the text has a space.
+            if let delimiter = wordDelimiterID, let previousWord,
+               !TranscriptText.separator(between: previousWord, and: word).isEmpty {
                 sequence.append(delimiter)
                 owners.append(nil)
             }
             sequence += wordTokens
             owners += Array(repeating: index, count: wordTokens.count)
+            previousWord = word
         }
         guard !sequence.isEmpty else { return Array(repeating: nil, count: words.count) }
         guard let path = viterbi(
