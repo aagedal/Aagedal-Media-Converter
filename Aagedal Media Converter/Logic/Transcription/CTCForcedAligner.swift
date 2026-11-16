@@ -20,17 +20,25 @@ struct CTCForcedAligner: Sendable {
         self.lowercase = lowercase
     }
 
+    /// Letters some training sets spelled out; the German model, for one, has
+    /// no ß because its transcripts wrote "ss".
+    private static let spelledOut: [String: String] = ["ß": "ss", "æ": "ae", "œ": "oe"]
+
     /// Characters of `word` the model can emit. Letters the vocabulary lacks
-    /// fall back to their base letter (é → e); anything else, such as digits or
-    /// punctuation, is skipped.
+    /// fall back to their base letter (é → e) or their spelled-out form
+    /// (ß → ss); anything else, such as digits or punctuation, is skipped.
     func tokens(for word: String) -> [Int] {
         let text = lowercase ? word.lowercased() : word.uppercased()
-        return text.compactMap { character in
+        return text.flatMap { character -> [Int] in
             let key = String(character)
-            if let id = vocabulary[key], id != blankTokenID, id != wordDelimiterID { return id }
+            if let id = vocabulary[key], id != blankTokenID, id != wordDelimiterID { return [id] }
             let base = key.folding(options: [.diacriticInsensitive, .widthInsensitive], locale: nil)
-            if base != key, let id = vocabulary[base], id != blankTokenID { return id }
-            return nil
+            if base != key, let id = vocabulary[base], id != blankTokenID { return [id] }
+            if let spelled = Self.spelledOut[key.lowercased()] {
+                let letters = (lowercase ? spelled : spelled.uppercased()).map { vocabulary[String($0)] }
+                if letters.allSatisfy({ $0 != nil && $0 != blankTokenID }) { return letters.compactMap { $0 } }
+            }
+            return []
         }
     }
 

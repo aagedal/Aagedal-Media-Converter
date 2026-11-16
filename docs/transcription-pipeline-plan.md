@@ -67,9 +67,9 @@ All on a synthetic clip with a known layout (two `say` voices, 4 s or 6 s pauses
 ## Aligner models
 
 `scripts/convert-wav2vec2-coreml.py` converts a Hugging Face `Wav2Vec2ForCTC` model
-(flexible length up to 40 s, fp16 computation, 8-bit weights unless
-`--weights float`) and writes `aligner.json` with the vocabulary,
-blank and delimiter tokens. The app downloads the zip, checks its SHA-256 and
+(flexible length up to 40 s, fp16 computation) and writes two aligners,
+`<id>.zip` with 8-bit weights and `<id>-float16.zip`, each with `aligner.json`
+holding the vocabulary, blank and delimiter tokens. The app downloads the zip, checks its SHA-256 and
 compiles it. `Install from File…` installs a zip directly.
 
 | Aligner | Source | License | 8-bit | float16 |
@@ -78,10 +78,15 @@ compiles it. `Install from File…` installs a zip directly.
 | `nn-nynorsk-300m` | NbAiLab/nb-wav2vec2-300m-nynorsk | Apache-2.0 | 271 MB | 584 MB |
 | `sv-voxrex-large` | KBLab/wav2vec2-large-voxrex-swedish | CC0-1.0 | 271 MB | 584 MB |
 | `en-base-960h` | facebook/wav2vec2-base-960h | Apache-2.0 | 81 MB | 175 MB |
+| `de-xlsr53-large` | jonatasgrosman/wav2vec2-large-xlsr-53-german | Apache-2.0 | 274 MB | 583 MB |
+| `es-xlsr53-large` | jonatasgrosman/wav2vec2-large-xlsr-53-spanish | Apache-2.0 | 274 MB | 583 MB |
+| `fr-xlsr53-large` | jonatasgrosman/wav2vec2-large-xlsr-53-french | Apache-2.0 | 274 MB | 583 MB |
+| `it-xlsr53-large` | jonatasgrosman/wav2vec2-large-xlsr-53-italian | Apache-2.0 | 274 MB | 583 MB |
+| `pt-xlsr53-large` | jonatasgrosman/wav2vec2-large-xlsr-53-portuguese | Apache-2.0 | 274 MB | 583 MB |
 
-All four are hosted at
+All nine are hosted at
 [huggingface.co/taagedal/wav2vec2-word-aligners-coreml](https://huggingface.co/taagedal/wav2vec2-word-aligners-coreml)
-(2026-11-14; 8-bit added 2026-11-16), with a model card listing sources, revisions and licences. The app
+(2026-11-14; 8-bit and de, es, fr, it, pt added 2026-11-16), with a model card listing sources, revisions and licences. The app
 downloads from a pinned commit (`AppConstants.wordAlignerDownloadBaseURL`), so a
 later upload can't change what a released version gets; publishing a new
 aligner means uploading it, then moving the pin and adding its SHA-256 and size
@@ -95,17 +100,24 @@ picks which one is downloaded (default 8-bit), and the installed precision is
 recorded in a `precision` file next to the model. Compared with the float16
 conversions by forced
 alignment over five minutes of `say` speech, character starts stayed within
-one 20 ms frame (nb, nn, sv: all; en: 99.97%, at most 40 ms). 6-bit
+one 20 ms frame (nb, nn, sv: all; en: 99.97%, at most 40 ms). On about a
+minute of `say` speech per language (two voices), de, es and pt kept every
+character within 20 ms, fr 99.92% (at most 40 ms) and it 99.91%, with one
+character 420 ms away. 6-bit
 palettization (226 MB) and 4-bit (151–169 MB) moved some characters by
 0.4–0.5 s, so they are not used.
+
+The German model has no ß (its training text wrote "ss"), so the aligner
+spells out letters a vocabulary lacks: ß → ss, æ → ae, œ → oe.
 
 Meta's MMS forced aligner covers 1,100 languages in one model but is
 CC-BY-NC-4.0, so it is not used.
 
 ## Next steps
 
-- **More aligners:** Danish, Finnish and German from the WhisperX table, after
-  checking licences.
+- **More aligners:** Japanese, Chinese and Korean need the cue builder to
+  handle text without spaces first (in progress); then Danish and Finnish
+  from the WhisperX table, after checking licences.
 - **Nemotron and Parakeet** can feed the same cue builder: `nemo-speech transcribe
   --format json --diarize` already returns words with speakers, and parakeet-mlx
   has word timestamps in its JSON output.

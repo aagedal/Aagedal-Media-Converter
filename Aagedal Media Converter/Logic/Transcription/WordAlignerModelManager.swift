@@ -103,6 +103,71 @@ struct WordAlignerModel: Identifiable, Hashable, Sendable {
                     sha256: "abc050fa89f6e1555872d0ee13b13e5d412839921087bb619375465d3c68500d", bytes: 175_081_458),
             ]
         ),
+        WordAlignerModel(
+            id: "de-xlsr53-large",
+            displayName: "German (wav2vec2 XLSR-53 large)",
+            languages: ["de"],
+            sourceRepository: "jonatasgrosman/wav2vec2-large-xlsr-53-german",
+            license: "Apache-2.0",
+            archives: [
+                .int8: WordAlignerArchive(
+                    sha256: "f56dbdeff0786b8e53034284aa87ad7e0c4d336bda27dee926d97c880bb2bd34", bytes: 273_723_848),
+                .float16: WordAlignerArchive(
+                    sha256: "45e53b7bacc33f57d0a2979c93e1e20a57d2faa57083eb94484dece610e95f80", bytes: 583_437_774),
+            ]
+        ),
+        WordAlignerModel(
+            id: "es-xlsr53-large",
+            displayName: "Spanish (wav2vec2 XLSR-53 large)",
+            languages: ["es"],
+            sourceRepository: "jonatasgrosman/wav2vec2-large-xlsr-53-spanish",
+            license: "Apache-2.0",
+            archives: [
+                .int8: WordAlignerArchive(
+                    sha256: "493ca98c9ba59ea5440eb652f77fb5131aaa16ed7b33257cb6fdb5e015a4c8ac", bytes: 273_736_022),
+                .float16: WordAlignerArchive(
+                    sha256: "d25ee3e1bbd539e636e7997da4ad8db2db8c264e12627a8330acc718f60e9bec", bytes: 583_433_890),
+            ]
+        ),
+        WordAlignerModel(
+            id: "fr-xlsr53-large",
+            displayName: "French (wav2vec2 XLSR-53 large)",
+            languages: ["fr"],
+            sourceRepository: "jonatasgrosman/wav2vec2-large-xlsr-53-french",
+            license: "Apache-2.0",
+            archives: [
+                .int8: WordAlignerArchive(
+                    sha256: "bdbb9c69815ae1489d62349ba34affc2552c655e9bc06d673eff2896141a57f8", bytes: 273_763_357),
+                .float16: WordAlignerArchive(
+                    sha256: "65509c12ab23bc73e33c9594a9e7c9ed06238a4af4edc66d060cf3581a28cd9a", bytes: 583_468_606),
+            ]
+        ),
+        WordAlignerModel(
+            id: "it-xlsr53-large",
+            displayName: "Italian (wav2vec2 XLSR-53 large)",
+            languages: ["it"],
+            sourceRepository: "jonatasgrosman/wav2vec2-large-xlsr-53-italian",
+            license: "Apache-2.0",
+            archives: [
+                .int8: WordAlignerArchive(
+                    sha256: "2925d35b3dabaca0ad3fc4a3ab8b7e579242624d63368cc0a3aa9ebf969e6dac", bytes: 273_755_073),
+                .float16: WordAlignerArchive(
+                    sha256: "e89a02b40580abb6502aa4ac8feb272f91302976f3b5095c2b453d54ec685345", bytes: 583_448_222),
+            ]
+        ),
+        WordAlignerModel(
+            id: "pt-xlsr53-large",
+            displayName: "Portuguese (wav2vec2 XLSR-53 large)",
+            languages: ["pt"],
+            sourceRepository: "jonatasgrosman/wav2vec2-large-xlsr-53-portuguese",
+            license: "Apache-2.0",
+            archives: [
+                .int8: WordAlignerArchive(
+                    sha256: "5dae55a5df9fe0ba703721fafa86ee1e6b19cca3b258b534428238d6b81b0275", bytes: 273_510_538),
+                .float16: WordAlignerArchive(
+                    sha256: "5a461efe607695605e70e6633fdb05c63cfbf550f21a8aa1676ff5150c336a3b", bytes: 583_451_586),
+            ]
+        ),
     ]
 
     static func model(forLanguage language: String) -> WordAlignerModel? {

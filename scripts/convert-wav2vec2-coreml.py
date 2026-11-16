@@ -11,12 +11,14 @@ for example:
         scripts/convert-wav2vec2-coreml.py NbAiLab/nb-wav2vec2-300m-bokmaal-v2 \\
         --id nb-bokmaal-300m --languages no,nb --output build/aligners
 
-The output folder holds `Wav2Vec2CTC.mlpackage` and `aligner.json`, plus a zip
-of both and its SHA-256 for `WordAlignerModel.allModels`.
+It writes two aligners, each a folder with `Wav2Vec2CTC.mlpackage` and
+`aligner.json` plus a zip of it, and prints each zip's size and SHA-256 for
+`WordAlignerModel.allModels`:
 
-Weights are stored as 8-bit integers by default, which halves the download.
-On five minutes of speech every character stayed within one 20 ms frame of
-the float16 model; 6- and 4-bit weights moved some by 0.4 s or more.
+- `<id>.zip` stores weights as 8-bit integers, about half the size. On five
+  minutes of speech every character stayed within one 20 ms frame of the
+  float16 model; 6- and 4-bit weights moved some by 0.4 s or more.
+- `<id>-float16.zip` keeps the weights at the computation precision.
 """
 import argparse
 import hashlib
@@ -75,30 +77,24 @@ def convert(arguments: argparse.Namespace) -> None:
         minimum_deployment_target=ct.target.macOS15,
         convert_to="mlprogram",
     )
-    if arguments.weights == "int8":
-        mlmodel = cto.linear_quantize_weights(mlmodel, cto.OptimizationConfig(
-            global_config=cto.OpLinearQuantizerConfig(
-                mode="linear_symmetric", dtype="int8", granularity="per_channel")))
-
-    destination = Path(arguments.output) / arguments.id
-    if destination.exists():
-        shutil.rmtree(destination)
-    destination.mkdir(parents=True)
-    package = destination / "Wav2Vec2CTC.mlpackage"
     mlmodel.short_description = f"wav2vec2 CTC log probabilities from {arguments.repository}"
-    mlmodel.save(str(package))
+    quantized = cto.linear_quantize_weights(mlmodel, cto.OptimizationConfig(
+        global_config=cto.OpLinearQuantizerConfig(
+            mode="linear_symmetric", dtype="int8", granularity="per_channel")))
+    variants = {arguments.id: quantized, f"{arguments.id}-{arguments.precision}": mlmodel}
 
     # Compare against PyTorch at lengths other than the traced one.
     for seconds in (3, 17):
         audio = normalise(rng.standard_normal(SAMPLE_RATE * seconds).astype(np.float32) * 0.1)
         with torch.no_grad():
             reference = wrapper(torch.from_numpy(audio)[None]).numpy()
-        predicted = mlmodel.predict({"audio": audio[None]})["log_probabilities"]
-        if predicted.shape != reference.shape:
-            raise SystemExit(f"Shape mismatch at {seconds}s: {predicted.shape} vs {reference.shape}")
-        agreement = (predicted.argmax(-1) == reference.argmax(-1)).mean()
-        print(f"{seconds:>2}s: frames={reference.shape[1]} max|Δ|={np.abs(predicted - reference).max():.3f} "
-              f"argmax agreement={agreement:.3f}")
+        for name, variant in variants.items():
+            predicted = variant.predict({"audio": audio[None]})["log_probabilities"]
+            if predicted.shape != reference.shape:
+                raise SystemExit(f"{name}: shape mismatch at {seconds}s: {predicted.shape} vs {reference.shape}")
+            agreement = (predicted.argmax(-1) == reference.argmax(-1)).mean()
+            print(f"{name} {seconds:>2}s: frames={reference.shape[1]} "
+                  f"max|Δ|={np.abs(predicted - reference).max():.3f} argmax agreement={agreement:.3f}")
 
     tokenizer = processor.tokenizer
     vocabulary = tokenizer.get_vocab()
@@ -118,13 +114,19 @@ def convert(arguments: argparse.Namespace) -> None:
         "lowercase": not any(token.isupper() for token in vocabulary if len(token) == 1),
         "vocabulary": vocabulary,
     }
-    (destination / "aligner.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
+    for name, variant in variants.items():
+        destination = Path(arguments.output) / name
+        if destination.exists():
+            shutil.rmtree(destination)
+        destination.mkdir(parents=True)
+        variant.save(str(destination / "Wav2Vec2CTC.mlpackage"))
+        (destination / "aligner.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
 
-    archive = Path(arguments.output) / f"{arguments.id}.zip"
-    archive.unlink(missing_ok=True)
-    subprocess.run(["ditto", "-c", "-k", "--keepParent", str(destination), str(archive)], check=True)
-    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-    print(f"{archive} {archive.stat().st_size} bytes sha256={digest}")
+        archive = Path(arguments.output) / f"{name}.zip"
+        archive.unlink(missing_ok=True)
+        subprocess.run(["ditto", "-c", "-k", "--keepParent", str(destination), str(archive)], check=True)
+        digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+        print(f"{archive} {archive.stat().st_size} bytes sha256={digest}")
 
 
 def main() -> None:
@@ -136,8 +138,6 @@ def main() -> None:
     parser.add_argument("--revision", help="Pinned repository revision (default: current main)")
     parser.add_argument("--precision", choices=["float16", "float32"], default="float16",
                         help="Precision of the computation")
-    parser.add_argument("--weights", choices=["int8", "float"], default="int8",
-                        help="Store weights as 8-bit integers, or at the computation precision")
     parser.add_argument("--output", default="build/aligners")
     convert(parser.parse_args())
 
