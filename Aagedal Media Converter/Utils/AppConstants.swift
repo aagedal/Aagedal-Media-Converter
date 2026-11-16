@@ -981,7 +981,7 @@ enum AppConstants {
     /// Pinned to a commit so a later upload can never change what a released
     /// app version downloads (each archive is also checked against its SHA-256).
     static let wordAlignerDownloadBaseURL = URL(string:
-        "https://huggingface.co/taagedal/wav2vec2-word-aligners-coreml/resolve/b187cdf8b2d84999ff9f374fbaaff5a1223ae51e")!
+        "https://huggingface.co/taagedal/wav2vec2-word-aligners-coreml/resolve/fdfe4583be3831581bce66f48418a1092398642d")!
     static let embedSubtitlesKey = "embedSubtitles"
     static let defaultEmbedSubtitles = false
 

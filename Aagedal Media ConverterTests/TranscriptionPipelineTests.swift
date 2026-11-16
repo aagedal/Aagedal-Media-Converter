@@ -237,6 +237,23 @@ final class TranscriptionPipelineTests: XCTestCase {
         XCTAssertEqual(aligner.tokens(for: "2026"), [])
     }
 
+    func testCTCAlignerSpellsOutLettersTheModelLacks() {
+        let letters = ["<pad>": 0, "|": 1, "s": 2, "e": 3, "h": 4, "i": 5, "ß": 6, "o": 7]
+        let german = CTCForcedAligner(
+            vocabulary: letters.filter { $0.key != "ß" }, blankTokenID: 0, wordDelimiter: "|", lowercase: true
+        )
+        XCTAssertEqual(german.tokens(for: "heiße"), [4, 3, 5, 2, 2, 3])
+        // A vocabulary that has the letter keeps it.
+        let full = CTCForcedAligner(vocabulary: letters, blankTokenID: 0, wordDelimiter: "|", lowercase: true)
+        XCTAssertEqual(full.tokens(for: "heiße"), [4, 3, 5, 6, 3])
+        // Uppercase vocabularies spell out in capitals; an incomplete spelling is skipped.
+        let upper = CTCForcedAligner(
+            vocabulary: ["<pad>": 0, "O": 1, "E": 2, "S": 3], blankTokenID: 0, wordDelimiter: nil, lowercase: false
+        )
+        XCTAssertEqual(upper.tokens(for: "œs"), [1, 2, 3])
+        XCTAssertEqual(german.tokens(for: "æ"), [], "The vocabulary has no a")
+    }
+
     func testCTCMergeSpreadsUnalignedWordsBetweenNeighbours() {
         let original = [
             TranscriptWord(text: "a", start: 9, end: 9.1),
@@ -478,6 +495,36 @@ final class TranscriptionPipelineTests: XCTestCase {
     func testInstalledEnglishAlignerMovesWordsIntoSpeech() async throws {
         try await assertInstalledAlignerMovesWordsIntoSpeech(
             language: "en", voice: "Samantha", sentence: "Hello, my name is Samantha and this is a test."
+        )
+    }
+
+    func testInstalledGermanAlignerMovesWordsIntoSpeech() async throws {
+        try await assertInstalledAlignerMovesWordsIntoSpeech(
+            language: "de", voice: "Anna", sentence: "Hallo, ich heiße Anna und das ist ein kurzer Test."
+        )
+    }
+
+    func testInstalledSpanishAlignerMovesWordsIntoSpeech() async throws {
+        try await assertInstalledAlignerMovesWordsIntoSpeech(
+            language: "es", voice: "Mónica", sentence: "Hola, me llamo Mónica y esto es una prueba."
+        )
+    }
+
+    func testInstalledFrenchAlignerMovesWordsIntoSpeech() async throws {
+        try await assertInstalledAlignerMovesWordsIntoSpeech(
+            language: "fr", voice: "Thomas", sentence: "Bonjour, je m'appelle Thomas et ceci est un essai."
+        )
+    }
+
+    func testInstalledItalianAlignerMovesWordsIntoSpeech() async throws {
+        try await assertInstalledAlignerMovesWordsIntoSpeech(
+            language: "it", voice: "Alice", sentence: "Ciao, mi chiamo Alice e questa è una prova."
+        )
+    }
+
+    func testInstalledPortugueseAlignerMovesWordsIntoSpeech() async throws {
+        try await assertInstalledAlignerMovesWordsIntoSpeech(
+            language: "pt", voice: "Luciana", sentence: "Olá, meu nome é Luciana e isto é um teste."
         )
     }
 
