@@ -67,25 +67,37 @@ All on a synthetic clip with a known layout (two `say` voices, 4 s or 6 s pauses
 ## Aligner models
 
 `scripts/convert-wav2vec2-coreml.py` converts a Hugging Face `Wav2Vec2ForCTC` model
-(flexible length up to 40 s, fp16) and writes `aligner.json` with the vocabulary,
+(flexible length up to 40 s, fp16 computation, 8-bit weights unless
+`--weights float`) and writes `aligner.json` with the vocabulary,
 blank and delimiter tokens. The app downloads the zip, checks its SHA-256 and
 compiles it. `Install from File…` installs a zip directly.
 
-| Aligner | Source | License | Archive |
-|---|---|---|---|
-| `nb-bokmaal-300m` | NbAiLab/nb-wav2vec2-300m-bokmaal-v2 | Apache-2.0 | 584 MB |
-| `nn-nynorsk-300m` | NbAiLab/nb-wav2vec2-300m-nynorsk | Apache-2.0 | 584 MB |
-| `sv-voxrex-large` | KBLab/wav2vec2-large-voxrex-swedish | CC0-1.0 | 584 MB |
-| `en-base-960h` | facebook/wav2vec2-base-960h | Apache-2.0 | 175 MB |
+| Aligner | Source | License | 8-bit | float16 |
+|---|---|---|---|---|
+| `nb-bokmaal-300m` | NbAiLab/nb-wav2vec2-300m-bokmaal-v2 | Apache-2.0 | 272 MB | 584 MB |
+| `nn-nynorsk-300m` | NbAiLab/nb-wav2vec2-300m-nynorsk | Apache-2.0 | 271 MB | 584 MB |
+| `sv-voxrex-large` | KBLab/wav2vec2-large-voxrex-swedish | CC0-1.0 | 271 MB | 584 MB |
+| `en-base-960h` | facebook/wav2vec2-base-960h | Apache-2.0 | 81 MB | 175 MB |
 
 All four are hosted at
 [huggingface.co/taagedal/wav2vec2-word-aligners-coreml](https://huggingface.co/taagedal/wav2vec2-word-aligners-coreml)
-(2026-11-14), with a model card listing sources, revisions and licences. The app
+(2026-11-14; 8-bit added 2026-11-16), with a model card listing sources, revisions and licences. The app
 downloads from a pinned commit (`AppConstants.wordAlignerDownloadBaseURL`), so a
 later upload can't change what a released version gets; publishing a new
 aligner means uploading it, then moving the pin and adding its SHA-256 and size
 to `WordAlignerModel.allModels`. Every conversion matched PyTorch's best token on
 every frame at 3 s and 17 s.
+
+The default archives (`<id>.zip`) store weights as 8-bit integers (symmetric,
+per output channel), about half the size; the float16 originals stay
+available as `<id>-float16.zip`. Settings › Transcription › Aligner precision
+picks which one is downloaded (default 8-bit), and the installed precision is
+recorded in a `precision` file next to the model. Compared with the float16
+conversions by forced
+alignment over five minutes of `say` speech, character starts stayed within
+one 20 ms frame (nb, nn, sv: all; en: 99.97%, at most 40 ms). 6-bit
+palettization (226 MB) and 4-bit (151–169 MB) moved some characters by
+0.4–0.5 s, so they are not used.
 
 Meta's MMS forced aligner covers 1,100 languages in one model but is
 CC-BY-NC-4.0, so it is not used.

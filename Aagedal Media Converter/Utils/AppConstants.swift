@@ -957,6 +957,9 @@ enum AppConstants {
     static let whisperSpeakerStyleKey = "whisperSpeakerStyle"
     static let defaultWhisperSpeakerStyle = "dashes"
     static let whisperVocabularyKey = "whisperVocabulary"
+    /// `WordAlignerPrecision` raw value for aligner downloads.
+    static let wordAlignerPrecisionKey = "wordAlignerPrecision"
+    static let defaultWordAlignerPrecision = "int8"
     /// Silero VAD (MIT), bundled: the pipeline finds speech with it and the
     /// whisper filter uses it to end its chunks in pauses.
     static let whisperVADModelURL = Bundle.main.url(forResource: "ggml-silero-v6.2.0", withExtension: "bin")
@@ -972,7 +975,7 @@ enum AppConstants {
     /// Pinned to a commit so a later upload can never change what a released
     /// app version downloads (each archive is also checked against its SHA-256).
     static let wordAlignerDownloadBaseURL = URL(string:
-        "https://huggingface.co/taagedal/wav2vec2-word-aligners-coreml/resolve/6e99081bb1c613cba8905446e2f1b377a4e7fa1c")!
+        "https://huggingface.co/taagedal/wav2vec2-word-aligners-coreml/resolve/b187cdf8b2d84999ff9f374fbaaff5a1223ae51e")!
     static let embedSubtitlesKey = "embedSubtitles"
     static let defaultEmbedSubtitles = false
 

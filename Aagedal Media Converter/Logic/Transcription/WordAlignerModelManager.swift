@@ -7,6 +7,26 @@ import CryptoKit
 import Foundation
 import OSLog
 
+/// How an aligner's weights are stored. 8-bit weights halve the download and
+/// place words within 20 ms of the float16 originals.
+enum WordAlignerPrecision: String, CaseIterable, Sendable {
+    case int8
+    case float16
+
+    /// Appended to the aligner's id to name its archive.
+    var archiveSuffix: String {
+        switch self {
+        case .int8: return ""
+        case .float16: return "-float16"
+        }
+    }
+}
+
+struct WordAlignerArchive: Hashable, Sendable {
+    let sha256: String
+    let bytes: Int64
+}
+
 /// A downloadable word aligner: a wav2vec2 CTC model for one language,
 /// converted to Core ML by `scripts/convert-wav2vec2-coreml.py`.
 struct WordAlignerModel: Identifiable, Hashable, Sendable {
@@ -16,11 +36,16 @@ struct WordAlignerModel: Identifiable, Hashable, Sendable {
     let languages: [String]
     let sourceRepository: String
     let license: String
-    let archiveSHA256: String
-    let archiveBytes: Int64
+    /// Published archives; a precision without one cannot be downloaded.
+    let archives: [WordAlignerPrecision: WordAlignerArchive]
 
-    var downloadURL: URL {
-        AppConstants.wordAlignerDownloadBaseURL.appendingPathComponent("\(id).zip")
+    func downloadURL(_ precision: WordAlignerPrecision) -> URL {
+        AppConstants.wordAlignerDownloadBaseURL.appendingPathComponent("\(id)\(precision.archiveSuffix).zip")
+    }
+
+    /// The precision of a published archive with this checksum.
+    func precision(ofArchiveSHA256 sha256: String) -> WordAlignerPrecision? {
+        archives.first { $0.value.sha256 == sha256 }?.key
     }
 
     var sourceURL: URL { URL(string: "https://huggingface.co/\(sourceRepository)")! }
@@ -32,8 +57,12 @@ struct WordAlignerModel: Identifiable, Hashable, Sendable {
             languages: ["no", "nb"],
             sourceRepository: "NbAiLab/nb-wav2vec2-300m-bokmaal-v2",
             license: "Apache-2.0",
-            archiveSHA256: "0c4e1ffb1669d65f7e931804a8a35a3208ea7f188910f4081c3fd37a4026d962",
-            archiveBytes: 584_328_647
+            archives: [
+                .int8: WordAlignerArchive(
+                    sha256: "cccc3c1e0e5a108248980362a38bd0032ea56bc83e809750be96e65258029c68", bytes: 271_942_807),
+                .float16: WordAlignerArchive(
+                    sha256: "0c4e1ffb1669d65f7e931804a8a35a3208ea7f188910f4081c3fd37a4026d962", bytes: 584_328_647),
+            ]
         ),
         WordAlignerModel(
             id: "nn-nynorsk-300m",
@@ -41,8 +70,12 @@ struct WordAlignerModel: Identifiable, Hashable, Sendable {
             languages: ["nn"],
             sourceRepository: "NbAiLab/nb-wav2vec2-300m-nynorsk",
             license: "Apache-2.0",
-            archiveSHA256: "c2eb5171009a499729f08af38d51b8332bfb250e6256223f4fd8e4be5ac5afb9",
-            archiveBytes: 584_434_843
+            archives: [
+                .int8: WordAlignerArchive(
+                    sha256: "21e540c8364569989fd2b550b3176c83a89528833f4916888f668872ddbebd34", bytes: 271_234_759),
+                .float16: WordAlignerArchive(
+                    sha256: "c2eb5171009a499729f08af38d51b8332bfb250e6256223f4fd8e4be5ac5afb9", bytes: 584_434_843),
+            ]
         ),
         WordAlignerModel(
             id: "sv-voxrex-large",
@@ -50,8 +83,12 @@ struct WordAlignerModel: Identifiable, Hashable, Sendable {
             languages: ["sv"],
             sourceRepository: "KBLab/wav2vec2-large-voxrex-swedish",
             license: "CC0-1.0",
-            archiveSHA256: "636fe7f3fc57cefbb8e585d29e40796c2c85842246df855cf28870e4eac74a25",
-            archiveBytes: 584_398_895
+            archives: [
+                .int8: WordAlignerArchive(
+                    sha256: "62c9bb3a1f8991c08538990644bf249143eb8b5ea306d3b7008fad456250495d", bytes: 271_284_155),
+                .float16: WordAlignerArchive(
+                    sha256: "636fe7f3fc57cefbb8e585d29e40796c2c85842246df855cf28870e4eac74a25", bytes: 584_398_895),
+            ]
         ),
         WordAlignerModel(
             id: "en-base-960h",
@@ -59,8 +96,12 @@ struct WordAlignerModel: Identifiable, Hashable, Sendable {
             languages: ["en"],
             sourceRepository: "facebook/wav2vec2-base-960h",
             license: "Apache-2.0",
-            archiveSHA256: "abc050fa89f6e1555872d0ee13b13e5d412839921087bb619375465d3c68500d",
-            archiveBytes: 175_081_458
+            archives: [
+                .int8: WordAlignerArchive(
+                    sha256: "505604db5921b0cd12ce650a00c74358dd97bd6928b067c52778e47ede857e4e", bytes: 80_572_858),
+                .float16: WordAlignerArchive(
+                    sha256: "abc050fa89f6e1555872d0ee13b13e5d412839921087bb619375465d3c68500d", bytes: 175_081_458),
+            ]
         ),
     ]
 
@@ -114,6 +155,9 @@ actor WordAlignerModelManager {
         modelsDirectory.appendingPathComponent(model.id, isDirectory: true)
     }
 
+    /// Records which archive an installed aligner came from.
+    nonisolated static let precisionFileName = "precision"
+
     nonisolated func isInstalled(_ model: WordAlignerModel) -> Bool {
         let directory = directory(for: model)
         return FileManager.default.fileExists(
@@ -123,16 +167,29 @@ actor WordAlignerModelManager {
         )
     }
 
+    /// The precision of an installed aligner; nil when it is not installed or
+    /// came from an archive the app does not know.
+    nonisolated func installedPrecision(_ model: WordAlignerModel) -> WordAlignerPrecision? {
+        guard isInstalled(model),
+              let raw = try? String(
+                  contentsOf: directory(for: model).appendingPathComponent(Self.precisionFileName), encoding: .utf8
+              ) else { return nil }
+        return WordAlignerPrecision(rawValue: raw.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
     /// The installed aligner for a Whisper language code, if any.
     nonisolated func installedDirectory(forLanguage language: String) -> URL? {
         guard let model = WordAlignerModel.model(forLanguage: language), isInstalled(model) else { return nil }
         return directory(for: model)
     }
 
-    func download(_ model: WordAlignerModel, progress: @escaping @Sendable (Double) -> Void) async throws {
-        guard !model.archiveSHA256.isEmpty else { throw WordAlignerModelError.unavailable }
-        guard activeDownloads[model.id] == nil, !isInstalled(model) else { return }
-        let operation = operationFactory(model.downloadURL, model.archiveBytes)
+    /// Downloads and installs an aligner, replacing one of another precision.
+    func download(
+        _ model: WordAlignerModel, precision: WordAlignerPrecision, progress: @escaping @Sendable (Double) -> Void
+    ) async throws {
+        guard let published = model.archives[precision] else { throw WordAlignerModelError.unavailable }
+        guard activeDownloads[model.id] == nil, installedPrecision(model) != precision else { return }
+        let operation = operationFactory(model.downloadURL(precision), published.bytes)
         activeDownloads[model.id] = operation
         defer { activeDownloads.removeValue(forKey: model.id) }
 
@@ -142,7 +199,7 @@ actor WordAlignerModelManager {
             operation.cancel()
         }
         defer { try? FileManager.default.removeItem(at: archive) }
-        guard try Self.sha256(of: archive) == model.archiveSHA256 else {
+        guard try Self.sha256(of: archive) == published.sha256 else {
             throw WordAlignerModelError.checksumMismatch
         }
         let installedModel = try await install(archive: archive)
@@ -191,6 +248,7 @@ actor WordAlignerModelManager {
         guard let model = WordAlignerModel.allModels.first(where: { $0.id == manifest.id }) else {
             throw WordAlignerModelError.unknownModel
         }
+        let precision = model.precision(ofArchiveSHA256: try Self.sha256(of: archive))
         let compiled = try await MLModel.compileModel(at: package)
         defer { try? fileManager.removeItem(at: compiled) }
 
@@ -198,6 +256,9 @@ actor WordAlignerModelManager {
         try fileManager.createDirectory(at: installing, withIntermediateDirectories: true)
         try fileManager.moveItem(at: compiled, to: installing.appendingPathComponent(Wav2Vec2WordAligner.modelFileName))
         try fileManager.copyItem(at: manifestURL, to: installing.appendingPathComponent(Wav2Vec2WordAligner.manifestFileName))
+        if let precision {
+            try Data(precision.rawValue.utf8).write(to: installing.appendingPathComponent(Self.precisionFileName))
+        }
 
         try fileManager.createDirectory(at: modelsDirectory, withIntermediateDirectories: true)
         let destination = directory(for: model)

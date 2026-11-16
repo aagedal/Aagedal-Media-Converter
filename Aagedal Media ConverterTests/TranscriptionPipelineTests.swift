@@ -352,6 +352,38 @@ final class TranscriptionPipelineTests: XCTestCase {
         XCTAssertEqual(WordAlignerModel.model(forLanguage: "nb")?.id, "nb-bokmaal-300m")
     }
 
+    func testEveryAlignerOffersBothPrecisions() throws {
+        for model in WordAlignerModel.allModels {
+            let small = try XCTUnwrap(model.archives[.int8], model.id)
+            let original = try XCTUnwrap(model.archives[.float16], model.id)
+            XCTAssertLessThan(small.bytes, original.bytes, model.id)
+            XCTAssertEqual(model.downloadURL(.int8).lastPathComponent, "\(model.id).zip")
+            XCTAssertEqual(model.downloadURL(.float16).lastPathComponent, "\(model.id)-float16.zip")
+            XCTAssertEqual(model.precision(ofArchiveSHA256: small.sha256), .int8)
+            XCTAssertEqual(model.precision(ofArchiveSHA256: original.sha256), .float16)
+        }
+        XCTAssertNil(WordAlignerModel.allModels[0].precision(ofArchiveSHA256: "unknown"))
+    }
+
+    func testInstalledAlignerReportsItsPrecision() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("Aligners-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let manager = WordAlignerModelManager(modelsDirectory: root)
+        let model = WordAlignerModel.allModels[0]
+        XCTAssertNil(manager.installedPrecision(model))
+
+        let directory = manager.directory(for: model)
+        try FileManager.default.createDirectory(
+            at: directory.appendingPathComponent(Wav2Vec2WordAligner.modelFileName), withIntermediateDirectories: true
+        )
+        try Data("{}".utf8).write(to: directory.appendingPathComponent(Wav2Vec2WordAligner.manifestFileName))
+        XCTAssertTrue(manager.isInstalled(model))
+        XCTAssertNil(manager.installedPrecision(model), "An install without a record has no known precision")
+
+        try Data("float16".utf8).write(to: directory.appendingPathComponent(WordAlignerModelManager.precisionFileName))
+        XCTAssertEqual(manager.installedPrecision(model), .float16)
+    }
+
     func testPipelineOptionsReadDefaults() throws {
         let suite = "TranscriptionPipelineTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

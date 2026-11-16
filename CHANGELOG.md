@@ -34,7 +34,7 @@
 ### Whisper transcription
 
 - Whisper now hears only the speech. The built-in Silero voice detector finds where people talk, and silence and music are left out, so Whisper no longer invents text in them and its timestamps no longer drift after long pauses.
-- Word timing can be refined with a wav2vec2 aligner for the language, so subtitles start and end with the speech. Aligners are downloaded per language in Settings › Transcription.
+- Word timing can be refined with a wav2vec2 aligner for the language, so subtitles start and end with the speech. Aligners are downloaded per language in Settings › Transcription, as 8-bit models (about half the size, same timing to within 20 ms) or the 16-bit originals.
 - Subtitle cues are laid out by the app: the Max line length setting now works, cues keep to two lines, break at sentence and clause ends and stay on screen long enough to read.
 - Speaker changes: a question and a short reply share a subtitle with "– " dialogue dashes, or subtitles can name the speakers (Speaker 1, Speaker 2). Up to four speakers are told apart by NeMo Speech (a 112 MB model, downloaded on first use).
 - Faster transcription now switches between 30- and 20-second chunks; the old 3-second chunks are gone, which improves recognition.

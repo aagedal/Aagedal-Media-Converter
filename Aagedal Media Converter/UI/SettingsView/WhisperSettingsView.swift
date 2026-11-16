@@ -606,10 +606,12 @@ struct WhisperPipelineSettingsSection: View {
     @AppStorage(AppConstants.whisperRefineWordTimingKey) private var refineTiming = AppConstants.defaultWhisperRefineWordTiming
     @AppStorage(AppConstants.whisperSpeakerStyleKey) private var speakerStyle = AppConstants.defaultWhisperSpeakerStyle
     @AppStorage(AppConstants.whisperVocabularyKey) private var vocabulary = ""
+    @AppStorage(AppConstants.wordAlignerPrecisionKey) private var alignerPrecision = AppConstants.defaultWordAlignerPrecision
 
     @State private var speechModelReady = SpeakerDiarizer.isModelCached
     @State private var speechModelTask: Task<Void, Never>?
     @State private var installed: Set<String> = []
+    @State private var installedPrecisions: [String: WordAlignerPrecision] = [:]
     @State private var progress: [String: Double] = [:]
     @State private var downloads: [String: Task<Void, Never>] = [:]
     @State private var message: String?
@@ -655,6 +657,14 @@ struct WhisperPipelineSettingsSection: View {
                     .font(.caption).foregroundStyle(.secondary)
 
                 if refineTiming {
+                    Picker("Aligner precision:", selection: $alignerPrecision) {
+                        Text("8-bit (smaller download)").tag(WordAlignerPrecision.int8.rawValue)
+                        Text("16-bit (original)").tag(WordAlignerPrecision.float16.rawValue)
+                    }
+                    .pickerStyle(.menu)
+                    .frame(maxWidth: 320)
+                    Text("8-bit aligners are half the size and place words within 20 ms of the 16-bit originals. The choice applies to new downloads.")
+                        .font(.caption).foregroundStyle(.secondary)
                     ForEach(WordAlignerModel.allModels) { model in
                         alignerRow(model)
                     }
@@ -681,23 +691,35 @@ struct WhisperPipelineSettingsSection: View {
                 Link(model.license, destination: model.sourceURL).font(.caption)
             }
             Spacer()
-            if installed.contains(model.id) {
-                Text("Ready").foregroundStyle(.secondary)
+            let precision = WordAlignerPrecision(rawValue: alignerPrecision) ?? .int8
+            let archive = model.archives[precision]
+            if let fraction = progress[model.id] {
+                ProgressView(value: fraction).frame(width: 80)
+                Button("Cancel") { downloads[model.id]?.cancel() }
+            } else if installed.contains(model.id) {
+                switch installedPrecisions[model.id] {
+                case .int8: Text("Ready (8-bit)").foregroundStyle(.secondary)
+                case .float16: Text("Ready (16-bit)").foregroundStyle(.secondary)
+                case nil: Text("Ready").foregroundStyle(.secondary)
+                }
+                if let installedPrecision = installedPrecisions[model.id], installedPrecision != precision,
+                   let archive {
+                    Button("Replace (\(ByteCountFormatter.string(fromByteCount: archive.bytes, countStyle: .file)))") {
+                        download(model, precision: precision)
+                    }
+                }
                 Button("Delete") {
                     Task {
                         try? await WordAlignerModelManager.shared.delete(model)
                         refresh()
                     }
                 }
-            } else if let fraction = progress[model.id] {
-                ProgressView(value: fraction).frame(width: 80)
-                Button("Cancel") { downloads[model.id]?.cancel() }
-            } else if model.archiveSHA256.isEmpty {
-                Text("Not available yet").foregroundStyle(.secondary)
-            } else {
-                Text(ByteCountFormatter.string(fromByteCount: model.archiveBytes, countStyle: .file))
+            } else if let archive {
+                Text(ByteCountFormatter.string(fromByteCount: archive.bytes, countStyle: .file))
                     .foregroundStyle(.secondary)
-                Button("Download") { download(model) }
+                Button("Download") { download(model, precision: precision) }
+            } else {
+                Text("Not available yet").foregroundStyle(.secondary)
             }
         }
     }
@@ -706,10 +728,13 @@ struct WhisperPipelineSettingsSection: View {
         installed = Set(WordAlignerModel.allModels.filter {
             WordAlignerModelManager.shared.isInstalled($0)
         }.map(\.id))
+        installedPrecisions = Dictionary(uniqueKeysWithValues: WordAlignerModel.allModels.compactMap { model in
+            WordAlignerModelManager.shared.installedPrecision(model).map { (model.id, $0) }
+        })
         speechModelReady = SpeakerDiarizer.isModelCached
     }
 
-    private func download(_ model: WordAlignerModel) {
+    private func download(_ model: WordAlignerModel, precision: WordAlignerPrecision) {
         message = nil
         progress[model.id] = 0
         downloads[model.id] = Task { @MainActor in
@@ -719,7 +744,7 @@ struct WhisperPipelineSettingsSection: View {
                 refresh()
             }
             do {
-                try await WordAlignerModelManager.shared.download(model) { fraction in
+                try await WordAlignerModelManager.shared.download(model, precision: precision) { fraction in
                     Task { @MainActor in
                         if progress[model.id] != nil { progress[model.id] = fraction }
                     }

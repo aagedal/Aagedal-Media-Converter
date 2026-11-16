@@ -324,6 +324,7 @@ enum SettingsSyncKeys {
         AppConstants.whisperRefineWordTimingKey,
         AppConstants.whisperSpeakerStyleKey,
         AppConstants.whisperVocabularyKey,
+        AppConstants.wordAlignerPrecisionKey,
         AppConstants.embedSubtitlesKey,
         AppConstants.parakeetModelKey,
         AppConstants.parakeetLanguageKey,

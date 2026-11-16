@@ -13,6 +13,10 @@ for example:
 
 The output folder holds `Wav2Vec2CTC.mlpackage` and `aligner.json`, plus a zip
 of both and its SHA-256 for `WordAlignerModel.allModels`.
+
+Weights are stored as 8-bit integers by default, which halves the download.
+On five minutes of speech every character stayed within one 20 ms frame of
+the float16 model; 6- and 4-bit weights moved some by 0.4 s or more.
 """
 import argparse
 import hashlib
@@ -22,6 +26,7 @@ import shutil
 import subprocess
 
 import coremltools as ct
+import coremltools.optimize.coreml as cto
 import numpy as np
 import torch
 from huggingface_hub import HfApi
@@ -70,6 +75,10 @@ def convert(arguments: argparse.Namespace) -> None:
         minimum_deployment_target=ct.target.macOS15,
         convert_to="mlprogram",
     )
+    if arguments.weights == "int8":
+        mlmodel = cto.linear_quantize_weights(mlmodel, cto.OptimizationConfig(
+            global_config=cto.OpLinearQuantizerConfig(
+                mode="linear_symmetric", dtype="int8", granularity="per_channel")))
 
     destination = Path(arguments.output) / arguments.id
     if destination.exists():
@@ -125,7 +134,10 @@ def main() -> None:
     parser.add_argument("--languages", required=True, help="Comma-separated Whisper language codes")
     parser.add_argument("--license", default="apache-2.0")
     parser.add_argument("--revision", help="Pinned repository revision (default: current main)")
-    parser.add_argument("--precision", choices=["float16", "float32"], default="float16")
+    parser.add_argument("--precision", choices=["float16", "float32"], default="float16",
+                        help="Precision of the computation")
+    parser.add_argument("--weights", choices=["int8", "float"], default="int8",
+                        help="Store weights as 8-bit integers, or at the computation precision")
     parser.add_argument("--output", default="build/aligners")
     convert(parser.parse_args())
 
