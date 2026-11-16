@@ -519,6 +519,55 @@ final class CodecExportSettingsTests: XCTestCase {
         }
     }
 
+    /// 50i and 59.94i code one frame per field pair. Interlacing at the field rate used to
+    /// repeat every frame: 50 or 59.94 coded frames per second instead of 25 or 29.97.
+    func testTVInterlacedModesCodeOneFramePerFieldPairWithTheBundledFFmpeg() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tv-interlaced-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let runner = SubprocessRunner()
+        // 0.8 s of progressive source at the field rate: 40 or 48 fields, 20 or 24 frames.
+        let modes: [(mode: TVFramerateMode, fieldRate: String, frameRate: String, fps: Double, frames: Int)] = [
+            (.i50, "50", "25", 25, 20), (.i5994, "60000/1001", "30000/1001", 30000.0 / 1001, 24),
+        ]
+        for preset in [ExportPreset.tvHEVC, .tvAVCIntra] {
+            for (mode, fieldRate, frameRate, fps, frames) in modes {
+                let label = "\(preset.rawValue) \(mode.rawValue)"
+                defaults.set(mode.rawValue, forKey: AppConstants.tvFramerateModeKey)
+                let settings = try XCTUnwrap(CodecExportSettings(preset: preset, defaults: defaults))
+                XCTAssertEqual(value(after: "-r", in: settings.ffmpegArguments), frameRate, label)
+                let output = directory.appendingPathComponent("\(mode.id.replacingOccurrences(of: ".", with: "")).\(settings.fileExtension)")
+                let encode = try await runner.run(SubprocessRequest(
+                    executableURL: URL(fileURLWithPath: ffmpeg),
+                    arguments: ["-y", "-v", "error", "-f", "lavfi", "-i", "testsrc2=d=0.8008:s=1920x1080:r=\(fieldRate)",
+                                "-f", "lavfi", "-i", "sine=d=0.8008:sample_rate=48000"]
+                        + settings.ffmpegArguments.map { $0 == "0:a?" ? "1:a?" : ($0 == "0:a" ? "1:a" : $0) }
+                        + [output.path]
+                ))
+                XCTAssertTrue(encode.succeeded, "\(label): \(encode.standardErrorText)")
+
+                let count = try await runner.run(SubprocessRequest(
+                    executableURL: URL(fileURLWithPath: ffmpeg),
+                    arguments: ["-nostdin", "-i", output.path, "-map", "0:v:0", "-c", "copy", "-f", "null", "-"]
+                ))
+                XCTAssertTrue(count.succeeded, "\(label): \(count.standardErrorText)")
+                let lastFrameLine = count.standardErrorText.components(separatedBy: CharacterSet(charactersIn: "\r\n"))
+                    .last { $0.hasPrefix("frame=") }
+                let coded = lastFrameLine?.dropFirst("frame=".count).split(separator: " ").first.flatMap { Int($0) }
+                XCTAssertEqual(coded, frames, label)
+
+                let metadata = try await BoundedVideoMetadataProbe.metadata(for: output)
+                let video = try XCTUnwrap(metadata.videoStreams.first, label)
+                XCTAssertEqual(try XCTUnwrap(video.frameRate?.value, label), fps, accuracy: 0.001, label)
+                XCTAssertEqual(video.isInterlaced, true, label)
+            }
+        }
+    }
+
     func testDNxHRArgumentsFollowProfileAndContainer() throws {
         let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

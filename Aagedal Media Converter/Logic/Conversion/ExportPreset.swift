@@ -79,6 +79,8 @@ enum TVFramerateMode: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Interlaced modes resample to the field rate first, so tinterlace pairs two fields
+    /// per coded frame, and code 25 or 29.97 frames per second (as XDCAM HD422 does).
     var ffmpegArgs: [String] {
         switch self {
         case .source:
@@ -88,13 +90,13 @@ enum TVFramerateMode: String, CaseIterable, Identifiable {
         case .p50:
             return ["-r", "50"]
         case .i50:
-            return ["-flags", "+ilme+ildct", "-r", "50", "-vf", "tinterlace=interleave_top,fieldorder=tff"]
+            return ["-flags", "+ilme+ildct", "-r", "25", "-vf", "fps=50,tinterlace=interleave_top,fieldorder=tff"]
         case .p2997:
             return ["-r", "30000/1001"]
         case .p5994:
             return ["-r", "60000/1001"]
         case .i5994:
-            return ["-flags", "+ilme+ildct", "-r", "60000/1001", "-vf", "tinterlace=interleave_top,fieldorder=tff"]
+            return ["-flags", "+ilme+ildct", "-r", "30000/1001", "-vf", "fps=60000/1001,tinterlace=interleave_top,fieldorder=tff"]
         }
     }
 
