@@ -6,14 +6,19 @@ clip options re-checked against `v0.4.0-beta.1`, 2026-10-25; live recording
 (`--live-from-start`, `--growing-file`, SIGINT/SIGTERM stops, upcoming-stream
 probes) checked against `v0.6.0-beta.1` on YouTube live streams, 2026-10-28;
 JSON progress (`--progress-template`, the 1.0 CLI contract in yt-dlp-rs
-`docs/CLI_CONTRACT.md`) checked against `v0.8.0-beta.1` and yt-dlp 2026.10.21
+`docs/CLI_CONTRACT.md`) checked against `v0.8.0-beta.1` and yt-dlp 2026.10.21 (the port's upstream baseline is now 2026.10.26)
 on a local HTTP download, 2026-11-02; JSON progress, `--keep-partial-on-stop`,
 exit codes and Dailymotion re-checked against `v0.8.0-beta.1` on YouTube (VOD and
 Sky News live), Twitch, SoundCloud and Dailymotion, 2026-11-03; live recording
 (`--live-from-start` with and without `--keep-partial-on-stop`, live HLS,
 `--growing-file`, SIGINT and SIGTERM), VOD downloads, clips, Stop, and Dailymotion
 formats and listings re-checked against `v0.9.0-beta.1` on YouTube (Al Jazeera and
-Sky News live, VOD), Twitch (live), SoundCloud and Dailymotion, 2026-11-03.
+Sky News live, VOD), Twitch (live), SoundCloud and Dailymotion, 2026-11-03; live
+recording (`--growing-file` with and without `--live-from-start`, `--live-from-start`
+alone, SIGINT stops), DaVinci Resolve 21.2 import of growing files, and `-x` without
+ffprobe checked against `v1.0.0-rc.1` on YouTube (Al Jazeera and Sky News live),
+2026-11-13, and against `v1.0.0-rc.2` on 2026-11-14
+([details](ytdlp-rs-1.0-rc-validation-2026-11-13.md)).
 Code: `Logic/YTDLP/YTDLPEngineRouter.swift` (routing, session failure memory,
 cleanup) and `YTDLPService.withEngineFallback`.
 
@@ -31,7 +36,7 @@ Site list (host suffix match on label boundaries, so `www.`, `m.`, `music.`,
 | Site | Hosts | Listings (`--flat-playlist`) |
 | --- | --- | --- |
 | YouTube | youtube.com, youtu.be, youtube-nocookie.com | yes |
-| Instagram | instagram.com (not `/p/` posts, see below) | no |
+| Instagram | instagram.com (`/p/` posts from 1.0.0-rc.1, see below) | no (post listing yes, 1.0.0-rc.1+) |
 | TikTok | tiktok.com | yes (users, collections) |
 | X/Twitter | x.com, twitter.com, t.co | no (post listing yes) |
 | Facebook | facebook.com, fb.watch | no |
@@ -55,32 +60,32 @@ never falls back ([yt-dlp-rs#74](https://github.com/aagedal/yt-dlp-rs/issues/74)
 | App feature / argument | yt-dlp-rs | Routing |
 | --- | --- | --- |
 | `--ignore-config` | supported; rs reads `~/.config/yt-dlp-rs/config` otherwise | passed to both |
-| `--remote-components ejs:github` | hidden, no effect (EJS bundled) | yt-dlp only |
-| `--cache-dir` | accepted, no effect (rs caches nothing) | yt-dlp only |
+| `--remote-components ejs:github` | no effect (EJS bundled); 1.0.0-rc.1 prints `WARNING: --remote-components is not supported natively and is ignored` | yt-dlp only |
+| `--cache-dir` | supported since 1.0.0-rc.1 (default `${XDG_CACHE_HOME}/yt-dlp-rs`, i.e. `~/.cache/yt-dlp-rs`); the app's yt-dlp cache folder is not shared | yt-dlp only |
 | `--js-runtimes deno:PATH` | supported (YouTube n/sig) | passed to both |
-| `--ffmpeg-location DIR` | supported (dir or binary); **required** for merges, `-x`, `--embed-metadata` (no PATH lookup) | download without ffmpeg → yt-dlp |
-| `-x --audio-format best` | supported, but **needs ffprobe** beside ffmpeg (no ffmpeg fallback); bundled ffmpeg has no ffprobe | audio-only without sibling ffprobe → yt-dlp |
+| `--ffmpeg-location DIR` | supported (dir or binary). Up to 0.9 **required** for merges, `-x` and `--embed-metadata` (no PATH lookup); 1.0.0-rc.1 falls back to ffmpeg/ffprobe on PATH | download without ffmpeg → yt-dlp (a PATH ffmpeg is not the app's bundled build, so the rule stays) |
+| `-x --audio-format best` | supported. Up to 1.0.0-rc.1 it **needed ffprobe** beside ffmpeg (the bundled ffmpeg has none): rc.1 announced an `ffmpeg -i` fallback, but the extraction still failed (`filesystem error: No such file or directory`). 1.0.0-rc.2 falls back to `ffmpeg -i` (a YouTube video to Opus with the title tag, 2026-11-14) | audio-only without sibling ffprobe → yt-dlp before `AppConstants.ytdlpRSAudioWithoutFFprobeMinimumVersion` (1.0.0-rc.2, yt-dlp-rs#92) |
 | `-f bestvideo+bestaudio/best`, `bestaudio/best` | supported | rs |
 | `--download-sections *S-E` (clip ranges) | supported; YouTube HTTPS formats fetch only the indexed segments, then cut locally (0.4.0), other formats stream through FFmpegFD; ffmpeg stats inherited | rs |
 | `--section-timecode` (clip timecode, rs extension) | 0.4.0; needs ffprobe, MP4/MOV result | rs only, when ffprobe sits beside ffmpeg |
 | `-j` `formats[].url`/`http_headers` (clip preview stream) | supported | rs (`YTDLPPreviewStream`, played by mpv) |
 | `--live-from-start --no-part` | 0.6: native DASH generator; per-format `Title.fNNN.mp4` files reported as destinations, SIGINT ends the fragment lists and merges (exit 0) | rs (0.6+), else yt-dlp |
-| `--growing-file` (rs extension, Settings → Downloads → "Record live streams as growing files") | 0.6: a live stream is written by ffmpeg as one fragmented `.mov` at its final name, tagged `com.blackmagicdesign.metadata:recording` while it grows, time-of-day timecode (stream start with `--live-from-start`), H.264/AAC preferred; progress lines end in `, recorded HH:MM:SS`; SIGINT and SIGTERM finish the file and remove the tag; `--embed-metadata` still runs afterwards. VOD downloads are unaffected | rs only (0.6+), never with clips or audio-only. The row offers the file (Finder, copy path, drag) while it records. A failed or stalled recording that already wrote the file throws `liveRecordingStopped` (kept, no fallback). The app removes a tag left by a killed process when the download ends, and remembers tagged paths for the launch sweep (`GrowingRecordingTag`) |
-| Live HLS recording (no `--live-from-start`), stopped with SIGINT to the process group | 0.4.0: SIGINT stops ffmpeg, then fixup, metadata and move run as after Ctrl-C (exit 0). SIGTERM loses the recording (it lives in a private `.yt-dlp-rs-process-*` directory) | rs |
+| `--growing-file` (rs extension, Settings → Downloads → "Record live streams as growing files") | 0.6: a live stream is written by ffmpeg as one fragmented `.mov` at its final name, tagged `com.blackmagicdesign.metadata:recording` while it grows, time-of-day timecode (stream start with `--live-from-start`), H.264/AAC preferred; progress lines end in `, recorded HH:MM:SS`; SIGINT and SIGTERM finish the file and remove the tag; `--embed-metadata` ran afterwards and rewrote the file up to 1.0.0-rc.1, which broke clips already on a DaVinci Resolve timeline. From 1.0.0-rc.2 the recording writes the tags itself and the file is never replaced, and a `--live-from-start` timecode starts at the first downloaded fragment rather than the stream's start. VOD downloads are unaffected | rs only (0.6+), never with clips or audio-only. The row offers the file (Finder, copy path, drag) while it records. A failed or stalled recording that already wrote the file throws `liveRecordingStopped` (kept, no fallback). The app removes a tag left by a killed process when the download ends, and remembers tagged paths for the launch sweep (`GrowingRecordingTag`) |
+| Live HLS recording (no `--live-from-start`), stopped with SIGINT to the process group | 0.4.0: SIGINT stops ffmpeg, then fixup, metadata and move run as after Ctrl-C (exit 0). SIGTERM lost the recording up to 0.9 (it lived in a private `.yt-dlp-rs-process-*` directory); per the 1.0 readiness review, SIGTERM now finishes it like SIGINT | rs |
 | `--wait-for-video 30-600` (only after a "live event will begin" / "not currently live" error) | 0.4.0, same `[wait]` lines | rs |
 | `--downloader-args "ffmpeg:-loglevel error -stats"` (ffmpeg stats for live recordings and clips) | supported | rs |
 | `--embed-metadata --no-embed-info-json --no-embed-chapters` | supported | rs |
 | `--windows-filenames`, `--restrict-filenames`, `--trim-filenames 200` | supported | rs |
 | `--no-overwrites`/`--force-overwrites`, "has already been downloaded" | supported, same message | rs |
-| `--newline --progress --verbose --progress-template download:__AMC_PROGRESS__=%(progress.{…})j` (`YTDLPProgressParser.downloadProgressTemplate`) | one JSON status per line on stdout, null keys left out, identical to yt-dlp; with the template neither engine prints `[download] NN.N% of …` lines. Progress is `downloaded_bytes / (total_bytes or total_bytes_estimate)`, else fragments, else indeterminate (live); `filename` replaces `Destination:`; `recorded_seconds` (0.8+) carries a growing file's recorded time. The human lines are parsed only until the first status | rs and yt-dlp |
-| `--keep-partial-on-stop` (rs extension, 0.8+; `AppConstants.ytdlpRSKeepPartialMinimumVersion`) | On SIGINT/SIGTERM the received data becomes a playable file at the final name (whole HLS/DASH fragments; a merge of the streams so far, audio fetched first), `after_move` prints it, exit 1 `Interrupted by user`, within 0.1–0.3 s for a 559 MB merge on an SSD. A stop before any data leaves nothing. A stop during the first fragment leaves an empty `.part` and its `.ytdl` (0.8 and 0.9; `partialFile` ignores the empty file). With `--live-from-start`, 0.9 merges the formats and exits 0 as without the flag; 0.8 exited 1 without merging ([yt-dlp-rs#73](https://github.com/aagedal/yt-dlp-rs/issues/73)), so the flag is not passed there. Growing files and live HLS through ffmpeg ignore it | rs only, not with `--live-from-start`. Stop (SIGINT) adopts the `after_move` file through `partialFile`. Cancel's SIGTERM keeps a file too, so rs gets a 10 s SIGKILL grace period and Cancel removes the attempt's new files (`YTDLPAttemptCleanup`), for both engines, except for live recordings |
+| `--newline --progress --verbose --progress-template download:__AMC_PROGRESS__=%(progress.{…})j` (`YTDLPProgressParser.downloadProgressTemplate`) | one JSON status per line on stdout, null keys left out, identical to yt-dlp; with the template neither engine prints `[download] NN.N% of …` lines. Progress is `downloaded_bytes / (total_bytes or total_bytes_estimate)`, else fragments, else indeterminate (live); `filename` replaces `Destination:`; `recorded_seconds` (0.8+) carries a growing file's recorded time. The human lines are parsed only until the first status. From 1.0 the template output follows the versioning policy in yt-dlp-rs `docs/CLI_CONTRACT.md#versioning` | rs and yt-dlp |
+| `--keep-partial-on-stop` (rs extension, 0.8+; `AppConstants.ytdlpRSKeepPartialMinimumVersion`) | On SIGINT/SIGTERM the received data becomes a playable file at the final name (whole HLS/DASH fragments; a merge of the streams so far, audio fetched first), `after_move` prints it, exit 1 `Interrupted by user`, within 0.1–0.3 s for a 559 MB merge on an SSD. A stop before any data leaves nothing. A stop during the first fragment left an empty `.part` and its `.ytdl` in 0.8 and 0.9 (`partialFile` ignores the empty file); 1.0.0-rc.1 leaves no files. With `--live-from-start`, 0.9 merges the formats and exits 0 as without the flag; 0.8 exited 1 without merging ([yt-dlp-rs#73](https://github.com/aagedal/yt-dlp-rs/issues/73)), so the flag is not passed there. Growing files and live HLS through ffmpeg ignore it | rs only, not with `--live-from-start`. Stop (SIGINT) adopts the `after_move` file through `partialFile`. Cancel's SIGTERM keeps a file too, so rs gets a 10 s SIGKILL grace period (as for `--live-from-start`, which rs merges on SIGTERM too) and Cancel removes the attempt's new files (`YTDLPAttemptCleanup`), for both engines, except for live recordings |
 | Exit 2 (usage error: unknown option or bad value) | both engines, `PROG: error: MESSAGE` on stderr | `YTDLPError.invalidArguments`; after yt-dlp-rs, falls back (yt-dlp gets only its own options) and turns yt-dlp-rs off for the rest of the session |
 | `--print before_dl:…%(live_status)s / %(duration)s`, `after_move:filepath` | supported; `after_move` prints the absolute path | rs |
 | `[download] Destination:`, `[Merger] Merging formats into "…"` | same lines | rs |
 | `-o` templates (`%(title)s [%(id)s].%(ext)s`, clip label) | supported | rs |
 | `-j --no-download`, `-J --flat-playlist` | supported; fields used (`title`, `duration`, `thumbnail(s)`, `uploader`, `description`, `entries[].url/title/duration/availability`) present | rs (listings only where ported) |
-| `--ignore-no-formats-error` (post probes) | hidden, **no effect**; a photo slide makes `-J` fail | Instagram `/p/` posts (all operations) → yt-dlp; Twitter posts stay on rs |
-| `-j --ignore-no-formats-error` for an upcoming stream's title and `release_timestamp` | still fails in 0.6 (`This live event will begin in …`) | yt-dlp only (`fetchUpcomingStreamInfo`) |
+| `--ignore-no-formats-error` (post probes) | no effect up to 0.9, so a photo slide made `-J` fail; works in 1.0.0-rc.1: a 12-slide Instagram carousel (`DeKeT1to6s3`) lists, probes and downloads identically to yt-dlp 2026.10.26 (2026-11-13) | Instagram `/p/` posts → rs from `AppConstants.ytdlpRSIgnoreNoFormatsMinimumVersion` (1.0.0-rc.1), else yt-dlp; Twitter posts on rs |
+| `-j --ignore-no-formats-error` for an upcoming stream's title and `release_timestamp` | failed up to 0.9 (`This live event will begin in …`); 1.0.0-rc.1 returns the same `live_status`, `release_timestamp`, title and thumbnail as yt-dlp for two scheduled SpaceX streams (2026-11-13) | `fetchUpcomingStreamInfo` (`.upcomingStreamInfo`) → rs from 1.0.0-rc.1, else yt-dlp |
 | `--playlist-items N`, `--no-playlist` | supported | rs |
 | `--cookies FILE` (Helium export) | supported (file is rewritten, like yt-dlp) | rs |
 | `--cookies-from-browser` safari/chrome/chromium/edge/brave/firefox/opera/vivaldi/whale, `firefox:PATH` (Zen) | all accepted and read natively | rs (first use may raise a separate Keychain prompt for yt-dlp-rs) |

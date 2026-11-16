@@ -1,11 +1,11 @@
 {
-  "releaseTag": "v0.9.0-beta.1",
-  "version": "0.9.0-beta.1",
+  "releaseTag": "v1.0.0-rc.2",
+  "version": "1.0.0-rc.2",
   "repository": "https://github.com/aagedal/yt-dlp-rs",
-  "archiveURL": "https://github.com/aagedal/yt-dlp-rs/releases/download/v0.9.0-beta.1/yt-dlp-rs-v0.9.0-beta.1-aarch64-apple-darwin.tar.gz",
-  "archiveSHA256": "e123190b1cc29e2ec8489aebb9d73aba50fdb624f6ab2920c98d80bffd66c115",
-  "checksumSource": "https://github.com/aagedal/yt-dlp-rs/releases/download/v0.9.0-beta.1/SHA256SUMS",
+  "archiveURL": "https://github.com/aagedal/yt-dlp-rs/releases/download/v1.0.0-rc.2/yt-dlp-rs-v1.0.0-rc.2-aarch64-apple-darwin.tar.gz",
+  "archiveSHA256": "e40600e8d97a0f6d58ce4e1bbd0425b92db3f99b5a1f0761aaa43795d055f569",
+  "checksumSource": "https://github.com/aagedal/yt-dlp-rs/releases/download/v1.0.0-rc.2/SHA256SUMS",
   "platform": "aarch64-apple-darwin",
-  "binarySHA256": "6885cba4d4ff4d9648d4b5da1a860245e350ef315fc27270ac3dcc0e9b286f3b",
+  "binarySHA256": "342615cf5e42bfa7c155396bdbef1f4e194b406944d954d07f57e362cb0a6ba2",
   "contents": "Unmodified yt-dlp-rs executable from the release archive. Build copies are signed with the app identity."
 }

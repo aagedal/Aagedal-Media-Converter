@@ -379,9 +379,9 @@ final class ManagedToolServiceTests: XCTestCase {
         try writeExecutable("#!/bin/sh\necho yt-dlp-rs \(AppConstants.bundledYTDLPRSVersion)\n", to: bundled)
         let service = YTDLPUpdateService(managedStore: store, bundledYTDLPRSPathProvider: { bundled.path })
 
-        // Off by default while yt-dlp-rs is in beta.
+        // On by default from 4.8 (the 1.0 release candidates).
         var path = await service.resolveYTDLPRSPath()
-        XCTAssertNil(path)
+        XCTAssertEqual(path, bundled.path)
         UserDefaults.standard.set(true, forKey: AppConstants.ytdlpRSEnabledKey)
 
         path = await service.resolveYTDLPRSPath()
