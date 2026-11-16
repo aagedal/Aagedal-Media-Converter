@@ -63,6 +63,7 @@
 
 ### Other fixes
 
+- TV (HEVC 10-bit 4:2:2) and TV (AVC-Intra MXF) exports set to 50i or 59.94i have 25 or 29.97 frames per second, each holding two fields. They used to have twice as many frames, every one repeated, at 50 or 59.94 frames per second.
 - Exports with Export matte sidecar turned on always write the `_matte` file. Some ordinary queue conversions went through the shared job engine, which left it out.
 
 # v.4.7.0
