@@ -331,6 +331,10 @@ struct WhisperSettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
 
+                Text("Japanese, Chinese and Korean lines scale with this setting: 13 characters for Japanese and 16 for Chinese and Korean at the default of 42.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
             }
             .padding(8)
         }

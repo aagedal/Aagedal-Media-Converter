@@ -196,6 +196,153 @@ final class TranscriptionPipelineTests: XCTestCase {
         XCTAssertEqual(srt, "1\n00:00:00,000 --> 00:00:01,500\nA\n\n2\n01:01:01,001 --> 01:01:02,000\nB\nC\n")
     }
 
+    // MARK: - Japanese, Chinese and Korean
+
+    /// Lines the FFmpeg whisper filter wrote for `say` speech with large-v3.
+    /// It splits only at spaces, so Japanese and Chinese come as phrases.
+    private let japaneseWhisperOutput = """
+    {"start":0,"end":4040,"text":"今日は東京で新しい映画祭が始まりました","p":0.9459,"language":"ja"}
+    {"start":4040,"end":9560,"text":" 多くの観客が集まり監督たちは作品について語りました","p":0.9624,"language":"ja"}
+    {"start":9560,"end":15920,"text":"午後には雨が降りましたが会場の雰囲気はとても明るかったです","p":0.9916,"language":"ja"}
+    {"start":19968,"end":22188,"text":"シンデレラがパッと振り返りました。","p":0.9095,"language":"ja"}
+    """
+    private let chineseWhisperOutput = """
+    {"start":0,"end":7460,"text":"今天北京开始了一个新的电影节,很多观众来到现场,导演们谈论了他们的作品。","p":0.9773,"language":"zh"}
+    {"start":7800,"end":14020,"text":"下午下了雨,但是会场的气氛非常热烈,据说明年还会继续举办。","p":0.9961,"language":"zh"}
+    """
+
+    func testSplitterBreaksJapanesePhrasesIntoTimedWords() {
+        let phrase = TranscriptWord(text: "今日は東京で新しい映画祭が始まりました", start: 0, end: 4.04, speaker: 1)
+        let split = TranscriptWordSplitter.split([phrase], script: .japanese)
+        XCTAssertEqual(split.map(\.text), ["今日は", "東京で", "新しい", "映画祭が", "始まりました"])
+        XCTAssertEqual(split.first?.start, 0)
+        XCTAssertEqual(split.last?.end ?? 0, 4.04, accuracy: 1e-9)
+        for (previous, next) in zip(split, split.dropFirst()) {
+            XCTAssertEqual(previous.end, next.start, accuracy: 1e-9)
+        }
+        // Three of nineteen characters.
+        XCTAssertEqual(split[0].end, 4.04 * 3 / 19, accuracy: 1e-9)
+        XCTAssertTrue(split.allSatisfy { $0.speaker == 1 })
+        XCTAssertEqual(split.map(\.endsPhrase), [false, false, false, false, true])
+    }
+
+    func testSplitterKeepsChineseParticlesAndMakesPunctuationFullWidth() {
+        let phrase = TranscriptWord(text: "今天北京开始了一个新的电影节,很多观众来到现场。", start: 0, end: 4)
+        let split = TranscriptWordSplitter.split([phrase], script: .chinese)
+        XCTAssertEqual(split.map(\.text), ["今天", "北京", "开始了", "一个", "新的", "电影节，", "很多", "观众", "来到", "现场。"])
+        XCTAssertTrue(split[5].endsClause)
+        XCTAssertTrue(split[9].endsSentence)
+
+        let traditional = TranscriptWordSplitter.split(
+            [TranscriptWord(text: "今天北京開始了一個新的電影節", start: 0, end: 2)], script: .chinese
+        )
+        XCTAssertEqual(traditional.map(\.text), ["今天", "北京", "開始了", "一個", "新的", "電影節"])
+    }
+
+    func testSplitterLeavesSpacedLanguagesAlone() {
+        let korean = words("오늘 서울에서 새로운 영화제가 시작되었습니다.")
+        XCTAssertEqual(TranscriptWordSplitter.split(korean, script: .korean), korean)
+        let english = [TranscriptWord(text: "3.5,", start: 0, end: 1)]
+        XCTAssertEqual(TranscriptWordSplitter.split(english, script: .chinese), english)
+    }
+
+    func testScriptComesFromLanguageOrText() {
+        let japanese = [TranscriptWord(text: "今日は東京で", start: 0, end: 1)]
+        let chinese = [TranscriptWord(text: "今天北京", start: 0, end: 1)]
+        XCTAssertEqual(TranscriptScript.detect(language: "ja", words: []), .japanese)
+        XCTAssertEqual(TranscriptScript.detect(language: "zh", words: []), .chinese)
+        XCTAssertEqual(TranscriptScript.detect(language: "ko", words: []), .korean)
+        XCTAssertEqual(TranscriptScript.detect(language: "no", words: words("Hei på deg")), .spaced)
+        XCTAssertEqual(TranscriptScript.detect(language: nil, words: japanese), .japanese)
+        XCTAssertEqual(TranscriptScript.detect(language: nil, words: chinese), .chinese)
+        XCTAssertEqual(TranscriptScript.detect(language: nil, words: words("오늘 서울에서")), .korean)
+        XCTAssertEqual(TranscriptScript.detect(language: nil, words: words("Hello there")), .spaced)
+    }
+
+    func testTranscriptLanguageRecognisesJapaneseChineseAndKorean() {
+        func resolve(_ text: String) -> String? {
+            TranscriptLanguage.resolve(setting: "auto", model: .base, words: [TranscriptWord(text: text, start: 0, end: 1)])
+        }
+        XCTAssertEqual(resolve("今日は東京で新しい映画祭が始まりました"), "ja")
+        XCTAssertEqual(resolve("今天北京开始了一个新的电影节"), "zh")
+        XCTAssertEqual(resolve("今天北京開始了一個新的電影節"), "zh")
+        XCTAssertEqual(resolve("오늘 서울에서 새로운 영화제가 시작되었습니다."), "ko")
+    }
+
+    func testWordsJoinWithoutSpacesNextToHanAndKana() {
+        XCTAssertEqual(TranscriptText.join(["今日は", "東京で", "iPhoneを", "買った。"]), "今日は東京でiPhoneを買った。")
+        XCTAssertEqual(TranscriptText.join(["电影节，", "很多"]), "电影节，很多")
+        XCTAssertEqual(TranscriptText.join(["오늘", "서울에서"]), "오늘 서울에서")
+        XCTAssertEqual(TranscriptText.join(["Hello", "there"]), "Hello there")
+    }
+
+    func testJapaneseWhisperOutputBecomesShortLinesWithoutSpaces() throws {
+        let transcript = WhisperWordJSONParser.parse(Data(japaneseWhisperOutput.utf8))
+        let script = TranscriptScript.detect(language: transcript.language, words: transcript.words)
+        XCTAssertEqual(script, .japanese)
+        let words = TranscriptWordSplitter.split(transcript.words, script: script)
+        let cues = SubtitleCueBuilder(script: script).cues(for: words)
+
+        let lines = cues.flatMap(\.lines)
+        for line in lines {
+            XCTAssertLessThanOrEqual(line.count, 13, line)
+            XCTAssertFalse(line.contains(" "), line)
+        }
+        XCTAssertTrue(cues.allSatisfy { $0.lines.count <= 2 })
+        XCTAssertEqual(lines.joined(), transcript.words.map(\.text).joined())
+        // Whisper left out 。, so the end of its phrase ends the cue.
+        XCTAssertEqual(cues.first?.lines, ["今日は東京で新しい", "映画祭が始まりました"])
+        // No line starts with a particle or ending that belongs to the word before.
+        XCTAssertFalse(lines.contains { ["が", "は", "を", "の", "ま", "た"].contains($0.first.map(String.init) ?? "") })
+    }
+
+    func testChineseWhisperOutputBecomesShortLinesWithFullWidthPunctuation() throws {
+        let transcript = WhisperWordJSONParser.parse(Data(chineseWhisperOutput.utf8))
+        let script = TranscriptScript.detect(language: transcript.language, words: transcript.words)
+        let words = TranscriptWordSplitter.split(transcript.words, script: script)
+        let cues = SubtitleCueBuilder(script: script).cues(for: words)
+
+        let lines = cues.flatMap(\.lines)
+        for line in lines {
+            XCTAssertLessThanOrEqual(line.count, 16, line)
+            XCTAssertFalse(line.contains(" ") || line.contains(","), line)
+        }
+        XCTAssertEqual(lines.joined(), transcript.words.map(\.text).joined().replacingOccurrences(of: ",", with: "，"))
+        // The cue ends at a clause once it holds enough text, and its lines break at the comma.
+        XCTAssertEqual(cues.first?.lines, ["今天北京开始了一个新的电影节，", "很多观众来到现场，"])
+        // Chinese reads at about nine characters a second.
+        let first = try XCTUnwrap(cues.first)
+        let characters = first.lines.reduce(0) { $0 + $1.count }
+        XCTAssertGreaterThanOrEqual(first.end - first.start, Double(characters) / 9 - 1e-9)
+    }
+
+    func testKoreanLinesKeepSpacesAndUseShorterLines() {
+        let text = "오늘 서울에서 새로운 영화제가 시작되었습니다. 많은 관객들이 모였고, 감독들은 자신의 작품에 대해 이야기했습니다."
+        let cues = SubtitleCueBuilder(script: .korean).cues(for: words(text))
+        for line in cues.flatMap(\.lines) { XCTAssertLessThanOrEqual(line.count, 16, line) }
+        XCTAssertEqual(cues.flatMap(\.lines).joined(separator: " "), text)
+    }
+
+    func testLineLengthScalesPerScript() {
+        XCTAssertEqual(TranscriptScript.spaced.lineLength(forLatin: 42), 42)
+        XCTAssertEqual(TranscriptScript.japanese.lineLength(forLatin: 42), 13)
+        XCTAssertEqual(TranscriptScript.chinese.lineLength(forLatin: 42), 16)
+        XCTAssertEqual(TranscriptScript.korean.lineLength(forLatin: 42), 16)
+        XCTAssertEqual(TranscriptScript.japanese.lineLength(forLatin: 20), 8)
+        XCTAssertEqual(TranscriptScript.chinese.lineLength(forLatin: 80), 30)
+    }
+
+    func testCJKPunctuationEndsSentencesAndClauses() {
+        for text in ["始まりました。", "本当？", "すごい！", "作品。」"] {
+            XCTAssertTrue(TranscriptWord(text: text, start: 0, end: 1).endsSentence, text)
+        }
+        for text in ["降りましたが、", "电影节，", "如下："] {
+            XCTAssertTrue(TranscriptWord(text: text, start: 0, end: 1).endsClause, text)
+        }
+        let lines = SubtitleCueBuilder().layoutLines(["午後には", "雨が", "降りましたが、", "会場は", "明るかったです"], width: 13)
+        XCTAssertEqual(lines, ["午後には雨が降りましたが、", "会場は明るかったです"])
+    }
+
     // MARK: - CTC forced alignment
 
     private let vocabulary = ["|": 0, "a": 1, "b": 2, "[PAD]": 3]
@@ -252,6 +399,38 @@ final class TranscriptionPipelineTests: XCTestCase {
         )
         XCTAssertEqual(upper.tokens(for: "œs"), [1, 2, 3])
         XCTAssertEqual(german.tokens(for: "æ"), [], "The vocabulary has no a")
+    }
+
+    func testCTCAlignerKeepsKanaVoicingAndFallsBackToSimplifiedChinese() {
+        let aligner = CTCForcedAligner(
+            vocabulary: ["|": 0, "か": 1, "が": 2, "ガ": 3, "电": 4, "[PAD]": 5],
+            blankTokenID: 5, wordDelimiter: "|", lowercase: true
+        )
+        XCTAssertEqual(aligner.tokens(for: "がか"), [2, 1])
+        XCTAssertEqual(aligner.tokens(for: "か\u{3099}"), [2])
+        // Half-width katakana write the voicing mark as its own character.
+        XCTAssertEqual(aligner.tokens(for: "ｶﾞ"), [3])
+        XCTAssertEqual(aligner.tokens(for: "電"), [4])
+        XCTAssertEqual(aligner.tokens(for: "ぱ"), [])
+    }
+
+    func testCTCAlignerPutsDelimitersOnlyWhereTextHasSpaces() {
+        let vocabulary = ["|": 0, "か": 1, "a": 2, "[PAD]": 3]
+        let aligner = CTCForcedAligner(vocabulary: vocabulary, blankTokenID: 3, wordDelimiter: "|", lowercase: true)
+        // Two frames hold two kana words only if no delimiter goes between them.
+        let kana = aligner.align(
+            words: ["か", "かか"], logProbabilities: emissions([1, 3, 1, 3, 1]),
+            frameCount: 5, vocabularySize: 4, secondsPerFrame: 0.02
+        )
+        XCTAssertEqual(kana?[1]?.lowerBound ?? -1, 0.04, accuracy: 1e-9)
+        XCTAssertNil(aligner.align(
+            words: ["a", "a"], logProbabilities: emissions([2, 2]),
+            frameCount: 2, vocabularySize: 4, secondsPerFrame: 0.02
+        ))
+        XCTAssertNotNil(aligner.align(
+            words: ["a", "a"], logProbabilities: emissions([2, 0, 2]),
+            frameCount: 3, vocabularySize: 4, secondsPerFrame: 0.02
+        ))
     }
 
     func testCTCMergeSpreadsUnalignedWordsBetweenNeighbours() {

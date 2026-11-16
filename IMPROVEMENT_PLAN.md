@@ -74,8 +74,9 @@ reclassify them as polish.
 - **Playback metering:** optional running playback-session LUFS, clearly separate from
   whole-program analysis; evaluate newer MPVKit/FFmpeg for ProRes RAW VideoToolbox
   decoding and animated WebP ([plan](docs/AUDIO-METERING-PLAN.md#deferred-improvements)).
-- **Transcription pipeline:** test on real interviews; add aligners for
-  ja, zh and ko after text without spaces is handled (nb, nn, sv, en, de, es, fr, it and pt are hosted); move Nemotron and Parakeet onto the word-level cue builder; live
+- **Transcription pipeline:** test on real interviews; add a Korean aligner and look
+  for Japanese and Chinese aligners trained only on data cleared for commercial use
+  (nb, nn, sv, en, de, es, fr, it and pt are hosted); move Nemotron and Parakeet onto the word-level cue builder; live
   transcript with in-run corrections; optional Foundation Models clean-up on macOS 27
   ([plan](docs/transcription-pipeline-plan.md)).
 - **First-run diagnostics:** model availability and feature-level codec/architecture

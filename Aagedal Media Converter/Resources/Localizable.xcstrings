@@ -67663,6 +67663,65 @@
         }
       }
     },
+    "Japanese, Chinese and Korean lines scale with this setting: 13 characters for Japanese and 16 for Chinese and Korean at the default of 42." : {
+      "comment" : "Explains how the subtitle line length setting applies to Japanese, Chinese and Korean transcripts.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Zeilen auf Japanisch, Chinesisch und Koreanisch richten sich nach dieser Einstellung: Beim Standardwert 42 sind es 13 Zeichen für Japanisch und 16 für Chinesisch und Koreanisch."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Las líneas en japonés, chino y coreano se ajustan a este valor: con el valor predeterminado de 42 admiten 13 caracteres en japonés y 16 en chino y coreano."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Les lignes en japonais, chinois et coréen suivent ce réglage : avec la valeur par défaut de 42, elles comptent 13 caractères en japonais et 16 en chinois et en coréen."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Le righe in giapponese, cinese e coreano seguono questa impostazione: con il valore predefinito di 42 contengono 13 caratteri in giapponese e 16 in cinese e coreano."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "日本語・中国語・韓国語の行の長さはこの設定に比例します。デフォルトの 42 では、日本語は 13 文字、中国語と韓国語は 16 文字です。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "일본어, 중국어, 한국어 줄 길이는 이 설정에 비례합니다. 기본값 42에서는 일본어 13자, 중국어와 한국어 16자입니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Linjer på japansk, kinesisk og koreansk følger denne innstillingen: Med standardverdien 42 får japansk 13 tegn og kinesisk og koreansk 16."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "As linhas em japonês, chinês e coreano acompanham este ajuste: com o padrão de 42, têm 13 caracteres em japonês e 16 em chinês e coreano."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "日文、中文和韩文的行长按此设置等比调整：默认值 42 时，日文每行 13 个字符，中文和韩文每行 16 个字符。"
+          }
+        }
+      }
+    },
     "JPEG 2000 video bitrate. 250 Mbps is the DCI maximum for 2K." : {
       "localizations" : {
         "de" : {

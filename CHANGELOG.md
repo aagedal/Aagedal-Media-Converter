@@ -40,6 +40,7 @@
 - Faster transcription now switches between 30- and 20-second chunks; the old 3-second chunks are gone, which improves recognition.
 - New Names and terms field: Whisper reads them before each part of the audio, which nudges it toward your spelling of names and places.
 - With Language set to Auto, word timing uses the language Whisper detected.
+- Japanese, Chinese and Korean subtitles: Japanese and Chinese are no longer one long "word" per phrase. They are split into words, joined without spaces, and lines break between words, not before particles. Lines are shorter (13 characters for Japanese and 16 for Chinese and Korean at the default line length), reading times follow those languages, sentences and clauses end at 。！？、，, and Whisper's ASCII commas in Chinese and Japanese become full-width.
 - The bundled FFmpeg (still 9.0.2) has an updated whisper filter: correctly escaped output, an initial prompt, and word confidence and language in its word list. A failed transcription now stops with an error instead of leaving partial subtitles.
 
 ### Encode history and statistics

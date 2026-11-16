@@ -171,13 +171,16 @@ struct WhisperTranscriptionPipeline: Sendable {
             throw WhisperServiceError.srtGenerationFailed
         }
         let transcript = WhisperWordJSONParser.parse(try Data(contentsOf: request.wordsFile))
-        var words = transcript.words
+        let language = TranscriptLanguage.resolve(
+            setting: request.language, model: request.model, words: transcript.words, detected: transcript.language
+        )
+        let script = TranscriptScript.detect(language: language, words: transcript.words)
+        // Split Japanese and Chinese phrases while they are still continuous
+        // speech, before speech-only times map back across removed pauses.
+        var words = TranscriptWordSplitter.split(transcript.words, script: script)
         if let speechMap { words = speechMap.sourceWords(words) }
 
-        if options.refineWordTiming, let audio, !words.isEmpty,
-           let language = TranscriptLanguage.resolve(
-               setting: request.language, model: request.model, words: words, detected: transcript.language
-           ),
+        if options.refineWordTiming, let audio, !words.isEmpty, let language,
            let directory = tools.alignerDirectory(language) {
             do {
                 let aligner = try Wav2Vec2WordAligner(directory: directory)
@@ -199,6 +202,7 @@ struct WhisperTranscriptionPipeline: Sendable {
         progress(WhisperProgress(stage: .writingSRT, percentage: 0.99, message: nil))
         return SubtitleCueBuilder(
             maxLineLength: options.maxLineLength,
+            script: script,
             speakerStyle: speakerStyle,
             speakerName: { String(localized: "Speaker \($0 + 1)") }
         ).srt(for: words)
