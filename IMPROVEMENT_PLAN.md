@@ -62,8 +62,9 @@ reclassify them as polish.
   strings (comparison metadata, warnings, some track labels), and review of the eight
   non-English/Norwegian languages flagged for review (4.2). The user is handling
   translation work directly.
-- Language pass over the string catalog. Known error: Korean "Browse…" is "먹다…"
-  ("eat"); look for similar machine-translation mistakes in all eight languages.
+- Language pass follow-ups: split shared keys ("Center", "Collapse", "Start"), settle
+  address form (de du/Sie, es tú/usted) and the remaining term choices listed in
+  `docs/language-pass-2026-11-16.md`.
 
 ## Features and polish
 
