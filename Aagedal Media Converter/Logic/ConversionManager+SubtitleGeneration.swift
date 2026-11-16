@@ -54,6 +54,7 @@ extension ConversionManager {
                 operationID: operationID,
                 audioStreamIndex: audioStreamIndex,
                 fasterTranscription: settings.whisperFasterTranscription,
+                pipeline: settings.whisperPipeline,
                 publicationIsCurrent: {
                     followUp.canBeginSubtitles(in: droppedFiles.wrappedValue)
                 }

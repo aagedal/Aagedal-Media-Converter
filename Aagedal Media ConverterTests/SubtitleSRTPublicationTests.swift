@@ -524,7 +524,7 @@ private struct PublicationOutputRunner: SubprocessRunning {
         outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?
     ) async throws -> SubprocessResult {
         let staged = try publicationStagedURL(for: request)
-        try "1\n00:00:00,000 --> 00:00:01,000\nLate result\n".write(to: staged, atomically: true, encoding: .utf8)
+        try writeFakeTranscriptionOutput("1\n00:00:00,000 --> 00:00:01,000\nLate result\n", to: staged)
         try await beforeCompletion()
         return SubprocessResult(
             terminationStatus: 0,
@@ -569,7 +569,7 @@ private actor ConcurrentPublicationOutputRunner: SubprocessRunning {
     ) async throws -> SubprocessResult {
         let staged = try publicationStagedURL(for: request)
         count += 1
-        try "1\n00:00:00,000 --> 00:00:01,000\nResult \(count)\n".write(to: staged, atomically: true, encoding: .utf8)
+        try writeFakeTranscriptionOutput("1\n00:00:00,000 --> 00:00:01,000\nResult \(count)\n", to: staged)
         if count == expectedCount {
             waiting.forEach { $0.resume() }
             waiting.removeAll()

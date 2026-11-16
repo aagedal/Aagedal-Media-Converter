@@ -949,6 +949,33 @@ enum AppConstants {
     static let defaultWhisperLanguage = "auto"
     static let whisperMaxLineLengthKey = "whisperMaxLineLength"
     static let defaultWhisperMaxLineLength = 42  // Characters per subtitle line
+    // Word-level pipeline: speech-only audio, wav2vec2 timing and speaker changes
+    static let whisperSpeechOnlyKey = "whisperSpeechOnly"
+    static let defaultWhisperSpeechOnly = true
+    static let whisperRefineWordTimingKey = "whisperRefineWordTiming"
+    static let defaultWhisperRefineWordTiming = true
+    static let whisperSpeakerStyleKey = "whisperSpeakerStyle"
+    static let defaultWhisperSpeakerStyle = "dashes"
+    static let whisperVocabularyKey = "whisperVocabulary"
+    /// `WordAlignerPrecision` raw value for aligner downloads.
+    static let wordAlignerPrecisionKey = "wordAlignerPrecision"
+    static let defaultWordAlignerPrecision = "int8"
+    /// Silero VAD (MIT), bundled: the pipeline finds speech with it and the
+    /// whisper filter uses it to end its chunks in pauses.
+    static let whisperVADModelURL = Bundle.main.url(forResource: "ggml-silero-v6.2.0", withExtension: "bin")
+    /// From huggingface.co/ggml-org/whisper-vad, revision 9ffd54a1e1ee413ddf265af9913beaf518d1639b.
+    static let whisperVADModelSHA256 = "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987"
+    static let wordAlignerModelsDirectory: URL = {
+        let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
+        return supportDir
+            .appendingPathComponent("AagedalMediaConverter", isDirectory: true)
+            .appendingPathComponent("word-aligners", isDirectory: true)
+    }()
+    /// Pinned to a commit so a later upload can never change what a released
+    /// app version downloads (each archive is also checked against its SHA-256).
+    static let wordAlignerDownloadBaseURL = URL(string:
+        "https://huggingface.co/taagedal/wav2vec2-word-aligners-coreml/resolve/b187cdf8b2d84999ff9f374fbaaff5a1223ae51e")!
     static let embedSubtitlesKey = "embedSubtitles"
     static let defaultEmbedSubtitles = false
 

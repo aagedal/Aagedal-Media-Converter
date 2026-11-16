@@ -508,7 +508,7 @@ private struct CoexistenceWhisperModel: WhisperModelProviding {
 
 /// Holds the inference boundary and deliberately succeeds after cancellation.
 private actor CoexistenceWhisperRunner: SubprocessRunning {
-    static let subtitleBytes = Data("1\n00:00:00,000 --> 00:00:01,000\nTranscription result\n".utf8)
+    static let subtitleBytes = Data("1\n00:00:00,000 --> 00:00:01,500\nTranscription result\n".utf8)
     let started: XCTestExpectation
     let cancelled: XCTestExpectation
     private var continuation: CheckedContinuation<Void, Never>?
@@ -539,7 +539,7 @@ private actor CoexistenceWhisperRunner: SubprocessRunning {
         } onCancel: {
             self.cancelled.fulfill()
         }
-        try Self.subtitleBytes.write(to: staged)
+        try writeFakeTranscriptionOutput(String(decoding: Self.subtitleBytes, as: UTF8.self), to: staged)
         return SubprocessResult(
             terminationStatus: 0, termination: .exited, standardOutput: Data(), standardError: Data(),
             discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0, duration: .milliseconds(1)

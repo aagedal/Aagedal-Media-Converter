@@ -12,13 +12,16 @@ protocol WhisperModelProviding: Sendable {
 
 extension WhisperModelManager: WhisperModelProviding {}
 
-/// Service for generating subtitles using FFmpeg's built-in whisper filter
+/// Service for generating subtitles using FFmpeg's built-in whisper filter and
+/// the word-level pipeline around it (`WhisperTranscriptionPipeline`).
 actor WhisperService {
     static let shared = WhisperService()
 
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "WhisperService")
     private let modelManager: any WhisperModelProviding
     private let transcriber: WhisperFFmpegTranscriber
+    private let subprocessRunner: any SubprocessRunning
+    private let pipelineTools: WhisperPipelineTools
     private let ffmpegPathProvider: @Sendable () -> String?
 
     private var activeRunIDs: Set<UUID> = []
@@ -31,10 +34,13 @@ actor WhisperService {
     init(
         modelManager: any WhisperModelProviding = WhisperModelManager.shared,
         subprocessRunner: any SubprocessRunning = SubprocessRunner(),
+        pipelineTools: WhisperPipelineTools = WhisperPipelineTools(),
         ffmpegPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ffmpegPath }
     ) {
         self.modelManager = modelManager
         transcriber = WhisperFFmpegTranscriber(subprocessRunner: subprocessRunner)
+        self.subprocessRunner = subprocessRunner
+        self.pipelineTools = pipelineTools
         self.ffmpegPathProvider = ffmpegPathProvider
     }
 
@@ -44,8 +50,9 @@ actor WhisperService {
     ///   - outputDirectory: Directory to save the SRT file
     ///   - model: The whisper model to use
     ///   - language: Language code (or "auto" for auto-detect)
-    ///   - fasterTranscription: Use 30-second chunks instead of the default three seconds
-    ///   - maxLineLength: Maximum characters per subtitle line (currently unused by FFmpeg filter)
+    ///   - fasterTranscription: Use 30-second chunks instead of the default 20 seconds
+    ///   - maxLineLength: Deprecated; the line length comes from `pipeline`
+    ///   - pipeline: Speech-only audio, word timing and speaker options
     ///   - progress: Callback for progress updates
     /// - Returns: URL to the generated .srt file
     func generateSubtitles(
@@ -57,6 +64,7 @@ actor WhisperService {
         audioStreamIndex: Int? = nil,
         fasterTranscription: Bool = false,
         maxLineLength: Int? = nil,
+        pipeline: WhisperPipelineOptions = .plain,
         publicationIsCurrent: @escaping @MainActor @Sendable () -> Bool = { true },
         progress: @escaping @Sendable (WhisperProgress) -> Void
     ) async throws -> URL {
@@ -97,6 +105,10 @@ actor WhisperService {
             ".whisper-\(runID.uuidString).srt"
         )
         defer { try? FileManager.default.removeItem(at: stagedSRTFile) }
+        let workDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("whisper-\(runID.uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: workDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: workDirectory) }
 
         logger.info("Starting FFmpeg whisper transcription: \(model.displayName), language: \(language)")
 
@@ -106,17 +118,30 @@ actor WhisperService {
             throw WhisperServiceError.cancelled
         }
 
+        let options = WhisperPipelineOptions(
+            speechOnly: pipeline.speechOnly,
+            refineWordTiming: pipeline.refineWordTiming,
+            speakerStyle: pipeline.speakerStyle,
+            maxLineLength: maxLineLength ?? pipeline.maxLineLength
+        )
+        let request = WhisperTranscriptionPipeline.Request(
+            inputFile: inputFile,
+            modelPath: modelPath,
+            model: model,
+            language: language,
+            audioStreamIndex: audioStreamIndex,
+            fasterTranscription: fasterTranscription,
+            ffmpegPath: ffmpegPath,
+            options: options,
+            wordsFile: workDirectory.appendingPathComponent("words.json"),
+            workDirectory: workDirectory
+        )
+        let pipelineRunner = WhisperTranscriptionPipeline(
+            transcriber: transcriber, subprocessRunner: subprocessRunner, tools: pipelineTools
+        )
         let transcriptionTask = Task {
-            try await transcriber.transcribe(
-                inputFile: inputFile,
-                modelPath: modelPath,
-                outputFile: stagedSRTFile,
-                ffmpegPath: ffmpegPath,
-                language: language,
-                audioStreamIndex: audioStreamIndex,
-                fasterTranscription: fasterTranscription,
-                progress: progress
-            )
+            let subtitles = try await pipelineRunner.run(request, progress: progress)
+            try Data(subtitles.utf8).write(to: stagedSRTFile, options: .atomic)
         }
         currentTranscriptionTasks[runID] = transcriptionTask
 
@@ -177,6 +202,7 @@ actor WhisperService {
         audioStreamIndex: Int? = nil,
         fasterTranscription: Bool = false,
         maxLineLength: Int? = nil,
+        pipeline: WhisperPipelineOptions = .plain,
         publicationIsCurrent: @escaping @MainActor @Sendable () -> Bool = { true },
         progress: @escaping @Sendable (WhisperProgress) -> Void
     ) async throws -> URL {
@@ -190,6 +216,7 @@ actor WhisperService {
             audioStreamIndex: audioStreamIndex,
             fasterTranscription: fasterTranscription,
             maxLineLength: maxLineLength,
+            pipeline: pipeline,
             publicationIsCurrent: publicationIsCurrent,
             progress: progress
         )
@@ -286,6 +313,8 @@ struct WhisperFFmpegTranscriber: Sendable {
         language: String,
         audioStreamIndex: Int?,
         fasterTranscription: Bool = false,
+        vadModelPath: String? = nil,
+        initialPrompt: String = "",
         progress: @escaping @Sendable (WhisperProgress) -> Void
     ) async throws {
         try Task.checkCancellation()
@@ -294,7 +323,9 @@ struct WhisperFFmpegTranscriber: Sendable {
             modelPath: modelPath.path,
             outputPath: outputFile.path,
             language: language,
-            fasterTranscription: fasterTranscription
+            fasterTranscription: fasterTranscription,
+            vadModelPath: vadModelPath,
+            initialPrompt: initialPrompt
         )
         var arguments = ["-nostdin", "-i", inputFile.path]
         if let audioStreamIndex {
@@ -310,7 +341,7 @@ struct WhisperFFmpegTranscriber: Sendable {
             timeout: Self.timeout,
             standardOutputCaptureLimit: 0,
             standardErrorCaptureLimit: Self.diagnosticCaptureLimit,
-            sensitiveValues: [inputFile.path, modelPath.path, outputFile.path, filter]
+            sensitiveValues: Set([inputFile.path, modelPath.path, outputFile.path, filter] + (vadModelPath.map { [$0] } ?? []))
         )
         let progressParser = WhisperFFmpegProgressParser(progress: progress)
 
@@ -356,19 +387,34 @@ struct WhisperFFmpegTranscriber: Sendable {
         }
     }
 
+    /// Writes one JSON line per word (`max_len=1`); `SubtitleCueBuilder` lays
+    /// out the cues, so the queue no longer has to be short to keep cues short.
+    /// With a VAD model the filter ends each queue in a pause instead of
+    /// cutting through a word. `initialPrompt` (an option of our FFmpeg build)
+    /// conditions every chunk, so names and terms are spelled as given.
     static func filter(
         modelPath: String, outputPath: String, language: String,
-        fasterTranscription: Bool = false
+        fasterTranscription: Bool = false,
+        vadModelPath: String? = nil,
+        initialPrompt: String = ""
     ) -> String {
-        let components = [
+        var components = [
             "model=\(escapeFilterOptionValue(modelPath))",
             "language=\(escapeFilterOptionValue(language))",
-            "format=srt",
+            "format=json",
+            "max_len=1",
             "destination=\(escapeFilterOptionValue(outputPath))",
             "use_gpu=true",
-            // Keep short chunks for subtitles unless faster transcription is requested.
-            "queue=\(fasterTranscription ? 30 : 3)"
         ]
+        if let vadModelPath {
+            components.append("vad_model=\(escapeFilterOptionValue(vadModelPath))")
+        }
+        let prompt = initialPrompt.split(whereSeparator: \.isNewline).joined(separator: " ")
+            .trimmingCharacters(in: .whitespaces)
+        if !prompt.isEmpty {
+            components.append("initial_prompt=\(escapeFilterOptionValue(prompt))")
+        }
+        components.append("queue=\(fasterTranscription ? 30 : 20)")
         return "whisper=" + components.joined(separator: ":")
     }
 

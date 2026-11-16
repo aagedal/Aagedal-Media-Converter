@@ -390,6 +390,8 @@
 		VIDITEMIDX00000001 /* VideoItemIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = VIDITEMIDX00000002 /* VideoItemIndex.swift */; };
 		A907D1D50000000000000101 /* yt-dlp-rs-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A907D1D50000000000000201 /* yt-dlp-rs-LICENSE.txt */; };
 		A906AA120000000000000101 /* ssimulacra2-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A906AA120000000000000201 /* ssimulacra2-LICENSE.txt */; };
+		A9515E000000000000000101 /* ggml-silero-v6.2.0.bin in Resources */ = {isa = PBXBuildFile; fileRef = A9515E000000000000000201 /* ggml-silero-v6.2.0.bin */; };
+		A9515E000000000000000102 /* silero-vad-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A9515E000000000000000202 /* silero-vad-LICENSE.txt */; };
 		46B0B00A2A6A498898911DEF /* AV2ResourcePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20BBB011334640A3A8D04D5D /* AV2ResourcePolicy.swift */; };
 		A598C35C58B24CE8BBE4CF00 /* AV2RecoveryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B62CDCA03AD943938CBC4A43 /* AV2RecoveryStore.swift */; };
 		FF13CD1ED3C14E4EB0F4D822 /* AV2ResourceRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD7F35730E574E58B708A19A /* AV2ResourceRecoveryTests.swift */; };
@@ -427,6 +429,7 @@
 		ENCHIST0021BF0000000 /* StatisticsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0021FR0000000 /* StatisticsSettingsView.swift */; };
 		ENCHIST0010BF0000000 /* EncodeHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0010FR0000000 /* EncodeHistoryTests.swift */; };
 		ENCHIST0022BF0000000 /* EncodeStatisticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0022FR0000000 /* EncodeStatisticsTests.swift */; };
+		TRANSPIPE01BF0000000 /* TranscriptionPipelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRANSPIPE01FR0000000 /* TranscriptionPipelineTests.swift */; };
 		ENCHIST0031BF0000000 /* EncodeHistorySyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCHIST0031FR0000000 /* EncodeHistorySyncTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -889,6 +892,8 @@
 		VDISPMGR00001000FREF1 /* VirtualDisplayManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualDisplayManager.swift; sourceTree = "<group>"; };
 		VIDITEMIDX00000002 /* VideoItemIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoItemIndex.swift; sourceTree = "<group>"; };
 		A906AA120000000000000201 /* ssimulacra2-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "ssimulacra2-LICENSE.txt"; sourceTree = "<group>"; };
+		A9515E000000000000000201 /* ggml-silero-v6.2.0.bin */ = {isa = PBXFileReference; lastKnownFileType = file; path = "ggml-silero-v6.2.0.bin"; sourceTree = "<group>"; };
+		A9515E000000000000000202 /* silero-vad-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "silero-vad-LICENSE.txt"; sourceTree = "<group>"; };
 		A907D1D50000000000000201 /* yt-dlp-rs-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "yt-dlp-rs-LICENSE.txt"; sourceTree = "<group>"; };
 		A907D1D50000000000000202 /* yt-dlp-rs */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = "yt-dlp-rs"; sourceTree = "<group>"; };
 		A906AA120000000000000202 /* ssimulacra2_rs */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = ssimulacra2_rs; sourceTree = "<group>"; };
@@ -929,12 +934,14 @@
 		ENCHIST0021FR0000000 /* StatisticsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatisticsSettingsView.swift; sourceTree = "<group>"; };
 		ENCHIST0010FR0000000 /* EncodeHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeHistoryTests.swift; sourceTree = "<group>"; };
 		ENCHIST0022FR0000000 /* EncodeStatisticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeStatisticsTests.swift; sourceTree = "<group>"; };
+		TRANSPIPE01FR0000000 /* TranscriptionPipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionPipelineTests.swift; sourceTree = "<group>"; };
 		ENCHIST0031FR0000000 /* EncodeHistorySyncTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncodeHistorySyncTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		8EA25FED2F82D6B00087B1F1 /* tessdata */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = tessdata; sourceTree = "<group>"; };
 		AB3500000000000000000001 /* Nemotron */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Nemotron; sourceTree = "<group>"; };
+		TRANSCRIPTIONGRP0000001 /* Transcription */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Transcription; sourceTree = "<group>"; };
 		8EA25FFE2F865E1F0087B1F1 /* Parakeet */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Parakeet; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
@@ -1049,6 +1056,7 @@
 				A90606000000000000000202 /* bmx-LICENSE.txt */,
 				8E0C32CE2E09F5E400F22B21 /* ffmpeg-LICENSE.txt */,
 				A906AA120000000000000201 /* ssimulacra2-LICENSE.txt */,
+				A9515E000000000000000202 /* silero-vad-LICENSE.txt */,
 				A907D1D50000000000000201 /* yt-dlp-rs-LICENSE.txt */,
 			);
 			path = Licenses;
@@ -1168,6 +1176,7 @@
 				8EA25FE32F82A75C0087B1F1 /* Subtitles */,
 				8EA25FFE2F865E1F0087B1F1 /* Parakeet */,
 				AB3500000000000000000001 /* Nemotron */,
+				TRANSCRIPTIONGRP0000001 /* Transcription */,
 			);
 			path = Logic;
 			sourceTree = "<group>";
@@ -1280,6 +1289,7 @@
 			children = (
 				8EE6EE9F2C31FC6F007B629D /* Assets.xcassets */,
 				8EE0BBBB2E0980560096171D /* Localizable.xcstrings */,
+				A9515E000000000000000201 /* ggml-silero-v6.2.0.bin */,
 				8EA25FED2F82D6B00087B1F1 /* tessdata */,
 			);
 			path = Resources;
@@ -1346,6 +1356,7 @@
 			children = (
 				ENCHIST0010FR0000000 /* EncodeHistoryTests.swift */,
 				ENCHIST0022FR0000000 /* EncodeStatisticsTests.swift */,
+				TRANSPIPE01FR0000000 /* TranscriptionPipelineTests.swift */,
 				ENCHIST0031FR0000000 /* EncodeHistorySyncTests.swift */,
 				A45000000000000000000002 /* ApplicationJobContractTests.swift */,
 				A45A99000000000000000002 /* AnonymousUsageIndicatorTests.swift */,
@@ -1792,6 +1803,7 @@
 				8EA25FED2F82D6B00087B1F1 /* tessdata */,
 				8EA25FFE2F865E1F0087B1F1 /* Parakeet */,
 				AB3500000000000000000001 /* Nemotron */,
+				TRANSCRIPTIONGRP0000001 /* Transcription */,
 			);
 			name = "Aagedal Media Converter";
 			productName = "Aagedal VideoLoop Converter";
@@ -1932,6 +1944,8 @@
 				A90606000000000000000102 /* bmx-LICENSE.txt in Resources */,
 				A90606000000000000000101 /* ffmpeg-LICENSE.txt in Resources */,
 				A906AA120000000000000101 /* ssimulacra2-LICENSE.txt in Resources */,
+				A9515E000000000000000101 /* ggml-silero-v6.2.0.bin in Resources */,
+				A9515E000000000000000102 /* silero-vad-LICENSE.txt in Resources */,
 				A907D1D50000000000000101 /* yt-dlp-rs-LICENSE.txt in Resources */,
 				A90606000000000000000100 /* LICENSE in Resources */,
 				8EE6EEA02C31FC6F007B629D /* Assets.xcassets in Resources */,
@@ -2432,6 +2446,7 @@
 				68DB0573FE4F499AA72EF9AF /* ConversionQueueStateTests.swift in Sources */,
 				ENCHIST0010BF0000000 /* EncodeHistoryTests.swift in Sources */,
 				ENCHIST0022BF0000000 /* EncodeStatisticsTests.swift in Sources */,
+				TRANSPIPE01BF0000000 /* TranscriptionPipelineTests.swift in Sources */,
 				ENCHIST0031BF0000000 /* EncodeHistorySyncTests.swift in Sources */,
 				3559AE0D84F84065A06C6888 /* ConversionUploadFollowUpTests.swift in Sources */,
 				7D163C3579E64EFABCEBCF29 /* AppIntentHandoffTests.swift in Sources */,

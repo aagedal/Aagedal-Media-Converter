@@ -6266,7 +6266,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             diagnostic.contains("Setting 'destination' to value '\(destinationPath.path)'"),
             diagnostic
         )
-        XCTAssertTrue(diagnostic.contains("Setting 'queue' to value '3'"), diagnostic)
+        XCTAssertTrue(diagnostic.contains("Setting 'queue' to value '20'"), diagnostic)
         XCTAssertFalse(diagnostic.contains("Error parsing filter"), diagnostic)
         XCTAssertFalse(diagnostic.contains("Error parsing filterchain"), diagnostic)
         XCTAssertFalse(diagnostic.contains("No option name near"), diagnostic)
@@ -6724,11 +6724,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         let existingSubtitle = temporaryDirectory.appendingPathComponent("clip.srt")
         let runner = RecordingSubprocessRunner { request, _ in
             let stagedURL = try XCTUnwrap(whisperDestinationURL(in: request))
-            try "1\n00:00:00,000 --> 00:00:01,000\nNew text\n".write(
-                to: stagedURL,
-                atomically: true,
-                encoding: .utf8
-            )
+            try writeFakeTranscriptionOutput("1\n00:00:00,000 --> 00:00:01,000\nNew text\n", to: stagedURL)
             return SubprocessResult(
                 terminationStatus: 0,
                 termination: .exited,
@@ -16008,11 +16004,7 @@ private final class DeferredSuccessfulWhisperRunner: SubprocessRunning, @uncheck
             for waiter in waiters { waiter.resume() }
         }
         let stagedURL = try XCTUnwrap(whisperDestinationURL(in: request))
-        try "1\n00:00:00,000 --> 00:00:01,000\nLate output\n".write(
-            to: stagedURL,
-            atomically: true,
-            encoding: .utf8
-        )
+        try writeFakeTranscriptionOutput("1\n00:00:00,000 --> 00:00:01,000\nLate output\n", to: stagedURL)
         return SubprocessResult(
             terminationStatus: 0,
             termination: .exited,
@@ -16137,11 +16129,7 @@ private final class CoordinatedWhisperOutputRunner: SubprocessRunning, @unchecke
             }
             return URL(fileURLWithPath: request.arguments[inputIndex + 1]).lastPathComponent
         }()
-        try "1\n00:00:00,000 --> 00:00:01,000\n\(inputName)\n".write(
-            to: stagedURL,
-            atomically: true,
-            encoding: .utf8
-        )
+        try writeFakeTranscriptionOutput("1\n00:00:00,000 --> 00:00:01,000\n\(inputName)\n", to: stagedURL)
         return SubprocessResult(
             terminationStatus: 0,
             termination: .exited,
