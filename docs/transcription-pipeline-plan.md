@@ -49,8 +49,9 @@ All on a synthetic clip with a known layout (two `say` voices, 4 s or 6 s pauses
   speech-only audio rather than relying on the filter's VAD.
 - Diarization ran 12 minutes of audio in 10 s on an M-series GPU, and its
   speech regions were within 0.25 s of the truth. It was the first speech
-  finder, but it needs a 107 MB download, so the bundled Silero model took over
-  and diarization is only used for speakers.
+  finder, but it needs a 107 MB download, so the bundled Silero model took over.
+  Diarization now finds speakers, and its segments are the speech fallback only
+  when speaker changes are on and Silero cannot run.
 - The Swift Silero port matches whisper.cpp 1.9.2 (built from the FFmpeg build's
   static libraries): probabilities within 0.021 (whisper.cpp rounds convolution
   input to fp16), identical segments on the test dialogue and 52 of 53 on a

@@ -220,6 +220,9 @@ struct WhisperTranscriptionPipeline: Sendable {
                 logger.warning("Silero VAD failed: \(error.localizedDescription, privacy: .public)")
             }
         }
-        return diarized?.map { $0.start...$0.end }
+        // No segments from speaker detection says nothing about speech, so
+        // transcribe all the audio rather than writing empty subtitles.
+        guard let diarized, !diarized.isEmpty else { return nil }
+        return diarized.map { $0.start...$0.end }
     }
 }
