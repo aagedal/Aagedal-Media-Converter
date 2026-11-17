@@ -306,6 +306,30 @@ final class MediaAdjustmentsTests: XCTestCase {
         }
     }
 
+    func testSpeedChangeDropsSourceChapters() async throws {
+        let suite = "adjustments-chapters-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: AppConstants.preserveMetadataPreferenceKey)
+        let settings = try XCTUnwrap(CodecExportSettings(preset: .lossless, defaults: defaults))
+        func chapterMaps(speed: Double) async -> [String] {
+            var adjustments = MediaAdjustments()
+            adjustments.speed = speed
+            adjustments.flipHorizontal = true
+            let arguments = await FFMPEGCommandBuilder.buildCommand(
+                inputURL: URL(fileURLWithPath: "/private/source.mov"), outputFileURL: URL(fileURLWithPath: "/private/out.mkv"),
+                preset: .lossless, codecSettings: settings, comment: "", includeDateTag: false, trimStart: nil, trimEnd: nil,
+                adjustments: ResolvedMediaAdjustments(adjustments: adjustments, globalLoudness: .init()),
+                durationProvider: { _ in 4 }
+            ).arguments
+            return arguments.indices.filter { arguments[$0] == "-map_chapters" }.map { arguments[$0 + 1] }
+        }
+        let unchanged = await chapterMaps(speed: 1)
+        let retimed = await chapterMaps(speed: 2)
+        XCTAssertEqual(unchanged, ["0"])
+        XCTAssertEqual(retimed, ["-1"])
+    }
+
     // MARK: - End to end with the bundled FFmpeg
 
     func testRotatedSpeedChangedExportWithBurnedSubtitlesIsNormalizedToTarget() async throws {

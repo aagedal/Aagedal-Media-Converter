@@ -959,6 +959,10 @@ enum FFMPEGCommandBuilder {
             arguments.append(contentsOf: additionalOutputArguments)
         }
         metadataPlan.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart, outputExtension: outputFileURL.pathExtension)
+        if adjustments?.adjustments.changesSpeed == true {
+            // Source chapters would keep source times; drop them, as soft subtitles are dropped.
+            dropSourceChapters(from: &arguments, outputArgumentsStart: outputArgumentsStart)
+        }
         // Appended after the metadata policy, which removes earlier per-stream
         // -map_metadata options that the attachment tag restore depends on.
         if preset != .streamCopy && preset.outputsVideoTrack {
@@ -1047,6 +1051,19 @@ extension FFMPEGCommandBuilder {
             return String(localized: "This custom preset does not allow the app to add filters, so adjustments cannot be applied.")
         }
         return nil
+    }
+
+    /// Replaces any chapter mapping with none.
+    static func dropSourceChapters(from arguments: inout [String], outputArgumentsStart: Int) {
+        var index = outputArgumentsStart
+        while index + 1 < arguments.count {
+            if arguments[index] == "-map_chapters" {
+                arguments.removeSubrange(index...index + 1)
+            } else {
+                index += 1
+            }
+        }
+        arguments += ["-map_chapters", "-1"]
     }
 
     static var sourceAdjustmentsUnsupportedReason: String {
