@@ -1,4 +1,5 @@
 import Foundation
+import os
 import XCTest
 @testable import Aagedal_Media_Converter
 
@@ -122,16 +123,16 @@ final class AnalyticsCancellationDrainTests: XCTestCase {
 
         let returned = expectation(description: "Old cancellation remains suspended during drain")
         returned.isInverted = true
-        var drainReleased = false
+        let drainReleased = OSAllocatedUnfairLock(initialState: false)
         var cancellationReturned = false
         let cancellation = Task {
             await service.cancelAnalysis(operationID: firstID)
             cancellationReturned = true
-            if !drainReleased { returned.fulfill() }
+            if !drainReleased.withLock({ $0 }) { returned.fulfill() }
         }
         await fulfillment(of: [returned], timeout: 0.05)
         XCTAssertFalse(cancellationReturned)
-        drainReleased = true
+        drainReleased.withLock { $0 = true }
         await runner.finish(run: 0)
         await cancellation.value
         XCTAssertTrue(cancellationReturned)
