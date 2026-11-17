@@ -59,6 +59,7 @@
 - yt-dlp-rs is on by default for supported sites, with yt-dlp as the fallback. If you turned the setting off, it stays off.
 - Updated yt-dlp-rs to 1.0.0-rc.2, a release candidate for its first stable release. It now also handles Instagram posts with photos and video, the start time of scheduled live streams, and audio-only downloads. Stopping a live stream recorded from its start now keeps the picture and sound the same length; before, the video could stop minutes before the audio.
 - Live streams recorded as growing files keep their length and timecode in a DaVinci Resolve timeline when the recording stops. Before, the title and other metadata were added by rewriting the finished file, and a clip already edited into a timeline could end at the wrong time. A recording from the start of a stream that has been live for more than five days now gets the timecode of its first frame.
+- A stopped growing-file recording now shows its full length in the queue, not about one second. Updated SwiftMediaMetadata to 3.1.4, which counts every fragment of a fragmented MP4 or MOV file, so these files also get the right frame count, frame rate and bitrate.
 - Downloading a video that is already in the output folder shows File already exists with a Redownload button again, instead of adding the existing file as a new download.
 - Cancelling a live stream recorded from its start with yt-dlp-rs gives it up to 10 seconds to finish the file, instead of 2.
 

@@ -16973,6 +16973,29 @@ extension SwiftExifDurationDeadlineTests {
         await fulfillment(of: [stopped], timeout: 2)
         XCTAssertEqual(scopes.stoppedURLs, [url])
     }
+
+    /// Growing-file live recordings are fragmented MOVs whose moov describes
+    /// only the first fragment (about one second); the rest are in `moof`s.
+    func testFragmentedRecordingReportsFullDuration() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("fragmented-\(UUID().uuidString).mov")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let result = try await SubprocessRunner().run(.init(
+            executableURL: URL(fileURLWithPath: ffmpeg),
+            arguments: ["-hide_banner", "-nostdin", "-y",
+                        "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=30",
+                        "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000",
+                        "-t", "6", "-c:v", "libx264", "-preset", "ultrafast", "-g", "30",
+                        "-pix_fmt", "yuv420p", "-c:a", "aac",
+                        "-movflags", "+frag_keyframe", "-timecode", "10:00:00:00",
+                        file.path],
+            timeout: .seconds(30)
+        ))
+        XCTAssertTrue(result.succeeded, result.standardErrorText)
+
+        let duration = await SwiftExifMediaProbe.duration(for: file)
+        XCTAssertEqual(try XCTUnwrap(duration), 6, accuracy: 0.1)
+    }
 }
 
 extension Aagedal_Media_Converter_Tests {
