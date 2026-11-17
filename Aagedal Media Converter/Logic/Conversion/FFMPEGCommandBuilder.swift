@@ -435,6 +435,18 @@ enum FFMPEGCommandBuilder {
             }
             adjustments = nil
         }
+        if preset == .imageSequence, let resolved = adjustments {
+            switch imageSequenceAdjustments(resolved) {
+            case .success(let pictureOnly):
+                adjustments = pictureOnly
+            case .failure(let error):
+                return FFMPEGCommand(
+                    arguments: [], normalizedTrimStart: normalizedTrimStart,
+                    normalizedTrimEnd: normalizedTrimEnd, effectiveDuration: nil,
+                    preparationError: error.message
+                )
+            }
+        }
         let replacementAudio = (preset.outputsAudioTrack && !isMuted) ? adjustments?.adjustments.replacementAudio : nil
         let replacesSourceAudio = replacementAudio?.mode == .replace
         // Routing describes the source's tracks, which replaced audio no longer uses.
@@ -832,6 +844,9 @@ enum FFMPEGCommandBuilder {
         }
 
         var loudnessTrackCount = 0
+        // Whether the only filter graph is the adjustments' audio one, which leaves the picture alone.
+        var addsAudioOnlyGraph = false
+        let hadFilterGraph = ffmpegArgs.contains { ["-filter_complex", "-lavfi", "-filter_complex_script"].contains($0) }
         if let resolved = adjustments, preset.outputsAudioTrack, !isMuted, !isImageSequenceInput,
            resolved.adjustments.hasAudioAdjustments || resolved.loudness != nil {
             let sourceAudioStreamCount = replacesSourceAudio
@@ -839,15 +854,25 @@ enum FFMPEGCommandBuilder {
             if let replacementInputIndex {
                 if replacesSourceAudio {
                     MediaAdjustmentsPlan.redirectSourceAudio(to: replacementInputIndex, in: &ffmpegArgs)
-                } else if ffmpegArgs.contains("-map") {
+                } else if !ffmpegArgs.contains("-an") {
+                    // Automatic selection keeps one audio track from either input; map both instead.
+                    MediaAdjustmentsPlan.insertAutomaticMaps(into: &ffmpegArgs, audioInput: 0, hasAudio: sourceAudioStreamCount > 0)
                     ffmpegArgs += ["-map", "\(replacementInputIndex):a"]
+                }
+            }
+            var sampleRate = ffmpegArgs.firstIndex(of: "-ar").flatMap {
+                $0 + 1 < ffmpegArgs.count ? Int(ffmpegArgs[$0 + 1]) : nil
+            }
+            if sampleRate == nil, resolved.loudness != nil {
+                // loudnorm upsamples to 192 kHz; a preset without a rate keeps the source's.
+                sampleRate = replacesSourceAudio ? nil : sourceMetadata?.audioStreams.first?.sampleRate
+                if sampleRate == nil {
+                    sampleRate = (try? await BoundedVideoMetadataProbe.metadata(for: audioProbeURL))?.audioStreams.first?.sampleRate
                 }
             }
             let context = MediaAdjustmentsPlan.AudioChainContext(
                 outputDuration: adjustedOutputDuration,
-                sampleRate: ffmpegArgs.firstIndex(of: "-ar").flatMap {
-                    $0 + 1 < ffmpegArgs.count ? Int(ffmpegArgs[$0 + 1]) : nil
-                } ?? 48000,
+                sampleRate: sampleRate ?? 48000,
                 fitsToDuration: abs(resolved.adjustments.audioOffset) > 0.0001 || replacementAudio != nil
             )
             var chainError: MediaAdjustmentsPlan.AdjustmentError?
@@ -861,13 +886,18 @@ enum FFMPEGCommandBuilder {
                 audioStreamCount: { input in
                     input == replacementInputIndex ? replacementAudioStreamCount : sourceAudioStreamCount
                 },
-                chain: { index in
+                chain: { index, input in
                     let measurement = loudnessMeasurements.flatMap { $0.indices.contains(index) ? $0[index] : nil }
                     // Silence measures -inf and is left as it is.
                     let skipsLoudness = loudnessMeasurements != nil
                         && !(measurement.map(MediaAdjustmentsPlan.measurementIsUsable) ?? false)
+                    var trackAdjustments = resolved.adjustments
+                    // The export volume is set while hearing the source track, so it leaves replacement audio alone.
+                    if let replacementInputIndex, replacesSourceAudio || input == replacementInputIndex {
+                        trackAdjustments.audioGain = nil
+                    }
                     switch MediaAdjustmentsPlan.audioFilterChain(
-                        for: resolved.adjustments, loudness: skipsLoudness ? nil : resolved.loudness,
+                        for: trackAdjustments, loudness: skipsLoudness ? nil : resolved.loudness,
                         measurement: measurement, context: context
                     ) {
                     case .success(let chain): return chain ?? "anull"
@@ -885,6 +915,7 @@ enum FFMPEGCommandBuilder {
                     preparationError: error.message
                 )
             case .success(let count):
+                addsAudioOnlyGraph = !hadFilterGraph
                 if let chainError {
                     return FFMPEGCommand(
                         arguments: [], normalizedTrimStart: normalizedTrimStart,
@@ -947,6 +978,10 @@ enum FFMPEGCommandBuilder {
             arguments.append(contentsOf: additionalOutputArguments)
         }
         metadataPlan.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart, outputExtension: outputFileURL.pathExtension)
+        if adjustments?.adjustments.changesSpeed == true {
+            // Source chapters would keep source times; drop them, as soft subtitles are dropped.
+            dropSourceChapters(from: &arguments, outputArgumentsStart: outputArgumentsStart)
+        }
         // Appended after the metadata policy, which removes earlier per-stream
         // -map_metadata options that the attachment tag restore depends on.
         if preset != .streamCopy && preset.outputsVideoTrack {
@@ -968,6 +1003,10 @@ enum FFMPEGCommandBuilder {
                 arguments += ["-metadata:c:\(index)", "title=\(title)"]
             }
         }
+        var colorPlanArguments = arguments
+        if addsAudioOnlyGraph {
+            removeArgumentPair("-filter_complex", value: nil, from: &colorPlanArguments)
+        }
         if !isImageSequenceInput, visualSourceURL == nil, customInputArguments == nil,
            UntaggedColorPlan.appliesTo(preset),
            let stream = sourceMetadata?.primaryVideoStream,
@@ -983,7 +1022,7 @@ enum FFMPEGCommandBuilder {
                sourceCodedWidth: stream.width,
                sourceCodedHeight: stream.height,
                sourcePixelAspectRatio: geometry.pixelAspectRatio ?? 1,
-               arguments: arguments
+               arguments: colorPlanArguments
            ) {
             plan.apply(to: &arguments, inputPath: inputURL.path)
         }
@@ -1029,12 +1068,43 @@ extension FFMPEGCommandBuilder {
             return String(localized: "Adjustments and loudness normalization are not available when the video is generated from audio (waveform or still image).")
         }
         if customInputArguments != nil {
-            return String(localized: "Adjustments and loudness normalization are not available for merged clips, image sequences and AV2 sources.")
+            return sourceAdjustmentsUnsupportedReason
         }
         if !(codecSettings?.appliesCrop ?? preset.appliesCrop) {
             return String(localized: "This custom preset does not allow the app to add filters, so adjustments cannot be applied.")
         }
         return nil
+    }
+
+    /// Replaces any chapter mapping with none.
+    static func dropSourceChapters(from arguments: inout [String], outputArgumentsStart: Int) {
+        var index = outputArgumentsStart
+        while index + 1 < arguments.count {
+            if arguments[index] == "-map_chapters" {
+                arguments.removeSubrange(index...index + 1)
+            } else {
+                index += 1
+            }
+        }
+        arguments += ["-map_chapters", "-1"]
+    }
+
+    static var sourceAdjustmentsUnsupportedReason: String {
+        String(localized: "Adjustments and loudness normalization are not available for merged clips, image sequences and AV2 sources.")
+    }
+
+    /// Image sequence exports carry their sound in a WAV sidecar that is extracted
+    /// without the audio chain, so only picture adjustments reach them. Item audio
+    /// changes (speed included) are refused; the global loudness default is dropped.
+    static func imageSequenceAdjustments(
+        _ resolved: ResolvedMediaAdjustments
+    ) -> Result<ResolvedMediaAdjustments?, MediaAdjustmentsPlan.AdjustmentError> {
+        guard !resolved.adjustments.hasAudioAdjustments, !(resolved.loudness != nil && resolved.loudnessIsExplicit) else {
+            return .failure(.unsupportedOutput(sourceAdjustmentsUnsupportedReason))
+        }
+        var pictureOnly = resolved
+        pictureOnly.loudness = nil
+        return .success(pictureOnly.isActive ? pictureOnly : nil)
     }
 
     /// Mono-track deliveries are normalized per source track before the split, so a
@@ -3163,7 +3233,7 @@ struct UntaggedColorPlan: Equatable, Sendable {
     /// Filters that leave the frame size alone.
     private static let sizeNeutralFilters: Set<String> = [
         "fps", "format", "setfield", "fieldorder", "yadif", "bwdif", "setpts", "null",
-        "interlace", "hqdn3d", "setdar",
+        "interlace", "hqdn3d", "setdar", "hflip", "vflip", "fade", "subtitles",
     ]
 
     /// Output pixel size of a linear chain of app-generated filters, or nil when any
@@ -3186,6 +3256,10 @@ struct UntaggedColorPlan: Equatable, Sendable {
             case "setsar":
                 guard value == "1/1" || value == "1" else { return nil }
                 sar = 1
+            case "transpose" where value == "clock" || value == "cclock":
+                // The adjustments' rotation: the picture and its pixel aspect turn with it.
+                (w, h) = (h, w)
+                sar = 1 / sar
             case "scale" where value == "'trunc(ih*dar/2)*2:trunc(ih/2)*2'" || value == "trunc(ih*dar/2)*2:trunc(ih/2)*2":
                 let dar = w * sar / h
                 w = even(h * dar)

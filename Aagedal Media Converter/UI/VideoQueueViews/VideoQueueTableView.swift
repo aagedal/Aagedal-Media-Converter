@@ -742,7 +742,8 @@ struct VideoQueueTableView: NSViewRepresentable {
                 case .groupItem(let item, let srcGroupID):
                     if let gIdx = parent.encodingGroups.firstIndex(where: { $0.id == srcGroupID }),
                        let iIdx = parent.encodingGroups[gIdx].items.firstIndex(where: { $0.id == item.id }) {
-                        let removed = parent.encodingGroups[gIdx].items.remove(at: iIdx)
+                        var removed = parent.encodingGroups[gIdx].items.remove(at: iIdx)
+                        removed.clearGroupOutputNameIndex()
                         itemsToMoveToUngrouped.append(removed)
                         movedTopLevelIDs.append(removed.id)
                     }
@@ -1067,6 +1068,7 @@ struct VideoQueueTableView: NSViewRepresentable {
                 mergeClipsAvailable: isGroupItem ? false : parent.mergeClipsAvailable,
                 outputFileExists: item.outputFileExists,
                 outputFileNameOverride: item.outputFileNameOverride,
+                outputNameIndex: item.outputNameIndex,
                 isDownloading: item.isDownloading,
                 downloadProgress: item.downloadProgress,
                 downloadHasProgress: item.downloadHasProgress,

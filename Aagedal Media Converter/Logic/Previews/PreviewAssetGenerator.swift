@@ -34,9 +34,21 @@ struct PreviewAssets: Sendable {
     let totalDuration: Double  // Total media duration for chunk width calculation
 
     // Per-channel waveform envelopes (one per audio channel, not just per stream)
-    let nativeChannelWaveform: SendableChannelWaveform?
+    var nativeChannelWaveform: SendableChannelWaveform?
     let nativePerStreamChannelWaveforms: [Int: SendableChannelWaveform]
     var waveformEnvelope: WaveformEnvelope? = nil
+    /// True while `nativeChannelWaveform` is a snapshot of a decode still in progress.
+    var nativeChannelWaveformIsPartial = false
+
+    /// The same assets without an unfinished first-stream waveform, so a decode that
+    /// stopped early doesn't stay on screen looking complete.
+    func discardingPartialChannelWaveform() -> PreviewAssets {
+        guard nativeChannelWaveformIsPartial else { return self }
+        var assets = self
+        assets.nativeChannelWaveform = nil
+        assets.nativeChannelWaveformIsPartial = false
+        return assets
+    }
 
     /// Expected total number of chunks based on duration
     var expectedChunkCount: Int {
@@ -504,7 +516,8 @@ actor PreviewAssetGenerator {
 
             // Merge in-memory channel waveform cache
             let cachedChannelWaveforms = channelWaveformCache.waveforms(for: url, fingerprint: fingerprint)
-            let channelWaveform = cachedChannelWaveforms[0] ?? partialChannelWaveforms[url]?.waveform
+            let partialChannelWaveform = cachedChannelWaveforms[0] == nil ? partialChannelWaveforms[url]?.waveform : nil
+            let channelWaveform = cachedChannelWaveforms[0] ?? partialChannelWaveform
             let perStreamChannelWaveforms = cachedChannelWaveforms.filter { $0.key != 0 || channelWaveform == nil }
 
             if rowURL == nil && thumbnailURLs.isEmpty && waveform == nil && audioWaveforms.isEmpty && waveformChunks.isEmpty && channelWaveform == nil {
@@ -520,7 +533,8 @@ actor PreviewAssetGenerator {
                 audioWaveformChunks: audioWaveformChunks,
                 totalDuration: estimatedDuration,
                 nativeChannelWaveform: channelWaveform,
-                nativePerStreamChannelWaveforms: perStreamChannelWaveforms
+                nativePerStreamChannelWaveforms: perStreamChannelWaveforms,
+                nativeChannelWaveformIsPartial: partialChannelWaveform != nil
             )
         } catch {
             logger.debug("Failed to load cached assets for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
@@ -671,38 +685,46 @@ actor PreviewAssetGenerator {
     ) async -> SendableChannelWaveform? {
         let access = startAccessingSecurityScope(for: url)
         defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
-        guard let fingerprint = try? assetFingerprint(for: url) else { return nil }
-        let epoch = cacheEpoch
-        if let cached = channelWaveformCache.waveforms(for: url, fingerprint: fingerprint)[streamIndex] {
-            return cached
+        // A cache purge or file change during the decode discards its result; decode once more.
+        for attempt in 0..<2 {
+            guard let fingerprint = try? assetFingerprint(for: url) else { return nil }
+            let epoch = cacheEpoch
+            if let cached = channelWaveformCache.waveforms(for: url, fingerprint: fingerprint)[streamIndex] {
+                return cached
+            }
+            guard let ffmpegPath = BinaryPathResolver.ffmpegPath else { return nil }
+
+            do {
+                let t0 = CFAbsoluteTimeGetCurrent()
+                let waveform = try await NativeWaveformRenderer.generateChannelWaveforms(
+                    url: url,
+                    ffmpegPath: ffmpegPath,
+                    streamIndex: streamIndex,
+                    channelCount: channelCount,
+                    channelLayout: channelLayout,
+                    duration: duration,
+                    envelopeCacheDirectory: try? ensureAssetDirectory(for: url),
+                    subprocessRunner: subprocessRunner,
+                    onProgress: onProgress
+                )
+
+                // Cache the result
+                try Task.checkCancellation()
+                guard epoch == cacheEpoch, (try? assetFingerprint(for: url)) == fingerprint else {
+                    logger.info("Preview cache changed while decoding stream \(streamIndex) of \(url.lastPathComponent, privacy: .public) (attempt \(attempt + 1))")
+                    continue
+                }
+                channelWaveformCache.insert(waveform, for: url, fingerprint: fingerprint, stream: streamIndex)
+
+                let t1 = CFAbsoluteTimeGetCurrent()
+                logger.info("On-demand per-channel waveform for stream \(streamIndex) generated in \(String(format: "%.2f", t1 - t0))s (\(channelCount) channels) for \(url.lastPathComponent, privacy: .public)")
+                return waveform
+            } catch {
+                logger.warning("On-demand per-channel waveform failed for stream \(streamIndex) of \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                return nil
+            }
         }
-        guard let ffmpegPath = BinaryPathResolver.ffmpegPath else { return nil }
-
-        do {
-            let t0 = CFAbsoluteTimeGetCurrent()
-            let waveform = try await NativeWaveformRenderer.generateChannelWaveforms(
-                url: url,
-                ffmpegPath: ffmpegPath,
-                streamIndex: streamIndex,
-                channelCount: channelCount,
-                channelLayout: channelLayout,
-                duration: duration,
-                envelopeCacheDirectory: try? ensureAssetDirectory(for: url),
-                onProgress: onProgress
-            )
-
-            // Cache the result
-            try Task.checkCancellation()
-            guard epoch == cacheEpoch, (try? assetFingerprint(for: url)) == fingerprint else { return nil }
-            channelWaveformCache.insert(waveform, for: url, fingerprint: fingerprint, stream: streamIndex)
-
-            let t1 = CFAbsoluteTimeGetCurrent()
-            logger.info("On-demand per-channel waveform for stream \(streamIndex) generated in \(String(format: "%.2f", t1 - t0))s (\(channelCount) channels) for \(url.lastPathComponent, privacy: .public)")
-            return waveform
-        } catch {
-            logger.warning("On-demand per-channel waveform failed for stream \(streamIndex) of \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            return nil
-        }
+        return nil
     }
 
     /// Decodes the first audio stream's waveform, or returns nil when there is no audio.

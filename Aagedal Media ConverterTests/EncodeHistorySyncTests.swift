@@ -162,11 +162,13 @@ final class EncodeHistorySyncTests: XCTestCase {
         var smallerRollup = rollup
         smallerRollup.encodeCount = 2
 
-        let original = remoteFile("device-b", records: [remoteCopyOfLocal, running], rollups: [smallerRollup])
-        let conflictCopy = remoteFile("device-b", records: [finished], rollups: [rollup])
+        // B's own file, and the file of Mac C, set up from B with Migration
+        // Assistant, which carries B's history.
+        let fileB = remoteFile("device-b", records: [remoteCopyOfLocal, running], rollups: [smallerRollup])
+        let fileC = remoteFile("device-c", records: [finished], rollups: [rollup])
         let merged = EncodeHistoryMerge.merge(
             localRecords: [shared], localSessions: [], localRollups: [],
-            localDeviceID: "device-a", remote: [original, conflictCopy], cutoff: nil, calendar: calendar
+            localDeviceID: "device-a", remote: [fileB, fileC], cutoff: nil, calendar: calendar
         )
 
         XCTAssertEqual(merged.records.count, 2)
@@ -307,6 +309,25 @@ final class EncodeHistorySyncTests: XCTestCase {
         XCTAssertEqual(second.first?.content?.records.map(\.id), [record.id])
     }
 
+    func testScanRetriesAFileThatFailedToRead() throws {
+        let history = cloud.appendingPathComponent("History", isDirectory: true)
+        try FileManager.default.createDirectory(at: history, withIntermediateDirectories: true)
+        let url = history.appendingPathComponent("device-b.json")
+        let valid = try EncodeHistoryStore.encoder.encode(remoteFile("device-b", records: []).content!)
+        let date = Date().addingTimeInterval(-60)
+        // Same size and date as the real file, as an evicted iCloud file can be.
+        try Data(repeating: UInt8(ascii: "x"), count: valid.count).write(to: url)
+        try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: url.path)
+        let first = HistorySyncFolder.scan(directory: history, excludingDeviceID: "device-a")
+        XCTAssertEqual(first.map(\.status), [.unreadable])
+
+        try valid.write(to: url)
+        try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: url.path)
+        let cache = Dictionary(uniqueKeysWithValues: first.map { ($0.url.lastPathComponent, $0) })
+        let second = HistorySyncFolder.scan(directory: history, excludingDeviceID: "device-a", cache: cache)
+        XCTAssertEqual(second.map(\.status), [.loaded])
+    }
+
     func testDeviceIDsFromFileNames() {
         XCTAssertEqual(HistorySyncFolder.deviceID(forFileName: "abc.json")?.id, "abc")
         XCTAssertEqual(HistorySyncFolder.deviceID(forFileName: "abc 2.json")?.id, "abc")
@@ -328,19 +349,251 @@ final class EncodeHistorySyncTests: XCTestCase {
         XCTAssertFalse(EncodeHistoryDevice.localID.contains(" "))
     }
 
+    // MARK: - Upgrades, migration and conflict copies
+
+    /// A Mac that ran 4.7 (no device ids) and then 4.8, with both kinds of
+    /// encodes in one month, folds them into one rollup that another Mac
+    /// counts in full.
+    func testUpgradedMacsHistoryIsAttributedAndCountedInFullElsewhere() async throws {
+        let now = Date()
+        let monthStart = try XCTUnwrap(calendar.dateInterval(of: .month, for: now.addingTimeInterval(-100 * 86_400))).start
+        let early = monthStart.addingTimeInterval(12 * 3600)
+        let month = EncodeStatistics.monthKey(for: early, calendar: calendar)
+
+        let legacySession = HistorySession(startedAt: early, endedAt: early, endedCleanly: true, deviceName: "Mac a")
+        var legacyRecords = (0..<2).map { _ in makeRecord(session: legacySession.id, daysAgo: 0, finished: true, device: nil, now: early) }
+        for index in legacyRecords.indices { legacyRecords[index].deviceName = "Mac a" }
+        let newSession = HistorySession(startedAt: early.addingTimeInterval(3600), endedAt: early.addingTimeInterval(3600),
+                                        endedCleanly: true, deviceName: "Mac a", deviceID: "device-a")
+        let newRecord = makeRecord(session: newSession.id, daysAgo: 0, finished: true, device: "device-a",
+                                   now: early.addingTimeInterval(3600))
+        // Folded by 4.7, and by a 4.8 build that didn't attribute old data yet.
+        var legacyRollup = MonthlyRollup(month: month, deviceName: "Mac a")
+        legacyRollup.encodeCount = 3
+        legacyRollup.sessionCount = 1
+        var newRollup = MonthlyRollup(month: month, deviceName: "Mac a", deviceID: "device-a")
+        newRollup.encodeCount = 2
+        let localDirectory = root.appendingPathComponent("local-a", isDirectory: true)
+        try FileManager.default.createDirectory(at: localDirectory, withIntermediateDirectories: true)
+        try EncodeHistoryStore.encoder.encode(EncodeHistoryFile(
+            sessions: [legacySession, newSession], records: legacyRecords + [newRecord], rollups: [legacyRollup, newRollup]
+        )).write(to: localDirectory.appendingPathComponent(EncodeHistoryStore.fileName))
+
+        let a = makeStore("a")
+        try recordEncode(on: a)
+        a.flush()
+
+        let local = try EncodeHistoryStore.decoder.decode(
+            EncodeHistoryFile.self, from: Data(contentsOf: localDirectory.appendingPathComponent(EncodeHistoryStore.fileName))
+        )
+        XCTAssertTrue(local.records.allSatisfy { $0.deviceID == "device-a" })
+        XCTAssertTrue(local.sessions.allSatisfy { $0.deviceID == "device-a" })
+        XCTAssertEqual(local.rollups.count, 1)
+        XCTAssertEqual(local.rollups.first?.deviceID, "device-a")
+        XCTAssertEqual(local.rollups.first?.encodeCount, 3 + 2 + 3)
+        XCTAssertEqual(local.rollups.first?.sessionCount, 1 + 2)
+        XCTAssertEqual(try readCloudFile("device-a.json").rollups, local.rollups)
+        XCTAssertEqual(a.statistics(for: .all).encodeCount, 9)
+
+        let b = makeStore("b")
+        await b.reloadRemote()
+        XCTAssertEqual(b.statistics(for: .all, deviceID: "device-a").encodeCount, 9)
+        XCTAssertEqual(b.statistics(for: .all).deviceCounts, ["device-a": 9])
+    }
+
+    /// Files written before the fix above still carry both kinds of rollup.
+    func testRollupsOfOneFileAddUpWhenOnlySomeHaveADeviceID() {
+        var legacy = MonthlyRollup(month: "2025-01", deviceName: "Mac b")
+        legacy.encodeCount = 3
+        var current = MonthlyRollup(month: "2025-01", deviceName: "Mac b", deviceID: "device-b")
+        current.encodeCount = 2
+        let merged = EncodeHistoryMerge.merge(
+            localRecords: [], localSessions: [], localRollups: [], localDeviceID: "device-a",
+            remote: [remoteFile("device-b", records: [], rollups: [legacy, current])], cutoff: nil, calendar: calendar
+        )
+        XCTAssertEqual(merged.rollups.map(\.encodeCount), [5])
+        XCTAssertEqual(merged.rollups.map(\.deviceID), ["device-b"])
+    }
+
+    /// Mac C was set up from Mac B with Migration Assistant, so its local
+    /// history holds copies of B's.
+    func testHistoryCarriedOverByMigrationAssistantCountsOnce() {
+        var bRollup = MonthlyRollup(month: "2025-01", deviceName: "Mac b", deviceID: "device-b")
+        bRollup.encodeCount = 4
+        var carriedRollup = bRollup
+        carriedRollup.encodeCount = 3
+        var cRollup = MonthlyRollup(month: "2025-01", deviceName: "Mac c", deviceID: "device-c")
+        cRollup.encodeCount = 2
+        let bRecord = makeRecord(session: UUID(), daysAgo: 1, finished: true, device: "device-b")
+        let cRecord = makeRecord(session: UUID(), daysAgo: 1, finished: true, device: "device-c")
+        func total(_ result: EncodeHistoryMerge.Result) -> Int { result.rollups.reduce(0) { $0 + $1.encodeCount } }
+
+        // On C: the carried-over rollup is a copy of B's.
+        let onC = EncodeHistoryMerge.merge(
+            localRecords: [bRecord, cRecord], localSessions: [], localRollups: [carriedRollup, cRollup],
+            localDeviceID: "device-c", remote: [remoteFile("device-b", records: [bRecord], rollups: [bRollup])],
+            cutoff: nil, calendar: calendar
+        )
+        XCTAssertEqual(total(onC), 4 + 2)
+        XCTAssertEqual(onC.records.count, 2)
+        // Without B's file the copy still counts.
+        let offline = EncodeHistoryMerge.merge(
+            localRecords: [], localSessions: [], localRollups: [carriedRollup, cRollup],
+            localDeviceID: "device-c", remote: [], cutoff: nil, calendar: calendar
+        )
+        XCTAssertEqual(total(offline), 3 + 2)
+
+        // On B: C's file carries B's own history, which B already counts (or
+        // pruned into its rollups), so it's ignored.
+        let onB = EncodeHistoryMerge.merge(
+            localRecords: [], localSessions: [], localRollups: [bRollup], localDeviceID: "device-b",
+            remote: [remoteFile("device-c", records: [bRecord, cRecord], rollups: [carriedRollup, cRollup])],
+            cutoff: nil, calendar: calendar
+        )
+        XCTAssertEqual(total(onB), 4 + 2)
+        XCTAssertEqual(onB.records.map(\.id), [cRecord.id])
+
+        // On A: the same records in B's and C's files count once, the rollups too.
+        let onA = EncodeHistoryMerge.merge(
+            localRecords: [], localSessions: [], localRollups: [], localDeviceID: "device-a",
+            remote: [remoteFile("device-b", records: [bRecord], rollups: [bRollup]),
+                     remoteFile("device-c", records: [bRecord, cRecord], rollups: [carriedRollup, cRollup])],
+            cutoff: nil, calendar: calendar
+        )
+        XCTAssertEqual(total(onA), 4 + 2)
+        XCTAssertEqual(onA.records.count, 2)
+    }
+
+    /// An iCloud conflict copy: B wrote the record, then folded it into a
+    /// rollup, and both versions of its file are in the folder.
+    func testOnlyTheNewestCopyOfAMacsFileCounts() {
+        let now = Date()
+        let record = makeRecord(session: UUID(), daysAgo: 100, finished: true, device: "device-b", now: now)
+        var rollup = MonthlyRollup(month: EncodeStatistics.monthKey(for: record.startedAt, calendar: calendar),
+                                   deviceName: "Mac b", deviceID: "device-b")
+        rollup.add(record)
+        var older = remoteFile("device-b", records: [record])
+        older.content?.modifiedAt = now.addingTimeInterval(-3600)
+        older.url = cloud.appendingPathComponent("History/device-b 2.json")
+        let newer = remoteFile("device-b", records: [], rollups: [rollup])
+
+        let merged = EncodeHistoryMerge.merge(
+            localRecords: [], localSessions: [], localRollups: [], localDeviceID: "device-a",
+            remote: [older, newer], cutoff: nil, calendar: calendar
+        )
+        let summary = EncodeStatistics.summarize(
+            records: merged.records, sessions: merged.sessions, rollups: merged.rollups,
+            period: .all, currentSessionID: nil, now: now, calendar: calendar
+        )
+        XCTAssertEqual(summary.encodeCount, 1)
+        XCTAssertTrue(merged.records.isEmpty)
+        XCTAssertEqual(HistorySyncFolder.devices(from: [older, newer]).first?.recordCount, 0)
+    }
+
+    // MARK: - Removing this Mac's file
+
+    /// The settings can report no location (iCloud Drive briefly unavailable)
+    /// although the folder written to is there.
+    func testTurningSyncOffRemovesTheFileWithoutACurrentLocation() async throws {
+        let location = SyncLocation(cloud)
+        let a = makeStore("a", location: location)
+        try recordEncode(on: a)
+        a.flush()
+        XCTAssertEqual(try cloudFileNames(), ["device-a.json"])
+
+        location.url = nil
+        a.setSyncEnabled(false)
+        XCTAssertEqual(try cloudFileNames(), [])
+    }
+
+    func testTurningSyncOffWhileTheFolderIsOfflineRemovesTheFileOnTheNextLaunch() async throws {
+        let location = SyncLocation(cloud)
+        let defaults = makeDefaults("a")
+        let a = makeStore("a", location: location, defaults: defaults)
+        try recordEncode(on: a)
+        a.flush()
+
+        // An unmounted drive.
+        let offline = root.appendingPathComponent("offline", isDirectory: true)
+        try FileManager.default.moveItem(at: cloud, to: offline)
+        location.url = nil
+        a.setSyncEnabled(false)
+        XCTAssertEqual(try cloudFileNames(in: offline), ["device-a.json"])
+
+        try FileManager.default.moveItem(at: offline, to: cloud)
+        location.url = cloud
+        let relaunched = makeStore("a", location: location, defaults: defaults)
+        XCTAssertFalse(relaunched.isSyncEnabled)
+        XCTAssertEqual(try cloudFileNames(), [])
+        XCTAssertNil(defaults.object(forKey: AppConstants.encodeHistorySyncWrittenDirectoriesKey))
+    }
+
+    func testChangingTheLocationRemovesTheFileFromTheOldOne() async throws {
+        let location = SyncLocation(cloud)
+        let b = makeStore("b")
+        try recordEncode(on: b)
+        b.flush()
+        let a = makeStore("a", location: location)
+        try recordEncode(on: a)
+        a.flush()
+        XCTAssertEqual(try cloudFileNames(), ["device-a.json", "device-b.json"])
+
+        let newFolder = root.appendingPathComponent("custom", isDirectory: true)
+        location.url = newFolder
+        a.flush()
+        XCTAssertEqual(try cloudFileNames(), ["device-b.json"])
+        XCTAssertEqual(try cloudFileNames(in: newFolder), ["device-a.json"])
+    }
+
+    // MARK: - Statistics filter
+
+    func testStatisticsMacFilterFallsBackToAllMacsWhenTheMacIsGone() async throws {
+        let a = makeStore("a"), b = makeStore("b")
+        try recordEncode(on: a)
+        try recordEncode(on: b)
+        b.flush()
+        await a.reloadRemote()
+        XCTAssertEqual(a.statisticsDeviceFilter("device-b"), "device-b")
+        XCTAssertEqual(a.statisticsDeviceFilter("device-a"), "device-a")
+        XCTAssertNil(a.statisticsDeviceFilter("device-z"))
+
+        await a.removeSyncedDevice("device-b")
+        XCTAssertNil(a.statisticsDeviceFilter("device-b"))
+        // One Mac left: the picker is hidden, so no filter either.
+        XCTAssertNil(a.statisticsDeviceFilter("device-a"))
+    }
+
     // MARK: - Helpers
 
-    private func makeStore(_ name: String, locationAvailable: Bool = true, bootstrap: Bool = true) -> EncodeHistoryStore {
+    /// The sync folder as the settings report it; nil while unavailable.
+    @MainActor private final class SyncLocation {
+        var url: URL?
+        init(_ url: URL?) { self.url = url }
+    }
+
+    /// Defaults with history sync on.
+    private func makeDefaults(_ name: String) -> UserDefaults {
         let suiteName = "EncodeHistorySyncTests-\(name)-\(UUID().uuidString)"
         suiteNames.append(suiteName)
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.set(true, forKey: AppConstants.encodeHistorySyncEnabledKey)
-        let folder: URL? = locationAvailable ? cloud : nil
+        return defaults
+    }
+
+    /// A Mac; pass the same `defaults` to simulate a relaunch.
+    private func makeStore(
+        _ name: String,
+        locationAvailable: Bool = true,
+        location: SyncLocation? = nil,
+        defaults: UserDefaults? = nil,
+        bootstrap: Bool = true
+    ) -> EncodeHistoryStore {
+        let location = location ?? SyncLocation(locationAvailable ? cloud : nil)
         let store = EncodeHistoryStore(
             directory: root.appendingPathComponent("local-\(name)", isDirectory: true),
-            defaults: defaults, calendar: calendar,
+            defaults: defaults ?? makeDefaults(name), calendar: calendar,
             deviceID: "device-\(name)", deviceName: "Mac \(name)",
-            syncFolder: { folder }
+            syncFolder: { location.url }
         )
         if bootstrap { store.bootstrap() }
         return store
@@ -398,8 +651,8 @@ final class EncodeHistorySyncTests: XCTestCase {
         )
     }
 
-    private func cloudFileNames() throws -> [String] {
-        try FileManager.default.contentsOfDirectory(atPath: cloud.appendingPathComponent("History").path)
+    private func cloudFileNames(in folder: URL? = nil) throws -> [String] {
+        try FileManager.default.contentsOfDirectory(atPath: (folder ?? cloud).appendingPathComponent("History").path)
             .filter { !$0.hasPrefix(".") }
             .sorted()
     }

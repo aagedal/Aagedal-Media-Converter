@@ -4061,6 +4061,44 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertEqual(runner.cancelledCount, 1)
     }
 
+    func testOnDemandChannelWaveformDecodesAgainAfterCachePurgeDuringDecode() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OnDemandWaveformPurge-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sourceURL = directory.appendingPathComponent("source.wav")
+        try Data("audio".utf8).write(to: sourceURL)
+        let calls = OSAllocatedUnfairLock(initialState: 0)
+        let generatorBox = OSAllocatedUnfairLock<PreviewAssetGenerator?>(initialState: nil)
+        let runner = RecordingSubprocessRunner { _, outputHandler in
+            let call = calls.withLock { count in
+                count += 1
+                return count
+            }
+            // The first decode is invalidated by a purge while it runs.
+            if call == 1, let generator = generatorBox.withLock({ $0 }) {
+                await generator.cleanupAssets(for: sourceURL)
+            }
+            let samples = (0..<960).map { Float(sin(Double($0) * 0.1)) }
+            outputHandler?(SubprocessOutputChunk(stream: .standardOutput, data: samples.withUnsafeBytes { Data($0) }))
+            return successfulSubprocessResult()
+        }
+        let generator = PreviewAssetGenerator(subprocessRunner: runner)
+        generatorBox.withLock { $0 = generator }
+
+        let waveform = await generator.generateChannelWaveformForStream(
+            url: sourceURL, streamIndex: 1, channelCount: 1, channelLayout: "mono", duration: 0.02)
+        XCTAssertEqual(waveform?.channelEnvelopes.map(\.frameCount), [960])
+        XCTAssertEqual(calls.withLock { $0 }, 2)
+
+        // The retried result is cached, so the next selection doesn't decode again.
+        let cached = await generator.generateChannelWaveformForStream(
+            url: sourceURL, streamIndex: 1, channelCount: 1, channelLayout: "mono", duration: 0.02)
+        XCTAssertEqual(cached?.channelEnvelopes.map(\.frameCount), [960])
+        XCTAssertEqual(calls.withLock { $0 }, 2)
+        await generator.cleanupAssets(for: sourceURL)
+    }
+
     func testPreviewAssetGeneratorTerminateAllStopsEveryTrackedRunnerTask() async throws {
         let runner = CountingBlockingSubprocessRunner()
         let generator = PreviewAssetGenerator(subprocessRunner: runner)
@@ -5285,9 +5323,9 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertTrue(waveform.channelEnvelopes.allSatisfy { !$0.powerLevels.isEmpty })
         let request = try XCTUnwrap(runner.lastRequest)
         XCTAssertTrue(request.arguments.contains("0:a:1"))
-        XCTAssertTrue(request.arguments.contains("aresample=48000:async=1:first_pts=0"))
+        XCTAssertTrue(request.arguments.contains("pan=2c|c0=c0|c1=c1,aresample=48000:async=1:first_pts=0"))
         XCTAssertEqual(request.arguments.last, "pipe:1")
-        // Multichannel streams keep their layout instead of being remixed.
+        // Multichannel streams map channels one to one instead of being remixed.
         XCTAssertFalse(request.arguments.contains("-ac"))
         XCTAssertFalse(request.redactedCommandDescription.contains("/private/fixture/stereo.wav"))
     }

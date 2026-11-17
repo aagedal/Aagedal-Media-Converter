@@ -63,6 +63,47 @@ final class ScheduledCaptureQueueTests: XCTestCase {
         XCTAssertTrue(queue.entries.isEmpty)
     }
 
+    func testTakeDueHoldsTheNextEntryUntilTheStartFinishes() {
+        let queue = ScheduledCaptureQueue(keepsDisplayAwake: false)
+        let first = capture(at: 0, for: 10)
+        let second = capture(at: 10, for: 10)
+        queue.save(first)
+        queue.save(second)
+        XCTAssertEqual(queue.takeDue(now: base.addingTimeInterval(11 * 60)), second,
+                       "A recording whose stop time passed is skipped for the one still in its time")
+        XCTAssertTrue(queue.isStartingRecording)
+        XCTAssertTrue(queue.entries.isEmpty)
+
+        let third = capture(at: 30, for: 10)
+        queue.save(third)
+        XCTAssertNil(queue.takeDue(now: base.addingTimeInterval(31 * 60)), "Another start waits for this one")
+        queue.finishStarting()
+        XCTAssertFalse(queue.isStartingRecording)
+        XCTAssertEqual(queue.takeDue(now: base.addingTimeInterval(31 * 60)), third)
+        queue.reset()
+        XCTAssertFalse(queue.isStartingRecording)
+    }
+
+    func testTakeDueDropsEntriesWhoseStopTimeHasPassed() {
+        let queue = ScheduledCaptureQueue(keepsDisplayAwake: false)
+        let open = capture(at: 30, for: nil)
+        queue.save(capture(at: 0, for: 10))
+        queue.save(capture(at: 10, for: 10))
+        queue.save(open)
+        XCTAssertNil(queue.takeDue(now: base.addingTimeInterval(25 * 60)))
+        XCTAssertEqual(queue.entries, [open])
+        XCTAssertFalse(queue.didStartRecording)
+        XCTAssertEqual(queue.takeDue(now: base.addingTimeInterval(600 * 60)), open, "A recording without a stop time never expires")
+    }
+
+    /// A scheduled start that failed or was stopped must not leave a timer that stops a later recording.
+    func testAutoStopNeedsARecording() {
+        let manager = ScreenCaptureManager.shared
+        XCTAssertFalse(manager.isRecording)
+        manager.setAutoStop(after: 60)
+        XCTAssertNil(manager.autoStopDate)
+    }
+
     func testMinuteStartDropsSeconds() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "UTC"))

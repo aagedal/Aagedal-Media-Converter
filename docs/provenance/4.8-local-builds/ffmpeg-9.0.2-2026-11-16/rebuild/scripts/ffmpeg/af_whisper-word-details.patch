@@ -1,0 +1,105 @@
+--- a/libavfilter/af_whisper.c
++++ b/libavfilter/af_whisper.c
+@@ -55,6 +55,7 @@
+     char *destination;
+     char *format;
+     int max_len;
++    char *initial_prompt;
+ 
+     struct whisper_context *ctx_wsp;
+     struct whisper_vad_context *ctx_vad;
+@@ -241,6 +242,43 @@
+     return ticks * 10;
+ }
+ 
++/* Mean probability of the segment's text tokens; special and timestamp tokens
++ * are ids >= EOT. Writes a JSON number, or null without a usable text token. */
++static void whisper_segment_p_json(struct whisper_context *ctx_wsp, int segment, char *out, size_t size)
++{
++    const whisper_token eot = whisper_token_eot(ctx_wsp);
++    const int n_tokens = whisper_full_n_tokens(ctx_wsp, segment);
++    double sum = 0;
++    int n = 0;
++
++    for (int i = 0; i < n_tokens; i++) {
++        if (whisper_full_get_token_id(ctx_wsp, segment, i) >= eot)
++            continue;
++        const float p = whisper_full_get_token_p(ctx_wsp, segment, i);
++        if (!isfinite(p)) {
++            n = 0;
++            break;
++        }
++        sum += av_clipd(p, 0.0, 1.0);
++        n++;
++    }
++    if (n > 0)
++        snprintf(out, size, "%.4f", sum / n);
++    else
++        snprintf(out, size, "null");
++}
++
++/* Whisper language codes are short lowercase ASCII; anything else is null. */
++static void whisper_language_json(const char *code, char *out, size_t size)
++{
++    const size_t len = code ? strlen(code) : 0;
++
++    if (len > 0 && len < size - 2 && strspn(code, "abcdefghijklmnopqrstuvwxyz") == len)
++        snprintf(out, size, "\"%s\"", code);
++    else
++        snprintf(out, size, "null");
++}
++
+ static int run_transcription(AVFilterContext *ctx, AVFrame *frame, int samples)
+ {
+     WhisperContext *wctx = ctx->priv;
+@@ -276,6 +314,13 @@
+     params.max_len = wctx->max_len;
+     params.token_timestamps = (wctx->max_len > 0);
+     params.split_on_word = (wctx->max_len > 0);
++    if (wctx->initial_prompt && *wctx->initial_prompt) {
++        /* Every queue chunk is its own whisper_full() call without context, so
++         * the prompt starts each chunk; carrying it also keeps it in front of
++         * every 30 s decode window inside a chunk. */
++        params.initial_prompt = wctx->initial_prompt;
++        params.carry_initial_prompt = true;
++    }
+ 
+     if (whisper_full(wctx->ctx_wsp, params, wctx->audio_buffer, samples) != 0) {
+         av_log(ctx, AV_LOG_ERROR, "Failed to process audio with whisper.cpp\n");
+@@ -287,6 +332,11 @@
+     char *text_cleaned = NULL;
+     char *buf = NULL;
+     const int json_output = !av_strcasecmp(wctx->format, "json");
++    char language_json[16];
++
++    if (json_output)
++        whisper_language_json(whisper_lang_str(whisper_full_lang_id(wctx->ctx_wsp)),
++                              language_json, sizeof(language_json));
+ 
+     for (int i = 0; i < n_segments; ++i) {
+         const char *text = whisper_full_get_segment_text(wctx->ctx_wsp, i);
+@@ -349,12 +399,15 @@
+ 
+                 wctx->index++;
+             } else if (json_output) {
++                char p_json[16];
+                 char *escaped = whisper_json_escape(text_cleaned);
+                 if (!escaped) {
+                     ret = AVERROR(ENOMEM);
+                     goto fail;
+                 }
+-                buf = av_asprintf("{\"start\":%" PRId64 ",\"end\":%" PRId64 ",\"text\":\"%s\"}\n", start_t, end_t, escaped);
++                whisper_segment_p_json(wctx->ctx_wsp, i, p_json, sizeof(p_json));
++                buf = av_asprintf("{\"start\":%" PRId64 ",\"end\":%" PRId64 ",\"text\":\"%s\",\"p\":%s,\"language\":%s}\n",
++                                  start_t, end_t, escaped, p_json, language_json);
+                 av_freep(&escaped);
+             } else
+                 buf = av_asprintf("%s\n", text_cleaned);
+@@ -599,6 +652,7 @@
+     { "destination", "Output destination", OFFSET(destination), AV_OPT_TYPE_STRING, {.str = ""}, .flags = FLAGS },
+     { "format", "Output format (text|srt|json)", OFFSET(format), AV_OPT_TYPE_STRING, {.str = "text"},.flags = FLAGS },
+     { "max_len", "Max segment length in characters", OFFSET(max_len), AV_OPT_TYPE_INT, {.i64 = 0}, 0, INT_MAX, .flags = FLAGS },
++    { "initial_prompt", "Text that conditions every queue chunk (names, terms, spelling)", OFFSET(initial_prompt), AV_OPT_TYPE_STRING, {.str = ""}, .flags = FLAGS },
+     { "vad_model", "Path to the VAD model file", OFFSET(vad_model_path), AV_OPT_TYPE_STRING,.flags = FLAGS },
+     { "vad_threshold", "VAD threshold", OFFSET(vad_threshold), AV_OPT_TYPE_FLOAT, {.dbl = 0.5}, 0.0, 1.0, .flags = FLAGS },
+     { "vad_min_speech_duration", "Minimum speech duration for VAD", OFFSET(vad_min_speech_duration), AV_OPT_TYPE_DURATION, {.i64 = 100000}, 20000, HOURS, .flags = FLAGS },

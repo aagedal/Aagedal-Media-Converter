@@ -500,7 +500,7 @@ actor ConversionManager: Sendable {
         conformanceMetadata: [UUID: VideoMetadata]? = nil
     ) async {
         guard !isConverting, pendingCancellationCount == 0 else { return }
-        if await rejectRecursiveMerge(items: items, mergeEnabled: concatEnabled || conformanceMergeEnabled) { return }
+        if await rejectUnmergeableClips(items: items, mergeEnabled: concatEnabled || conformanceMergeEnabled) { return }
         allowedItemIDs = nil
         let batchID = UUID()
         activeBatchID = batchID
@@ -627,7 +627,7 @@ actor ConversionManager: Sendable {
         limitToIDs: Set<UUID>? = nil
     ) async {
         guard !self.isConverting, pendingCancellationCount == 0 else { return }
-        if await rejectRecursiveMerge(items: droppedFiles, mergeEnabled: mergeClipsEnabled, allowedIDs: limitToIDs) { return }
+        if await rejectUnmergeableClips(items: droppedFiles, mergeEnabled: mergeClipsEnabled, allowedIDs: limitToIDs) { return }
         let batchID = UUID()
         activeBatchID = batchID
         callbackOwnership = ConversionCallbackOwnership()
@@ -676,25 +676,39 @@ actor ConversionManager: Sendable {
         }
     }
 
-    /// A merge consumes all sources at once, so a per-clip generation chain cannot be preserved.
-    private func rejectRecursiveMerge(
+    /// A merge consumes all sources at once, so a per-clip generation chain cannot be
+    /// preserved, and it encodes the joined clips once, without per-clip adjustments.
+    private func rejectUnmergeableClips(
         items: Binding<[VideoItem]>, mergeEnabled: Bool, allowedIDs: Set<UUID>? = nil
     ) async -> Bool {
         guard mergeEnabled else { return false }
         return await MainActor.run {
-            let indices = items.wrappedValue.indices.filter {
-                let item = items.wrappedValue[$0]
-                return item.status == .waiting && item.recursiveEncodingGenerations != nil
-                    && (allowedIDs?.contains(item.id) ?? true)
-            }
-            guard !indices.isEmpty else { return false }
-            for index in indices {
+            var rejected = false
+            for index in items.wrappedValue.indices {
+                let item = items.wrappedValue[index]
+                guard item.status == .waiting, allowedIDs?.contains(item.id) ?? true else { continue }
+                let reason: String
+                if item.recursiveEncodingGenerations != nil {
+                    reason = "Recursive encoding cannot merge clips. Disable merging or recursive encoding, then reset this clip."
+                } else if Self.mergeRefusesAdjustments(of: item) {
+                    reason = FFMPEGCommandBuilder.sourceAdjustmentsUnsupportedReason
+                } else {
+                    continue
+                }
                 items.wrappedValue[index].status = .failed
-                items.wrappedValue[index].conversionError = "Recursive encoding cannot merge clips. Disable merging or recursive encoding, then reset this clip."
+                items.wrappedValue[index].conversionError = reason
+                rejected = true
             }
-            SoundManager.shared.playError()
-            return true
+            if rejected { SoundManager.shared.playError() }
+            return rejected
         }
+    }
+
+    /// Adjustments set on the clip itself. The global loudness default is skipped
+    /// quietly for merges, as for other outputs it cannot reach.
+    static func mergeRefusesAdjustments(of item: VideoItem) -> Bool {
+        ResolvedMediaAdjustments(adjustments: item.adjustments, globalLoudness: LoudnessNormalizationSettings())
+            .hasExplicitAdjustments
     }
 
     func convertNextFile(
@@ -1367,7 +1381,7 @@ actor ConversionManager: Sendable {
         FileNameProcessor.outputBaseName(
             inputURL: inputURL, override: item.outputFileNameOverride,
             counter: item.customCounterValue, preset: preset,
-            settings: settings, context: context
+            settings: settings, context: context, index: item.outputNameIndex
         )
     }
 }

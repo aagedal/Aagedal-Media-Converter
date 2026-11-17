@@ -307,7 +307,7 @@ enum P2CardImporter {
 
         // Check the whole import up front, so a large card doesn't fill the disk shot by shot.
         let neededBytes = zip(shots, sizes).reduce(Int64(0)) { total, pair in
-            FileManager.default.fileExists(atPath: P2ClipRewrapper.outputURL(for: pair.0).path) ? total : total + pair.1
+            P2ClipRewrapper.cachedRewrap(for: pair.0) != nil ? total : total + pair.1
         }
         try? FileManager.default.createDirectory(at: AppConstants.p2ClipsDirectory, withIntermediateDirectories: true)
         if let available = try? AppConstants.p2ClipsDirectory
@@ -394,6 +394,13 @@ actor P2ClipRewrapper {
     static let spaceMargin: Int64 = 512 * 1024 * 1024
     /// Holds the path of the card a shot came from, next to its rewrapped file.
     private static let cardMarkerName = ".card"
+    /// Marks a Matroska rewrap made because bmx couldn't make an MXF. 4.7 wrote Matroska
+    /// for every shot at the same path, without this marker; those are redone as MXF.
+    private static let matroskaFallbackMarkerName = ".matroska-fallback"
+    /// Written when an MXF replaces a 4.7 Matroska rewrap. A restored session or history
+    /// entry may still point at the Matroska, so `removeStale` removes it only `retention`
+    /// after this marker was written, like a shot no longer imported.
+    private static let supersededMarkerName = ".matroska-superseded"
 
     private struct InFlight {
         let task: Task<URL, Error>
@@ -418,12 +425,24 @@ actor P2ClipRewrapper {
         outputURL(for: shot).deletingPathExtension().appendingPathExtension("mkv")
     }
 
+    /// A finished rewrap of the shot: its MXF, or the Matroska made because bmx couldn't
+    /// make one. Audio-only shots always go to Matroska, so 4.7's rewrap of one is kept.
+    nonisolated static func cachedRewrap(for shot: P2CardImporter.Shot) -> URL? {
+        let fileManager = FileManager.default
+        let output = outputURL(for: shot)
+        if fileManager.fileExists(atPath: output.path) { return output }
+        let matroska = matroskaOutputURL(for: shot)
+        guard fileManager.fileExists(atPath: matroska.path) else { return nil }
+        let marker = output.deletingLastPathComponent().appendingPathComponent(matroskaFallbackMarkerName)
+        let hasVideo = shot.clips.allSatisfy { $0.videoURL != nil }
+        return !hasVideo || fileManager.fileExists(atPath: marker.path) ? matroska : nil
+    }
+
     /// `progress` receives about how many bytes have been written so far.
     func rewrap(_ shot: P2CardImporter.Shot, progress: @escaping @Sendable (Int64) -> Void) async throws -> URL {
-        let output = Self.outputURL(for: shot)
-        if FileManager.default.fileExists(atPath: output.path) {
-            Self.markUsed(output, cardRoot: shot.cardRoot)
-            return output
+        if let cached = Self.cachedRewrap(for: shot) {
+            Self.markUsed(cached, cardRoot: shot.cardRoot)
+            return cached
         }
         let key = shot.cacheKey
         let task: Task<URL, Error>
@@ -476,9 +495,15 @@ actor P2ClipRewrapper {
         let channelCount = shot.clips.map(\.audioURLs.count).min() ?? 0
         guard hasVideo || channelCount > 0 else { throw P2CardImporter.RewrapError.noEssence(shot.name) }
 
+        // A cancelled rewrap this one waited for may have finished it.
+        if let cached = cachedRewrap(for: shot) {
+            markUsed(cached, cardRoot: shot.cardRoot)
+            return cached
+        }
         let output = outputURL(for: shot)
         let directory = output.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let matroska = matroskaOutputURL(for: shot)
 
         let sourceBytes = shot.sourceURLs.reduce(Int64(0)) { total, url in
             total + Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
@@ -510,15 +535,22 @@ actor P2ClipRewrapper {
                     },
                     progress: progress
                 )
-                return try finish(shot, partial: partial, output: output)
+                let url = try finish(shot, partial: partial, output: output)
+                if FileManager.default.fileExists(atPath: matroska.path) {
+                    FileManager.default.createFile(
+                        atPath: directory.appendingPathComponent(supersededMarkerName).path, contents: nil
+                    )
+                }
+                return url
             } catch {
                 try Task.checkCancellation()
                 logger.warning("bmxtranswrap couldn't rewrap P2 shot \(shot.name, privacy: .public), using Matroska: \(error.localizedDescription, privacy: .public)")
             }
         }
 
-        let matroska = matroskaOutputURL(for: shot)
+        // bmx failed, so 4.7's Matroska rewrap is what this shot gets; keep it.
         if FileManager.default.fileExists(atPath: matroska.path) {
+            markMatroskaFallback(matroska)
             markUsed(matroska, cardRoot: shot.cardRoot)
             return matroska
         }
@@ -578,7 +610,16 @@ actor P2ClipRewrapper {
             },
             progress: progress
         )
-        return try finish(shot, partial: partial, output: matroska)
+        let url = try finish(shot, partial: partial, output: matroska)
+        markMatroskaFallback(url)
+        return url
+    }
+
+    private static func markMatroskaFallback(_ matroska: URL) {
+        FileManager.default.createFile(
+            atPath: matroska.deletingLastPathComponent().appendingPathComponent(matroskaFallbackMarkerName).path,
+            contents: nil
+        )
     }
 
     /// bmxtranswrap reads the clips of a shot in order (`--no-reorder`) and joins them
@@ -713,7 +754,8 @@ actor P2ClipRewrapper {
     }
 
     /// Removes shots not imported for `retention`, including partial files left by
-    /// a quit mid-rewrap (a newer rewrap of the shot overwrites those). Run at launch.
+    /// a quit mid-rewrap (a newer rewrap of the shot overwrites those), and 4.7 Matroska
+    /// rewraps an MXF replaced that long ago. Run at launch.
     /// On the actor, so it can't remove a shot that an import is reusing or rewrapping.
     func removeStale(now: Date = Date()) {
         Self.removeStale(in: AppConstants.p2ClipsDirectory, now: now, keeping: Set(inFlight.keys).union(stopping.keys))
@@ -726,9 +768,20 @@ actor P2ClipRewrapper {
         ) else { return }
         for shot in shots where !busy.contains(shot.lastPathComponent) {
             let modified = (try? shot.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-            guard let modified, now.timeIntervalSince(modified) >= retention else { continue }
-            try? fileManager.removeItem(at: shot)
-            logger.info("Removed unused P2 rewrap \(shot.lastPathComponent, privacy: .public)")
+            if let modified, now.timeIntervalSince(modified) >= retention {
+                try? fileManager.removeItem(at: shot)
+                logger.info("Removed unused P2 rewrap \(shot.lastPathComponent, privacy: .public)")
+                continue
+            }
+            let marker = shot.appendingPathComponent(supersededMarkerName)
+            guard let superseded = (try? fileManager.attributesOfItem(atPath: marker.path))?[.modificationDate] as? Date,
+                  now.timeIntervalSince(superseded) >= retention else { continue }
+            let files = (try? fileManager.contentsOfDirectory(at: shot, includingPropertiesForKeys: nil)) ?? []
+            for file in files where file.pathExtension == "mkv" {
+                try? fileManager.removeItem(at: file)
+                logger.info("Removed superseded Matroska P2 rewrap \(file.lastPathComponent, privacy: .public)")
+            }
+            try? fileManager.removeItem(at: marker)
         }
     }
 }

@@ -38,7 +38,7 @@ struct EncodeStatisticsView: View {
     @Environment(\.openWindow) private var openWindow
     @State private var store = EncodeHistoryStore.shared
     /// Nil for all Macs.
-    @State private var deviceFilter: String?
+    @State private var selectedDeviceID: String?
     @State private var exportError: String?
 
     var body: some View {
@@ -53,7 +53,7 @@ struct EncodeStatisticsView: View {
                 }
                 .pickerStyle(.segmented)
                 if deviceIDs.count > 1 {
-                    Picker("Mac", selection: $deviceFilter) {
+                    Picker("Mac", selection: $selectedDeviceID) {
                         Text("All Macs").tag(String?.none)
                         ForEach(deviceIDs, id: \.self) { id in
                             Text(verbatim: deviceLabel(id)).tag(String?.some(id))
@@ -104,6 +104,10 @@ struct EncodeStatisticsView: View {
             }
         }
         .formStyle(.grouped)
+        .onChange(of: deviceIDs) {
+            // The Mac's data is gone (file removed, sync off), or the picker is hidden.
+            if selectedDeviceID != nil, deviceFilter == nil { selectedDeviceID = nil }
+        }
         .alert("Couldn’t Export Statistics", isPresented: Binding(
             get: { exportError != nil }, set: { if !$0 { exportError = nil } }
         )) {
@@ -143,6 +147,9 @@ struct EncodeStatisticsView: View {
         guard id == store.deviceID else { return name }
         return String(localized: "\(name) (this Mac)", comment: "Statistics Mac picker: the Mac the app runs on.")
     }
+
+    /// The selected Mac while it still has data, else nil (all Macs).
+    private var deviceFilter: String? { store.statisticsDeviceFilter(selectedDeviceID) }
 
     private var macLabel: String {
         deviceFilter.map(deviceLabel) ?? String(localized: "All Macs")

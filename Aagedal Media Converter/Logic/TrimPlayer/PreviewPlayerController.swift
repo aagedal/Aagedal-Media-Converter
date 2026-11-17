@@ -1382,7 +1382,17 @@ final class PreviewPlayerController: ObservableObject {
                 onProgress: { [weak self] partial in
                     Task { @MainActor in self?.showChannelWaveformProgress(partial, id: progressID, stream: streamIndex) }
                 }
-            ) else { return }
+            ) else {
+                guard !Task.isCancelled else { return }
+                self.channelWaveformProgressID = nil
+                // A failed decode may have drawn part of the track. Drop it, so the
+                // waveform isn't mistaken for complete and the next selection retries.
+                if self.videoItem.url == url, self.selectedAudioStreamIndex() == streamIndex {
+                    self.currentChannelWaveformEnvelopes = []
+                    self.currentChannelWaveformLabels = []
+                }
+                return
+            }
 
             guard !Task.isCancelled else { return }
             self.channelWaveformProgressID = nil
@@ -1695,6 +1705,8 @@ final class PreviewPlayerController: ObservableObject {
                 guard !Task.isCancelled else { break }
 
                 if let cached = await PreviewAssetGenerator.shared.cachedAssetsIfPresent(for: url) {
+                    // The generation may have ended while this read was in flight.
+                    guard !Task.isCancelled else { break }
                     // Only update if we have new chunks, thumbnails or decoded waveform
                     let currentChunkCount = self.previewAssets?.waveformChunks.count ?? 0
                     let decodedFrames = { (assets: PreviewAssets?) in
@@ -1750,9 +1762,10 @@ final class PreviewPlayerController: ObservableObject {
             } catch {
                 // Only handle errors if we're still viewing this file
                 if self.previewAssetURL == taskURL {
-                    // Only clear assets if we don't have any (don't wipe partial cache on error)
-                    if self.previewAssets == nil {
-                        self.previewAssets = nil
+                    // Keep partial thumbnails and chunks, but not a first-stream waveform
+                    // whose decode stopped early; reopening Trim decodes it again.
+                    if self.previewAssets?.nativeChannelWaveformIsPartial == true {
+                        self.previewAssets = self.previewAssets?.discardingPartialChannelWaveform()
                     }
                     if (error as? CancellationError) == nil {
                         logger.error("Failed to load preview assets for \(taskURL.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")

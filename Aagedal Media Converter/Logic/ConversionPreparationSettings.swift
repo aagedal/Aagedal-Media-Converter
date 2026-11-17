@@ -96,7 +96,7 @@ struct VideoGroupImportContext: Sendable {
         VideoFileUtils.makeOutputURL(
             for: item.url, outputFolder: outputFolder, preset: preset,
             counter: item.customCounterValue, namingSettings: naming,
-            override: item.outputFileNameOverride
+            override: item.outputFileNameOverride, index: item.outputNameIndex
         )
     }
 

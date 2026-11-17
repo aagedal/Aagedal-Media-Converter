@@ -81,6 +81,11 @@ final class CodecExportSettingsTests: XCTestCase {
             includeDateTag: false, sourceMetadata: metadata, trimStart: 0.5, trimEnd: 1.5,
             cropConfig: CropConfig(normalizedRect: CropRect(x: 0, y: 0, width: 0.5, height: 1))
         )
+        // A flip or gain applied again would undo or compound the first generation's.
+        var adjustments = MediaAdjustments()
+        adjustments.flipHorizontal = true
+        adjustments.audioGain = 6
+        request.adjustments = ResolvedMediaAdjustments(adjustments: adjustments, globalLoudness: .init())
         request.outputURLResolved = { url in resolved.withLock { $0 = url } }
         let converter = FFMPEGConverter(ffmpegPathProvider: { binary.path })
         await converter.convert(

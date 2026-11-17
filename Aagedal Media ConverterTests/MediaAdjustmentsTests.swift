@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import AVFoundation
+import os
 import XCTest
 @testable import Aagedal_Media_Converter
 
@@ -124,26 +125,30 @@ final class MediaAdjustmentsTests: XCTestCase {
     }
 
     func testOutputChainsExpandGenericMapsAndExtendRoutingGraphs() throws {
-        var direct = ["-map", "0:v:0", "-map", "0:a?", "-c:v", "libx264", "-c:a", "aac"]
+        var direct = ["-map", "0:v:0", "-map", "0:a?", "-map", "1:a", "-c:v", "libx264", "-c:a", "aac"]
+        var inputs: [Int?] = []
         let directCount = try MediaAdjustmentsPlan.applyAudioChains(
-            to: &direct, placement: .outputs, audioStreamCount: { _ in 2 }, chain: { "volume=\($0)" }
+            to: &direct, placement: .outputs, audioStreamCount: { $0 == 0 ? 2 : 1 },
+            chain: { index, input in inputs.append(input); return "volume=\(index)" }
         ).get()
-        XCTAssertEqual(directCount, 2)
+        XCTAssertEqual(directCount, 3)
+        XCTAssertEqual(inputs, [0, 0, 1])
         XCTAssertEqual(direct, [
-            "-filter_complex", "[0:a:0]volume=0[afx0];[0:a:1]volume=1[afx1]",
-            "-map", "0:v:0", "-map", "[afx0]", "-map", "[afx1]", "-c:v", "libx264", "-c:a", "aac",
+            "-filter_complex", "[0:a:0]volume=0[afx0];[0:a:1]volume=1[afx1];[1:a:0]volume=2[afx2]",
+            "-map", "0:v:0", "-map", "[afx0]", "-map", "[afx1]", "-map", "[afx2]", "-c:v", "libx264", "-c:a", "aac",
         ])
 
         var routed = ["-filter_complex", "[0:a:0]pan=stereo|c0=c1|c1=c0[aout]", "-map", "0:v:0", "-map", "[aout]"]
         _ = try MediaAdjustmentsPlan.applyAudioChains(
-            to: &routed, placement: .outputs, audioStreamCount: { _ in 1 }, chain: { _ in "anull" }
+            to: &routed, placement: .outputs, audioStreamCount: { _ in 1 },
+            chain: { _, input in XCTAssertNil(input, "A graph output has no single input"); return "anull" }
         ).get()
         XCTAssertEqual(routed[1], "[0:a:0]pan=stereo|c0=c1|c1=c0[aout];[aout]anull[afx0]")
         XCTAssertEqual(Array(routed.suffix(2)), ["-map", "[afx0]"])
 
         var copied = ["-map", "0:a:0", "-c:a:0", "copy"]
         XCTAssertEqual(
-            MediaAdjustmentsPlan.applyAudioChains(to: &copied, placement: .outputs, audioStreamCount: { _ in 1 }, chain: { _ in "anull" }),
+            MediaAdjustmentsPlan.applyAudioChains(to: &copied, placement: .outputs, audioStreamCount: { _ in 1 }, chain: { _, _ in "anull" }),
             .failure(.copiedAudio)
         )
     }
@@ -154,7 +159,7 @@ final class MediaAdjustmentsTests: XCTestCase {
             "-map", "0:v:0", "-map", "[l]", "-map", "[r]", "-map", "[keep]", "-map", "0:a:1",
         ]
         let count = try MediaAdjustmentsPlan.applyAudioChains(
-            to: &split, placement: .sources, audioStreamCount: { _ in 2 }, chain: { "volume=\($0)" }
+            to: &split, placement: .sources, audioStreamCount: { _ in 2 }, chain: { index, _ in "volume=\(index)" }
         ).get()
         XCTAssertEqual(count, 2)
         XCTAssertEqual(split[1], "[0:a:0]volume=0,asplit=2[asrc0_0][asrc0_1];[0:a:1]volume=1[asrc1_0];"
@@ -220,6 +225,113 @@ final class MediaAdjustmentsTests: XCTestCase {
             adjustments: ResolvedMediaAdjustments(adjustments: explicit, globalLoudness: global)
         )
         XCTAssertNotNil(rejected.preparationError)
+    }
+
+    // MARK: - Outputs that cannot take every adjustment
+
+    func testMergesRefuseClipAdjustmentsButNotTheGlobalLoudnessDefault() {
+        var item = VideoItem(url: URL(fileURLWithPath: "/private/clip.mov"), name: "Clip", size: 0,
+                             duration: "00:00:01", status: .waiting, progress: 0, eta: nil)
+        XCTAssertFalse(ConversionManager.mergeRefusesAdjustments(of: item))
+        var adjustments = MediaAdjustments()
+        adjustments.audioGain = 0.02
+        adjustments.loudness = .off
+        item.adjustments = adjustments
+        XCTAssertFalse(ConversionManager.mergeRefusesAdjustments(of: item), "Inaudible volume and loudness off change nothing")
+        adjustments.loudness = .on
+        item.adjustments = adjustments
+        XCTAssertTrue(ConversionManager.mergeRefusesAdjustments(of: item))
+        adjustments.loudness = .useDefault
+        adjustments.rotation = .clockwise90
+        item.adjustments = adjustments
+        XCTAssertTrue(ConversionManager.mergeRefusesAdjustments(of: item))
+    }
+
+    func testGeneratedVideoRefusesExplicitAdjustmentsBeforeTheSwiftWaveformEngine() async {
+        var adjustments = MediaAdjustments()
+        adjustments.audioGain = 6
+        var request = ConversionRequest(
+            inputURL: URL(fileURLWithPath: "/private/missing.wav"), outputURL: URL(fileURLWithPath: "/private/missing-out"),
+            preset: .h264, includeDateTag: false,
+            adjustments: ResolvedMediaAdjustments(adjustments: adjustments, globalLoudness: .enabledEBU),
+            waveformRequest: WaveformVideoRequest(
+                width: 32, height: 32, backgroundHex: "000000", foregroundHex: "FFFFFF",
+                normalizeAudio: false, style: .linear, frameRate: 24, renderingEngine: .swift,
+                swiftStyle: .capsules, bandCount: 16, frequencyDistribution: .logarithmic,
+                foregroundGradientEnabled: false, foregroundGradientEndHex: "FFFFFF",
+                backgroundGradientEnabled: false, backgroundGradientEndHex: "000000", waveformOpacity: 1
+            )
+        )
+        let expected = FFMPEGCommandBuilder.adjustmentsUnsupportedReason(
+            preset: .h264, codecSettings: nil, customInputArguments: nil, generatesVideo: true
+        )
+        XCTAssertNotNil(expected)
+        XCTAssertEqual(FFMPEGConverter.unsupportedAdjustmentsReason(for: request, codecSettings: nil), expected)
+
+        let reason = OSAllocatedUnfairLock<String?>(initialState: nil)
+        let converter = FFMPEGConverter(ffmpegPathProvider: { nil })
+        await converter.convert(request: request, progressUpdate: { _, _ in }, completion: { success, error in
+            XCTAssertFalse(success)
+            reason.withLock { $0 = error }
+        })
+        XCTAssertEqual(reason.withLock { $0 }, expected)
+
+        // The global default alone is skipped where it cannot apply.
+        request.adjustments = ResolvedMediaAdjustments(adjustments: nil, globalLoudness: .enabledEBU)
+        XCTAssertNil(FFMPEGConverter.unsupportedAdjustmentsReason(for: request, codecSettings: nil))
+    }
+
+    func testImageSequenceExportsKeepPictureAdjustmentsAndRefuseSoundChanges() async {
+        var picture = MediaAdjustments()
+        picture.rotation = .clockwise90
+        let kept = FFMPEGCommandBuilder.imageSequenceAdjustments(
+            ResolvedMediaAdjustments(adjustments: picture, globalLoudness: .enabledEBU)
+        )
+        XCTAssertEqual(try kept.get()?.adjustments.rotation, .clockwise90)
+        XCTAssertNil(try kept.get()?.loudness, "The WAV sidecar is not normalized, so the default is skipped")
+        XCTAssertNil(try FFMPEGCommandBuilder.imageSequenceAdjustments(
+            ResolvedMediaAdjustments(adjustments: nil, globalLoudness: .enabledEBU)
+        ).get())
+
+        var loudness = MediaAdjustments()
+        loudness.loudness = .on
+        var speed = MediaAdjustments()
+        speed.speed = 2
+        var volume = MediaAdjustments()
+        volume.audioGain = 6
+        for adjustments in [loudness, speed, volume] {
+            let command = await FFMPEGCommandBuilder.buildCommand(
+                inputURL: URL(fileURLWithPath: "/private/source.mov"),
+                outputFileURL: URL(fileURLWithPath: "/private/out/frame_%06d.png"),
+                preset: .imageSequence, comment: "", includeDateTag: false, trimStart: nil, trimEnd: nil,
+                adjustments: ResolvedMediaAdjustments(adjustments: adjustments, globalLoudness: .init())
+            )
+            XCTAssertEqual(command.preparationError, FFMPEGCommandBuilder.sourceAdjustmentsUnsupportedReason)
+        }
+    }
+
+    func testSpeedChangeDropsSourceChapters() async throws {
+        let suite = "adjustments-chapters-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: AppConstants.preserveMetadataPreferenceKey)
+        let settings = try XCTUnwrap(CodecExportSettings(preset: .lossless, defaults: defaults))
+        func chapterMaps(speed: Double) async -> [String] {
+            var adjustments = MediaAdjustments()
+            adjustments.speed = speed
+            adjustments.flipHorizontal = true
+            let arguments = await FFMPEGCommandBuilder.buildCommand(
+                inputURL: URL(fileURLWithPath: "/private/source.mov"), outputFileURL: URL(fileURLWithPath: "/private/out.mkv"),
+                preset: .lossless, codecSettings: settings, comment: "", includeDateTag: false, trimStart: nil, trimEnd: nil,
+                adjustments: ResolvedMediaAdjustments(adjustments: adjustments, globalLoudness: .init()),
+                durationProvider: { _ in 4 }
+            ).arguments
+            return arguments.indices.filter { arguments[$0] == "-map_chapters" }.map { arguments[$0 + 1] }
+        }
+        let unchanged = await chapterMaps(speed: 1)
+        let retimed = await chapterMaps(speed: 2)
+        XCTAssertEqual(unchanged, ["0"])
+        XCTAssertEqual(retimed, ["-1"])
     }
 
     // MARK: - End to end with the bundled FFmpeg
@@ -310,6 +422,84 @@ final class MediaAdjustmentsTests: XCTestCase {
         }
     }
 
+    func testLoudnessKeepsTheSourceSampleRateWhenThePresetSetsNone() async throws {
+        let fixture = try await Fixture.make(audioTracks: 1, sampleRate: 44100)
+        defer { fixture.remove() }
+        let output = fixture.directory.appendingPathComponent("normalized.mkv")
+        let command = try await fixture.export(
+            preset: .lossless, adjustments: ResolvedMediaAdjustments(adjustments: nil, globalLoudness: .enabledEBU),
+            to: output
+        )
+        XCTAssertFalse(command.arguments.contains("-ar"))
+        XCTAssertTrue(command.arguments.contains { $0.contains("aresample=44100") }, "\(command.arguments)")
+        let probe = try await fixture.probe(output)
+        XCTAssertEqual(probe.sampleRate, 44100)
+    }
+
+    func testAddedAudioReachesPresetsWithoutMapsAndKeepsItsOwnVolume() async throws {
+        let fixture = try await Fixture.make(audioTracks: 1)
+        defer { fixture.remove() }
+        let suite = "adjustments-custom-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let slot = try XCTUnwrap(ExportPreset.custom1.customSlotIndex)
+        defaults.set("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a pcm_s16le", forKey: AppConstants.customPresetCommandKey(for: slot))
+        defaults.set(true, forKey: AppConstants.customPresetApplyCropKey(for: slot))
+        let settings = try XCTUnwrap(CodecExportSettings(preset: .custom1, defaults: defaults))
+        XCTAssertFalse(settings.ffmpegArguments.contains("-map"))
+
+        var adjustments = MediaAdjustments()
+        adjustments.replacementAudio = .init(path: fixture.replacementAudio.path, mode: .add)
+        adjustments.audioGain = 6
+        let output = fixture.directory.appendingPathComponent("added.mov")
+        let command = try await fixture.export(
+            preset: .custom1, adjustments: ResolvedMediaAdjustments(adjustments: adjustments, globalLoudness: .init()),
+            to: output, codecSettings: settings
+        )
+        let graph = try XCTUnwrap(command.arguments.firstIndex(of: "-filter_complex").map { command.arguments[$0 + 1] })
+        let chains = graph.split(separator: ";").map(String.init)
+        XCTAssertEqual(chains.count, 2, graph)
+        XCTAssertTrue(chains[0].hasPrefix("[0:a:0]") && chains[0].contains("volume=6dB"), graph)
+        XCTAssertTrue(chains[1].hasPrefix("[1:a:0]") && !chains[1].contains("volume="), "The export volume is for the source track: \(graph)")
+        let probe = try await fixture.probe(output)
+        XCTAssertEqual(probe.audioTracks, 2)
+        XCTAssertEqual(probe.width, 320)
+    }
+
+    func testAudioAndPictureAdjustmentsKeepTheUntaggedColorFix() async throws {
+        let fixture = try await Fixture.make(audioTracks: 1, size: "1280x720")
+        defer { fixture.remove() }
+        let metadata = try await BoundedVideoMetadataProbe.metadata(for: fixture.source)
+        XCTAssertNil(metadata.primaryVideoStream?.colorSpace)
+        let suite = "adjustments-proxy-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(ProxyResolutionLimit.r480.rawValue, forKey: AppConstants.proxyResolutionLimitKey)
+        let settings = CodecExportSettings(preset: .proxy, defaults: defaults)
+        func command(rotation: MediaAdjustments.Rotation) async -> [String] {
+            var adjustments = MediaAdjustments()
+            adjustments.audioGain = 6
+            adjustments.flipHorizontal = true
+            adjustments.videoFadeIn = 0.5
+            adjustments.rotation = rotation
+            return await FFMPEGCommandBuilder.buildCommand(
+                inputURL: fixture.source, outputFileURL: fixture.directory.appendingPathComponent("proxy.mov"),
+                preset: .proxy, codecSettings: settings,
+                comment: "", includeDateTag: false, trimStart: nil, trimEnd: nil,
+                sourceMetadata: metadata, adjustments: ResolvedMediaAdjustments(adjustments: adjustments, globalLoudness: .init())
+            ).arguments
+        }
+        // HD downscaled to an SD proxy changes the class players assume, so the source is tagged.
+        let upright = await command(rotation: .none)
+        XCTAssertTrue(upright.contains("-filter_complex"))
+        let input = try XCTUnwrap(upright.indices.first { upright[$0] == "-i" && upright[$0 + 1] == fixture.source.path })
+        XCTAssertEqual(Array(upright[(input - 6)..<input]),
+                       ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"], "\(upright)")
+        // Turned to portrait, the proxy is 480 × 854: still HD to players, so nothing changes.
+        let portrait = await command(rotation: .clockwise90)
+        XCTAssertFalse(portrait.contains("-color_primaries"), "\(portrait)")
+    }
+
     func testParsesLoudnormStatisticsInGraphOrder() {
         let log = """
         [Parsed_loudnorm_3 @ 0x7b9ac09440]
@@ -346,7 +536,7 @@ private struct Fixture {
     let replacementAudio: URL
     let ffmpeg: String
 
-    static func make(audioTracks: Int, size: String = "320x240") async throws -> Fixture {
+    static func make(audioTracks: Int, size: String = "320x240", sampleRate: Int = 48000) async throws -> Fixture {
         let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("adjustments-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -358,7 +548,7 @@ private struct Fixture {
         try "1\n00:00:00,500 --> 00:00:03,000\nHello: world, [test]\n\n".write(to: fixture.subtitles, atomically: true, encoding: .utf8)
         var arguments = ["-y", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=d=4:s=\(size):r=25"]
         for track in 0..<audioTracks {
-            arguments += ["-f", "lavfi", "-i", "sine=f=\(440 + track * 220):d=4:sample_rate=48000,volume=\(-30 - track * 6)dB,pan=stereo|c0=c0|c1=c0"]
+            arguments += ["-f", "lavfi", "-i", "sine=f=\(440 + track * 220):d=4:sample_rate=\(sampleRate),volume=\(-30 - track * 6)dB,pan=stereo|c0=c0|c1=c0"]
         }
         arguments += ["-map", "0:v"] + (0..<audioTracks).flatMap { ["-map", "\($0 + 1):a"] }
         arguments += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "pcm_s24le", fixture.source.path]
@@ -383,13 +573,14 @@ private struct Fixture {
     /// Builds, measures when loudness is on, rebuilds and encodes, as `FFMPEGConverter` does.
     func export(
         preset: ExportPreset, adjustments: ResolvedMediaAdjustments, to output: URL,
-        trimStart: Double? = nil, trimEnd: Double? = nil
+        trimStart: Double? = nil, trimEnd: Double? = nil, codecSettings: CodecExportSettings? = nil
     ) async throws -> FFMPEGCommand {
         let metadata = try await BoundedVideoMetadataProbe.metadata(for: source)
         func build(_ measurements: [LoudnormMeasurement]?) async -> FFMPEGCommand {
             await FFMPEGCommandBuilder.buildCommand(
                 inputURL: source, outputFileURL: output, preset: preset,
-                codecSettings: CodecExportSettings(preset: preset, defaults: UserDefaults(suiteName: "adjustments-\(UUID())")!),
+                codecSettings: codecSettings
+                    ?? CodecExportSettings(preset: preset, defaults: UserDefaults(suiteName: "adjustments-\(UUID())")!),
                 comment: "", includeDateTag: false, trimStart: trimStart, trimEnd: trimEnd,
                 sourceMetadata: metadata, adjustments: adjustments, loudnessMeasurements: measurements
             )
@@ -407,14 +598,15 @@ private struct Fixture {
         return command
     }
 
-    struct Probe { var width = 0, height = 0, audioTracks = 0, duration = 0.0 }
+    struct Probe { var width = 0, height = 0, audioTracks = 0, duration = 0.0, sampleRate: Int? }
 
     func probe(_ url: URL) async throws -> Probe {
         let metadata = try await BoundedVideoMetadataProbe.metadata(for: url)
         let video = metadata.videoStreams.first
         return Probe(
             width: video?.width ?? 0, height: video?.height ?? 0,
-            audioTracks: metadata.audioStreams.count, duration: metadata.duration ?? 0
+            audioTracks: metadata.audioStreams.count, duration: metadata.duration ?? 0,
+            sampleRate: metadata.audioStreams.first?.sampleRate
         )
     }
 

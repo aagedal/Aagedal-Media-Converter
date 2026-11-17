@@ -101,26 +101,34 @@ struct FileNameProcessor {
     static func outputBaseName(
         inputURL: URL, override: String? = nil, counter: Int? = nil, preset: ExportPreset,
         settings: FileNamePreferences = FileNameSettings().snapshot,
-        context: FileNameTemplateContext? = nil, date: Date = Date()
+        context: FileNameTemplateContext? = nil, date: Date = Date(), index: Int? = nil
     ) -> String {
         let parts = outputNameParts(inputURL: inputURL, override: override, counter: counter, preset: preset,
-                                    settings: settings, context: context, date: date)
+                                    settings: settings, context: context, date: date, index: index)
         return parts.baseName + parts.suffix
     }
 
+    /// `index` is a clip's `outputNameIndex`; it goes after the preset suffix.
     static func outputNameParts(
         inputURL: URL, override: String? = nil, counter: Int? = nil, preset: ExportPreset,
         settings: FileNamePreferences = FileNameSettings().snapshot,
-        context: FileNameTemplateContext? = nil, date: Date = Date()
+        context: FileNameTemplateContext? = nil, date: Date = Date(), index: Int? = nil
     ) -> (baseName: String, suffix: String) {
         if let override = override?.trimmingCharacters(in: .whitespacesAndNewlines), !override.isEmpty {
-            return (processFileName((override as NSString).deletingPathExtension, settings: settings), "")
+            return (processFileName((override as NSString).deletingPathExtension, settings: settings),
+                    indexedName("", index: index))
         }
         let context = context ?? FileNameTemplateContext(preset: preset)
         let sourceName = processFileName(inputURL.deletingPathExtension().lastPathComponent, settings: settings)
         let templated = applyCustomTemplate(sourceName: sourceName, counter: counter, settings: settings, context: context, date: date)
         let suffix = settings.includePresetSuffix && !settings.customTemplateUsesPresetSuffix ? context.presetSuffix : ""
-        return (templated, suffix)
+        return (templated, indexedName(suffix, index: index))
+    }
+
+    /// Appends a clip's output name index (`_2`, `_3`, …), if any.
+    static func indexedName(_ name: String, index: Int?) -> String {
+        guard let index else { return name }
+        return "\(name)_\(index)"
     }
 
     /// Applies the user's custom filename template to a sanitized source name.

@@ -384,6 +384,14 @@ final class AppIntentHandoffTests: XCTestCase {
             items: [item], destinationFolderURL: folder, preset: .h264,
             mergeClipsEnabled: false, defaults: defaults
         ))
+
+        // A group's `_2` name has no place in the contract, which numbers outputs itself.
+        var indexed = makeItem(url: first)
+        indexed.outputNameIndex = 2
+        XCTAssertNil(ManualApplicationJobBridge.makeRequest(
+            items: [indexed], destinationFolderURL: folder, preset: .h264,
+            mergeClipsEnabled: false, defaults: defaults
+        ))
     }
 
     func testSharedGroupPreparationPreservesOrderAndSequentialNames() throws {

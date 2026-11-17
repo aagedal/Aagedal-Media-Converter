@@ -1,15 +1,15 @@
-# v.4.8.0 (Unreleased)
+# v.4.8.0
 
 ### Adjustments
 
 - New Adjustments… window for each queued file (right-click a file): rotate 90° or 180° and flip, change speed from 0.25× to 4× with pitch-preserved audio, fade the picture from or to black, fade audio in and out, offset the audio, and replace the audio or add tracks from another file. Added audio follows the trim and is fitted to the video's length.
 - Burn in subtitles from a text track or an SRT, ASS or VTT file, with font size, outline or box, and position. Picture subtitles (PGS, DVD) can't be burned in; convert them with subtitle OCR first.
-- Adjustments need a re-encoding preset. Stream Copy, DCP, IMF, AV2, merges and generated waveform video refuse files with adjustments before encoding starts. Speed changes leave out soft subtitles.
+- Adjustments need a re-encoding preset. Stream Copy, DCP, IMF, AV2, merges and generated waveform video refuse files with adjustments before encoding starts. Image Sequence takes picture adjustments only, since its WAV file is written without them. Recursive encoding applies adjustments to the first generation only. Speed changes leave out soft subtitles and chapters.
 
 ### Loudness normalization
 
 - New Loudness Normalization setting in Settings › Presets: EBU R128, ATSC A/85, −14 LUFS, −16 LUFS or a custom target, with a per-file override.
-- Each audio track is measured first, then the encode brings it to the target, with a plain gain change wherever the audio allows it. Presets with mono tracks (AVC-Intra, XDCAM, split-to-mono routing) are measured before the split, so the balance between channels is kept.
+- Each audio track is measured first, then the encode brings it to the target, with a plain gain change wherever the audio allows it. Presets that don't set a sample rate keep the source's. Presets with mono tracks (AVC-Intra, XDCAM, split-to-mono routing) are measured before the split, so the balance between channels is kept.
 - The setting is skipped for outputs it can't apply to. Shortcuts and agent jobs don't use it.
 
 ### New presets
@@ -88,6 +88,7 @@
 - TV (HEVC 10-bit 4:2:2) and TV (AVC-Intra MXF) exports set to 50i or 59.94i have 25 or 29.97 frames per second, each holding two fields. They used to have twice as many frames, every one repeated, at 50 or 59.94 frames per second.
 - Exports with Export matte sidecar turned on always write the `_matte` file. Some ordinary queue conversions went through the shared job engine, which left it out.
 - Interlaced H.264 and AVC-Intra copied or encoded to MOV keep their field order. FFmpeg left out the QuickTime field-order atom for H.264, so editing apps could treat these files as progressive. MP4 is unchanged.
+- Corrected about 2,750 translations in all nine languages, Norwegian included: wrong word senses (a crop as in farming, a share as in stocks), leftover English and inconsistent terms.
 
 # v.4.7.0
 

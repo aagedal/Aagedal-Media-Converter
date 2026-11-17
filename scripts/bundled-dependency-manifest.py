@@ -75,7 +75,7 @@ TOOL_METADATA: dict[str, dict[str, Any]] = {
         "component": "FFmpeg",
         "license": "GPL-3.0-or-later",
         "licenseFile": "Licenses/ffmpeg-LICENSE.txt",
-        "requiredSourceComponents": ["FFmpeg 9.0.2 build (SVT-AV1 4.3.0)"],
+        "requiredSourceComponents": ["FFmpeg 9.0.2 build (2026-11-16)"],
         "versionArguments": ["-version"],
         "versionPattern": r"ffmpeg version ([^ ]+)",
     },

@@ -46,6 +46,9 @@ final class ScheduledCaptureQueue: ObservableObject {
     /// stays open after recordings finish, so the user comes back to it rather than to a closed
     /// overlay.
     private(set) var didStartRecording = false
+    /// From `takeDue` until `finishStarting`: the recording is starting but not yet recording,
+    /// so neither the next entry nor leaving record mode may interrupt it.
+    @Published private(set) var isStartingRecording = false
 
     private let keepsDisplayAwake: Bool
     private var powerAssertion: UUID?
@@ -86,15 +89,25 @@ final class ScheduledCaptureQueue: ObservableObject {
     func reset() {
         removeAll()
         didStartRecording = false
+        isStartingRecording = false
     }
 
-    /// Removes and returns the first recording when its start time has come.
+    /// Removes and returns the first recording when its start time has come, and marks it as
+    /// starting. Recordings whose stop time passed while another recording ran are dropped;
+    /// entries never overlap, so at most one due recording is still within its time.
     func takeDue(now: Date = Date()) -> ScheduledCapture? {
+        guard !isStartingRecording else { return nil }
+        defer { updatePowerAssertion() }
+        entries.removeAll { $0.end.map { $0 <= now } ?? false }
         guard let first = entries.first, first.start <= now else { return nil }
         entries.removeFirst()
         didStartRecording = true
-        updatePowerAssertion()
+        isStartingRecording = true
         return first
+    }
+
+    func finishStarting() {
+        isStartingRecording = false
     }
 
     /// A start time for a new recording: the first whole minute at least five minutes from now

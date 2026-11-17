@@ -136,6 +136,10 @@ final class EncodeHistoryStore {
             file.sessions[index].endedAt = lastActivity ?? file.sessions[index].startedAt
             file.sessions[index].endedCleanly = false
         }
+        // Written once with this Mac's id, so other Macs never have to guess.
+        EncodeHistoryMerge.attributeUnattributed(
+            records: &file.records, sessions: &file.sessions, rollups: &file.rollups, to: deviceID
+        )
 
         let session = HistorySession(
             startedAt: now,
@@ -154,6 +158,9 @@ final class EncodeHistoryStore {
         if isSyncEnabled {
             startMonitoring()
             reloadTask = Task { [weak self] in await self?.reloadRemote() }
+        } else {
+            // A removal that couldn't happen when sync was turned off.
+            removeStaleSyncFiles(keeping: nil)
         }
     }
 
@@ -308,6 +315,14 @@ final class EncodeHistoryStore {
             ?? allRollups.first { $0.deviceID == id && !$0.deviceName.isEmpty }?.deviceName
     }
 
+    /// `id` while it names one of several Macs in the merged history, else nil
+    /// (all Macs): a Mac whose data is gone can't stay selected unseen.
+    func statisticsDeviceFilter(_ id: String?) -> String? {
+        guard let id else { return nil }
+        let ids = historyDeviceIDs
+        return ids.count > 1 && ids.contains(id) ? id : nil
+    }
+
     /// Macs with data in the merged history, this one first.
     var historyDeviceIDs: [String] {
         var others = Set(allRecords.compactMap(\.deviceID) + allRollups.compactMap(\.deviceID) + allSessions.compactMap(\.deviceID))
@@ -356,8 +371,9 @@ final class EncodeHistoryStore {
     /// `History` inside the sync folder, or nil when the location isn't available.
     var syncDirectory: URL? { syncFolder().map(HistorySyncFolder.directory(in:)) }
 
-    /// Turning sync off also removes this Mac's file from the sync folder, so
-    /// its paths and file names no longer sit in iCloud Drive.
+    /// Turning sync off also removes this Mac's file from the sync folder (and
+    /// any earlier one), so its paths and file names no longer sit in iCloud
+    /// Drive. A folder that isn't reachable now is cleaned up on a later launch.
     func setSyncEnabled(_ enabled: Bool) {
         guard enabled != isSyncEnabled else { return }
         isSyncEnabled = enabled
@@ -372,16 +388,8 @@ final class EncodeHistoryStore {
             cloudSaveTask = nil
             reloadTask?.cancel()
             stopMonitoring()
-            if let directory = syncDirectory {
-                let id = deviceID
-                Self.writeQueue.sync {
-                    do {
-                        try HistorySyncFolder.removeFiles(of: id, in: directory)
-                    } catch {
-                        Self.logger.error("Couldn't remove synced history: \(error.localizedDescription, privacy: .public)")
-                    }
-                }
-            }
+            if let directory = syncDirectory { noteWrittenSyncDirectory(directory) }
+            removeStaleSyncFiles(keeping: nil)
             remoteFiles = []
             foreignRelinks = [:]
             syncDevices = []
@@ -602,7 +610,8 @@ final class EncodeHistoryStore {
         }
     }
 
-    /// Writes this Mac's file in the sync folder (atomically, on the write queue).
+    /// Writes this Mac's file in the sync folder (atomically, on the write
+    /// queue), after removing it from a folder used before the location changed.
     private func writeCloud(synchronously: Bool) {
         cloudSaveTask?.cancel()
         cloudSaveTask = nil
@@ -611,6 +620,8 @@ final class EncodeHistoryStore {
             syncErrorMessage = SettingsSyncService.SyncError.locationUnavailable.localizedDescription
             return
         }
+        noteWrittenSyncDirectory(directory)
+        removeStaleSyncFiles(keeping: directory)
         let file = HistorySyncFolder.makeFile(
             records: records, sessions: sessions, rollups: rollups,
             deviceID: deviceID, deviceName: deviceName, now: Date()
@@ -630,6 +641,54 @@ final class EncodeHistoryStore {
                     }
                 }
             }
+        }
+    }
+
+    /// Folders this Mac's synced file was written to and may still be in.
+    /// Persisted, so a folder that's offline when sync is turned off or the
+    /// location changes is still cleaned up later.
+    private var writtenSyncDirectories: [String] {
+        get { defaults.stringArray(forKey: AppConstants.encodeHistorySyncWrittenDirectoriesKey) ?? [] }
+        set {
+            if newValue.isEmpty {
+                defaults.removeObject(forKey: AppConstants.encodeHistorySyncWrittenDirectoriesKey)
+            } else {
+                defaults.set(newValue, forKey: AppConstants.encodeHistorySyncWrittenDirectoriesKey)
+            }
+        }
+    }
+
+    private func noteWrittenSyncDirectory(_ directory: URL) {
+        let path = directory.standardizedFileURL.path
+        if !writtenSyncDirectories.contains(path) { writtenSyncDirectories.append(path) }
+    }
+
+    /// Removes this Mac's file from every remembered folder except `current`.
+    /// Folders that can't be reached stay remembered for the next attempt.
+    private func removeStaleSyncFiles(keeping current: URL?) {
+        let kept = current?.standardizedFileURL.path
+        let stale = writtenSyncDirectories.filter { $0 != kept }
+        guard !stale.isEmpty else { return }
+        let id = deviceID
+        let done = Self.writeQueue.sync { Set(stale.filter { Self.removeSyncFiles(of: id, inDirectoryAt: $0) }) }
+        writtenSyncDirectories.removeAll { done.contains($0) }
+    }
+
+    /// Whether the folder is now free of this Mac's file.
+    nonisolated private static func removeSyncFiles(of deviceID: String, inDirectoryAt path: String) -> Bool {
+        let fileManager = FileManager.default
+        let directory = URL(fileURLWithPath: path, isDirectory: true)
+        guard fileManager.fileExists(atPath: path) else {
+            // No History folder in a sync folder that's there means nothing to
+            // remove; no sync folder means it's offline (an unmounted drive).
+            return fileManager.fileExists(atPath: directory.deletingLastPathComponent().path)
+        }
+        do {
+            try HistorySyncFolder.removeFiles(of: deviceID, in: directory)
+            return true
+        } catch {
+            logger.error("Couldn't remove synced history: \(error.localizedDescription, privacy: .public)")
+            return false
         }
     }
 

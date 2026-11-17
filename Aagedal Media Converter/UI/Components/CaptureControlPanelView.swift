@@ -298,15 +298,24 @@ struct CaptureControlPanelView: View {
             }
             .onChange(of: captureManager.recordingDisplayIDs) { _, _ in schedulePanelResize() }
             .onChange(of: currentPreviewBox) { _, _ in schedulePanelResize() }
-            .onChange(of: captureManager.isProcessing) { _, _ in schedulePanelResize() }
+            .onChange(of: captureManager.isProcessing) { _, isProcessing in
+                schedulePanelResize()
+                // Record mode stays open after a scheduled recording (see the overlay controller's
+                // handleRecordingStopped); the stop cleared the previews, so start them again.
+                if !isProcessing, !captureManager.isRecording,
+                   !scheduleQueue.entries.isEmpty || scheduleQueue.didStartRecording {
+                    Task { await refreshPreviews() }
+                }
+            }
             .onChange(of: focusedDisplayID) { _, _ in schedulePanelResize() }
             .task(id: scheduleQueue.entries.first) {
                 guard let next = scheduleQueue.entries.first else { return }
                 while !Task.isCancelled {
                     let remaining = next.start.timeIntervalSinceNow
                     scheduleCountdown = max(0, remaining)
-                    // A recording still running or finalizing delays the next one.
-                    if remaining <= 0, !captureManager.isRecording, !captureManager.isProcessing {
+                    // A recording still running, starting or finalizing delays the next one.
+                    if remaining <= 0, !captureManager.isRecording, !captureManager.isProcessing,
+                       !scheduleQueue.isStartingRecording {
                         fireScheduledRecording()
                         return
                     }
@@ -596,7 +605,7 @@ struct CaptureControlPanelView: View {
 
     private var bottomBar: some View {
         HStack(spacing: 10) {
-            if captureManager.isRecording || captureManager.isProcessing {
+            if captureManager.isRecording || captureManager.isProcessing || scheduleQueue.isStartingRecording {
                 recordingBottomBar
             } else if let next = scheduleQueue.entries.first {
                 Button {
@@ -1214,9 +1223,12 @@ struct CaptureControlPanelView: View {
                 outputDirectory: outputDirectoryURL,
                 dynamicRange: dynamicRangeOption
             )
-            if let duration = entry.duration, duration > 0 {
-                captureManager.setAutoStop(after: duration)
+            // Stop at the planned time, however late the start. setAutoStop ignores a start that
+            // failed or was stopped meanwhile.
+            if let end = entry.end {
+                captureManager.setAutoStop(after: max(1, end.timeIntervalSinceNow))
             }
+            scheduleQueue.finishStarting()
         }
     }
 

@@ -1,0 +1,12 @@
+--- a/libavformat/movenc.c
++++ b/libavformat/movenc.c
+@@ -2926,7 +2926,8 @@
+     } else if (track->extradata_size[track->last_stsd_index] > 0)
+         mov_write_glbl_tag(pb, track);
+ 
+-    if (track->par->codec_id != AV_CODEC_ID_H264 &&
++    /* QuickTime readers need fiel to treat interlaced H.264 (e.g. AVC-Intra) as such. */
++    if ((track->par->codec_id != AV_CODEC_ID_H264 || track->mode == MODE_MOV) &&
+         track->par->codec_id != AV_CODEC_ID_MPEG4 &&
+         track->par->codec_id != AV_CODEC_ID_DNXHD) {
+         int field_order = track->par->field_order;
