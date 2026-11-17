@@ -298,6 +298,8 @@ actor FFMPEGConverter {
                     pass.trimStart = nil
                     pass.trimEnd = nil
                     pass.cropConfig = nil
+                    // Speed, rotation, burned-in subtitles and loudness would compound.
+                    pass.adjustments = nil
                     pass.audioRoutingConfig = nil
                     pass.timecodeConfig = nil
                     pass.sourceMetadata = nil
