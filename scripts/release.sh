@@ -26,15 +26,43 @@
 #   scripts/release.sh 4.1.2 520       # override version + build number
 #   scripts/release.sh --beta 1        # beta: GitHub prerelease tagged <version>-beta.1;
 #                                      # the appcast and Homebrew cask are left untouched
+#   scripts/release.sh --preflight     # run the checks below, print what would be built, stop
+#
+# Before the build, the script checks that HEAD is committed and on origin/main,
+# fetches the Swift package revisions pinned in Package.resolved, and checks the
+# notarytool profile and sign_update, so these fail in seconds, not after the
+# archive.
+#
+# Set ALLOW_OLDER_COMMIT=1 to release a commit that is behind origin/main.
 #
 set -euo pipefail
 
+usage() {
+    echo "Usage: scripts/release.sh [--preflight] [--beta <number>] [version build]" >&2
+    exit 1
+}
+
 BETA_NUMBER=""
-if [[ "${1:-}" == "--beta" ]]; then
-    BETA_NUMBER="${2:-}"
-    [[ "$BETA_NUMBER" =~ ^[0-9]+$ ]] || { echo "Usage: scripts/release.sh --beta <number> [version build]" >&2; exit 1; }
-    shift 2
-fi
+PREFLIGHT_ONLY=false
+while [[ "${1:-}" == --* ]]; do
+    case "$1" in
+        --beta)
+            BETA_NUMBER="${2:-}"
+            [[ "$BETA_NUMBER" =~ ^[0-9]+$ ]] || usage
+            shift 2
+            ;;
+        --preflight)
+            PREFLIGHT_ONLY=true
+            shift
+            ;;
+        *)
+            usage
+            ;;
+    esac
+done
+
+# Every path below is relative to the repository root.
+cd "$(dirname "$0")/.."
 
 echo "==> scripts/release.sh starting"
 
@@ -80,12 +108,70 @@ TAP_LOCAL_PATH="${TAP_LOCAL_PATH:-}"
 TAP_CASK_NAME="aagedal-media-converter"
 TAP_CASK_FILE="${TAP_CASK_FILE:-Casks/$TAP_CASK_NAME.rb}"
 
+PROJECT="Aagedal Media Converter.xcodeproj"
+SCHEME="Aagedal Media Converter"
+PACKAGE_RESOLVED="$PROJECT/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+
+# -----------------------------------------------------------------------------
+# Preflight — cheap checks that would otherwise fail after the build
+# -----------------------------------------------------------------------------
+echo "==> Preflight checks"
+
+# The GitHub tag, the source companion and the GPL source offer all name this
+# commit, so the build must come from committed source that is on GitHub.
+if ! git diff --quiet HEAD --; then
+    echo "ERROR: tracked files have uncommitted changes:" >&2
+    git status --short --untracked-files=no >&2
+    echo "       Commit or discard them so the release matches its tag." >&2
+    exit 1
+fi
+git fetch --quiet origin main
+RELEASE_COMMIT=$(git rev-parse HEAD)
+if ! git merge-base --is-ancestor "$RELEASE_COMMIT" origin/main; then
+    echo "ERROR: HEAD ${RELEASE_COMMIT:0:8} is not on origin/main. Merge it through a pull request first." >&2
+    exit 1
+fi
+if [[ "$RELEASE_COMMIT" != "$(git rev-parse origin/main)" && -z "${ALLOW_OLDER_COMMIT:-}" ]]; then
+    echo "ERROR: origin/main has commits that HEAD ${RELEASE_COMMIT:0:8} lacks. Run git pull first," >&2
+    echo "       or set ALLOW_OLDER_COMMIT=1 to release this older commit." >&2
+    exit 1
+fi
+
+# The build steps pass -skipPackageUpdates so they never move a pin. That also
+# stops them fetching a newly pinned revision, which fails with "Couldn't check
+# out revision". Fetch exactly the pinned revisions here instead.
+echo "    Fetching the Swift package revisions pinned in Package.resolved…"
+if ! PACKAGE_LOG=$(xcodebuild -resolvePackageDependencies -onlyUsePackageVersionsFromResolvedFile \
+        -project "$PROJECT" -scheme "$SCHEME" 2>&1); then
+    echo "$PACKAGE_LOG" >&2
+    echo "ERROR: could not fetch the pinned Swift packages (output above)." >&2
+    exit 1
+fi
+if ! git diff --quiet -- "$PACKAGE_RESOLVED"; then
+    echo "ERROR: resolving packages changed $PACKAGE_RESOLVED. Commit the intended pins first." >&2
+    exit 1
+fi
+
+if [[ ! -x "$SIGN_UPDATE_BIN" ]]; then
+    echo "ERROR: $SIGN_UPDATE_BIN not found. Build Sparkle's sign_update tool first." >&2
+    echo "       (See Sparkle's docs — the binary lives in their built products dir.)" >&2
+    exit 1
+fi
+
+# Catches a missing or expired notarytool profile and no network. A pass does
+# not prove that submit can reach the keychain from an agent shell (see the
+# note at the top), so still run the script from Terminal.
+if ! NOTARY_LOG=$(xcrun notarytool history --keychain-profile "$NOTARYTOOL_PROFILE" 2>&1); then
+    echo "$NOTARY_LOG" | tail -5 >&2
+    echo "ERROR: notarytool can't use keychain profile \"$NOTARYTOOL_PROFILE\" (output above)." >&2
+    echo "       Check the network, or store the profile with" >&2
+    echo "       xcrun notarytool store-credentials $NOTARYTOOL_PROFILE" >&2
+    exit 1
+fi
+
 # -----------------------------------------------------------------------------
 # Resolve version / build
 # -----------------------------------------------------------------------------
-PROJECT="Aagedal Media Converter.xcodeproj"
-SCHEME="Aagedal Media Converter"
-
 if [[ -z "${1:-}" || -z "${2:-}" ]]; then
     echo "    Reading version from xcodebuild -showBuildSettings (takes a few seconds)…"
     BUILD_SETTINGS=$(xcodebuild -skipPackageUpdates -project "$PROJECT" -showBuildSettings -scheme "$SCHEME")
@@ -100,6 +186,10 @@ if [[ -n "${2:-}" ]]; then
 else
     CURRENT_PROJECT_VERSION=$(echo "$BUILD_SETTINGS" | awk -F' = ' '/^[[:space:]]*CURRENT_PROJECT_VERSION/{print $2; exit}')
 fi
+if [[ -z "$MARKETING_VERSION" || -z "$CURRENT_PROJECT_VERSION" ]]; then
+    echo "ERROR: could not read MARKETING_VERSION and CURRENT_PROJECT_VERSION. Pass them as arguments." >&2
+    exit 1
+fi
 
 if [[ -n "$BETA_NUMBER" ]]; then
     RELEASE_TAG="$MARKETING_VERSION-beta.$BETA_NUMBER"
@@ -109,7 +199,12 @@ else
     RELEASE_TITLE="$MARKETING_VERSION"
 fi
 
-echo "==> Building $RELEASE_TITLE ($CURRENT_PROJECT_VERSION)"
+if [[ "$PREFLIGHT_ONLY" == true ]]; then
+    echo "==> Preflight passed: would build $RELEASE_TITLE ($CURRENT_PROJECT_VERSION) from ${RELEASE_COMMIT:0:8}"
+    exit 0
+fi
+
+echo "==> Building $RELEASE_TITLE ($CURRENT_PROJECT_VERSION) from ${RELEASE_COMMIT:0:8}"
 
 # -----------------------------------------------------------------------------
 # Build & export
@@ -201,12 +296,6 @@ RELEASE_ZIP="$BUILD_DIR/$RELEASE_ZIP_NAME"
 ZIP_SIZE=$(/usr/bin/stat -f%z "$RELEASE_ZIP")
 echo "==> Release zip: $RELEASE_ZIP ($ZIP_SIZE bytes)"
 
-if [[ ! -x "$SIGN_UPDATE_BIN" ]]; then
-    echo "ERROR: $SIGN_UPDATE_BIN not found. Build Sparkle's sign_update tool first." >&2
-    echo "       (See Sparkle's docs — the binary lives in their built products dir.)" >&2
-    exit 1
-fi
-
 ED_SIGNATURE_LINE=$("$SIGN_UPDATE_BIN" "$RELEASE_ZIP")
 echo "==> Sparkle signature: $ED_SIGNATURE_LINE"
 
@@ -226,13 +315,12 @@ PUB_DATE=$(date "+%a, %d %b %Y %H:%M:%S %z")
 # notes" link if the version isn't documented yet — Sparkle still renders that
 # fine, and we'd rather ship than block on a missing CHANGELOG entry.
 RELEASE_NOTES_HTML=""
-if python3 scripts/changelog-to-html.py CHANGELOG.md "$MARKETING_VERSION" > /tmp/release-notes-$$.html 2>/dev/null; then
+RELEASE_NOTES_FILE="$BUILD_DIR/release-notes.html"
+if python3 scripts/changelog-to-html.py CHANGELOG.md "$MARKETING_VERSION" > "$RELEASE_NOTES_FILE" 2>/dev/null; then
     # Indent each line so the CDATA reads nicely in raw XML.
-    RELEASE_NOTES_HTML=$(sed 's/^/                /' /tmp/release-notes-$$.html)
-    rm -f /tmp/release-notes-$$.html
+    RELEASE_NOTES_HTML=$(sed 's/^/                /' "$RELEASE_NOTES_FILE")
     echo "==> Inline release notes extracted from CHANGELOG.md"
 else
-    rm -f /tmp/release-notes-$$.html
     RELEASE_NOTES_HTML="                <p>See <a href=\"https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/tag/$RELEASE_TAG\">release notes</a>.</p>"
     echo "==> WARNING: $MARKETING_VERSION not found in CHANGELOG.md — using bare link in appcast"
 fi
@@ -293,14 +381,14 @@ if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
             "$MARKETING_VERSION" > "$BETA_NOTES" || echo "See CHANGELOG.md." > "$BETA_NOTES"
         gh release create "$RELEASE_TAG" --draft --prerelease \
             --repo "$GITHUB_OWNER/$GITHUB_REPO" \
-            --target main \
+            --target "$RELEASE_COMMIT" \
             --title "$RELEASE_TITLE" \
             --notes-file "$BETA_NOTES"
     else
         echo "==> Creating draft GitHub release $RELEASE_TAG"
         gh release create "$RELEASE_TAG" --draft \
             --repo "$GITHUB_OWNER/$GITHUB_REPO" \
-            --target main \
+            --target "$RELEASE_COMMIT" \
             --title "$RELEASE_TITLE" \
             --generate-notes
     fi
@@ -328,9 +416,9 @@ if [[ -n "$BETA_NUMBER" ]]; then
     exit 0
 fi
 
-cp "$APPCAST_CANDIDATE" "$APPCAST"
-
 if [[ "$RELEASE_PUBLISHED" == true ]]; then
+    # The appcast PR is made from its own clone, so this checkout stays clean
+    # for the next release's preflight.
     echo "==> Opening appcast deployment pull request"
     if ! python3 scripts/publish-release-appcast.py \
         --repo "$GITHUB_OWNER/$GITHUB_REPO" --item "$APPCAST_ITEM" \
@@ -344,6 +432,7 @@ if [[ "$RELEASE_PUBLISHED" == true ]]; then
         APPCAST_PR_FAILED=true
     fi
 else
+    cp "$APPCAST_CANDIDATE" "$APPCAST"
     echo "==> Appcast prepared locally; the live update feed has NOT been deployed."
     echo "    Publish both release assets, then commit $APPCAST and open a pull request against main."
     echo "    Merge that PR and confirm the Publish website appcast workflow succeeds."
