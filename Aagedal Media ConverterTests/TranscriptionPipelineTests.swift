@@ -481,6 +481,12 @@ final class TranscriptionPipelineTests: XCTestCase {
         XCTAssertEqual(mapped[0].end, 3.25, accuracy: 1e-9)
     }
 
+    func testSpeechRegionsSkipSpeechPastTheEndOfTheAudio() {
+        let map = SpeechRegionMap(speech: [1...2, 10.5...11, 12...13], duration: 10)
+        XCTAssertEqual(map.regions.map(\.start), [0.75])
+        XCTAssertEqual(map.regions.map(\.end), [2.25])
+    }
+
     func testSpeechAudioConcatenatesRegions() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("SpeechAudio-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -534,6 +540,34 @@ final class TranscriptionPipelineTests: XCTestCase {
             ]
         )
         XCTAssertEqual(assigned[0].speaker, 0)
+    }
+
+    func testSpeakerAssignmentReachesSegmentsExactlyAtTolerance() {
+        // The longest segment ends exactly `tolerance` before the word.
+        let assigned = SpeakerDiarizer.assignSpeakers(
+            to: [TranscriptWord(text: "x", start: 10.5, end: 10.7)],
+            segments: [
+                SpeakerSegment(start: 6, end: 10, speaker: 4),
+                SpeakerSegment(start: 12, end: 13, speaker: 7),
+            ],
+            tolerance: 0.5
+        )
+        XCTAssertEqual(assigned[0].speaker, 0)
+    }
+
+    func testDiarizationModelCountsOnlyOnceVerified() throws {
+        let caches = FileManager.default.temporaryDirectory.appendingPathComponent("NeMoCache-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: caches) }
+        XCTAssertFalse(SpeakerDiarizer.isModelCached(in: caches))
+
+        let revision = caches.appendingPathComponent("NeMoSpeech/models/nvidia/Nemotron-3-Diarization/f667ed73")
+        try FileManager.default.createDirectory(at: revision, withIntermediateDirectories: true)
+        try Data().write(to: revision.appendingPathComponent("Nemotron-3-Diarization.q8_0.gguf"))
+        try Data().write(to: revision.appendingPathComponent("Nemotron-3-Diarization.q8_0.gguf.lock"))
+        XCTAssertFalse(SpeakerDiarizer.isModelCached(in: caches), "An interrupted pull is not a cached model")
+
+        try Data("sha256=0\n".utf8).write(to: revision.appendingPathComponent("Nemotron-3-Diarization.q8_0.gguf.verified"))
+        XCTAssertTrue(SpeakerDiarizer.isModelCached(in: caches))
     }
 
     // MARK: - Language and options

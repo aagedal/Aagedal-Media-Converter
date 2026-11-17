@@ -306,6 +306,27 @@ final class NativeWaveformImprovementTests: XCTestCase {
         XCTAssertTrue(other.advance(raw: [1, 1, 1, 1]).history.isEmpty)
     }
 
+    func testPreviewSimulatorAdvancesIncrementallyLikeAColdStart() {
+        let simulator = WaveformPreviewSimulator()
+        let frameRate = 25.0
+        for tick in 0..<200 {
+            let time = 1000 + Double(tick) / frameRate
+            let incremental = simulator.frame(at: time, style: .ridgeline, bandCount: 8, frameRate: frameRate)
+            let cold = WaveformStylePreview.simulatedFrame(at: time, style: .ridgeline, bandCount: 8, frameRate: frameRate)
+            XCTAssertEqual(incremental.time, cold.time, accuracy: 1e-9)
+            XCTAssertEqual(incremental.history.count, cold.history.count)
+            for (a, b) in zip(incremental.magnitudes + (incremental.peakMagnitudes ?? []),
+                              cold.magnitudes + (cold.peakMagnitudes ?? [])) {
+                XCTAssertEqual(a, b, accuracy: 0.01)
+            }
+        }
+        // A settings change starts over from a cold simulation.
+        let changed = simulator.frame(at: 1010, style: .bars, bandCount: 4, frameRate: frameRate)
+        let cold = WaveformStylePreview.simulatedFrame(at: 1010, style: .bars, bandCount: 4, frameRate: frameRate)
+        XCTAssertEqual(changed.magnitudes, cold.magnitudes)
+        XCTAssertEqual(changed.peakMagnitudes, cold.peakMagnitudes)
+    }
+
     func testEveryStyleRendersForEdgeCaseBandCounts() throws {
         for style in SwiftWaveformStyle.allCases {
             for bandCount in [1, 2, 64] {

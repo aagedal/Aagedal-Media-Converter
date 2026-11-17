@@ -103,9 +103,10 @@ struct PCMWaveFile: Sendable {
     }
 }
 
-/// Speech found by diarization, joined into the stretches Whisper should hear.
-/// Whisper transcribes only these, back to back; `sourceTime` maps its
-/// timestamps back onto the original media.
+/// Speech found by Silero VAD (or, when it cannot run, by speaker detection),
+/// joined into the stretches Whisper should hear. Whisper transcribes only
+/// these, back to back; `sourceTime` maps its timestamps back onto the
+/// original media.
 struct SpeechRegionMap: Sendable, Equatable {
     struct Region: Sendable, Equatable {
         var start: Double
@@ -123,8 +124,12 @@ struct SpeechRegionMap: Sendable, Equatable {
     init(speech: [ClosedRange<Double>], duration: Double, padding: Double = 0.25, mergeGap: Double = 1.0) {
         var merged: [ClosedRange<Double>] = []
         for range in speech.sorted(by: { $0.lowerBound < $1.lowerBound }) {
-            let padded = max(0, range.lowerBound - padding)...min(duration, range.upperBound + padding)
-            guard padded.upperBound > padded.lowerBound else { continue }
+            // Speech reported past the end of the audio pads to an empty or
+            // inverted span, so check before forming a range.
+            let lower = max(0, range.lowerBound - padding)
+            let upper = min(duration, range.upperBound + padding)
+            guard upper > lower else { continue }
+            let padded = lower...upper
             if let last = merged.last, padded.lowerBound - last.upperBound <= mergeGap {
                 merged[merged.count - 1] = last.lowerBound...max(last.upperBound, padded.upperBound)
             } else {

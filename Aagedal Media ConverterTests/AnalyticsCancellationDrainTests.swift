@@ -123,6 +123,8 @@ final class AnalyticsCancellationDrainTests: XCTestCase {
 
         let returned = expectation(description: "Old cancellation remains suspended during drain")
         returned.isInverted = true
+        // Changed after the Task captures it, which Swift 6 flags for a plain
+        // var; `cancellationReturned` is only changed inside the Task.
         let drainReleased = OSAllocatedUnfairLock(initialState: false)
         var cancellationReturned = false
         let cancellation = Task {

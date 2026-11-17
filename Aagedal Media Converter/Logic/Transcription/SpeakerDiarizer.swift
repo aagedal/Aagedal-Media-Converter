@@ -11,9 +11,9 @@ struct SpeakerSegment: Sendable, Equatable {
 }
 
 /// Finds who speaks when with the bundled NeMo Speech runtime and NVIDIA's
-/// Nemotron 3 Diarization model (Sortformer v3, up to eight speakers). The
-/// Whisper pipeline also falls back to these segments for speech-only audio
-/// when Silero cannot run.
+/// Nemotron 3 Diarization model (Sortformer v3, up to eight speakers). When
+/// speaker changes are on and Silero cannot run, the Whisper pipeline also
+/// uses these segments for speech-only audio.
 struct SpeakerDiarizer: Sendable {
     static let model = "nemotron-3-diarization"
     static let timeout: Duration = .seconds(2 * 60 * 60)
@@ -26,9 +26,22 @@ struct SpeakerDiarizer: Sendable {
         guard let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
             return false
         }
-        return FileManager.default.fileExists(
-            atPath: caches.appendingPathComponent("NeMoSpeech/models/nvidia/Nemotron-3-Diarization").path
-        )
+        return isModelCached(in: caches)
+    }
+
+    /// NeMo Speech creates the model folder before downloading and writes a
+    /// `.verified` file next to the GGUF only once its checksum matches, so a
+    /// cancelled or failed pull does not count.
+    static func isModelCached(in caches: URL) -> Bool {
+        let model = caches.appendingPathComponent("NeMoSpeech/models/nvidia/Nemotron-3-Diarization")
+        let fileManager = FileManager.default
+        guard let revisions = try? fileManager.contentsOfDirectory(at: model, includingPropertiesForKeys: nil) else {
+            return false
+        }
+        return revisions.contains { revision in
+            let files = (try? fileManager.contentsOfDirectory(atPath: revision.path)) ?? []
+            return files.contains { $0.hasSuffix(".gguf.verified") }
+        }
     }
 
     /// Downloads and verifies the model ahead of the first run.
@@ -88,8 +101,10 @@ struct SpeakerDiarizer: Sendable {
             var result = word
             // Segments are sorted by start; only those starting before the word
             // ends and not ending long before it begins can matter.
+            // The lower bound gets a millisecond of slack so a segment exactly
+            // `tolerance` away is not lost to rounding or the strict search.
             let upper = firstIndex(in: segments, startingAfter: word.end + tolerance)
-            let lower = firstIndex(in: segments, startingAfter: word.start - longest - tolerance)
+            let lower = firstIndex(in: segments, startingAfter: word.start - longest - tolerance - 0.001)
             var overlap: [Int: Double] = [:]
             var nearest: (distance: Double, speaker: Int)?
             for segment in segments[lower..<upper] {

@@ -423,6 +423,7 @@ struct WaveformStylePreview: View {
     var transparentBackground = false
 
     @State private var isPlaying = true
+    @State private var simulator = WaveformPreviewSimulator()
 
     /// Short edge of the preview bitmap. Small enough to render every frame on
     /// the main thread, large enough to look crisp in the settings window.
@@ -483,8 +484,8 @@ struct WaveformStylePreview: View {
     }
 
     private func renderImage(at time: TimeInterval, width: Int, height: Int) -> CGImage? {
-        let frame = Self.simulatedFrame(at: time, style: style, bandCount: max(1, bandCount),
-                                        frameRate: effectiveFrameRate)
+        let frame = simulator.frame(at: time, style: style, bandCount: max(1, bandCount),
+                                    frameRate: effectiveFrameRate)
         return NativeWaveformVideoRenderer.renderImage(
             style: style,
             frame: frame,
@@ -500,20 +501,11 @@ struct WaveformStylePreview: View {
     }
 
     /// Runs the export animation state (smoothing, peak hold, ridge history)
-    /// over just enough synthetic frames to reach `time`. Stateless, so the
-    /// preview never drifts and restarts cleanly when settings change.
+    /// over just enough synthetic frames to reach `time`, from a cold start.
     nonisolated static func simulatedFrame(
         at time: TimeInterval, style: SwiftWaveformStyle, bandCount: Int, frameRate: Double
     ) -> WaveformFrameInput {
-        let currentFrame = Int((time * frameRate).rounded(.down))
-        let warmUp = WaveformAnimationState.warmUpFrames(frameRate: frameRate, style: style)
-        var state = WaveformAnimationState(bandCount: bandCount, frameRate: frameRate, style: style,
-                                           startFrameIndex: currentFrame - warmUp)
-        var input = WaveformFrameInput(magnitudes: [])
-        for frame in (currentFrame - warmUp)...currentFrame {
-            input = state.advance(raw: syntheticMagnitudes(at: Double(frame) / frameRate, bandCount: bandCount))
-        }
-        return input
+        WaveformPreviewSimulator().frame(at: time, style: style, bandCount: bandCount, frameRate: frameRate)
     }
 
     /// Deterministic music-like band levels: a kick on the beat (bass), an
@@ -541,5 +533,47 @@ struct WaveformStylePreview: View {
                 + 0.12 * noise
             return Float(min(1, max(0, value)))
         }
+    }
+}
+
+/// Keeps the preview's animation state between timeline ticks, so a tick
+/// advances only the frames since the last one instead of re-running the whole
+/// warm-up. A settings change, a step back in time or a gap longer than the
+/// warm-up starts again from a cold simulation, so the preview never drifts.
+final class WaveformPreviewSimulator {
+    private struct Settings: Equatable {
+        var style: SwiftWaveformStyle
+        var bandCount: Int
+        var frameRate: Double
+    }
+
+    private var settings: Settings?
+    private var state: WaveformAnimationState?
+    private var lastFrame = 0
+    private var lastInput = WaveformFrameInput(magnitudes: [])
+
+    func frame(at time: TimeInterval, style: SwiftWaveformStyle, bandCount: Int, frameRate: Double) -> WaveformFrameInput {
+        let currentFrame = Int((time * frameRate).rounded(.down))
+        let warmUp = WaveformAnimationState.warmUpFrames(frameRate: frameRate, style: style)
+        let settings = Settings(style: style, bandCount: bandCount, frameRate: frameRate)
+        var first = currentFrame - warmUp
+        var state: WaveformAnimationState
+        if settings == self.settings, let current = self.state,
+           currentFrame >= lastFrame, currentFrame - lastFrame <= warmUp {
+            guard currentFrame > lastFrame else { return lastInput }
+            first = lastFrame + 1
+            state = current
+        } else {
+            state = WaveformAnimationState(bandCount: bandCount, frameRate: frameRate, style: style,
+                                           startFrameIndex: first)
+        }
+        for frame in first...currentFrame {
+            lastInput = state.advance(raw: WaveformStylePreview.syntheticMagnitudes(
+                at: Double(frame) / frameRate, bandCount: bandCount))
+        }
+        self.settings = settings
+        self.state = state
+        lastFrame = currentFrame
+        return lastInput
     }
 }
