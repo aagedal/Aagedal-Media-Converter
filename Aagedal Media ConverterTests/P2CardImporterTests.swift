@@ -313,12 +313,55 @@ final class P2CardImporterTests: XCTestCase {
 
         let output = try await rewrapOnlyShot()
         XCTAssertEqual(output.pathExtension, "mkv")
-        XCTAssertFalse(FileManager.default.fileExists(atPath: P2ClipRewrapper.outputURL(for: try XCTUnwrap(
-            P2CardImporter.shots(from: P2CardImporter.clips(onCard: card)).first)).path))
+        let shot = try XCTUnwrap(P2CardImporter.shots(from: P2CardImporter.clips(onCard: card)).first)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: P2ClipRewrapper.outputURL(for: shot).path))
         let info = try await probe(output)
         XCTAssertTrue(info.contains("TIMECODE        : 00:29:18:09"), info)
         XCTAssertTrue(info.contains("Video: dnxhd"), info)
         XCTAssertEqual(info.components(separatedBy: "Audio: pcm_s24le").count - 1, 2, info)
+
+        // The fallback counts as done, so importing the card again doesn't run bmx again.
+        XCTAssertEqual(P2ClipRewrapper.cachedRewrap(for: shot), output)
+        let again = try await P2ClipRewrapper.shared.rewrap(shot) { _ in }
+        XCTAssertEqual(again, output)
+    }
+
+    func testMatroskaFrom47IsRedoneAsMXFUnlessTheShotHasNoVideo() throws {
+        let name = "0001\(UUID().uuidString.prefix(4))"
+        try addClip(name, audio: 2)
+        let shot = try XCTUnwrap(P2CardImporter.shots(from: P2CardImporter.clips(onCard: card)).first)
+        let matroska = P2ClipRewrapper.matroskaOutputURL(for: shot)
+        let folder = matroska.deletingLastPathComponent()
+        try? FileManager.default.removeItem(at: folder)
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data().write(to: matroska)
+        XCTAssertNil(P2ClipRewrapper.cachedRewrap(for: shot))
+
+        // An audio-only shot goes to Matroska in 4.8 too.
+        try FileManager.default.removeItem(at: card.appendingPathComponent("CONTENTS/VIDEO/\(name).MXF"))
+        let audioOnly = try XCTUnwrap(P2CardImporter.shots(from: P2CardImporter.clips(onCard: card)).first)
+        XCTAssertEqual(audioOnly.cacheKey, shot.cacheKey)
+        XCTAssertEqual(P2ClipRewrapper.cachedRewrap(for: audioOnly), matroska)
+    }
+
+    func testMXFRewrapMarksTheMatroskaFrom47AsSuperseded() async throws {
+        let name = "0001\(UUID().uuidString.prefix(4))"
+        try addClip(name, audio: 2, timecode: "10:00:00:00")
+        try await writeP2Essence(for: name, timecode: "10:00:00:00")
+        let shot = try XCTUnwrap(P2CardImporter.shots(from: P2CardImporter.clips(onCard: card)).first)
+        let matroska = P2ClipRewrapper.matroskaOutputURL(for: shot)
+        let folder = matroska.deletingLastPathComponent()
+        try? FileManager.default.removeItem(at: folder)
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data().write(to: matroska)
+
+        let output = try await P2ClipRewrapper.shared.rewrap(shot) { _ in }
+        XCTAssertEqual(output.pathExtension, "mxf")
+        // A restored session may still point at the Matroska, so it stays for now.
+        XCTAssertTrue(FileManager.default.fileExists(atPath: matroska.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: folder.appendingPathComponent(".matroska-superseded").path))
     }
 
     func testBMXArgumentsJoinTheClipsInShotOrder() throws {
@@ -389,6 +432,29 @@ final class P2CardImporterTests: XCTestCase {
         P2ClipRewrapper.removeStale(in: folder, now: now, keeping: ["P2-BUSY-1"])
         let left = try FileManager.default.contentsOfDirectory(atPath: folder.path).sorted()
         XCTAssertEqual(left, ["P2-BUSY-1", "P2-NEW-1"])
+    }
+
+    func testSupersededMatroskaRewrapIsRemovedAfterTheRetention() throws {
+        let folder = card.appendingPathComponent("P2Clips", isDirectory: true)
+        let now = Date()
+        func shot(_ name: String, supersededAt date: Date) throws -> URL {
+            let shot = folder.appendingPathComponent(name, isDirectory: true)
+            try FileManager.default.createDirectory(at: shot, withIntermediateDirectories: true)
+            for file in ["0001AA.mxf", "0001AA.mkv"] {
+                try Data().write(to: shot.appendingPathComponent(file))
+            }
+            let marker = shot.appendingPathComponent(".matroska-superseded")
+            try Data().write(to: marker)
+            try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: marker.path)
+            return shot
+        }
+        let old = try shot("P2-OLD-1", supersededAt: now.addingTimeInterval(-P2ClipRewrapper.retention - 60))
+        let recent = try shot("P2-NEW-1", supersededAt: now.addingTimeInterval(-86_400))
+
+        P2ClipRewrapper.removeStale(in: folder, now: now)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: old.path).sorted(), ["0001AA.mxf"])
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: recent.path).sorted(),
+                       [".matroska-superseded", "0001AA.mkv", "0001AA.mxf"])
     }
 
     func testURLsOutsideP2CardsPassThroughUnchanged() async {
