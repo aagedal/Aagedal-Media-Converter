@@ -490,19 +490,92 @@ final class EncodeHistorySyncTests: XCTestCase {
         XCTAssertEqual(HistorySyncFolder.devices(from: [older, newer]).first?.recordCount, 0)
     }
 
+    // MARK: - Removing this Mac's file
+
+    /// The settings can report no location (iCloud Drive briefly unavailable)
+    /// although the folder written to is there.
+    func testTurningSyncOffRemovesTheFileWithoutACurrentLocation() async throws {
+        let location = SyncLocation(cloud)
+        let a = makeStore("a", location: location)
+        try recordEncode(on: a)
+        a.flush()
+        XCTAssertEqual(try cloudFileNames(), ["device-a.json"])
+
+        location.url = nil
+        a.setSyncEnabled(false)
+        XCTAssertEqual(try cloudFileNames(), [])
+    }
+
+    func testTurningSyncOffWhileTheFolderIsOfflineRemovesTheFileOnTheNextLaunch() async throws {
+        let location = SyncLocation(cloud)
+        let defaults = makeDefaults("a")
+        let a = makeStore("a", location: location, defaults: defaults)
+        try recordEncode(on: a)
+        a.flush()
+
+        // An unmounted drive.
+        let offline = root.appendingPathComponent("offline", isDirectory: true)
+        try FileManager.default.moveItem(at: cloud, to: offline)
+        location.url = nil
+        a.setSyncEnabled(false)
+        XCTAssertEqual(try cloudFileNames(in: offline), ["device-a.json"])
+
+        try FileManager.default.moveItem(at: offline, to: cloud)
+        location.url = cloud
+        let relaunched = makeStore("a", location: location, defaults: defaults)
+        XCTAssertFalse(relaunched.isSyncEnabled)
+        XCTAssertEqual(try cloudFileNames(), [])
+        XCTAssertNil(defaults.object(forKey: AppConstants.encodeHistorySyncWrittenDirectoriesKey))
+    }
+
+    func testChangingTheLocationRemovesTheFileFromTheOldOne() async throws {
+        let location = SyncLocation(cloud)
+        let b = makeStore("b")
+        try recordEncode(on: b)
+        b.flush()
+        let a = makeStore("a", location: location)
+        try recordEncode(on: a)
+        a.flush()
+        XCTAssertEqual(try cloudFileNames(), ["device-a.json", "device-b.json"])
+
+        let newFolder = root.appendingPathComponent("custom", isDirectory: true)
+        location.url = newFolder
+        a.flush()
+        XCTAssertEqual(try cloudFileNames(), ["device-b.json"])
+        XCTAssertEqual(try cloudFileNames(in: newFolder), ["device-a.json"])
+    }
+
     // MARK: - Helpers
 
-    private func makeStore(_ name: String, locationAvailable: Bool = true, bootstrap: Bool = true) -> EncodeHistoryStore {
+    /// The sync folder as the settings report it; nil while unavailable.
+    @MainActor private final class SyncLocation {
+        var url: URL?
+        init(_ url: URL?) { self.url = url }
+    }
+
+    /// Defaults with history sync on.
+    private func makeDefaults(_ name: String) -> UserDefaults {
         let suiteName = "EncodeHistorySyncTests-\(name)-\(UUID().uuidString)"
         suiteNames.append(suiteName)
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.set(true, forKey: AppConstants.encodeHistorySyncEnabledKey)
-        let folder: URL? = locationAvailable ? cloud : nil
+        return defaults
+    }
+
+    /// A Mac; pass the same `defaults` to simulate a relaunch.
+    private func makeStore(
+        _ name: String,
+        locationAvailable: Bool = true,
+        location: SyncLocation? = nil,
+        defaults: UserDefaults? = nil,
+        bootstrap: Bool = true
+    ) -> EncodeHistoryStore {
+        let location = location ?? SyncLocation(locationAvailable ? cloud : nil)
         let store = EncodeHistoryStore(
             directory: root.appendingPathComponent("local-\(name)", isDirectory: true),
-            defaults: defaults, calendar: calendar,
+            defaults: defaults ?? makeDefaults(name), calendar: calendar,
             deviceID: "device-\(name)", deviceName: "Mac \(name)",
-            syncFolder: { folder }
+            syncFolder: { location.url }
         )
         if bootstrap { store.bootstrap() }
         return store
@@ -560,8 +633,8 @@ final class EncodeHistorySyncTests: XCTestCase {
         )
     }
 
-    private func cloudFileNames() throws -> [String] {
-        try FileManager.default.contentsOfDirectory(atPath: cloud.appendingPathComponent("History").path)
+    private func cloudFileNames(in folder: URL? = nil) throws -> [String] {
+        try FileManager.default.contentsOfDirectory(atPath: (folder ?? cloud).appendingPathComponent("History").path)
             .filter { !$0.hasPrefix(".") }
             .sorted()
     }

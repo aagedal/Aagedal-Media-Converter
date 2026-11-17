@@ -23,6 +23,8 @@ extension AppConstants {
     static let defaultEncodeHistorySyncEnabled = false
     /// Random device id used when the hardware UUID can't be read.
     static let encodeHistoryFallbackDeviceIDKey = "encodeHistoryFallbackDeviceID"
+    /// History folders this Mac's synced file was written to and not yet removed from.
+    static let encodeHistorySyncWrittenDirectoriesKey = "encodeHistorySyncWrittenDirectories"
 }
 
 // MARK: - Device identity
