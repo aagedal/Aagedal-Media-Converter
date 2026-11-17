@@ -74,6 +74,15 @@
 - The timeline editor now also opens for groups without Merge, such as a camera card imported as separate clips. Trim, split, reorder and cut ranges the same way; each clip is still saved as its own file. The timecode shows the selected clip's output timecode, and markers, which only merged files carry, can't be added.
 - Clips split from one source in a group without Merge get their own output names (`_2`, `_3`, …), so they no longer save over each other.
 
+### Screen recording
+
+- Recordings keep their exact frame rate. 25 fps used to come out at about 24 fps and 29.97 at about 29.3, and Auto now records a 59.94 Hz display at 59.94 rather than 60. Growing recordings no longer lose frames, and every file of a multi-screen recording ends when you press Stop.
+- The display stays awake while recording and while waiting for a scheduled recording. An idle display used to lock the screen, and the recording then captured nothing.
+- Schedule several recordings in a row, and edit them before they start. Recordings can't overlap. Record mode stays open between and after scheduled recordings, and the saved files are offered together when it closes. An Escape typed in another app no longer cancels the schedule.
+- The recording overlay can extend or cancel the auto-stop, like the menu-bar item. The total recording time no longer flickers between two values.
+- The saved-files dialog lists only the recordings from that session, not every one since the app started.
+- Fixed a square outline around the recording overlay, a virtual display showing no preview after a recording, and the overlay ignoring clicks after Cmd-Ctrl-F made an app full screen.
+
 ### Other fixes
 
 - TV (HEVC 10-bit 4:2:2) and TV (AVC-Intra MXF) exports set to 50i or 59.94i have 25 or 29.97 frames per second, each holding two fields. They used to have twice as many frames, every one repeated, at 50 or 59.94 frames per second.

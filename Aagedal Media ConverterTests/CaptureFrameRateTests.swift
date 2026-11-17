@@ -667,6 +667,139 @@ final class CaptureFrameRateTests: XCTestCase {
         }
     }
 
+    func testAutoRateFollowsFractionalRefreshRates() {
+        XCTAssertEqual(CaptureFrameRate.display(refreshRate: 59.94006, maximumFramesPerSecond: 60, fallback: 60), CaptureFrameRate(60000, denominator: 1001))
+        XCTAssertEqual(CaptureFrameRate.display(refreshRate: 59.94, maximumFramesPerSecond: 59, fallback: 60), CaptureFrameRate(60000, denominator: 1001))
+        XCTAssertEqual(CaptureFrameRate.display(refreshRate: 23.976, maximumFramesPerSecond: 24, fallback: 60), CaptureFrameRate(24000, denominator: 1001))
+        XCTAssertEqual(CaptureFrameRate.display(refreshRate: 29.97, maximumFramesPerSecond: 0, fallback: 60), CaptureFrameRate(30000, denominator: 1001))
+        XCTAssertEqual(CaptureFrameRate.display(refreshRate: 60, maximumFramesPerSecond: 60, fallback: 30), CaptureFrameRate(60))
+        // Built-in panels report no mode refresh rate.
+        XCTAssertEqual(CaptureFrameRate.display(refreshRate: 0, maximumFramesPerSecond: 120, fallback: 60), CaptureFrameRate(120))
+        // A variable-refresh display that can run faster keeps its maximum.
+        XCTAssertEqual(CaptureFrameRate.display(refreshRate: 59.94, maximumFramesPerSecond: 120, fallback: 60), CaptureFrameRate(120))
+        // Rates that are not 1000/1001 of an integer stay integral.
+        XCTAssertEqual(CaptureFrameRate.display(refreshRate: 74.97, maximumFramesPerSecond: 75, fallback: 60), CaptureFrameRate(75))
+        XCTAssertEqual(CaptureFrameRate.display(refreshRate: 0, maximumFramesPerSecond: 0, fallback: 30), CaptureFrameRate(30))
+    }
+
+    /// ScreenCaptureKit runs faster than the target; the schedule must pick the ideal
+    /// mix of whole-refresh gaps and hold the exact long-run rate.
+    func testScheduleKeepsExactRateFromRefreshAlignedFrames() {
+        var seed: UInt64 = 42
+        func jitter() -> Double {   // ±0.05 ms of timestamp noise
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            return (Double(seed >> 11) / Double(1 << 53) - 0.5) * 0.0001
+        }
+        let cases: [(refresh: Double, rate: CaptureFrameRate)] = [
+            (60, CaptureFrameRate(25)), (60, CaptureFrameRate(30000, denominator: 1001)),
+            (60, CaptureFrameRate(50)), (60, CaptureFrameRate(60000, denominator: 1001)), (60, CaptureFrameRate(60)),
+            (60, CaptureFrameRate(24000, denominator: 1001)), (60, CaptureFrameRate(120)),
+            (120, CaptureFrameRate(25)), (120, CaptureFrameRate(30000, denominator: 1001)), (120, CaptureFrameRate(50)),
+            (120, CaptureFrameRate(60)), (48, CaptureFrameRate(25)), (50, CaptureFrameRate(25))
+        ]
+        for (refresh, rate) in cases {
+            var schedule = CaptureFrameSchedule(frameRate: rate)
+            let seconds = 120.0
+            var kept: [Int] = []
+            for index in 0..<Int(seconds * refresh) {
+                let time = 1000 + Double(index) / refresh + jitter()
+                if schedule.keeps(CMTime(seconds: time, preferredTimescale: 1_000_000_000)) { kept.append(index) }
+            }
+            let expected = min(rate.framesPerSecond, refresh)
+            XCTAssertEqual(Double(kept.count) / seconds, expected, accuracy: expected * 0.002, "\(rate) at \(refresh) Hz")
+            let ideal = refresh / rate.framesPerSecond
+            let allowed: Set<Int> = [max(1, Int(ideal.rounded(.down))), max(1, Int(ideal.rounded(.up)))]
+            let gaps = Set(zip(kept, kept.dropFirst()).map { $1 - $0 })
+            XCTAssertTrue(gaps.isSubset(of: allowed), "\(rate) at \(refresh) Hz: gaps \(gaps), allowed \(allowed)")
+        }
+    }
+
+    func testScheduleRestartsAfterStaticScreenWithoutBursting() {
+        var schedule = CaptureFrameSchedule(frameRate: CaptureFrameRate(25))
+        let at = { (seconds: Double) in CMTime(seconds: seconds, preferredTimescale: 1_000_000_000) }
+        XCTAssertTrue(schedule.keeps(at(0)))
+        XCTAssertTrue(schedule.keeps(at(2)))             // first change after two static seconds
+        XCTAssertFalse(schedule.keeps(at(2 + 1.0 / 60)))
+        XCTAssertTrue(schedule.keeps(at(2 + 2.0 / 60)))
+    }
+
+    func testFrameQueueFillsSlotsByCaptureTime() {
+        let ms = { (value: Int64) in CMTime(value: value, timescale: 1000) }
+        var queue = CaptureFrameQueue<Int>(capacity: 8)
+        // 25 fps kept from a 60 Hz display: 2- and 3-refresh gaps around 40 ms slots.
+        for (index, time) in [Int64(0), 33, 83, 117, 167].enumerated() { queue.append(index, at: ms(time)) }
+        let slots = [Int64(0), 40, 80, 120, 160, 200].map { queue.frame(forSlotAt: ms($0), halfInterval: ms(20)) }
+        XCTAssertEqual(slots, [0, 1, 2, 3, 4, 4], "Every captured frame fills a slot; a static screen repeats the last")
+        // A retry after encoder backpressure gets the same frame.
+        XCTAssertEqual(queue.frame(forSlotAt: ms(200), halfInterval: ms(20)), 4)
+        XCTAssertEqual(queue.frames.count, 1)
+
+        var bounded = CaptureFrameQueue<Int>(capacity: 2)
+        for index in 0..<5 { bounded.append(index, at: ms(Int64(index) * 10)) }
+        XCTAssertEqual(bounded.frames.map(\.frame), [3, 4])
+    }
+
+    func testCadenceStatsBucketsIntervalsAndStaticGaps() {
+        var stats = CaptureCadenceStats()
+        var time = CMTime(value: 0, timescale: 600)
+        for _ in 0..<4 {
+            stats.record(presentationTime: time)
+            time = CMTimeAdd(time, CMTime(value: 30, timescale: 600))   // 50 ms
+        }
+        time = CMTimeAdd(time, CMTime(value: 3, timescale: 1))
+        stats.record(presentationTime: time)
+        XCTAssertEqual(stats.frameCount, 5)
+        XCTAssertEqual(stats.intervalCounts, [50: 3, CaptureCadenceStats.staticGapMilliseconds: 1])
+        XCTAssertEqual(stats.summary, "50 ms ×3, ≥250 ms ×1")
+        XCTAssertEqual(CaptureCadenceStats().summary, "none")
+    }
+
+    /// Finalizing another display's file can take seconds; the pump must not keep
+    /// adding frames after delivery stopped, or video runs past the audio.
+    func testFrozenEndpointEndsGrowingRecordingAtDeliveryCutoff() async throws {
+        for rate in [CaptureFrameRate(25), CaptureFrameRate(30000, denominator: 1001)] {
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mov")
+            defer { try? FileManager.default.removeItem(at: url) }
+            let clock = OSAllocatedUnfairLock(initialState: CMTime.zero)
+            let writer = try ScreenCaptureWriter(
+                outputURL: url, fileType: .mov,
+                videoSettings: CapturePreset.avcGrowing.videoSettings(width: 64, height: 64, frameRate: rate),
+                audioSettings: CapturePreset.avcGrowing.audioSettings,
+                dynamicRange: .sdr, includeMicrophone: false, isGrowing: true, frameRate: rate,
+                currentTime: { clock.withLock { $0 } }
+            )
+            writer.append(sampleBuffer: try makeScreenSample(at: .zero, rate: rate), type: .screen)
+            // 5.25 frame durations in: frames 0...5 are due when delivery stops.
+            clock.withLock { $0 = CMTimeMultiplyByFloat64(rate.frameDuration, multiplier: 5.25) }
+            writer.freezeEndpoint()
+            clock.withLock { $0 = CMTime(value: 3, timescale: 1) }
+            try await Task.sleep(for: .milliseconds(150))   // several pump ticks
+            try await writer.finish()
+
+            let tracks = try await AVURLAsset(url: url).loadTracks(withMediaType: .video)
+            let video = try XCTUnwrap(tracks.first)
+            let range = try await video.load(.timeRange)
+            XCTAssertEqual(CMTimeCompare(range.duration, rate.presentationOffset(frameIndex: 6)), 0, "Video duration at \(rate): \(range.duration)")
+        }
+    }
+
+    private func makeScreenSample(at time: CMTime, rate: CaptureFrameRate) throws -> CMSampleBuffer {
+        var pixelBuffer: CVPixelBuffer?
+        XCTAssertEqual(CVPixelBufferCreate(kCFAllocatorDefault, 64, 64, kCVPixelFormatType_32BGRA,
+                                          [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary, &pixelBuffer), kCVReturnSuccess)
+        let pixels = try XCTUnwrap(pixelBuffer)
+        CVPixelBufferLockBaseAddress(pixels, [])
+        memset(try XCTUnwrap(CVPixelBufferGetBaseAddress(pixels)), 0, CVPixelBufferGetDataSize(pixels))
+        CVPixelBufferUnlockBaseAddress(pixels, [])
+        var format: CMVideoFormatDescription?
+        XCTAssertEqual(CMVideoFormatDescriptionCreateForImageBuffer(allocator: kCFAllocatorDefault, imageBuffer: pixels, formatDescriptionOut: &format), noErr)
+        var timing = CMSampleTimingInfo(duration: rate.frameDuration, presentationTimeStamp: time, decodeTimeStamp: .invalid)
+        var sample: CMSampleBuffer?
+        XCTAssertEqual(CMSampleBufferCreateReadyWithImageBuffer(allocator: kCFAllocatorDefault, imageBuffer: pixels,
+                                                               formatDescription: try XCTUnwrap(format), sampleTiming: &timing, sampleBufferOut: &sample), noErr)
+        return try XCTUnwrap(sample)
+    }
+
     func testContinuouslyReadyBacklogYieldsBetweenBoundedPasses() throws {
         var emitted = 0
         let drained = try CaptureFrameEmission.drain(
