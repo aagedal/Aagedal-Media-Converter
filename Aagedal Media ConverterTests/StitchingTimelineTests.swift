@@ -256,25 +256,78 @@ final class StitchingTimelineTests: XCTestCase {
         var group = EncodingGroup(name: "Card", items: [source], concatEnabled: false)
         StitchingTimeline.split(&group.items, at: 30)
         group.separateClipOutputNames(preset: .streamCopy)
-        XCTAssertEqual(group.items.map(\.outputFileNameOverride), ["Card_001", "Card_001_2"])
+        XCTAssertEqual(group.items.map(\.outputFileNameOverride), ["Card_001", "Card_001"])
+        XCTAssertEqual(group.items.map(\.outputNameIndex), [nil, 2])
+        XCTAssertEqual(outputNames(group, preset: .streamCopy), ["Card_001", "Card_001_2"])
 
         // A later split of the first part skips the name already in use.
         StitchingTimeline.split(&group.items, at: 10)
         group.separateClipOutputNames(preset: .streamCopy)
-        XCTAssertEqual(group.items.map(\.outputFileNameOverride), ["Card_001", "Card_001_3", "Card_001_2"])
+        XCTAssertEqual(outputNames(group, preset: .streamCopy), ["Card_001", "Card_001_3", "Card_001_2"])
 
         // Names differing only in case are the same file on macOS.
         var other = clip(duration: 10)
         other.outputFileNameOverride = "card_001"
         group.items.append(other)
         group.separateClipOutputNames(preset: .streamCopy)
-        XCTAssertEqual(group.items.last?.outputFileNameOverride, "card_001_4")
+        XCTAssertEqual(outputNames(group, preset: .streamCopy).last, "card_001_4")
 
         // A merge writes one file, so its parts keep the shared name.
         var merged = EncodingGroup(name: "Card", items: [source], concatEnabled: true)
         StitchingTimeline.split(&merged.items, at: 30)
         merged.separateClipOutputNames(preset: .streamCopy)
-        XCTAssertEqual(merged.items.map(\.outputFileNameOverride), ["Card_001", "Card_001"])
+        XCTAssertEqual(merged.items.map(\.outputNameIndex), [nil, nil])
+        XCTAssertEqual(outputNames(merged, preset: .streamCopy), ["Card_001", "Card_001"])
+    }
+
+    func testSplitClipOutputIndexFollowsThePresetAndIsDroppedWhenFree() {
+        var group = EncodingGroup(name: "Card", items: [clip(duration: 60)], concatEnabled: false)
+        StitchingTimeline.split(&group.items, at: 30)
+        group.separateClipOutputNames(preset: .prores)
+        XCTAssertNil(group.items[1].outputFileNameOverride)
+
+        // The index sits after whatever suffix the current preset gives.
+        for preset in [ExportPreset.prores, .h264] {
+            let suffix = FileNameTemplateContext(preset: preset).presetSuffix
+            XCTAssertEqual(outputNames(group, preset: preset, settings: namingPreferences),
+                           ["stitching-test\(suffix)", "stitching-test\(suffix)_2"])
+        }
+
+        // Once the other clip is gone the name is free again.
+        group.items.removeFirst()
+        group.separateClipOutputNames(preset: .h264)
+        XCTAssertEqual(group.items.map(\.outputNameIndex), [nil])
+        // Sequential names are unique already.
+        StitchingTimeline.split(&group.items, at: 15)
+        group.separateClipOutputNames(preset: .h264)
+        XCTAssertEqual(group.items.map(\.outputNameIndex), [nil, 2])
+        group.sequentialNamingEnabled = true
+        group.separateClipOutputNames(preset: .h264)
+        XCTAssertEqual(group.items.map(\.outputNameIndex), [nil, nil])
+        XCTAssertEqual(group.items.map(\.outputFileNameOverride), ["Card_001", "Card_002"])
+    }
+
+    func testSeparatingNamesLeavesConvertedClipsAndTheirOutputsAlone() {
+        func card(_ letter: String, status: ConversionManager.ConversionStatus, output: String?) -> VideoItem {
+            VideoItem(url: URL(fileURLWithPath: "/Volumes/\(letter)/CLIPS/C0001.MP4"), name: "C0001.MP4",
+                      size: 0, duration: "", status: status, progress: 0, eta: nil,
+                      outputURL: output.map { URL(fileURLWithPath: "/out/\($0).mp4") })
+        }
+        // The converter gave the second card's clip `_1` when its name was taken.
+        var group = EncodingGroup(name: "Cards", items: [
+            card("A", status: .done, output: "C0001"),
+            card("B", status: .done, output: "C0001_1"),
+            card("C", status: .waiting, output: "C0001")
+        ], concatEnabled: false)
+        group.separateClipOutputNames(preset: .streamCopy)
+        XCTAssertEqual(group.items.map(\.outputNameIndex), [nil, nil, 2])
+        XCTAssertEqual(group.items.map { $0.outputURL?.lastPathComponent },
+                       ["C0001.mp4", "C0001_1.mp4", "C0001_2.mp4"])
+        XCTAssertNil(group.items[2].outputFileNameOverride)
+
+        // Removing the index again restores the plain expected output.
+        group.items[2].setOutputNameIndex(nil)
+        XCTAssertEqual(group.items[2].outputURL?.lastPathComponent, "C0001.mp4")
     }
 
     func testSplitRejectsBoundariesInvalidTimesAndBusyItems() {
@@ -503,6 +556,23 @@ final class StitchingTimelineTests: XCTestCase {
                        WaveformEnvelope.Peak(minimum: -0.5, maximum: 0.5))
         XCTAssertEqual(envelope.peak(from: 0.5, to: 1, level: 0),
                        WaveformEnvelope.Peak(minimum: 0, maximum: 0))
+    }
+
+    private let namingPreferences = FileNamePreferences(
+        isEnabled: true, replaceSpaces: true, replaceScandinavianCharacters: true,
+        specialCharacterRemovalMode: .loose, includePresetSuffix: true, customTemplateEnabled: false,
+        template: "", dateFormat: "yyyyMMdd", counterPadding: 3
+    )
+
+    private func outputNames(
+        _ group: EncodingGroup, preset: ExportPreset, settings: FileNamePreferences? = nil
+    ) -> [String] {
+        group.items.map { item in
+            FileNameProcessor.outputBaseName(
+                inputURL: item.url, override: item.outputFileNameOverride, counter: item.customCounterValue,
+                preset: preset, settings: settings ?? namingPreferences, index: item.outputNameIndex
+            )
+        }
     }
 
     private func clip(duration: Double, start: Double? = nil, end: Double? = nil) -> VideoItem {

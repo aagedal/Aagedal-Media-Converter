@@ -463,7 +463,7 @@ struct VideoFileUtils: Sendable {
     static func makeOutputURL(
         for url: URL, outputFolder: String?, preset: ExportPreset, counter: Int? = nil,
         imageSequenceFrameRate: Double? = nil, namingSettings: VideoImportNamingSettings,
-        override: String? = nil
+        override: String? = nil, index: Int? = nil
     ) -> URL? {
         let resolvedOutputFolder = namingSettings.destination.resolveFolder(
             for: url, defaultOutputFolder: outputFolder, presetSuffix: namingSettings.context.presetSuffix
@@ -472,7 +472,7 @@ struct VideoFileUtils: Sendable {
         let nameParts = FileNameProcessor.outputNameParts(
             inputURL: url, override: override, counter: counter, preset: preset, settings: namingSettings.fileName,
             context: namingSettings.namingContext(preset: preset, imageSequenceFrameRate: imageSequenceFrameRate),
-            date: namingSettings.date
+            date: namingSettings.date, index: index
         )
         let resolvedExtension = namingSettings.outputExtension(for: url)
 
@@ -976,6 +976,25 @@ struct VideoItem: Identifiable, Equatable, Sendable {
 
     /// Manual override for output filename (base name, no extension)
     var outputFileNameOverride: String? = nil
+    /// `_2`, `_3`, … after the output name, so clips of a group without a merge don't
+    /// write the same file. Set by `EncodingGroup.separateClipOutputNames` and applied
+    /// when the name is resolved, so it follows the current preset and template.
+    var outputNameIndex: Int? = nil
+
+    /// Sets `outputNameIndex` and renames the expected `outputURL` to match.
+    mutating func setOutputNameIndex(_ index: Int?) {
+        guard index != outputNameIndex else { return }
+        if let url = outputURL {
+            var name = url.deletingPathExtension().lastPathComponent
+            if let old = outputNameIndex, name.hasSuffix("_\(old)") {
+                name.removeLast("_\(old)".count)
+            }
+            let renamed = url.deletingLastPathComponent()
+                .appendingPathComponent(FileNameProcessor.indexedName(name, index: index))
+            outputURL = url.pathExtension.isEmpty ? renamed : renamed.appendingPathExtension(url.pathExtension)
+        }
+        outputNameIndex = index
+    }
 
     /// Whether this item is ready for upload (conversion done or source upload enabled)
     var isReadyForUpload: Bool {
@@ -1100,7 +1119,10 @@ struct VideoItem: Identifiable, Equatable, Sendable {
         }
         // Details are named for the queue preset; overridden rows keep theirs.
         if outputFileNameOverride == nil, presetOverride == nil {
+            let index = outputNameIndex
+            outputNameIndex = nil
             outputURL = details.outputURL
+            setOutputNameIndex(index)
         }
         hasVideoStream = details.hasVideoStream
         // Preserve a previously-set metadata when the fallback path returned nil.

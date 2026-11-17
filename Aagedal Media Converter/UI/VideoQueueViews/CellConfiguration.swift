@@ -70,6 +70,7 @@ struct VideoFileCellConfiguration: Equatable {
     // Output file state (cached, no filesystem access)
     let outputFileExists: Bool
     let outputFileNameOverride: String?
+    let outputNameIndex: Int?
 
     // Download state
     let isDownloading: Bool

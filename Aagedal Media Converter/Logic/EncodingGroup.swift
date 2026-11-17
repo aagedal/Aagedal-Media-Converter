@@ -127,37 +127,67 @@ struct EncodingGroup: Identifiable, Equatable, Sendable {
     }
 
     /// Without a merge every clip is saved as its own file, so clips split from one
-    /// source would write the same output. Later clips with a name already in use get
-    /// `_2`, `_3`, … after it. A merge writes one file and is left alone.
+    /// source, or same-named clips from different cards, would write the same output.
+    /// Later clips with a name already in use get an `outputNameIndex` (`_2`, `_3`, …),
+    /// which is dropped again once the name is free. Clips that are converting, done or
+    /// with the shared job service keep their names and outputs. A merge writes one file.
     mutating func separateClipOutputNames(preset: ExportPreset) {
-        guard !concatEnabled else { return }
-        if sequentialNamingEnabled {
-            normalizeSequentialNaming()
+        let pending = items.indices.filter { !items[$0].keepsOutputName }
+        guard !concatEnabled, !sequentialNamingEnabled else {
+            if !concatEnabled { normalizeSequentialNaming() }
+            for index in pending { items[index].setOutputNameIndex(nil) }
             return
         }
+        // The file system ignores case.
         let names = items.map { item in
-            let parts = FileNameProcessor.outputNameParts(
+            FileNameProcessor.outputBaseName(
                 inputURL: item.url, override: item.outputFileNameOverride,
                 counter: item.customCounterValue, preset: preset
-            )
-            return parts.baseName + parts.suffix
+            ).lowercased()
         }
-        // The file system ignores case.
-        let taken = Set(names.map { $0.lowercased() })
+        let taken = Set(names)
         var used = Set<String>()
-        for index in items.indices {
-            var name = names[index]
-            if used.contains(name.lowercased()) {
-                var number = 2
-                while taken.union(used).contains("\(names[index])_\(number)".lowercased()) {
-                    number += 1
-                }
-                name = "\(names[index])_\(number)"
-                items[index].outputFileNameOverride = name
-                items[index].outputURL = nil
+        for index in items.indices where items[index].keepsOutputName {
+            used.insert(FileNameProcessor.indexedName(names[index], index: items[index].outputNameIndex))
+            if let outputURL = items[index].outputURL {
+                used.insert(outputURL.deletingPathExtension().lastPathComponent.lowercased())
             }
-            used.insert(name.lowercased())
         }
+        // Clips without an index keep the plain name first, so existing names stay put.
+        var newIndices = items.map(\.outputNameIndex)
+        var unnamed: [Int] = []
+        for index in pending where items[index].outputNameIndex == nil {
+            if !used.insert(names[index]).inserted { unnamed.append(index) }
+        }
+        for index in pending where items[index].outputNameIndex != nil {
+            if used.insert(names[index]).inserted {
+                newIndices[index] = nil
+                continue
+            }
+            let current = FileNameProcessor.indexedName(names[index], index: items[index].outputNameIndex)
+            if taken.contains(current) || !used.insert(current).inserted { unnamed.append(index) }
+        }
+        for index in unnamed.sorted() {
+            var number = 2
+            while taken.contains("\(names[index])_\(number)") || used.contains("\(names[index])_\(number)") {
+                number += 1
+            }
+            used.insert("\(names[index])_\(number)")
+            newIndices[index] = number
+        }
+        for index in pending { items[index].setOutputNameIndex(newIndices[index]) }
+    }
+}
+
+extension VideoItem {
+    /// Converting, finished and shared-job clips have (or will have) their output file.
+    var keepsOutputName: Bool {
+        status == .converting || status == .done || applicationJobID != nil
+    }
+
+    /// A clip leaving its group no longer needs the group's `_2` name.
+    mutating func clearGroupOutputNameIndex() {
+        if !keepsOutputName { setOutputNameIndex(nil) }
     }
 }
 

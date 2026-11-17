@@ -276,6 +276,8 @@ enum ManualApplicationJobBridge {
         return item.status == .waiting
             && item.applicationJobID == nil
             && item.recursiveEncodingGenerations == nil
+            // The contract numbers outputs itself and has no field for a group's `_2` name.
+            && item.outputNameIndex == nil
             && item.isEncodable
             && !item.isImageSequence
             && (item.audioRoutingConfig == nil

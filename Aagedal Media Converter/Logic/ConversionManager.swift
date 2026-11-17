@@ -1381,7 +1381,7 @@ actor ConversionManager: Sendable {
         FileNameProcessor.outputBaseName(
             inputURL: inputURL, override: item.outputFileNameOverride,
             counter: item.customCounterValue, preset: preset,
-            settings: settings, context: context
+            settings: settings, context: context, index: item.outputNameIndex
         )
     }
 }

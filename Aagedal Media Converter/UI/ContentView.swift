@@ -1510,13 +1510,15 @@ struct ContentView: View {
 
         let groupName = masterName.isEmpty ? state.folderURL.lastPathComponent : masterName
 
-        let group = EncodingGroup(
+        var group = EncodingGroup(
             name: groupName,
             items: groupItems,
             preset: cardPreset,
             concatEnabled: concatEnabled,
             uploadEnabled: uploadEnabled
         )
+        // Clips on different cards can share a name.
+        group.separateClipOutputNames(preset: cardPreset)
 
         encodingGroups.append(group)
         queueOrder.append(group.id)
@@ -2597,6 +2599,7 @@ struct ContentView: View {
                 // Encoding group entry
                 let group = encodingGroups[groupIndex]
                 if group.items.contains(where: { $0.status == .waiting }) {
+                    encodingGroups[groupIndex].separateClipOutputNames(preset: group.preset ?? selectedPreset)
                     if await submitApplicationGroupIfSupported(groupID: id, waitForCompletion: true) {
                         i += 1
                         continue
@@ -2804,6 +2807,10 @@ struct ContentView: View {
         isConverting = true
         dockProgressUpdater.updateProgress(0.0)
 
+        // Two clips must not write the same file, however the group was built.
+        encodingGroups[groupIndex].separateClipOutputNames(
+            preset: encodingGroups[groupIndex].preset ?? selectedPreset
+        )
         if await submitApplicationGroupIfSupported(groupID: groupID, waitForCompletion: false) {
             isConverting = false
             return
@@ -2970,7 +2977,8 @@ struct ContentView: View {
                     for: item,
                     waveformFrameRate: preset == .imageSequence ? AudioWaveformPreferences.loadConfig().frameRate : nil
                 )
-            )
+            ),
+            index: item.outputNameIndex
         )
     }
 

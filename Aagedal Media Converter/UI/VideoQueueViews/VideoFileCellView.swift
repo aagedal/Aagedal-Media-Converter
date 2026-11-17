@@ -1070,7 +1070,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         // Also re-render when name changes — for yt-dlp downloads the output name
         // is derived from item.name (e.g. "Fetching info..." → YouTube title), so
         // it'd otherwise stay stuck on the placeholder until download completes.
-        if isFirstConfigure || prev?.outputURL != config.outputURL || prev?.outputFileNameOverride != config.outputFileNameOverride || prev?.status != config.status || prev?.outputFileExists != config.outputFileExists || prev?.name != config.name {
+        if isFirstConfigure || prev?.outputURL != config.outputURL || prev?.outputFileNameOverride != config.outputFileNameOverride || prev?.outputNameIndex != config.outputNameIndex || prev?.status != config.status || prev?.outputFileExists != config.outputFileExists || prev?.name != config.name {
             let outputName = displayOutputFilename(config: config)
             outputNameLabel.stringValue = outputName
             outputNameLabel.toolTip = outputName
@@ -1631,7 +1631,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         if let override = config.outputFileNameOverride?.trimmingCharacters(in: .whitespacesAndNewlines),
            !override.isEmpty {
             let ext = config.preset.outputExtension(for: config.url)
-            return override + "." + ext
+            return FileNameProcessor.indexedName(override, index: config.outputNameIndex) + "." + ext
         }
         if let outputURL = config.outputURL {
             return outputURL.lastPathComponent
@@ -1640,7 +1640,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         let sanitized = FileNameProcessor.processFileName(filename)
         let ext = config.preset.outputExtension(for: config.url)
         let suffix = FileNameProcessor.includePresetSuffix ? config.preset.fileSuffix : ""
-        return "\(sanitized)\(suffix).\(ext)"
+        return FileNameProcessor.indexedName("\(sanitized)\(suffix)", index: config.outputNameIndex) + ".\(ext)"
     }
 
     // MARK: - Button Actions

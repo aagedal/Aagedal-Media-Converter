@@ -401,7 +401,8 @@ struct GroupEditorView: View {
     /// the logic the old mini-row extract button used.
     private func extractItem(id: UUID) {
         guard let idx = group.items.firstIndex(where: { $0.id == id }) else { return }
-        let item = group.items.remove(at: idx)
+        var item = group.items.remove(at: idx)
+        item.clearGroupOutputNameIndex()
         droppedFiles.append(item)
         if let groupIdx = queueOrder.firstIndex(of: group.id) {
             queueOrder.insert(item.id, at: groupIdx + 1)
@@ -654,7 +655,8 @@ private struct GroupEditorRow: View {
     private var perItemOutputName: String {
         if let override = item.outputFileNameOverride?.trimmingCharacters(in: .whitespacesAndNewlines),
            !override.isEmpty {
-            return override + "." + preset.outputExtension(for: item.url)
+            return FileNameProcessor.indexedName(override, index: item.outputNameIndex)
+                + "." + preset.outputExtension(for: item.url)
         }
         if let outputURL = item.outputURL {
             return outputURL.lastPathComponent
@@ -662,7 +664,8 @@ private struct GroupEditorRow: View {
         let base = (item.name as NSString).deletingPathExtension
         let sanitized = FileNameProcessor.processFileName(base)
         let suffix = FileNameProcessor.includePresetSuffix ? preset.fileSuffix : ""
-        return "\(sanitized)\(suffix).\(preset.outputExtension(for: item.url))"
+        return FileNameProcessor.indexedName("\(sanitized)\(suffix)", index: item.outputNameIndex)
+            + ".\(preset.outputExtension(for: item.url))"
     }
 
     private var groupOutputName: String {
