@@ -143,7 +143,9 @@ enum HistorySyncFolder {
                 continue
             }
             let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
-            if let cached = cache[name], cached.status != .notDownloaded,
+            // Only files that were read are reused. One that failed is tried
+            // again: an evicted iCloud file keeps its name, size and date.
+            if let cached = cache[name], cached.status == .loaded,
                cached.modificationDate == values?.contentModificationDate, cached.size == values?.fileSize {
                 files.append(cached)
                 continue

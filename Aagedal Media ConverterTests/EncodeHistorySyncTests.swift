@@ -307,6 +307,25 @@ final class EncodeHistorySyncTests: XCTestCase {
         XCTAssertEqual(second.first?.content?.records.map(\.id), [record.id])
     }
 
+    func testScanRetriesAFileThatFailedToRead() throws {
+        let history = cloud.appendingPathComponent("History", isDirectory: true)
+        try FileManager.default.createDirectory(at: history, withIntermediateDirectories: true)
+        let url = history.appendingPathComponent("device-b.json")
+        let valid = try EncodeHistoryStore.encoder.encode(remoteFile("device-b", records: []).content!)
+        let date = Date().addingTimeInterval(-60)
+        // Same size and date as the real file, as an evicted iCloud file can be.
+        try Data(repeating: UInt8(ascii: "x"), count: valid.count).write(to: url)
+        try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: url.path)
+        let first = HistorySyncFolder.scan(directory: history, excludingDeviceID: "device-a")
+        XCTAssertEqual(first.map(\.status), [.unreadable])
+
+        try valid.write(to: url)
+        try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: url.path)
+        let cache = Dictionary(uniqueKeysWithValues: first.map { ($0.url.lastPathComponent, $0) })
+        let second = HistorySyncFolder.scan(directory: history, excludingDeviceID: "device-a", cache: cache)
+        XCTAssertEqual(second.map(\.status), [.loaded])
+    }
+
     func testDeviceIDsFromFileNames() {
         XCTAssertEqual(HistorySyncFolder.deviceID(forFileName: "abc.json")?.id, "abc")
         XCTAssertEqual(HistorySyncFolder.deviceID(forFileName: "abc 2.json")?.id, "abc")
