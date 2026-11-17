@@ -418,6 +418,20 @@ final class MediaAdjustmentsTests: XCTestCase {
         }
     }
 
+    func testLoudnessKeepsTheSourceSampleRateWhenThePresetSetsNone() async throws {
+        let fixture = try await Fixture.make(audioTracks: 1, sampleRate: 44100)
+        defer { fixture.remove() }
+        let output = fixture.directory.appendingPathComponent("normalized.mkv")
+        let command = try await fixture.export(
+            preset: .lossless, adjustments: ResolvedMediaAdjustments(adjustments: nil, globalLoudness: .enabledEBU),
+            to: output
+        )
+        XCTAssertFalse(command.arguments.contains("-ar"))
+        XCTAssertTrue(command.arguments.contains { $0.contains("aresample=44100") }, "\(command.arguments)")
+        let probe = try await fixture.probe(output)
+        XCTAssertEqual(probe.sampleRate, 44100)
+    }
+
     func testAudioAndPictureAdjustmentsKeepTheUntaggedColorFix() async throws {
         let fixture = try await Fixture.make(audioTracks: 1, size: "1280x720")
         defer { fixture.remove() }
@@ -488,7 +502,7 @@ private struct Fixture {
     let replacementAudio: URL
     let ffmpeg: String
 
-    static func make(audioTracks: Int, size: String = "320x240") async throws -> Fixture {
+    static func make(audioTracks: Int, size: String = "320x240", sampleRate: Int = 48000) async throws -> Fixture {
         let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("adjustments-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -500,7 +514,7 @@ private struct Fixture {
         try "1\n00:00:00,500 --> 00:00:03,000\nHello: world, [test]\n\n".write(to: fixture.subtitles, atomically: true, encoding: .utf8)
         var arguments = ["-y", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=d=4:s=\(size):r=25"]
         for track in 0..<audioTracks {
-            arguments += ["-f", "lavfi", "-i", "sine=f=\(440 + track * 220):d=4:sample_rate=48000,volume=\(-30 - track * 6)dB,pan=stereo|c0=c0|c1=c0"]
+            arguments += ["-f", "lavfi", "-i", "sine=f=\(440 + track * 220):d=4:sample_rate=\(sampleRate),volume=\(-30 - track * 6)dB,pan=stereo|c0=c0|c1=c0"]
         }
         arguments += ["-map", "0:v"] + (0..<audioTracks).flatMap { ["-map", "\($0 + 1):a"] }
         arguments += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "pcm_s24le", fixture.source.path]
@@ -549,14 +563,15 @@ private struct Fixture {
         return command
     }
 
-    struct Probe { var width = 0, height = 0, audioTracks = 0, duration = 0.0 }
+    struct Probe { var width = 0, height = 0, audioTracks = 0, duration = 0.0, sampleRate: Int? }
 
     func probe(_ url: URL) async throws -> Probe {
         let metadata = try await BoundedVideoMetadataProbe.metadata(for: url)
         let video = metadata.videoStreams.first
         return Probe(
             width: video?.width ?? 0, height: video?.height ?? 0,
-            audioTracks: metadata.audioStreams.count, duration: metadata.duration ?? 0
+            audioTracks: metadata.audioStreams.count, duration: metadata.duration ?? 0,
+            sampleRate: metadata.audioStreams.first?.sampleRate
         )
     }
 

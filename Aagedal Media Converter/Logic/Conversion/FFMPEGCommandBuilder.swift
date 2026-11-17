@@ -858,11 +858,19 @@ enum FFMPEGCommandBuilder {
                     ffmpegArgs += ["-map", "\(replacementInputIndex):a"]
                 }
             }
+            var sampleRate = ffmpegArgs.firstIndex(of: "-ar").flatMap {
+                $0 + 1 < ffmpegArgs.count ? Int(ffmpegArgs[$0 + 1]) : nil
+            }
+            if sampleRate == nil, resolved.loudness != nil {
+                // loudnorm upsamples to 192 kHz; a preset without a rate keeps the source's.
+                sampleRate = replacesSourceAudio ? nil : sourceMetadata?.audioStreams.first?.sampleRate
+                if sampleRate == nil {
+                    sampleRate = (try? await BoundedVideoMetadataProbe.metadata(for: audioProbeURL))?.audioStreams.first?.sampleRate
+                }
+            }
             let context = MediaAdjustmentsPlan.AudioChainContext(
                 outputDuration: adjustedOutputDuration,
-                sampleRate: ffmpegArgs.firstIndex(of: "-ar").flatMap {
-                    $0 + 1 < ffmpegArgs.count ? Int(ffmpegArgs[$0 + 1]) : nil
-                } ?? 48000,
+                sampleRate: sampleRate ?? 48000,
                 fitsToDuration: abs(resolved.adjustments.audioOffset) > 0.0001 || replacementAudio != nil
             )
             var chainError: MediaAdjustmentsPlan.AdjustmentError?
