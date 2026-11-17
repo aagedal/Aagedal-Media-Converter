@@ -81,11 +81,11 @@ struct SourceAudioMeterChunk: Sendable {
 
 enum SourceAudioMeterDecoder {
     static func arguments(for request: SourceAudioMeterRequest) -> [String] {
-        var filters: [String] = []
-        if request.channels > 8 {
-            // Keep the first eight source channels individually; -ac 8 would downmix.
-            filters.append("pan=8c|" + (0..<8).map { "c\($0)=c\($0)" }.joined(separator: "|"))
-        }
+        // The PCM must have exactly `displayedChannels` channels, or the bins mix
+        // channels when the probed count is wrong. Map the first source channels one
+        // to one; -ac would downmix. Missing channels stay silent.
+        let channels = request.displayedChannels
+        var filters = ["pan=\(channels)c|" + (0..<channels).map { "c\($0)=c\($0)" }.joined(separator: "|")]
         // Fill timestamp gaps and preserve delayed-track alignment with the preview.
         filters.append("aresample=48000:async=1:first_pts=0")
         return ["-hide_banner", "-loglevel", "error", "-nostdin", "-threads", "1",

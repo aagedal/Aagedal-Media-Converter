@@ -885,7 +885,7 @@ final class SourceAudioMeterTests: XCTestCase {
         XCTAssertEqual(arguments[arguments.firstIndex(of: "-map")! + 1], "0:a:2")
         XCTAssertEqual(arguments[arguments.firstIndex(of: "-ss")! + 1], "16.0")
         XCTAssertFalse(arguments.contains("-ac"))
-        XCTAssertFalse(arguments.joined().contains("pan="))
+        XCTAssertTrue(arguments.joined().contains("pan=6c|c0=c0|c1=c1|c2=c2|c3=c3|c4=c4|c5=c5,"))
         let many = SourceAudioMeterRequest(url: request.url, track: 1, channels: 16, window: 0)
         XCTAssertEqual(many.displayedChannels, 8)
         XCTAssertTrue(SourceAudioMeterDecoder.arguments(for: many).joined().contains("pan=8c|c0=c0|c1=c1"))
