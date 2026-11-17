@@ -136,6 +136,10 @@ final class EncodeHistoryStore {
             file.sessions[index].endedAt = lastActivity ?? file.sessions[index].startedAt
             file.sessions[index].endedCleanly = false
         }
+        // Written once with this Mac's id, so other Macs never have to guess.
+        EncodeHistoryMerge.attributeUnattributed(
+            records: &file.records, sessions: &file.sessions, rollups: &file.rollups, to: deviceID
+        )
 
         let session = HistorySession(
             startedAt: now,

@@ -32,7 +32,10 @@ enum EncodeHistoryDevice {
     /// its records and sessions. Derived from the hardware UUID, hashed so the
     /// raw identifier never leaves the Mac: it survives reinstalls and display
     /// name changes, and a Mac set up with Migration Assistant gets its own id
-    /// rather than inheriting the old Mac's file.
+    /// rather than inheriting the old Mac's file. Two limits: the fallback id
+    /// lives in the app's preferences, which Migration Assistant copies, so two
+    /// Macs that both can't read the hardware UUID could share it; and a
+    /// virtual machine duplicated as a whole may keep its hardware UUID.
     static let localID: String = hardwareDerivedID() ?? fallbackID(defaults: .standard)
 
     private static func hardwareDerivedID() -> String? {
@@ -197,13 +200,33 @@ enum HistorySyncFolder {
         }
     }
 
+    /// The newest readable copy of each device's file. Every write holds that
+    /// Mac's whole history, so an older iCloud conflict copy only adds stale
+    /// data: taking records from one copy and rollups from another would count
+    /// encodes folded in between twice.
+    static func newestCopies(of files: [HistorySyncFile]) -> [HistorySyncFile] {
+        var newest: [String: HistorySyncFile] = [:]
+        for file in files where file.content != nil {
+            if let existing = newest[file.deviceID], !isNewer(file, than: existing) { continue }
+            newest[file.deviceID] = file
+        }
+        return newest.values.sorted { $0.deviceID < $1.deviceID }
+    }
+
+    /// By the header's write date; on a tie the file with the plain name wins.
+    private static func isNewer(_ candidate: HistorySyncFile, than existing: HistorySyncFile) -> Bool {
+        let a = candidate.content?.modifiedAt ?? candidate.modificationDate ?? .distantPast
+        let b = existing.content?.modifiedAt ?? existing.modificationDate ?? .distantPast
+        if a != b { return a > b }
+        return candidate.url.lastPathComponent == "\(candidate.deviceID).json"
+    }
+
     /// One entry per device, by name.
     static func devices(from files: [HistorySyncFile]) -> [HistorySyncDevice] {
         let byDevice = Dictionary(grouping: files, by: \.deviceID)
         return byDevice.map { id, files in
             let loaded = files.filter { $0.status == .loaded }
-                .sorted { ($0.content?.modifiedAt ?? .distantPast) > ($1.content?.modifiedAt ?? .distantPast) }
-            let newest = loaded.first?.content
+            let newest = newestCopies(of: loaded).first?.content
             let state: HistorySyncDevice.State
             if loaded.isEmpty {
                 state = files.contains { $0.status == .notDownloaded } ? .downloading : .unreadable
@@ -214,9 +237,8 @@ enum HistorySyncFolder {
             }
             let name = newest?.deviceName.flatMap { $0.isEmpty ? nil : $0 }
                 ?? newest?.records.first(where: { !$0.deviceName.isEmpty })?.deviceName
-            let recordCount = Set(loaded.flatMap { $0.content?.records.map(\.id) ?? [] }).count
             return HistorySyncDevice(id: id, name: name, updatedAt: newest?.modifiedAt ?? loaded.first?.modificationDate,
-                                     recordCount: recordCount, state: state)
+                                     recordCount: newest?.records.count ?? 0, state: state)
         }
         .sorted { ($0.name ?? $0.id).localizedStandardCompare($1.name ?? $1.id) == .orderedAscending }
     }
@@ -266,14 +288,64 @@ enum EncodeHistoryMerge {
         var rollups: [MonthlyRollup] = []
     }
 
+    /// Gives this Mac's history without a device id (written by 4.7, before
+    /// sync) the id of this Mac, so it's stored once with the right owner and
+    /// another Mac doesn't have to guess. Rollups that then share a month,
+    /// device and name are added up: each holds different encodes (an encode
+    /// is folded once, under the one id it had).
+    ///
+    /// History that Migration Assistant carried over from a Mac that ran 4.7
+    /// is claimed too; it can't be told apart from this Mac's own. If the old
+    /// Mac also keeps syncing, its old records and sessions are still counted
+    /// once (same ids), but encodes both Macs already folded into rollups are
+    /// counted by both.
+    static func attributeUnattributed(
+        records: inout [EncodeRecord],
+        sessions: inout [HistorySession],
+        rollups: inout [MonthlyRollup],
+        to deviceID: String
+    ) {
+        for index in records.indices where records[index].deviceID == nil { records[index].deviceID = deviceID }
+        for index in sessions.indices where sessions[index].deviceID == nil { sessions[index].deviceID = deviceID }
+        guard rollups.contains(where: { $0.deviceID == nil }) else { return }
+        for index in rollups.indices where rollups[index].deviceID == nil { rollups[index].deviceID = deviceID }
+        rollups = coalesced(rollups)
+    }
+
+    /// Rollups with the same month, device and name added up, in a stable order.
+    static func coalesced(_ rollups: [MonthlyRollup]) -> [MonthlyRollup] {
+        var byKey: [String: MonthlyRollup] = [:]
+        for rollup in rollups {
+            let key = rollupKey(rollup)
+            if byKey[key] == nil { byKey[key] = rollup } else { byKey[key]?.merge(rollup) }
+        }
+        return byKey.values.sorted { $0.month != $1.month ? $0.month < $1.month : $0.deviceName < $1.deviceName }
+    }
+
+    private static func rollupKey(_ rollup: MonthlyRollup) -> String {
+        "\(rollup.deviceID ?? "")|\(rollup.month)|\(rollup.deviceName)"
+    }
+
     /// Every element in the result carries a device id: local data without
     /// one gets `localDeviceID`, remote data the id of the file it came from.
     ///
+    /// - This Mac's history comes only from the local file. Remote data that
+    ///   claims this Mac's id (a Mac set up from this one with Migration
+    ///   Assistant syncs the copies it got) is ignored: whatever is missing
+    ///   locally was pruned into a local rollup or removed on purpose.
+    /// - Of each other device only the newest copy of its file is read
+    ///   (`HistorySyncFolder.newestCopies`).
     /// - Records and sessions are deduplicated by id. The local copy wins; of
-    ///   two remote copies (an iCloud conflict copy, or history carried over by
-    ///   Migration Assistant) the more finished one wins.
-    /// - Rollups are deduplicated per device, month and name, keeping the larger
-    ///   (folding only ever grows a rollup).
+    ///   two remote copies (history carried over by Migration Assistant, in the
+    ///   old and the new Mac's file) the more finished one wins.
+    /// - Rollups: within one file, entries for the same device, month and name
+    ///   are added up (see `attributeUnattributed`). Across files they are
+    ///   copies of the same rollup taken at different times, so the larger
+    ///   wins (folding only ever grows a rollup). Local rollups of another Mac,
+    ///   carried over by Migration Assistant, take part in that comparison as
+    ///   one more file. Until both Macs have folded the carried-over records,
+    ///   ones this Mac still keeps while the other already folded them count
+    ///   twice; that settles once this Mac's retention folds them as well.
     /// - Remote data follows this Mac's retention (`cutoff`): older records and
     ///   sessions are folded into that device's rollups in memory, so a Mac
     ///   that stopped syncing ages out of the browser but stays in statistics.
@@ -297,41 +369,54 @@ enum EncodeHistoryMerge {
             if session.deviceID == nil { session.deviceID = localDeviceID }
             return session
         }
-        result.rollups = localRollups.map { rollup in
+        let stampedRollups = localRollups.map { rollup in
             var rollup = rollup
             if rollup.deviceID == nil { rollup.deviceID = localDeviceID }
             return rollup
         }
-        guard remote.contains(where: { $0.content != nil }) else { return result }
+        result.rollups = stampedRollups.filter { $0.deviceID == localDeviceID }
+        let carriedOverRollups = stampedRollups.filter { $0.deviceID != localDeviceID }
+        let files = HistorySyncFolder.newestCopies(of: remote)
+        guard !files.isEmpty || !carriedOverRollups.isEmpty else { return result }
 
         let localRecordIDs = Set(localRecords.map(\.id))
         let localSessionIDs = Set(localSessions.map(\.id))
         var records: [UUID: EncodeRecord] = [:]
         var sessions: [UUID: HistorySession] = [:]
         var rollups: [String: MonthlyRollup] = [:]
-        for file in remote {
+        func addRollups(of copy: [MonthlyRollup]) {
+            for rollup in coalesced(copy) {
+                let key = rollupKey(rollup)
+                if let existing = rollups[key],
+                   existing.encodeCount + existing.sessionCount >= rollup.encodeCount + rollup.sessionCount { continue }
+                rollups[key] = rollup
+            }
+        }
+        addRollups(of: carriedOverRollups)
+        for file in files {
             guard let content = file.content else { continue }
             let name = content.deviceName ?? ""
             for var record in content.records where !localRecordIDs.contains(record.id) {
                 if record.deviceID == nil { record.deviceID = file.deviceID }
+                guard record.deviceID != localDeviceID else { continue }
                 if record.deviceName.isEmpty { record.deviceName = name }
                 if let existing = records[record.id], !isMoreFinished(record, than: existing) { continue }
                 records[record.id] = record
             }
             for var session in content.sessions where !localSessionIDs.contains(session.id) {
                 if session.deviceID == nil { session.deviceID = file.deviceID }
+                guard session.deviceID != localDeviceID else { continue }
                 if session.deviceName.isEmpty { session.deviceName = name }
                 if let existing = sessions[session.id], !isMoreFinished(session, than: existing) { continue }
                 sessions[session.id] = session
             }
-            for var rollup in content.rollups {
+            addRollups(of: content.rollups.compactMap { rollup in
+                var rollup = rollup
                 if rollup.deviceID == nil { rollup.deviceID = file.deviceID }
+                guard rollup.deviceID != localDeviceID else { return nil }
                 if rollup.deviceName.isEmpty { rollup.deviceName = name }
-                let key = "\(rollup.deviceID ?? "")|\(rollup.month)|\(rollup.deviceName)"
-                if let existing = rollups[key],
-                   existing.encodeCount + existing.sessionCount >= rollup.encodeCount + rollup.sessionCount { continue }
-                rollups[key] = rollup
-            }
+                return rollup
+            })
         }
 
         var remoteRecords = Array(records.values)
