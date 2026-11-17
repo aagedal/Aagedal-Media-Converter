@@ -1,0 +1,233 @@
+--- a/libavfilter/af_whisper.c
++++ b/libavfilter/af_whisper.c
+@@ -67 +67 @@
+-    int64_t audio_buffer_start_ms;
++    int64_t audio_buffer_start_samples;
+@@ -201 +201,44 @@
+-static void run_transcription(AVFilterContext *ctx, AVFrame *frame, int samples)
++/* JSON strings preserve the original UTF-8 bytes; escape syntax/control bytes. */
++static char *whisper_json_escape(const char *text)
++{
++    const unsigned char *p;
++    size_t size = 1;
++    char *escaped, *out;
++    static const char hex[] = "0123456789abcdef";
++
++    for (p = (const unsigned char *)text; *p; p++) {
++        size_t extra = *p < 0x20 ? 6 : (*p == '"' || *p == '\\' ? 2 : 1);
++        if (size > SIZE_MAX - extra)
++            return NULL;
++        size += extra;
++    }
++    escaped = av_malloc(size);
++    if (!escaped)
++        return NULL;
++    out = escaped;
++    for (p = (const unsigned char *)text; *p; p++) {
++        if (*p < 0x20) {
++            *out++ = '\\'; *out++ = 'u'; *out++ = '0'; *out++ = '0';
++            *out++ = hex[*p >> 4]; *out++ = hex[*p & 15];
++        } else {
++            if (*p == '"' || *p == '\\')
++                *out++ = '\\';
++            *out++ = *p;
++        }
++    }
++    *out = 0;
++    return escaped;
++}
++
++/* Whisper may timestamp padded inference beyond the supplied audio. Bound ticks
++ * before multiplying, including malformed/extreme timestamps from the model. */
++static int64_t whisper_segment_ms(int64_t ticks, int64_t duration_ms)
++{
++    if (ticks <= 0)
++        return 0;
++    if (ticks > duration_ms / 10)
++        return duration_ms;
++    return ticks * 10;
++}
++
++static int run_transcription(AVFilterContext *ctx, AVFrame *frame, int samples)
+@@ -203,0 +247 @@
++    int ret = 0;
+@@ -206,4 +250,12 @@
+-    if (!wctx->ctx_wsp || samples == 0)
+-        return;
+-
+-    const int64_t timestamp_ms = wctx->audio_buffer_start_ms;
++    if (samples == 0)
++        return 0;
++    if (!wctx->ctx_wsp)
++        return AVERROR(EIO);
++
++    if (wctx->audio_buffer_start_samples > INT64_MAX - samples)
++        return AVERROR(EINVAL);
++    const int64_t timestamp_ms = av_rescale_rnd(wctx->audio_buffer_start_samples,
++                                               1000, WHISPER_SAMPLE_RATE, AV_ROUND_DOWN);
++    const int64_t end_ms = av_rescale_rnd(wctx->audio_buffer_start_samples + samples,
++                                         1000, WHISPER_SAMPLE_RATE, AV_ROUND_DOWN);
++    const int64_t duration_ms = end_ms - timestamp_ms;
+@@ -230 +282 @@
+-        return;
++        return AVERROR(EIO);
+@@ -234,0 +287,3 @@
++    char *text_cleaned = NULL;
++    char *buf = NULL;
++    const int json_output = !av_strcasecmp(wctx->format, "json");
+@@ -238 +293,5 @@
+-        if (av_isspace(text[0]))
++        if (!text) {
++            ret = AVERROR(EIO);
++            goto fail;
++        }
++        if (!json_output && av_isspace(text[0]))
+@@ -240,3 +299,7 @@
+-        char *text_cleaned = av_strireplace(text, "[BLANK_AUDIO]", "");
+-
+-        if (av_strnlen(text_cleaned, 1) == 0) {
++        text_cleaned = json_output ? av_strdup(text) : av_strireplace(text, "[BLANK_AUDIO]", "");
++        if (!text_cleaned) {
++            ret = AVERROR(ENOMEM);
++            goto fail;
++        }
++
++        if (!json_output && av_strnlen(text_cleaned, 1) == 0) {
+@@ -248 +311 @@
+-        if (wctx->max_len > 0 && (strcmp(text_cleaned, "[") == 0 || strcmp(text_cleaned, "]") == 0 ||
++        if (!json_output && wctx->max_len > 0 && (strcmp(text_cleaned, "[") == 0 || strcmp(text_cleaned, "]") == 0 ||
+@@ -256,2 +319,2 @@
+-        const int64_t t0_ms = whisper_full_get_segment_t0(wctx->ctx_wsp, i) * 10;
+-        const int64_t t1_ms = whisper_full_get_segment_t1(wctx->ctx_wsp, i) * 10;
++        const int64_t t0_ms = whisper_segment_ms(whisper_full_get_segment_t0(wctx->ctx_wsp, i), duration_ms);
++        const int64_t t1_ms = FFMAX(t0_ms, whisper_segment_ms(whisper_full_get_segment_t1(wctx->ctx_wsp, i), duration_ms));
+@@ -268,0 +332,5 @@
++        if (!segments_text) {
++            ret = AVERROR(ENOMEM);
++            goto fail;
++        }
++
+@@ -272 +339,0 @@
+-            char *buf = NULL;
+@@ -284,2 +351,8 @@
+-            } else if (!av_strcasecmp(wctx->format, "json")) {
+-                buf = av_asprintf("{\"start\":%" PRId64 ",\"end\":%" PRId64 ",\"text\":\"%s\"}\n", start_t, end_t, text_cleaned);
++            } else if (json_output) {
++                char *escaped = whisper_json_escape(text_cleaned);
++                if (!escaped) {
++                    ret = AVERROR(ENOMEM);
++                    goto fail;
++                }
++                buf = av_asprintf("{\"start\":%" PRId64 ",\"end\":%" PRId64 ",\"text\":\"%s\"}\n", start_t, end_t, escaped);
++                av_freep(&escaped);
+@@ -289,3 +362,10 @@
+-            if (buf) {
+-                avio_write(wctx->avio_context, buf, strlen(buf));
+-                av_freep(&buf);
++            if (!buf) {
++                ret = AVERROR(ENOMEM);
++                goto fail;
++            }
++            avio_write(wctx->avio_context, buf, strlen(buf));
++            av_freep(&buf);
++            avio_flush(wctx->avio_context);
++            if (wctx->avio_context->error < 0) {
++                ret = wctx->avio_context->error;
++                goto fail;
+@@ -300 +380,3 @@
+-        av_dict_set(metadata, "lavfi.whisper.text", segments_text, 0);
++        ret = av_dict_set(metadata, "lavfi.whisper.text", segments_text, 0);
++        if (ret < 0)
++            goto fail;
+@@ -302 +384,7 @@
+-        av_dict_set(metadata, "lavfi.whisper.duration", duration_text, AV_DICT_DONT_STRDUP_VAL);
++        if (!duration_text) {
++            ret = AVERROR(ENOMEM);
++            goto fail;
++        }
++        ret = av_dict_set(metadata, "lavfi.whisper.duration", duration_text, AV_DICT_DONT_STRDUP_VAL);
++        if (ret < 0)
++            goto fail;
+@@ -307 +395 @@
+-        memcpy(wctx->audio_buffer, wctx->audio_buffer + samples,
++        memmove(wctx->audio_buffer, wctx->audio_buffer + samples,
+@@ -309 +397 @@
+-        wctx->audio_buffer_start_ms += duration * 1000;
++        wctx->audio_buffer_start_samples += samples;
+@@ -312,0 +401,7 @@
++    return 0;
++
++fail:
++    av_freep(&buf);
++    av_freep(&text_cleaned);
++    av_freep(&segments_text);
++    return ret;
+@@ -320,0 +416 @@
++    int ret;
+@@ -325 +421,3 @@
+-        run_transcription(ctx, frame, wctx->audio_buffer_fill_size);
++        ret = run_transcription(ctx, frame, wctx->audio_buffer_fill_size);
++        if (ret < 0)
++            goto fail;
+@@ -329,3 +427,2 @@
+-        wctx->audio_buffer_start_ms = av_rescale_q(frame->pts,
+-                                                   (AVRational) {1000, 1},
+-                                                   (AVRational) {inlink->time_base.den, inlink->time_base.num});
++        wctx->audio_buffer_start_samples = av_rescale_q(frame->pts, inlink->time_base,
++                                                       (AVRational) {1, WHISPER_SAMPLE_RATE});
+@@ -345,0 +443,2 @@
++            ret = AVERROR(EIO);
++            goto fail;
+@@ -359 +458,5 @@
+-                    run_transcription(ctx, frame, end_pos);
++                    ret = run_transcription(ctx, frame, end_pos);
++                    if (ret < 0) {
++                        whisper_vad_free_segments(segments);
++                        goto fail;
++                    }
+@@ -365,2 +468,5 @@
+-    } else if (wctx->audio_buffer_fill_size >= wctx->audio_buffer_queue_size)
+-        run_transcription(ctx, frame, wctx->audio_buffer_fill_size);
++    } else if (wctx->audio_buffer_fill_size >= wctx->audio_buffer_queue_size) {
++        ret = run_transcription(ctx, frame, wctx->audio_buffer_fill_size);
++        if (ret < 0)
++            goto fail;
++    }
+@@ -371,0 +478,4 @@
++
++fail:
++    av_frame_free(&frame);
++    return ret;
+@@ -379,0 +490 @@
++    int ret;
+@@ -395 +506,5 @@
+-    run_transcription(ctx, frame, wctx->audio_buffer_fill_size);
++    ret = run_transcription(ctx, frame, wctx->audio_buffer_fill_size);
++    if (ret < 0) {
++        av_frame_free(&frame);
++        return ret;
++    }
+@@ -421 +536 @@
+-    if (!wctx->eof && ff_inlink_acknowledge_status(inlink, &status, &pts))
++    if (!wctx->eof && ff_inlink_acknowledge_status(inlink, &status, &pts)) {
+@@ -422,0 +538,5 @@
++        if (!wctx->eof) {
++            ff_outlink_set_status(outlink, status, pts);
++            return 0;
++        }
++    }
+@@ -425 +545,13 @@
+-        push_last_frame(outlink);
++        int ret = push_last_frame(outlink);
++        if (ret < 0)
++            return ret;
++        if (wctx->avio_context) {
++            int write_error;
++            avio_flush(wctx->avio_context);
++            write_error = wctx->avio_context->error;
++            ret = avio_closep(&wctx->avio_context);
++            if (write_error < 0)
++                return write_error;
++            if (ret < 0)
++                return ret;
++        }

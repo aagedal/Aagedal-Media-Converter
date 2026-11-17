@@ -1,0 +1,31 @@
+{
+  "previousSHA256": "21f5d3fbea60883e280b54bcff32670d672ac8f49c996e330df34b4a7d471484",
+  "intermediateSHA256": "f3fc4f2e78018af48e18c70a7f5a1b8af9a4f4de77a2f1406e607cbf50bfdcf1",
+  "intermediateNote": "Bundled by #118 (Whisper word details) without refreshed notices or source; replaced by this build in #125.",
+  "sha256": "18c8235278b7b478377c2c4ad04824f91e8867c879cb63827352640004e538af",
+  "bytes": 60310128,
+  "mode": "0755",
+  "architecture": "arm64",
+  "minimumMacOS": "11.0",
+  "sourceVersion": "9.0.2",
+  "buildSystemRepository": "https://github.com/aagedal/ffmpeg-apple-silicon",
+  "buildSystemRevision": "0f9eac951a7b750019b9af71ead7f949c9434571",
+  "workingTreeModified": false,
+  "dependencyChanges": {
+    "libjxl": "0.12.0 -> 0.13.0",
+    "brotli": "1.2.0 -> 1.2.1",
+    "HarfBuzz": "15.0.0 -> 15.1.0"
+  },
+  "sourcePatches": [
+    "scripts/ffmpeg/yadif-videotoolbox-autorelease.patch",
+    "scripts/ffmpeg/libopenjpegenc-max-size.patch",
+    "scripts/ffmpeg/libopenjpegenc-imf.patch",
+    "scripts/ffmpeg/af_whisper-canonical-json.patch",
+    "scripts/ffmpeg/af_whisper-word-details.patch",
+    "scripts/ffmpeg/movenc-h264-fiel.patch"
+  ],
+  "sourceNote": "Full build of every library and FFmpeg from one workspace (ffmpeg-apple-silicon PRs #7 and #8). Its corresponding-source archive replaces the SVT-AV1 4.3.0 archive of the 4.7 build.",
+  "signature": "Developer ID Application: Truls Aagedal (3R5QGG9DW6); hardened runtime; secure timestamp 2026-11-16 18:43:47 CET",
+  "cdhash": "d19ca085d8c2bca39b5d3da845606f4f5ce4ecdb",
+  "notarizationStatus": "Accepted (notarytool job 33ddc0e8-72c0-403d-a193-12ba29052d27, notarization.json)"
+}

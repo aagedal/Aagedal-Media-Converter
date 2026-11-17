@@ -274,7 +274,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 
 ========================================================================
-sources/brotli-1.2.0/LICENSE
+sources/brotli-1.2.1/LICENSE
 ========================================================================
 
 Copyright (c) 2009, 2010, 2013-2016 by the Brotli Authors.
@@ -6676,7 +6676,7 @@ necessary.  Here is a sample; alter the names:
 That's all there is to it!
 
 ========================================================================
-sources/harfbuzz-15.0.0/AUTHORS
+sources/harfbuzz-15.1.0/AUTHORS
 ========================================================================
 
 Behdad Esfahbod
@@ -6695,7 +6695,7 @@ Simon Hausmann
 Werner Lemberg
 
 ========================================================================
-sources/harfbuzz-15.0.0/COPYING
+sources/harfbuzz-15.1.0/COPYING
 ========================================================================
 
 HarfBuzz is licensed under the so-called "Old MIT" license.  Details follow.
@@ -6742,7 +6742,7 @@ ON AN "AS IS" BASIS, AND THE COPYRIGHT HOLDER HAS NO OBLIGATION TO
 PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 
 ========================================================================
-sources/harfbuzz-15.0.0/perf/texts/COPYING
+sources/harfbuzz-15.1.0/perf/texts/COPYING
 ========================================================================
 
 ja-runs.txt
@@ -6778,7 +6778,7 @@ line is one Unicode-script run.  Common and other scripts are omitted
 and act as run boundaries.
 
 ========================================================================
-sources/harfbuzz-15.0.0/src/ms-use/COPYING
+sources/harfbuzz-15.1.0/src/ms-use/COPYING
 ========================================================================
 
     MIT License
@@ -6804,7 +6804,7 @@ sources/harfbuzz-15.0.0/src/ms-use/COPYING
     SOFTWARE
 
 ========================================================================
-sources/harfbuzz-15.0.0/test/COPYING
+sources/harfbuzz-15.1.0/test/COPYING
 ========================================================================
 
 The following license applies to many of the fonts in this folder.
@@ -6904,7 +6904,7 @@ FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
 
 ========================================================================
-sources/harfbuzz-15.0.0/test/shape/data/aots/COPYING
+sources/harfbuzz-15.1.0/test/shape/data/aots/COPYING
 ========================================================================
 
 Copyright 2000-2016 Adobe Systems Incorporated. All Rights Reserved.
@@ -6922,7 +6922,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 ========================================================================
-sources/harfbuzz-15.0.0/test/shape/data/text-rendering-tests/COPYING
+sources/harfbuzz-15.1.0/test/shape/data/text-rendering-tests/COPYING
 ========================================================================
 
 Copyright 2016 Unicode Inc. All rights reserved.
@@ -8709,7 +8709,7 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ========================================================================
-sources/libjxl-0.12.0/AUTHORS
+sources/libjxl-0.13.0/AUTHORS
 ========================================================================
 
 # List of the project authors.
@@ -8752,6 +8752,7 @@ Alexander Sago <cagelight@gmail.com>
 Alifian Caesar Khalid <alifiancaesar@gmail.com>
 Alistair Barrow
 Amiralgaby
+Anantha Narayanan R <evertrustai@gmail.com>
 Andrew Kaster <andrew@ladybird.org>
 Andrius Lukas Narbutas <andrius4669@gmail.com>
 Aous Naman <aous@unsw.edu.au>
@@ -8795,11 +8796,14 @@ Kleis Auke Wolthuizen <github@kleisauke.nl>
 L. E. Segovia
 ledoge
 Leo Izen <leo.izen@gmail.com>
+Linus VandeVondele <linus.vandevondele@gmail.com>
+LongYinan <lynweklm@gmail.com>
 Lovell Fuller
 Lucas Chollet <lucas.chollet@serenityos.org>
 Maarten DB <anonymous.maarten@gmail.com>
 Marcin Konicki <ahwayakchih@gmail.com>
 Martin Strunz
+Máté Makai <mmakai2@gmail.com>
 Mathieu Malaterre <mathieu.malaterre@gmail.com>
 Mikk Leini <mikk.leini@krakul.eu>
 Misaki Kasumi <misakikasumi@outlook.com>
@@ -8809,8 +8813,10 @@ Nigel Tao <nigeltao@golang.org>
 oupson <oupson1er@gmail.com>
 Petr Diblík
 Pieter Wuille
+Pepper Gray <hello@peppergray.xyz>
 roland-rollo
 Samuel Leong <wvvwvvvvwvvw@gmail.com>
+Samuele Benassai <samuelebenassai.pptx@gmail.com>
 Sandro <sandro.jaeckel@gmail.com>
 sandstrom
 Sergey Fedorov <vital.had@gmail.com>
@@ -8830,7 +8836,7 @@ Ziemowit Zabawa <ziemek.zabawa@outlook.com>
 源文雨 <41315874+fumiama@users.noreply.github.com>
 
 ========================================================================
-sources/libjxl-0.12.0/LICENSE
+sources/libjxl-0.13.0/LICENSE
 ========================================================================
 
 Copyright (c) the JPEG XL Project Authors.
@@ -8862,7 +8868,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ========================================================================
-sources/libjxl-0.12.0/PATENTS
+sources/libjxl-0.13.0/PATENTS
 ========================================================================
 
 Additional IP Rights Grant (Patents)
@@ -8889,7 +8895,7 @@ rights granted to you under this License for this implementation of JPEG XL
 shall terminate as of the date such litigation is filed.
 
 ========================================================================
-sources/libjxl-0.12.0/debian/copyright
+sources/libjxl-0.13.0/debian/copyright
 ========================================================================
 
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
@@ -9093,7 +9099,7 @@ License: CC0
 
 
 ========================================================================
-sources/libjxl-0.12.0/lib/extras/LICENSE.apngdis
+sources/libjxl-0.13.0/lib/extras/LICENSE.apngdis
 ========================================================================
 
 APNG Disassembler 2.8
@@ -9125,7 +9131,7 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 
 ========================================================================
-sources/libjxl-0.12.0/third_party/HEVCSoftware/cfg/LICENSE
+sources/libjxl-0.13.0/third_party/HEVCSoftware/cfg/LICENSE
 ========================================================================
 
 The copyright in this software is being made available under the BSD
@@ -9161,7 +9167,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 
 ========================================================================
-sources/libjxl-0.12.0/third_party/brotli/LICENSE
+sources/libjxl-0.13.0/third_party/brotli/LICENSE
 ========================================================================
 
 Copyright (c) 2009, 2010, 2013-2016 by the Brotli Authors.
@@ -9185,7 +9191,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 ========================================================================
-sources/libjxl-0.12.0/third_party/googletest/LICENSE
+sources/libjxl-0.13.0/third_party/googletest/LICENSE
 ========================================================================
 
 Copyright 2008, Google Inc.
@@ -9218,7 +9224,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ========================================================================
-sources/libjxl-0.12.0/third_party/highway/LICENSE
+sources/libjxl-0.13.0/third_party/highway/LICENSE
 ========================================================================
 
                                  Apache License
@@ -9423,7 +9429,7 @@ sources/libjxl-0.12.0/third_party/highway/LICENSE
    See the License for the specific language governing permissions and
    limitations under the License.
 ========================================================================
-sources/libjxl-0.12.0/third_party/highway/LICENSE-BSD3
+sources/libjxl-0.13.0/third_party/highway/LICENSE-BSD3
 ========================================================================
 
 Copyright (c) The Highway Project Authors. All rights reserved.
@@ -9453,7 +9459,7 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ========================================================================
-sources/libjxl-0.12.0/third_party/highway/debian/copyright
+sources/libjxl-0.13.0/third_party/highway/debian/copyright
 ========================================================================
 
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
@@ -9478,7 +9484,7 @@ License: Apache-2.0
  can be found in "/usr/share/common-licenses/Apache-2.0".
 
 ========================================================================
-sources/libjxl-0.12.0/third_party/libjpeg-turbo/LICENSE.md
+sources/libjxl-0.13.0/third_party/libjpeg-turbo/LICENSE.md
 ========================================================================
 
 libjpeg-turbo Licenses
@@ -9615,7 +9621,7 @@ desirable to choose a license that granted us the same protections for new code
 that were granted to the IJG for code derived from their software.
 
 ========================================================================
-sources/libjxl-0.12.0/third_party/libpng/AUTHORS
+sources/libjxl-0.13.0/third_party/libpng/AUTHORS
 ========================================================================
 
 PNG REFERENCE LIBRARY AUTHORS
@@ -9682,7 +9688,7 @@ other copyright owners, and are released under other open source
 licenses.
 
 ========================================================================
-sources/libjxl-0.12.0/third_party/libpng/LICENSE
+sources/libjxl-0.13.0/third_party/libpng/LICENSE
 ========================================================================
 
 COPYRIGHT NOTICE, DISCLAIMER, and LICENSE
@@ -9821,7 +9827,7 @@ this source code in a product, acknowledgment is not required but would
 be appreciated.
 
 ========================================================================
-sources/libjxl-0.12.0/third_party/libpng/ci/LICENSE_MIT.txt
+sources/libjxl-0.13.0/third_party/libpng/ci/LICENSE_MIT.txt
 ========================================================================
 
 MIT License
@@ -9845,7 +9851,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ========================================================================
-sources/libjxl-0.12.0/third_party/libpng/contrib/gregbook/COPYING
+sources/libjxl-0.13.0/third_party/libpng/contrib/gregbook/COPYING
 ========================================================================
 
                     GNU GENERAL PUBLIC LICENSE
@@ -10195,7 +10201,7 @@ library.  If this is what you want to do, use the GNU Library General
 Public License instead of this License.
 
 ========================================================================
-sources/libjxl-0.12.0/third_party/libpng/contrib/gregbook/LICENSE
+sources/libjxl-0.13.0/third_party/libpng/contrib/gregbook/LICENSE
 ========================================================================
 
   ---------------------------------------------------------------------------
@@ -10250,7 +10256,7 @@ sources/libjxl-0.12.0/third_party/libpng/contrib/gregbook/LICENSE
   ---------------------------------------------------------------------------
 
 ========================================================================
-sources/libjxl-0.12.0/third_party/libpng/contrib/pngexif/LICENSE_MIT.txt
+sources/libjxl-0.13.0/third_party/libpng/contrib/pngexif/LICENSE_MIT.txt
 ========================================================================
 
 MIT License
@@ -10274,7 +10280,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ========================================================================
-sources/libjxl-0.12.0/third_party/libpng/contrib/pngminus/LICENSE.txt
+sources/libjxl-0.13.0/third_party/libpng/contrib/pngminus/LICENSE.txt
 ========================================================================
 
 pnm2png / png2pnm --- conversion from PBM/PGM/PPM-file to PNG-file
@@ -10300,7 +10306,7 @@ out of or in connection with the software or the use or other dealings in the
 software.
 
 ========================================================================
-sources/libjxl-0.12.0/third_party/libpng/scripts/cmake/AUTHORS.md
+sources/libjxl-0.13.0/third_party/libpng/scripts/cmake/AUTHORS.md
 ========================================================================
 
 CMake Files, Lists and Scripts for the PNG Reference Library
@@ -10349,7 +10355,7 @@ Author List
  * Vicky Pfau
 
 ========================================================================
-sources/libjxl-0.12.0/third_party/sjpeg/AUTHORS
+sources/libjxl-0.13.0/third_party/sjpeg/AUTHORS
 ========================================================================
 
 Main stuff:
@@ -10365,7 +10371,7 @@ with a lot of help over time from:
   - Haoran Man (hman at google dot com)
 
 ========================================================================
-sources/libjxl-0.12.0/third_party/sjpeg/COPYING
+sources/libjxl-0.13.0/third_party/sjpeg/COPYING
 ========================================================================
 
 
@@ -10572,7 +10578,7 @@ sources/libjxl-0.12.0/third_party/sjpeg/COPYING
    limitations under the License.
 
 ========================================================================
-sources/libjxl-0.12.0/third_party/skcms/LICENSE
+sources/libjxl-0.13.0/third_party/skcms/LICENSE
 ========================================================================
 
 // Copyright (c) 2018 Google Inc. All rights reserved.
@@ -10606,7 +10612,7 @@ sources/libjxl-0.12.0/third_party/skcms/LICENSE
 --------------------------------------------------------------------------------
 
 ========================================================================
-sources/libjxl-0.12.0/third_party/skcms/bazel/rbe/linux-bazel-4.2.1/LICENSE
+sources/libjxl-0.13.0/third_party/skcms/bazel/rbe/linux-bazel-4.2.1/LICENSE
 ========================================================================
 
 
@@ -10812,7 +10818,7 @@ sources/libjxl-0.12.0/third_party/skcms/bazel/rbe/linux-bazel-4.2.1/LICENSE
    See the License for the specific language governing permissions and
    limitations under the License.
 ========================================================================
-sources/libjxl-0.12.0/third_party/skcms/bazel/rbe/windows-bazel-4.2.1/LICENSE
+sources/libjxl-0.13.0/third_party/skcms/bazel/rbe/windows-bazel-4.2.1/LICENSE
 ========================================================================
 
 
@@ -11018,7 +11024,7 @@ sources/libjxl-0.12.0/third_party/skcms/bazel/rbe/windows-bazel-4.2.1/LICENSE
    See the License for the specific language governing permissions and
    limitations under the License.
 ========================================================================
-sources/libjxl-0.12.0/third_party/zlib/LICENSE
+sources/libjxl-0.13.0/third_party/zlib/LICENSE
 ========================================================================
 
 Copyright notice:
@@ -11045,7 +11051,7 @@ Copyright notice:
   jloup@gzip.org          madler@alumni.caltech.edu
 
 ========================================================================
-sources/libjxl-0.12.0/third_party/zlib/contrib/dotzlib/LICENSE_1_0.txt
+sources/libjxl-0.13.0/third_party/zlib/contrib/dotzlib/LICENSE_1_0.txt
 ========================================================================
 
 Boost Software License - Version 1.0 - August 17th, 2003
