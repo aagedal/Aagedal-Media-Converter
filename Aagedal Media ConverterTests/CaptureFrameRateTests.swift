@@ -723,6 +723,56 @@ final class CaptureFrameRateTests: XCTestCase {
         XCTAssertTrue(schedule.keeps(at(2 + 2.0 / 60)))
     }
 
+    /// Growing presets: the pump fills slots from `sessionStartPTS`, whatever its phase
+    /// against the display refresh. Each slot must get its own kept frame.
+    func testAnchoredScheduleFillsEveryPumpSlotOnce() {
+        var seed: UInt64 = 7
+        func jitter() -> Double {   // ±0.05 ms of timestamp noise
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            return (Double(seed >> 11) / Double(1 << 53) - 0.5) * 0.0001
+        }
+        let rates = [
+            CaptureFrameRate(24), CaptureFrameRate(24000, denominator: 1001), CaptureFrameRate(25),
+            CaptureFrameRate(30000, denominator: 1001), CaptureFrameRate(50)
+        ]
+        let at = { (seconds: Double) in CMTime(seconds: seconds, preferredTimescale: 1_000_000_000) }
+        for refresh in [60.0, 60000.0 / 1001] {
+            for rate in rates {
+                let interval = 1 / rate.framesPerSecond
+                let pumpDelay = interval / 2 + 0.04
+                let capacity = Int((pumpDelay * rate.framesPerSecond).rounded(.up)) + 2
+                for step in 0..<40 {
+                    let firstFrame = 1000.0
+                    let start = firstFrame - interval * (Double(step) + 0.5) / 40
+                    var schedule = CaptureFrameSchedule(frameRate: rate)
+                    schedule.anchor(toSlotsFrom: at(start))
+                    var queue = CaptureFrameQueue<Int>(capacity: capacity)
+                    var kept: [Int] = []
+                    var emitted: [Int] = []
+                    // The first slot whose window holds the first frame; earlier ones can only repeat it.
+                    let firstSlot = step < 20 ? 0 : 1
+                    var slot = 0
+                    for index in 0..<Int(20 * refresh) {
+                        let time = firstFrame + Double(index) / refresh + (index == 0 ? 0 : jitter())
+                        while start + Double(slot) * interval <= time - pumpDelay {
+                            let frame = queue.frame(forSlotAt: at(start + Double(slot) * interval), halfInterval: at(interval / 2))
+                            if slot >= firstSlot, let frame { emitted.append(frame) }
+                            slot += 1
+                        }
+                        if schedule.keeps(at(time)) {
+                            kept.append(index)
+                            queue.append(index, at: at(time))
+                        }
+                    }
+                    let context = "\(rate.framesPerSecond) fps at \(refresh) Hz, first frame \(step).5/40 of an interval after the first slot"
+                    XCTAssertEqual(Set(emitted).count, emitted.count, "Repeated frames: \(context)")
+                    XCTAssertEqual(Array(kept.prefix(emitted.count)), emitted, "Dropped frames: \(context)")
+                    XCTAssertGreaterThan(emitted.count, Int(19 * rate.framesPerSecond), context)
+                }
+            }
+        }
+    }
+
     func testFrameQueueFillsSlotsByCaptureTime() {
         let ms = { (value: Int64) in CMTime(value: value, timescale: 1000) }
         var queue = CaptureFrameQueue<Int>(capacity: 8)

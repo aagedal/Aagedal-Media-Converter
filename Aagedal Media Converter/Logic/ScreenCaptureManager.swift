@@ -1937,16 +1937,30 @@ private final class CaptureAssetWriterFinalizationBox: @unchecked Sendable {
 /// times the target rate; the schedule keeps the refresh nearest each slot, so a 60 Hz
 /// display yields 25 fps as the ideal mix of 2- and 3-refresh gaps. It advances exactly
 /// one interval per kept frame, so the long-run rate equals the target.
+///
+/// Growing presets anchor it to the CFR pump's slots instead: it keeps the first frame
+/// from half a refresh before each slot, which lands in that slot's window, so the pump
+/// neither repeats nor drops a kept frame whatever the phase between display and slots.
 struct CaptureFrameSchedule {
     let interval: Double
     private var nextDue: Double?
     private var lastKept: Double?
+    /// The pump's first slot, and the slot of the last kept frame, when anchored.
+    private var anchor: Double?
+    private var lastKeptSlot: Int?
     private var lastDelivered: Double?
     /// The delivery grid (normally the display refresh), measured as the shortest gap.
     private var refresh: Double?
 
     init(frameRate: CaptureFrameRate) {
         interval = 1 / frameRate.framesPerSecond
+    }
+
+    /// Places the slots at `start` plus whole intervals, as the CFR pump does.
+    mutating func anchor(toSlotsFrom start: CMTime) {
+        let seconds = CMTimeGetSeconds(start)
+        guard seconds.isFinite else { return }
+        anchor = seconds
     }
 
     mutating func keeps(_ time: CMTime) -> Bool {
@@ -1956,6 +1970,14 @@ struct CaptureFrameSchedule {
             refresh = min(refresh ?? .infinity, seconds - lastDelivered)
         }
         lastDelivered = seconds
+        if let anchor {
+            // Until the refresh is known, the first frame takes the slot whose window holds it.
+            let lead = refresh.map { $0 / 2 } ?? interval / 2
+            let slot = Int(((seconds - anchor + lead) / interval).rounded(.down))
+            guard slot > lastKeptSlot ?? .min else { return false }
+            lastKeptSlot = slot
+            return true
+        }
         guard let due = nextDue, let lastKept else {
             nextDue = seconds + interval
             lastKept = seconds
@@ -2182,6 +2204,7 @@ final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendable {
                 logger.info("Capture writer started.")
                 if isGrowing {
                     sessionStartPTS = startTime
+                    schedule.anchor(toSlotsFrom: startTime)
                     setRecordingXattr()      // the DaVinci Resolve growing-file trigger
                     startCFRPump()
                 }
