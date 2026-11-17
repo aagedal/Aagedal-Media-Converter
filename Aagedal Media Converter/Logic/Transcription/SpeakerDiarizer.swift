@@ -10,10 +10,10 @@ struct SpeakerSegment: Sendable, Equatable {
     var speaker: Int
 }
 
-/// Finds who speaks when with the bundled NeMo Speech runtime and its
-/// Sortformer model (up to four speakers). The same segments tell the Whisper
-/// pipeline where there is speech at all, so one pass serves both silence
-/// removal and speaker changes.
+/// Finds who speaks when with the bundled NeMo Speech runtime and NVIDIA's
+/// Nemotron 3 Diarization model (Sortformer v3, up to eight speakers). The
+/// Whisper pipeline also falls back to these segments for speech-only audio
+/// when Silero cannot run.
 struct SpeakerDiarizer: Sendable {
     static let model = "nemotron-3-diarization"
     static let timeout: Duration = .seconds(2 * 60 * 60)

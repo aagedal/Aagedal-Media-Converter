@@ -638,7 +638,7 @@ struct WhisperPipelineSettingsSection: View {
                 }
                 .pickerStyle(.menu)
                 .frame(maxWidth: 320)
-                Text("Dialogue dashes put two speakers who share a subtitle on separate lines starting with “– ”. Speaker names label each change of voice. The NeMo Speech diarization model tells up to four speakers apart; it is a 112 MB download on first use.")
+                Text("Dialogue dashes put two speakers who share a subtitle on separate lines starting with “– ”. Speaker names label each change of voice. The NeMo Speech diarization model tells up to eight speakers apart; it is a 107 MB download on first use.")
                     .font(.caption).foregroundStyle(.secondary)
 
                 if speakerStyle != SubtitleSpeakerStyle.off.rawValue && !speechModelReady {

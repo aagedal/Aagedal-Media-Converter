@@ -502,7 +502,7 @@ struct WaveformStylePreview: View {
     /// Runs the export animation state (smoothing, peak hold, ridge history)
     /// over just enough synthetic frames to reach `time`. Stateless, so the
     /// preview never drifts and restarts cleanly when settings change.
-    static func simulatedFrame(
+    nonisolated static func simulatedFrame(
         at time: TimeInterval, style: SwiftWaveformStyle, bandCount: Int, frameRate: Double
     ) -> WaveformFrameInput {
         let currentFrame = Int((time * frameRate).rounded(.down))
@@ -519,7 +519,7 @@ struct WaveformStylePreview: View {
     /// Deterministic music-like band levels: a kick on the beat (bass), an
     /// off-beat hi-hat (treble) and a drifting melody (mids). Each hit has an
     /// instant attack and exponential release, mimicking export smoothing.
-    static func syntheticMagnitudes(at time: TimeInterval, bandCount: Int) -> [Float] {
+    nonisolated static func syntheticMagnitudes(at time: TimeInterval, bandCount: Int) -> [Float] {
         let beat = 0.5  // 120 BPM
         let kick = exp(-max(0, time.truncatingRemainder(dividingBy: beat)) * 9)
         let hat = exp(-max(0, (time + beat / 2).truncatingRemainder(dividingBy: beat)) * 14)

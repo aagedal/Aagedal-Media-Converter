@@ -1,4 +1,5 @@
 import Foundation
+import os
 import SwiftUI
 import XCTest
 @testable import Aagedal_Media_Converter
@@ -60,9 +61,9 @@ final class UploadLifecycleTests: XCTestCase {
         let started = expectation(description: "Upload started")
         let cancelled = expectation(description: "Old upload cancelled despite invalid retry")
         let service = ControlledUploadService(started: [started], cancelled: [cancelled])
-        var config: UploadConfig? = Self.config
+        let config = OSAllocatedUnfairLock<UploadConfig?>(initialState: Self.config)
         let manager = UploadManager(
-            rcloneService: service, configurationProvider: { config }, rcloneAvailability: { true }
+            rcloneService: service, configurationProvider: { config.withLock { $0 } }, rcloneAvailability: { true }
         )
         var items = [makeItem()]
         let itemID = items[0].id
@@ -70,7 +71,7 @@ final class UploadLifecycleTests: XCTestCase {
 
         let first = try XCTUnwrap(manager.startUpload(itemID: itemID))
         await fulfillment(of: [started], timeout: 2)
-        config = nil
+        config.withLock { $0 = nil }
         XCTAssertNil(manager.startUpload(itemID: itemID))
         await fulfillment(of: [cancelled], timeout: 2)
         await service.emitProgress(run: 0, value: 1, speed: "Old speed")
