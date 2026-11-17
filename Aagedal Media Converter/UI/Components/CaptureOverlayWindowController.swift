@@ -475,11 +475,15 @@ final class CaptureOverlayWindowController: NSObject, NSWindowDelegate, NSMenuDe
 
         /// Returns false when Escape is left to the panel: with recordings scheduled it closes the
         /// schedule popover or presses Cancel Schedule rather than leaving record mode.
-        let handleEscape = { [weak self] () -> Bool in
+        let handleEscape = { [weak self] (fromOtherApp: Bool) -> Bool in
             guard let self else { return true }
             let manager = ScreenCaptureManager.shared
-            guard !manager.isRecording && !manager.isProcessing else { return true }
-            guard ScheduledCaptureQueue.shared.entries.isEmpty else { return false }
+            let schedule = ScheduledCaptureQueue.shared
+            guard !manager.isRecording && !manager.isProcessing && !schedule.isStartingRecording else { return true }
+            // Once scheduling is in use, record mode waits while the user works elsewhere: an
+            // Escape in another app was meant for that app.
+            if fromOtherApp && (!schedule.entries.isEmpty || schedule.didStartRecording) { return true }
+            guard schedule.entries.isEmpty else { return false }
             self.dismissCaptureOverlay()
             return true
         }
@@ -487,17 +491,16 @@ final class CaptureOverlayWindowController: NSObject, NSWindowDelegate, NSMenuDe
         // Local monitor catches Escape when our app/panels are focused
         escapeKeyLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             if event.keyCode == 53 {
-                return handleEscape() ? nil : event
+                return handleEscape(false) ? nil : event
             }
             return event
         }
 
         // Global monitor catches Escape when another app is focused
         // (since the overlay panel is non-activating, focus stays with the previous app).
-        // A schedule is left alone: the Escape was meant for that other app.
         escapeKeyGlobalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
             if event.keyCode == 53 {
-                _ = handleEscape()
+                _ = handleEscape(true)
             }
         }
     }

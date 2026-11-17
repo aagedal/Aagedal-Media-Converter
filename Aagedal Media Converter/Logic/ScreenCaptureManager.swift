@@ -1081,7 +1081,8 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
 
     func setAutoStop(after duration: TimeInterval) {
         autoStopTask?.cancel()
-        guard duration > 0 else {
+        // Without a recording, nothing would clear the timer before it stopped a later one.
+        guard duration > 0, isRecording else {
             autoStopDate = nil
             autoStopTask = nil
             return

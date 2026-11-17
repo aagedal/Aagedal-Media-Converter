@@ -305,8 +305,9 @@ struct CaptureControlPanelView: View {
                 while !Task.isCancelled {
                     let remaining = next.start.timeIntervalSinceNow
                     scheduleCountdown = max(0, remaining)
-                    // A recording still running or finalizing delays the next one.
-                    if remaining <= 0, !captureManager.isRecording, !captureManager.isProcessing {
+                    // A recording still running, starting or finalizing delays the next one.
+                    if remaining <= 0, !captureManager.isRecording, !captureManager.isProcessing,
+                       !scheduleQueue.isStartingRecording {
                         fireScheduledRecording()
                         return
                     }
@@ -596,7 +597,7 @@ struct CaptureControlPanelView: View {
 
     private var bottomBar: some View {
         HStack(spacing: 10) {
-            if captureManager.isRecording || captureManager.isProcessing {
+            if captureManager.isRecording || captureManager.isProcessing || scheduleQueue.isStartingRecording {
                 recordingBottomBar
             } else if let next = scheduleQueue.entries.first {
                 Button {
@@ -1214,9 +1215,12 @@ struct CaptureControlPanelView: View {
                 outputDirectory: outputDirectoryURL,
                 dynamicRange: dynamicRangeOption
             )
-            if let duration = entry.duration, duration > 0 {
-                captureManager.setAutoStop(after: duration)
+            // Stop at the planned time, however late the start. setAutoStop ignores a start that
+            // failed or was stopped meanwhile.
+            if let end = entry.end {
+                captureManager.setAutoStop(after: max(1, end.timeIntervalSinceNow))
             }
+            scheduleQueue.finishStarting()
         }
     }
 
