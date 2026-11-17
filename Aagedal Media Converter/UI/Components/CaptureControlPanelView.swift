@@ -48,16 +48,20 @@ struct CaptureControlPanelView: View {
     /// When set, only this display's tile is shown, expanded to fill the panel (focus mode).
     @State private var focusedDisplayID: CGDirectDisplayID?
 
-    // Schedule state
+    // Schedule state. The queue itself is shared: it outlives this panel between scheduled recordings.
+    @StateObject private var scheduleQueue = ScheduledCaptureQueue.shared
     @State private var showSchedulePopover = false
+    /// Whether the popover shows the add/edit form rather than the list of scheduled recordings.
+    @State private var showScheduleForm = false
+    /// Whether closing the form returns to the list instead of closing the popover.
+    @State private var scheduleFormReturnsToList = false
+    /// The scheduled recording the form edits; nil adds a new one.
+    @State private var scheduleEditingID: UUID?
     @State private var scheduleStartDate = Date().addingTimeInterval(300)
     @State private var scheduleUseDuration = false
     @State private var scheduleDurationHours = 0
     @State private var scheduleDurationMinutes = 5
-    @State private var scheduledStart: Date?
-    @State private var scheduledDuration: TimeInterval?
     @State private var scheduleCountdown: TimeInterval = 0
-    @State private var schedulePowerAssertion: UUID?
 
     private var presetBinding: Binding<CapturePreset> {
         Binding(
@@ -275,7 +279,6 @@ struct CaptureControlPanelView: View {
             .onAppear { handleOnAppear() }
             .onDisappear {
                 isViewActive = false
-                cancelSchedule()
             }
             .onChange(of: captureRegionMode) { _, newValue in
                 onRegionModeChanged(newValue)
@@ -297,17 +300,21 @@ struct CaptureControlPanelView: View {
             .onChange(of: currentPreviewBox) { _, _ in schedulePanelResize() }
             .onChange(of: captureManager.isProcessing) { _, _ in schedulePanelResize() }
             .onChange(of: focusedDisplayID) { _, _ in schedulePanelResize() }
-            .task(id: scheduledStart) {
-                guard let start = scheduledStart else { return }
+            .task(id: scheduleQueue.entries.first) {
+                guard let next = scheduleQueue.entries.first else { return }
                 while !Task.isCancelled {
-                    let remaining = start.timeIntervalSinceNow
-                    if remaining <= 0 {
+                    let remaining = next.start.timeIntervalSinceNow
+                    scheduleCountdown = max(0, remaining)
+                    // A recording still running or finalizing delays the next one.
+                    if remaining <= 0, !captureManager.isRecording, !captureManager.isProcessing {
                         fireScheduledRecording()
                         return
                     }
-                    scheduleCountdown = remaining
                     try? await Task.sleep(for: .milliseconds(500))
                 }
+            }
+            .onChange(of: scheduleQueue.entries.isEmpty) { _, isEmpty in
+                if isEmpty && !showScheduleForm { showSchedulePopover = false }
             }
             .modifier(PreviewRefreshModifier(
                 captureHideCursor: captureHideCursor,
@@ -329,11 +336,11 @@ struct CaptureControlPanelView: View {
     private var panelContent: some View {
         mainView
             .background(
-                VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow, cornerRadius: 14)
             )
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .shadow(color: .black.opacity(0.3), radius: 12)
+            // No SwiftUI shadow: the panel is sized to this content, so the window edge would clip
+            // it square, and the window shadow (hasShadow) would then trace that square outline.
             .overlay(alignment: .topTrailing) {
                 sizeToggleButton
             }
@@ -589,29 +596,46 @@ struct CaptureControlPanelView: View {
 
     private var bottomBar: some View {
         HStack(spacing: 10) {
-            if let start = scheduledStart {
-                Button(action: cancelSchedule) {
-                    Text("Cancel Schedule")
+            if captureManager.isRecording || captureManager.isProcessing {
+                recordingBottomBar
+            } else if let next = scheduleQueue.entries.first {
+                Button {
+                    scheduleQueue.removeAll()
+                } label: {
+                    Text(scheduleQueue.entries.count > 1 ? "Cancel All" : "Cancel Schedule")
                 }
                 .keyboardShortcut(.cancelAction)
 
                 Spacer()
 
-                HStack(spacing: 6) {
-                    Image(systemName: "clock.fill")
-                        .foregroundColor(.orange)
-                    VStack(alignment: .trailing, spacing: 0) {
-                        Text("Starts \(Self.startTimeFormatter.string(from: start))")
+                Button(action: openScheduleList) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "clock.fill")
+                            .foregroundColor(.orange)
+                        VStack(alignment: .trailing, spacing: 0) {
+                            HStack(spacing: 4) {
+                                Text("Starts \(Self.startTimeFormatter.string(from: next.start))")
+                                if scheduleQueue.entries.count > 1 {
+                                    Text("· \(scheduleQueue.entries.count) scheduled")
+                                }
+                            }
                             .font(.caption2)
                             .foregroundColor(.secondary)
-                        Text("in \(scheduleCountdownText)")
-                            .font(.system(.callout, design: .monospaced))
-                            .monospacedDigit()
+                            Text("in \(scheduleCountdownText)")
+                                .font(.system(.callout, design: .monospaced))
+                                .monospacedDigit()
+                        }
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(.secondary)
                     }
+                    .contentShape(Rectangle())
                 }
-                .help("Mac will stay awake until the recording starts.")
-            } else if captureManager.isRecording || captureManager.isProcessing {
-                recordingBottomBar
+                .buttonStyle(.plain)
+                .help("Edit the schedule. The display stays awake until the recording starts.")
+                .popover(isPresented: $showSchedulePopover, arrowEdge: .top) {
+                    schedulePopoverContent
+                }
             } else {
                 Button(action: onCancel) {
                     Text("Cancel")
@@ -621,10 +645,7 @@ struct CaptureControlPanelView: View {
                 Spacer()
 
                 Button {
-                    scheduleStartDate = roundedScheduleDate(minutesFromNow: 5)
-                    scheduleUseDuration = false
-                    scheduleDurationHours = 0
-                    scheduleDurationMinutes = 5
+                    openScheduleForm(for: nil, returnsToList: false)
                     showSchedulePopover = true
                 } label: {
                     Image(systemName: "clock")
@@ -663,6 +684,7 @@ struct CaptureControlPanelView: View {
                 Text("\(elapsedText) / \(totalText)")
                     .font(.system(.title3, design: .monospaced))
                     .monospacedDigit()
+                    .help(autoStopClockText ?? "")
             } else {
                 Text(elapsedText)
                     .font(.system(.title3, design: .monospaced))
@@ -676,6 +698,23 @@ struct CaptureControlPanelView: View {
             }
 
             Spacer()
+
+            if captureManager.isRecording {
+                autoStopMenu
+            }
+
+            if let next = scheduleQueue.entries.first {
+                Button(action: openScheduleList) {
+                    Image(systemName: "clock.fill")
+                        .font(.system(size: 13))
+                        .foregroundColor(.orange)
+                }
+                .buttonStyle(.plain)
+                .help("Next scheduled recording: \(Self.startTimeFormatter.string(from: next.start))")
+                .popover(isPresented: $showSchedulePopover, arrowEdge: .top) {
+                    schedulePopoverContent
+                }
+            }
 
             Button(action: onHidePanel) {
                 Image(systemName: "eye.slash")
@@ -697,6 +736,39 @@ struct CaptureControlPanelView: View {
                 .controlSize(.regular)
             }
         }
+    }
+
+    /// The same auto-stop controls as the menu-bar item: increments start a fresh auto-stop
+    /// when none is active.
+    private var autoStopMenu: some View {
+        Menu {
+            if let clockText = autoStopClockText {
+                Text(clockText)
+                Divider()
+            }
+            ForEach([1, 5, 10, 30], id: \.self) { minutes in
+                Button("+\(minutes) min") {
+                    captureManager.extendAutoStop(by: TimeInterval(minutes * 60))
+                }
+            }
+            if captureManager.autoStopDate != nil {
+                Divider()
+                Button("Cancel Auto-Stop") { captureManager.cancelAutoStop() }
+            }
+        } label: {
+            Image(systemName: "timer")
+                .font(.system(size: 13))
+                .foregroundColor(captureManager.autoStopDate != nil ? .orange : .primary)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(autoStopClockText ?? String(localized: "Extend Auto-Stop"))
+    }
+
+    private var autoStopClockText: String? {
+        guard let stopDate = captureManager.autoStopDate else { return nil }
+        return String(localized: "Auto-stop at: \(Self.startTimeFormatter.string(from: stopDate))")
     }
 
     // MARK: - Toggle Buttons
@@ -926,11 +998,89 @@ struct CaptureControlPanelView: View {
     // MARK: - Schedule
 
     private var schedulePopoverContent: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Schedule Recording")
+        Group {
+            if showScheduleForm {
+                scheduleForm
+            } else {
+                scheduleList
+            }
+        }
+        .padding(12)
+        .frame(width: 280)
+    }
+
+    private var scheduleList: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Scheduled Recordings")
                 .font(.headline)
 
-            DatePicker("Start at", selection: $scheduleStartDate, in: Date()...,
+            ScrollView {
+                VStack(spacing: 8) {
+                    ForEach(scheduleQueue.entries) { entry in
+                        scheduleRow(entry)
+                    }
+                }
+            }
+            .frame(maxHeight: 220)
+            .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+
+            HStack {
+                Button("Add Recording…") {
+                    openScheduleForm(for: nil, returnsToList: true)
+                }
+                Spacer()
+                Button("Done") {
+                    showSchedulePopover = false
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+    }
+
+    private func scheduleRow(_ entry: ScheduledCapture) -> some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(Self.scheduleStartFormatter.string(from: entry.start))
+                    .monospacedDigit()
+                Group {
+                    if let end = entry.end {
+                        Text("Stops at \(Self.startTimeFormatter.string(from: end))")
+                    } else {
+                        Text("No stop time")
+                    }
+                }
+                .font(.caption)
+                .foregroundColor(.secondary)
+            }
+            Spacer()
+            Button {
+                openScheduleForm(for: entry, returnsToList: true)
+            } label: {
+                Image(systemName: "pencil")
+            }
+            .buttonStyle(.borderless)
+            .help("Edit")
+            Button {
+                scheduleQueue.remove(id: entry.id)
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .help("Remove")
+        }
+    }
+
+    private var scheduleForm: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(scheduleEditingID == nil ? "Schedule Recording" : "Edit Scheduled Recording")
+                .font(.headline)
+
+            // From the next whole minute: the picker clamps an earlier choice to the bound,
+            // and now would carry its seconds into the start.
+            DatePicker("Start at", selection: $scheduleStartDate,
+                       in: ScheduledCapture.minuteStart(of: Date()).addingTimeInterval(60)...,
                        displayedComponents: [.date, .hourAndMinute])
 
             Toggle("Auto-stop after", isOn: $scheduleUseDuration)
@@ -953,23 +1103,76 @@ struct CaptureControlPanelView: View {
                 }
             }
 
+            if let conflict = scheduleQueue.conflict(with: scheduleFormEntry) {
+                Text("Overlaps the recording starting \(Self.scheduleStartFormatter.string(from: conflict.start)).")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Divider()
 
             HStack {
                 Button("Cancel") {
-                    showSchedulePopover = false
+                    closeScheduleForm()
                 }
                 Spacer()
-                Button("Schedule") {
-                    activateSchedule()
-                    showSchedulePopover = false
+                Button(scheduleEditingID == nil ? "Schedule" : "Save") {
+                    if scheduleQueue.save(scheduleFormEntry) {
+                        closeScheduleForm()
+                    }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(scheduleStartDate <= Date() || (scheduleUseDuration && scheduleDurationHours == 0 && scheduleDurationMinutes == 0))
+                .keyboardShortcut(.defaultAction)
+                .disabled(!scheduleFormIsValid)
             }
         }
-        .padding(12)
-        .frame(width: 280)
+    }
+
+    /// The recording the form describes, keeping the edited entry's identity.
+    private var scheduleFormEntry: ScheduledCapture {
+        let seconds = TimeInterval(scheduleDurationHours * 3600 + scheduleDurationMinutes * 60)
+        return ScheduledCapture(
+            id: scheduleEditingID ?? UUID(),
+            start: ScheduledCapture.minuteStart(of: scheduleStartDate),
+            duration: scheduleUseDuration ? seconds : nil
+        )
+    }
+
+    private var scheduleFormIsValid: Bool {
+        guard scheduleFormEntry.start > Date() else { return false }
+        if scheduleUseDuration && scheduleDurationHours == 0 && scheduleDurationMinutes == 0 { return false }
+        return scheduleQueue.conflict(with: scheduleFormEntry) == nil
+    }
+
+    private func openScheduleList() {
+        showScheduleForm = false
+        showSchedulePopover = true
+    }
+
+    /// Fills the form from `entry`, or with defaults for a new recording after the queued ones.
+    private func openScheduleForm(for entry: ScheduledCapture?, returnsToList: Bool) {
+        scheduleEditingID = entry?.id
+        scheduleStartDate = entry?.start ?? scheduleQueue.suggestedStart()
+        if let duration = entry?.duration {
+            let minutes = Int((duration / 60).rounded())
+            scheduleUseDuration = true
+            scheduleDurationHours = min(minutes / 60, 23)
+            scheduleDurationMinutes = minutes % 60
+        } else {
+            scheduleUseDuration = false
+            scheduleDurationHours = 0
+            scheduleDurationMinutes = 5
+        }
+        scheduleFormReturnsToList = returnsToList
+        showScheduleForm = true
+    }
+
+    private func closeScheduleForm() {
+        showScheduleForm = false
+        if !scheduleFormReturnsToList || scheduleQueue.entries.isEmpty {
+            showSchedulePopover = false
+        }
     }
 
     private var scheduleCountdownText: String {
@@ -985,50 +1188,25 @@ struct CaptureControlPanelView: View {
 
     private var autoStopTotalText: String? {
         guard let stopDate = captureManager.autoStopDate else { return nil }
-        let remaining = max(0, stopDate.timeIntervalSinceNow)
-        let total = captureManager.elapsedTime + remaining
-        return Self.durationFormatter.string(from: total)
-    }
-
-    private func roundedScheduleDate(minutesFromNow: Int) -> Date {
-        let calendar = Calendar.current
-        let future = calendar.date(byAdding: .minute, value: minutesFromNow, to: Date()) ?? Date()
-        var components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: future)
-        components.second = 0
-        return calendar.date(from: components) ?? future
-    }
-
-    private func activateSchedule() {
-        scheduledStart = scheduleStartDate
-        if scheduleUseDuration {
-            let seconds = TimeInterval(scheduleDurationHours * 3600 + scheduleDurationMinutes * 60)
-            scheduledDuration = seconds > 0 ? seconds : nil
-        } else {
-            scheduledDuration = nil
-        }
-        scheduleCountdown = scheduleStartDate.timeIntervalSinceNow
-        if schedulePowerAssertion == nil {
-            schedulePowerAssertion = PowerAssertion.shared.acquire(reason: "Waiting for scheduled screen recording")
-        }
-    }
-
-    private func cancelSchedule() {
-        scheduledStart = nil
-        scheduledDuration = nil
-        scheduleCountdown = 0
-        PowerAssertion.shared.release(schedulePowerAssertion)
-        schedulePowerAssertion = nil
+        // From the two fixed dates: elapsed time plus time remaining are sampled at different
+        // moments, so their sum flickers between neighbouring seconds.
+        let total = captureManager.recordingStartDate.map { stopDate.timeIntervalSince($0) }
+            ?? captureManager.elapsedTime + max(0, stopDate.timeIntervalSinceNow)
+        return Self.durationFormatter.string(from: total.rounded())
     }
 
     private func fireScheduledRecording() {
-        let duration = scheduledDuration
-        scheduledStart = nil
-        scheduledDuration = nil
-        scheduleCountdown = 0
-        PowerAssertion.shared.release(schedulePowerAssertion)
-        schedulePowerAssertion = nil
+        // Held until the recording has taken its own display assertion, so an idle display
+        // can't go to sleep in between (the queue lets go of its own once it is empty).
+        let powerAssertion = PowerAssertion.display.acquire(reason: "Starting scheduled screen recording")
+        guard let entry = scheduleQueue.takeDue() else {
+            PowerAssertion.display.release(powerAssertion)
+            return
+        }
+        showSchedulePopover = false
 
         Task {
+            defer { PowerAssertion.display.release(powerAssertion) }
             onStartRecording()
             await captureManager.setSelectedDisplays(effectiveDisplayIDs, settings: makeSettings(), maxPreviewWidth: previewPixelWidth)
             await captureManager.startAllRecording(
@@ -1036,7 +1214,7 @@ struct CaptureControlPanelView: View {
                 outputDirectory: outputDirectoryURL,
                 dynamicRange: dynamicRangeOption
             )
-            if let duration, duration > 0 {
+            if let duration = entry.duration, duration > 0 {
                 captureManager.setAutoStop(after: duration)
             }
         }
@@ -1180,6 +1358,15 @@ struct CaptureControlPanelView: View {
         formatter.timeStyle = .short
         return formatter
     }()
+
+    /// Scheduled start times, with the day so recordings on different days are told apart.
+    private static let scheduleStartFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        formatter.doesRelativeDateFormatting = true
+        return formatter
+    }()
 }
 
 // MARK: - Capture Tile
@@ -1308,13 +1495,29 @@ private struct CaptureTileView: View {
 private struct VisualEffectBlur: NSViewRepresentable {
     let material: NSVisualEffectView.Material
     let blendingMode: NSVisualEffectView.BlendingMode
+    var cornerRadius: CGFloat = 0
 
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = material
         view.blendingMode = blendingMode
         view.state = .active
+        // The window server draws a behind-window blur, and the window shadow, from this
+        // mask rather than from SwiftUI's clip, so without it both keep square corners.
+        if cornerRadius > 0 { view.maskImage = Self.roundedMask(cornerRadius: cornerRadius) }
         return view
+    }
+
+    private static func roundedMask(cornerRadius: CGFloat) -> NSImage {
+        let edge = cornerRadius * 2 + 1
+        let image = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius).fill()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(top: cornerRadius, left: cornerRadius, bottom: cornerRadius, right: cornerRadius)
+        image.resizingMode = .stretch
+        return image
     }
 
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {

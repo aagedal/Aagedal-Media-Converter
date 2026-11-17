@@ -276,6 +276,21 @@ struct CaptureFrameRate: Equatable, Sendable {
     func wrappedTimecodeFrame(start: Int, frameIndex: Int) -> Int {
         (start + frameIndex) % framesPerTimecodeDay
     }
+
+    /// The Auto rate for a display. `maximumFramesPerSecond` is an integer, so a
+    /// 59.94 Hz display would otherwise record at 60 and drift a frame every ~17 s.
+    static func display(refreshRate: Double, maximumFramesPerSecond: Int, fallback: Int) -> CaptureFrameRate {
+        if refreshRate > 0, abs(refreshRate - refreshRate.rounded()) > 0.01 {
+            let nominal = (refreshRate * 1.001).rounded()
+            // A variable-refresh display that can run faster keeps its maximum.
+            if abs(refreshRate - nominal / 1.001) < 0.01, maximumFramesPerSecond <= Int(nominal) {
+                return CaptureFrameRate(Int32(nominal) * 1000, denominator: 1001)
+            }
+        }
+        if maximumFramesPerSecond > 0 { return CaptureFrameRate(Int32(maximumFramesPerSecond)) }
+        if refreshRate >= 1 { return CaptureFrameRate(Int32(refreshRate.rounded())) }
+        return CaptureFrameRate(Int32(max(1, fallback)))
+    }
 }
 
 enum CaptureFrameRateOption: String, CaseIterable, Identifiable {
@@ -420,7 +435,10 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
     private var timerTask: Task<Void, Never>?
     private var autoStopTask: Task<Void, Never>?
     private var outputAccess: SecurityAccess = .none
-    private var recordingStartDate: Date?
+    private(set) var recordingStartDate: Date?
+    /// Keeps the display awake for the whole session: an idle display sleep locks the
+    /// screen, and capture then delivers nothing while the timer keeps running.
+    private var recordingPowerAssertion: UUID?
     private override init() {
         super.init()
         refreshMicrophoneAuthorizationStatus()
@@ -568,6 +586,9 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
             recordingDisplayIDs.insert(displayID)
             if !wasRecording {
                 recordingStartDate = Date()
+                if recordingPowerAssertion == nil {
+                    recordingPowerAssertion = PowerAssertion.display.acquire(reason: "Screen recording")
+                }
                 startTimer()
             }
             logger.info("Recording display=\(displayID, privacy: .public) -> \(tile.recordingURL?.path ?? "?", privacy: .public)")
@@ -717,8 +738,13 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
             let effectiveDynamicRange = normalizedDynamicRange(dynamicRange)
             let url = try prepareOutputURL(for: preset, directory: outputDirectory, display: display)
             let pixelFormat = pixelFormat(for: preset, dynamicRange: effectiveDynamicRange)
+            // ScreenCaptureKit's own limit undershoots (24 fps for 25 and 29.3 for 29.97 on
+            // a 60 Hz display), so it runs up to three times faster and the writer keeps
+            // frames on an exact schedule.
             config = makeStreamConfiguration(
-                resolution: resolution, frameRate: frameRate, pixelFormat: pixelFormat,
+                resolution: resolution,
+                minimumFrameInterval: CMTimeMultiplyByRatio(frameRate.frameDuration, multiplier: 1, divisor: 3),
+                pixelFormat: pixelFormat,
                 sourceRect: sourceRect, destinationRect: destinationRect, dynamicRange: effectiveDynamicRange
             )
             config.showsCursor = !settings.hideCursor
@@ -749,7 +775,7 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
             let requestedPreviewRate = resolvedFrameRate(option: settings.frameRate, display: display, fallback: 30)
             let previewFrameRate = requestedPreviewRate.framesPerSecond > 60 ? CaptureFrameRate(60) : requestedPreviewRate
             config = makeStreamConfiguration(
-                resolution: previewResolution, frameRate: previewFrameRate, pixelFormat: kCVPixelFormatType_32BGRA,
+                resolution: previewResolution, minimumFrameInterval: previewFrameRate.frameDuration, pixelFormat: kCVPixelFormatType_32BGRA,
                 sourceRect: sourceRect, destinationRect: destinationRect, dynamicRange: .sdr
             )
             config.showsCursor = !settings.hideCursor
@@ -838,6 +864,7 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         // Retire delivery before suspending: callbacks already queued on the main
         // actor must not overwrite a replacement tile or its meter readings.
         tile.delivery.invalidate()
+        tile.writer?.freezeEndpoint()
         guard let stream = tile.stream else { return }
         let operation = CaptureStreamOperation(stream: stream, output: tile.output)
         tile.stream = nil
@@ -950,6 +977,8 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         timerTask = nil
         elapsedTime = 0
         recordingStartDate = nil
+        PowerAssertion.display.release(recordingPowerAssertion)
+        recordingPowerAssertion = nil
         autoStopTask?.cancel()
         autoStopTask = nil
         autoStopDate = nil
@@ -1015,7 +1044,11 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         updateRecordingSessionOwnership()
         stoppingDisplayIDs.formUnion(ids)
         defer { stoppingDisplayIDs.subtract(ids) }
-        for tile in stoppedTiles { tile.delivery.invalidate() }
+        // Every file ends now, not when its turn in the sequential finalization comes.
+        for tile in stoppedTiles {
+            tile.delivery.invalidate()
+            tile.writer?.freezeEndpoint()
+        }
         for tile in stoppedTiles { await stopStream(for: tile) }
         for tile in stoppedTiles {
             let id = tile.displayID
@@ -1038,6 +1071,12 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
     /// Back-compat no-argument stop — stops every recording display.
     func stopRecording() async {
         await stopAllRecording()
+    }
+
+    /// Starts a new capture session's list of saved files. Called when record mode opens, so the
+    /// saved-files dialog lists only this session's recordings.
+    func clearOutputURLs() {
+        lastOutputURLs = []
     }
 
     func setAutoStop(after duration: TimeInterval) {
@@ -1157,7 +1196,7 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
 
     private func makeStreamConfiguration(
         resolution: CGSize,
-        frameRate: CaptureFrameRate,
+        minimumFrameInterval: CMTime,
         pixelFormat: OSType?,
         sourceRect: CGRect,
         destinationRect: CGRect,
@@ -1176,7 +1215,7 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         }
         config.width = Int(resolution.width)
         config.height = Int(resolution.height)
-        config.minimumFrameInterval = frameRate.frameDuration
+        config.minimumFrameInterval = minimumFrameInterval
         if let pixelFormat {
             config.pixelFormat = pixelFormat
         }
@@ -1203,24 +1242,15 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         return kCVPixelFormatType_32BGRA
     }
 
-    private func frameRate(for display: SCDisplay, fallback: Int) -> Int {
-        if let screenNumber = NSScreen.main?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
-           screenNumber == display.displayID,
-           let maxFPS = NSScreen.main?.maximumFramesPerSecond,
-           maxFPS > 0 {
-            return maxFPS
+    private func frameRate(for display: SCDisplay, fallback: Int) -> CaptureFrameRate {
+        let matchingScreen = NSScreen.screens.first {
+            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) == display.displayID
         }
-
-        if let matchingScreen = NSScreen.screens.first(where: {
-            guard let screenID = $0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
-                return false
-            }
-            return screenID == display.displayID
-        }) {
-            return max(1, matchingScreen.maximumFramesPerSecond)
-        }
-
-        return max(1, fallback)
+        return CaptureFrameRate.display(
+            refreshRate: CGDisplayCopyDisplayMode(display.displayID)?.refreshRate ?? 0,
+            maximumFramesPerSecond: matchingScreen?.maximumFramesPerSecond ?? 0,
+            fallback: fallback
+        )
     }
 
     private func resolvedFrameRate(
@@ -1231,7 +1261,7 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         if let fixed = option.fixedValue {
             return fixed
         }
-        return CaptureFrameRate(Int32(frameRate(for: display, fallback: fallback)))
+        return frameRate(for: display, fallback: fallback)
     }
 
     private func normalizedDynamicRange(_ option: CaptureDynamicRangeOption) -> CaptureDynamicRangeOption {
@@ -1841,6 +1871,9 @@ final class CaptureMicrophonePermissionRequest {
 
 private protocol CaptureOutputWriter: AnyObject, Sendable {
     func append(sampleBuffer: CMSampleBuffer, type: SCStreamOutputType)
+    /// Marks the end of the recording when sample delivery stops, before the
+    /// stream's stop callback and finalization, which may take seconds.
+    func freezeEndpoint()
     func finish() async throws
     func setErrorHandler(_ handler: @escaping @Sendable (Error) -> Void)
 }
@@ -1897,6 +1930,108 @@ private final class CaptureAssetWriterFinalizationBox: @unchecked Sendable {
                 completion()
             }
         }
+    }
+}
+
+/// Keeps captured frames on an exact schedule. ScreenCaptureKit delivers up to three
+/// times the target rate; the schedule keeps the refresh nearest each slot, so a 60 Hz
+/// display yields 25 fps as the ideal mix of 2- and 3-refresh gaps. It advances exactly
+/// one interval per kept frame, so the long-run rate equals the target.
+struct CaptureFrameSchedule {
+    let interval: Double
+    private var nextDue: Double?
+    private var lastKept: Double?
+    private var lastDelivered: Double?
+    /// The delivery grid (normally the display refresh), measured as the shortest gap.
+    private var refresh: Double?
+
+    init(frameRate: CaptureFrameRate) {
+        interval = 1 / frameRate.framesPerSecond
+    }
+
+    mutating func keeps(_ time: CMTime) -> Bool {
+        let seconds = CMTimeGetSeconds(time)
+        guard seconds.isFinite else { return false }
+        if let lastDelivered, seconds - lastDelivered > 0.002 {
+            refresh = min(refresh ?? .infinity, seconds - lastDelivered)
+        }
+        lastDelivered = seconds
+        guard let due = nextDue, let lastKept else {
+            nextDue = seconds + interval
+            lastKept = seconds
+            return true
+        }
+        guard seconds >= due - (refresh.map { $0 / 2 } ?? interval / 4) else { return false }
+        // Never fewer whole refreshes apart than fit in one interval: 29.97 fps on a 60 Hz
+        // display must not catch up with a 1-refresh gap.
+        if let refresh, seconds - lastKept < ((interval / refresh).rounded(.down) - 0.5) * refresh {
+            return false
+        }
+        // After a static stretch, restart from this frame instead of bursting to catch up.
+        nextDue = seconds - due > interval ? seconds + interval : due + interval
+        self.lastKept = seconds
+        return true
+    }
+}
+
+/// Captured frames waiting for the CFR pump, which fills each slot by capture time:
+/// the newest frame captured before the slot's midpoint to the next one. Choosing by
+/// arrival instead lost about 8% of frames to the beat between delivery and the timer.
+struct CaptureFrameQueue<Frame> {
+    /// Each queued frame is a full-resolution copy, so only the pump delay's worth is kept.
+    let capacity: Int
+    private(set) var frames: [(time: CMTime, frame: Frame)] = []
+
+    init(capacity: Int) {
+        self.capacity = max(2, capacity)
+    }
+
+    mutating func append(_ frame: Frame, at time: CMTime) {
+        frames.append((time, frame))
+        if frames.count > capacity { frames.removeFirst(frames.count - capacity) }
+    }
+
+    /// Frames before the chosen one are dropped; the chosen one stays to repeat while
+    /// the screen is static.
+    mutating func frame(forSlotAt slotTime: CMTime, halfInterval: CMTime) -> Frame? {
+        guard !frames.isEmpty else { return nil }
+        let limit = CMTimeAdd(slotTime, halfInterval)
+        let index = frames.lastIndex { CMTimeCompare($0.time, limit) <= 0 } ?? 0
+        frames.removeFirst(index)
+        return frames[0].frame
+    }
+}
+
+/// Measures the cadence ScreenCaptureKit actually delivers. `minimumFrameInterval`
+/// only caps the rate, and refresh-aligned delivery can fall below the target.
+struct CaptureCadenceStats {
+    /// Longer gaps are a static screen rather than a capture cadence.
+    static let staticGapMilliseconds = 250
+
+    private(set) var frameCount = 0
+    /// Interval counts keyed by whole milliseconds.
+    private(set) var intervalCounts: [Int: Int] = [:]
+    private var lastPresentationTime: CMTime = .invalid
+
+    mutating func record(presentationTime: CMTime) {
+        defer {
+            lastPresentationTime = presentationTime
+            frameCount += 1
+        }
+        guard lastPresentationTime.isNumeric, presentationTime.isNumeric else { return }
+        let seconds = CMTimeGetSeconds(CMTimeSubtract(presentationTime, lastPresentationTime))
+        let milliseconds = Int((seconds * 1000).rounded())
+        intervalCounts[min(max(milliseconds, 0), Self.staticGapMilliseconds), default: 0] += 1
+    }
+
+    /// The most common intervals, e.g. "50 ms ×1200, 33 ms ×40, ≥250 ms ×3".
+    var summary: String {
+        let common = intervalCounts.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }.prefix(4)
+        guard !common.isEmpty else { return "none" }
+        return common.map { milliseconds, count in
+            let label = milliseconds >= Self.staticGapMilliseconds ? "≥\(milliseconds)" : "\(milliseconds)"
+            return "\(label) ms ×\(count)"
+        }.joined(separator: ", ")
     }
 }
 
@@ -1962,10 +2097,13 @@ final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendable {
     private var microphoneSampleCount = 0
     private var errorHandler: (@Sendable (Error) -> Void)?
 
-    // CFR pump (growing presets only): SCStream is variable-rate, so we re-emit
-    // the latest frame on a fixed clock to produce a constant-frame-rate file.
+    // CFR pump (growing presets only): SCStream is variable-rate, so we fill each
+    // slot of a fixed clock from the captured frames to produce a constant-frame-rate file.
     private let bufferLock = NSLock()
-    private var latestPixelBuffer: CVPixelBuffer?
+    private var capturedFrames: CaptureFrameQueue<CVPixelBuffer>
+    /// The pump stays this far behind the clock: a slot takes frames captured up to half
+    /// an interval after it, and delivery lags capture.
+    private let pumpDelay: CMTime
     private var copyPool: CVPixelBufferPool?
     private var cfrTimer: DispatchSourceTimer?
     private let cfrQueue = DispatchQueue(label: "com.aagedal.capture.cfr")
@@ -1973,6 +2111,11 @@ final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendable {
     private var sessionStartPTS: CMTime = .zero
     private var emittedFrameIndex = 0
     private var timecodeStartFrame = 0
+    /// Host-clock end of the recording. Until it is set, the pump follows the clock.
+    private let endpoint = OSAllocatedUnfairLock<CMTime?>(initialState: nil)
+    private var schedule: CaptureFrameSchedule
+    private var deliveredFrameCount = 0
+    private var cadence = CaptureCadenceStats()
 
     init(
         outputURL: URL,
@@ -1994,6 +2137,15 @@ final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendable {
         self.isGrowing = isGrowing
         self.frameRate = frameRate
         self.currentTime = currentTime
+        self.schedule = CaptureFrameSchedule(frameRate: frameRate)
+        let pumpDelay = CMTimeAdd(
+            CMTimeMultiplyByRatio(frameRate.frameDuration, multiplier: 1, divisor: 2),
+            CMTime(value: 40, timescale: 1000)
+        )
+        self.pumpDelay = pumpDelay
+        self.capturedFrames = CaptureFrameQueue(
+            capacity: Int((CMTimeGetSeconds(pumpDelay) * frameRate.framesPerSecond).rounded(.up)) + 2
+        )
     }
 
     func append(sampleBuffer: CMSampleBuffer, type: SCStreamOutputType) {
@@ -2054,12 +2206,16 @@ final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendable {
             guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
                 return
             }
+            let captureTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+            deliveredFrameCount += 1
+            guard schedule.keeps(captureTime) else { return }
+            cadence.record(presentationTime: captureTime)
             applyColorAttachments(to: imageBuffer, dynamicRange: dynamicRange)
             if isGrowing {
-                // Growing presets don't append here — the CFR pump re-emits the
-                // latest frame on a fixed clock. Stash a private copy so SCStream
-                // can recycle its buffer immediately.
-                storeLatestFrame(imageBuffer)
+                // Growing presets don't append here — the CFR pump fills its fixed
+                // clock from these frames. Stash a private copy so SCStream can
+                // recycle its buffer immediately.
+                storeCapturedFrame(imageBuffer, at: captureTime)
                 return
             }
             if hasVideoInput, let videoInput, videoInput.isReadyForMoreMediaData {
@@ -2094,18 +2250,31 @@ final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendable {
         }
     }
 
+    func freezeEndpoint() {
+        let now = currentTime()
+        endpoint.withLock { if $0 == nil { $0 = now } }
+    }
+
+    private var recordingEnd: CMTime {
+        endpoint.withLock { $0 } ?? currentTime()
+    }
+
     func finish() async throws {
         guard !finished else { return }
 
         // Freeze the endpoint before waiting for encoder backpressure, so the
         // recording cannot grow while its final frames are being drained.
-        let stopTime = currentTime()
+        freezeEndpoint()
+        let stopTime = recordingEnd
         finished = true
+        if cadence.frameCount > 0 {
+            logger.notice("Screen frames delivered: \(self.deliveredFrameCount, privacy: .public), kept \(self.cadence.frameCount, privacy: .public) at a requested \(self.frameRate.framesPerSecond, privacy: .public) fps; kept intervals \(self.cadence.summary, privacy: .public)")
+        }
         stopCFRPump()
         if isGrowing, started, writeError == nil {
             await flushCFRFrames(through: stopTime)
         }
-        bufferLock.withLock { latestPixelBuffer = nil }
+        bufferLock.withLock { capturedFrames = CaptureFrameQueue(capacity: capturedFrames.capacity) }
         // The recording xattr only marks a file as *currently growing*; a
         // finished file carries none (matches the reference recorder).
         if isGrowing {
@@ -2285,13 +2454,11 @@ final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendable {
 
     // MARK: - Growing-file CFR pump
 
-    /// Stash a private copy of the latest screen frame so SCStream can recycle
-    /// its buffer immediately (we re-append our copy from the CFR timer).
-    private func storeLatestFrame(_ imageBuffer: CVImageBuffer) {
+    /// Stash a private copy of a kept screen frame so SCStream can recycle its
+    /// buffer immediately (the CFR timer appends our copy).
+    private func storeCapturedFrame(_ imageBuffer: CVImageBuffer, at time: CMTime) {
         guard let copy = copyIntoPool(imageBuffer) else { return }
-        bufferLock.lock()
-        latestPixelBuffer = copy
-        bufferLock.unlock()
+        bufferLock.withLock { capturedFrames.append(copy, at: time) }
     }
 
     private func copyIntoPool(_ source: CVImageBuffer) -> CVPixelBuffer? {
@@ -2393,17 +2560,16 @@ final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendable {
     /// is constant-frame-rate even while the screen is static.
     private func pumpTick() {
         guard !finished, writeError == nil else { return }
-        _ = emitCFRFrames(through: currentTime())
+        // finish() flushes the remainder through the endpoint.
+        _ = emitCFRFrames(through: CMTimeSubtract(recordingEnd, pumpDelay))
     }
 
     /// Returns false when captured frames need another bounded emission pass.
     private func emitCFRFrames(through time: CMTime, deadline: ContinuousClock.Instant? = nil) -> Bool {
         guard writeError == nil else { return true }
         guard let videoInput else { return true }
-        bufferLock.lock()
-        let buffer = latestPixelBuffer
-        bufferLock.unlock()
-        guard let buffer else { return true }   // no frame captured yet
+        guard bufferLock.withLock({ !capturedFrames.frames.isEmpty }) else { return true }   // no frame captured yet
+        let halfInterval = CMTimeMultiplyByRatio(frameRate.frameDuration, multiplier: 1, divisor: 2)
 
         let elapsed = CMTimeGetSeconds(CMTimeSubtract(time, sessionStartPTS))
         guard elapsed.isFinite, elapsed >= 0 else { return true }
@@ -2423,6 +2589,9 @@ final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendable {
                         sessionStartPTS,
                         frameRate.presentationOffset(frameIndex: emittedFrameIndex)
                     )
+                    guard let buffer = bufferLock.withLock({
+                        capturedFrames.frame(forSlotAt: pts, halfInterval: halfInterval)
+                    }) else { return false }
                     let appended = try CaptureFrameEmission.append(
                         videoReady: videoInput.isReadyForMoreMediaData,
                         timecodeReady: !hasTimecodeInput || timecodeInput?.isReadyForMoreMediaData == true,

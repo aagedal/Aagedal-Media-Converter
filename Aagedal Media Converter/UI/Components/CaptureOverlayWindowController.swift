@@ -19,6 +19,7 @@ final class CaptureOverlayWindowController: NSObject, NSWindowDelegate, NSMenuDe
     private var escapeKeyGlobalMonitor: Any?
     private var modifierKeyLocalMonitor: Any?
     private var modifierKeyGlobalMonitor: Any?
+    private var cmdReleaseCheckTimer: Timer?
 
     // Menu bar status item (shown during recording) whose dropdown holds the recording controls.
     private var showPanelStatusItem: NSStatusItem?
@@ -71,6 +72,8 @@ final class CaptureOverlayWindowController: NSObject, NSWindowDelegate, NSMenuDe
         }
 
         isShowing = true
+        ScreenCaptureManager.shared.clearOutputURLs()
+        ScheduledCaptureQueue.shared.reset()
 
         guard let targetScreen = screen ?? NSScreen.main ?? NSScreen.screens.first else {
             isShowing = false // no active displays — abort the overlay
@@ -92,6 +95,9 @@ final class CaptureOverlayWindowController: NSObject, NSWindowDelegate, NSMenuDe
     func dismissCaptureOverlay() {
         guard isShowing else { return }
         isShowing = false
+        // Scheduled recordings use this session's settings, so they end with it.
+        ScheduledCaptureQueue.shared.reset()
+        let savedURLs = ScreenCaptureManager.shared.lastOutputURLs
 
         processingObserver = nil
         removeEscapeKeyMonitor()
@@ -106,9 +112,7 @@ final class CaptureOverlayWindowController: NSObject, NSWindowDelegate, NSMenuDe
         overlayPanel?.close()
         overlayPanel = nil
 
-        controlPanel?.close()
-        controlPanel = nil
-        controlHostingView = nil
+        closeControlPanel()
         hideStatusItems()
 
         // Record mode closed without recording (cancel/Escape). Under the default ephemeral policy,
@@ -117,6 +121,23 @@ final class CaptureOverlayWindowController: NSObject, NSWindowDelegate, NSMenuDe
         VirtualDisplayManager.shared.destroyAllIfEphemeral()
 
         NSApp.unhide(nil)
+
+        // Files from a session kept open by scheduled recordings (see handleRecordingStopped).
+        if !savedURLs.isEmpty {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                self.showPostRecordingDialog(for: savedURLs)
+            }
+        }
+    }
+
+    /// Closes the control panel and detaches its SwiftUI view first, so the view disappears even
+    /// if something still holds the panel: a live view keeps reconciling the shared display
+    /// selection with its own, possibly stale, display list.
+    private func closeControlPanel() {
+        controlPanel?.contentView = nil
+        controlPanel?.close()
+        controlPanel = nil
+        controlHostingView = nil
     }
 
     func hideControlPanel() {
@@ -154,6 +175,7 @@ final class CaptureOverlayWindowController: NSObject, NSWindowDelegate, NSMenuDe
             if newFrame.minX < visible.minX { newFrame.origin.x = visible.minX }
         }
         panel.setFrame(newFrame, display: true, animate: false)
+        panel.invalidateShadow()
     }
 
     // MARK: - Recording Lifecycle
@@ -174,12 +196,25 @@ final class CaptureOverlayWindowController: NSObject, NSWindowDelegate, NSMenuDe
     }
 
     func handleRecordingStopped() {
+        // With recordings scheduled, or after one has run, record mode stays open: for the next
+        // recording, or for the user to find when they return. The saved files are offered
+        // together when record mode closes.
+        let schedule = ScheduledCaptureQueue.shared
+        if !schedule.entries.isEmpty || schedule.didStartRecording {
+            showControlPanel()
+            return
+        }
+
         let urls = ScreenCaptureManager.shared.lastOutputURLs
 
+        // Record mode is closing, so the remaining preview streams end with it.
+        let captureManager = ScreenCaptureManager.shared
+        Task {
+            await captureManager.stopPreview()
+        }
+
         // Dismiss control panel and status items
-        controlPanel?.close()
-        controlPanel = nil
-        controlHostingView = nil
+        closeControlPanel()
         overlayPanel?.close()
         overlayPanel = nil
         hideStatusItems()
@@ -348,10 +383,12 @@ final class CaptureOverlayWindowController: NSObject, NSWindowDelegate, NSMenuDe
             onHidePanel: { [weak self] in
                 self?.hideControlPanel()
             },
-            onRegionModeChanged: { [weak self] isRegion in
+            // Weak panel: the panel owns this view through its content view, so a strong capture
+            // would keep every closed panel (and its live selection observers) alive.
+            onRegionModeChanged: { [weak self, weak panel] isRegion in
                 guard let self else { return }
                 if isRegion {
-                    guard let screen = panel.screen ?? NSScreen.main ?? NSScreen.screens.first else { return }
+                    guard let screen = panel?.screen ?? NSScreen.main ?? NSScreen.screens.first else { return }
                     let regionX = UserDefaults.standard.double(forKey: AppConstants.captureRegionXKey)
                     let regionY = UserDefaults.standard.double(forKey: AppConstants.captureRegionYKey)
                     let regionW = UserDefaults.standard.double(forKey: AppConstants.captureRegionWidthKey)
@@ -436,28 +473,31 @@ final class CaptureOverlayWindowController: NSObject, NSWindowDelegate, NSMenuDe
     private func installEscapeKeyMonitor() {
         guard escapeKeyLocalMonitor == nil else { return }
 
-        let handleEscape = { [weak self] in
-            guard let self else { return }
+        /// Returns false when Escape is left to the panel: with recordings scheduled it closes the
+        /// schedule popover or presses Cancel Schedule rather than leaving record mode.
+        let handleEscape = { [weak self] () -> Bool in
+            guard let self else { return true }
             let manager = ScreenCaptureManager.shared
-            if !manager.isRecording && !manager.isProcessing {
-                self.dismissCaptureOverlay()
-            }
+            guard !manager.isRecording && !manager.isProcessing else { return true }
+            guard ScheduledCaptureQueue.shared.entries.isEmpty else { return false }
+            self.dismissCaptureOverlay()
+            return true
         }
 
         // Local monitor catches Escape when our app/panels are focused
         escapeKeyLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             if event.keyCode == 53 {
-                handleEscape()
-                return nil
+                return handleEscape() ? nil : event
             }
             return event
         }
 
         // Global monitor catches Escape when another app is focused
-        // (since the overlay panel is non-activating, focus stays with the previous app)
+        // (since the overlay panel is non-activating, focus stays with the previous app).
+        // A schedule is left alone: the Escape was meant for that other app.
         escapeKeyGlobalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
             if event.keyCode == 53 {
-                handleEscape()
+                _ = handleEscape()
             }
         }
     }
@@ -483,6 +523,7 @@ final class CaptureOverlayWindowController: NSObject, NSWindowDelegate, NSMenuDe
     }
 
     private func applyClickThroughState() {
+        updateCmdReleaseCheck()
         overlayPanel?.ignoresMouseEvents = isRegionOverlayClickThrough || isCmdHeld
         // Holding CMD also passes events through the control panel, so a TCC dialog (or any
         // window) hidden behind it can be reached. The manual toggle does not affect the control
@@ -491,6 +532,27 @@ final class CaptureOverlayWindowController: NSObject, NSWindowDelegate, NSMenuDe
     }
 
     // MARK: - Modifier Key Handling
+
+    /// The Cmd release can go unseen, e.g. after ⌃⌘F switches QuickTime into a full-screen
+    /// Space, which would leave both panels passing every click through. While Cmd counts
+    /// as held, confirm it against the live keyboard state.
+    private func updateCmdReleaseCheck() {
+        guard isCmdHeld else {
+            cmdReleaseCheckTimer?.invalidate()
+            cmdReleaseCheckTimer = nil
+            return
+        }
+        guard cmdReleaseCheckTimer == nil else { return }
+        let timer = Timer(timeInterval: 0.2, target: self, selector: #selector(cmdReleaseCheckTick), userInfo: nil, repeats: true)
+        RunLoop.main.add(timer, forMode: .common)
+        cmdReleaseCheckTimer = timer
+    }
+
+    @objc private func cmdReleaseCheckTick() {
+        guard isCmdHeld, !NSEvent.modifierFlags.contains(.command) else { return }
+        isCmdHeld = false
+        applyClickThroughState()
+    }
 
     private func installModifierKeyMonitor() {
         guard modifierKeyLocalMonitor == nil else { return }

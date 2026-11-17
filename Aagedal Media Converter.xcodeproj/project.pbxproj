@@ -301,6 +301,7 @@
 		BCDC7685DC8A43E4BC04CE65 /* ImageSequenceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 045E9C8BA166403190A5B12D /* ImageSequenceSettings.swift */; };
 		C1DCF31F2FB2341100D617D4 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = C1DCF31E2FB2341100D617D4 /* Sparkle */; };
 		C2D3E4F5061728394A5B6C7D /* ScreenCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D3E4F5061728394A5B6C7E /* ScreenCaptureManager.swift */; };
+		5CA000000000000000000001 /* ScheduledCaptureQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CA000000000000000000002 /* ScheduledCaptureQueue.swift */; };
 		C4D287CF98164FE5AF3C20AB /* DownloadDetailsLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA9E57AC40EF429691668B6D /* DownloadDetailsLifecycleTests.swift */; };
 		A7E1R0UTT00000000000001 /* YTDLPEngineRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E1R0UTT00000000000002 /* YTDLPEngineRouterTests.swift */; };
 		C7166A0F2716B52C985E6275 /* MetadataWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74E3B8A6D800B9AF62A3BF1E /* MetadataWindowController.swift */; };
@@ -318,6 +319,7 @@
 		A907D1D50000000000000303 /* ManagedToolUpdateScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A907D1D50000000000000403 /* ManagedToolUpdateScheduler.swift */; };
 		CCF14EFA815D8DCCB62749E1 /* YTDLPUpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE5D4D8671AB2EB5948179AE /* YTDLPUpdateService.swift */; };
 		CD4320100000000000000001 /* CaptureFrameRateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD4320100000000000000002 /* CaptureFrameRateTests.swift */; };
+		5CA000000000000000000003 /* ScheduledCaptureQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CA000000000000000000004 /* ScheduledCaptureQueueTests.swift */; };
 		CE5F75F4C4B14D14BD081FC8 /* ConversionFollowUp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 204052BD416D4C0D98872778 /* ConversionFollowUp.swift */; };
 		CFDA4F1FFB4945D68D0C63C2 /* AppIntentHandoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 155BC403D5934BF3920B554B /* AppIntentHandoff.swift */; };
 		D249323D5DD7455983FE38F9 /* ImageSequenceSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4D04393D4534BA2A77B8F64 /* ImageSequenceSettingsTests.swift */; };
@@ -792,6 +794,7 @@
 		C039480DE22E4EBEADB0088D /* ModelDiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDiagnosticsTests.swift; sourceTree = "<group>"; };
 		C2018B1D061B2AD00DB22947 /* VideoFileCellView+Thumbnail.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "VideoFileCellView+Thumbnail.swift"; sourceTree = "<group>"; };
 		C2D3E4F5061728394A5B6C7E /* ScreenCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCaptureManager.swift; sourceTree = "<group>"; };
+		5CA000000000000000000002 /* ScheduledCaptureQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledCaptureQueue.swift; sourceTree = "<group>"; };
 		C52C02E1A35246D6A0CBE187 /* AudioOnlySettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioOnlySettings.swift; sourceTree = "<group>"; };
 		C67C434261D841BD82FD8EEC /* AV2AACParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2AACParser.swift; sourceTree = "<group>"; };
 		C9D639A2FE984963B2B59AF0 /* WatchFolderSelectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchFolderSelectionService.swift; sourceTree = "<group>"; };
@@ -803,6 +806,7 @@
 		CAPREGN00000001000FREF1 /* CaptureRegionOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureRegionOverlayView.swift; sourceTree = "<group>"; };
 		CC01A1C0PY00010000000001 /* CopyableCommandRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopyableCommandRow.swift; sourceTree = "<group>"; };
 		CD4320100000000000000002 /* CaptureFrameRateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureFrameRateTests.swift; sourceTree = "<group>"; };
+		5CA000000000000000000004 /* ScheduledCaptureQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledCaptureQueueTests.swift; sourceTree = "<group>"; };
 		CD5693B21A7341B2A3FA32A7 /* ConversionQueueState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionQueueState.swift; sourceTree = "<group>"; };
 		A907D1D50000000000000405 /* ManagedToolVersioningTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagedToolVersioningTests.swift; sourceTree = "<group>"; };
 		CDC94AC62B82453580FBD4E4 /* YTDLPUpdateOwnershipTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YTDLPUpdateOwnershipTests.swift; sourceTree = "<group>"; };
@@ -1135,6 +1139,7 @@
 				8EEE45382EC13B670049F017 /* Previews */,
 				8EEE45322EC13A330049F017 /* WatchFolder */,
 				C2D3E4F5061728394A5B6C7E /* ScreenCaptureManager.swift */,
+				5CA000000000000000000002 /* ScheduledCaptureQueue.swift */,
 				VDISPMGR00001000FREF1 /* VirtualDisplayManager.swift */,
 				VDISPHDR00001000FREF1 /* CGVirtualDisplay+Private.h */,
 				8E545D932C3412AE0088C274 /* ConversionManager.swift */,
@@ -1428,6 +1433,7 @@
 				8EBD10232EBE8B7000377649 /* Aagedal_Media_Converter_Tests.swift */,
 				AAD060010000000000000002 /* KeychainCredentialManagerTests.swift */,
 				CD4320100000000000000002 /* CaptureFrameRateTests.swift */,
+				5CA000000000000000000004 /* ScheduledCaptureQueueTests.swift */,
 				A15F59A5246B4BA880E781B3 /* AV2ScratchDirectoryTests.swift */,
 				FD7F35730E574E58B708A19A /* AV2ResourceRecoveryTests.swift */,
 				E0148C0DED554F1ABE4B7DB0 /* MergeCompatibilityPolicyTests.swift */,
@@ -2187,6 +2193,7 @@
 				DDADD32918CD4580B1A5ECC6 /* ConversionQueueState.swift in Sources */,
 				EA6ED86B34C44A7C80E5F242 /* ConversionUploadFollowUp.swift in Sources */,
 				C2D3E4F5061728394A5B6C7D /* ScreenCaptureManager.swift in Sources */,
+				5CA000000000000000000001 /* ScheduledCaptureQueue.swift in Sources */,
 				VDISPMGR00001000BUILD /* VirtualDisplayManager.swift in Sources */,
 				VDISPMENU0001000BUILD /* VirtualDisplayMenu.swift in Sources */,
 				CAMCARDVIEW0000001 /* CameraCardImportView.swift in Sources */,
@@ -2434,6 +2441,7 @@
 				8EBD10242EBE8B7000377649 /* Aagedal_Media_Converter_Tests.swift in Sources */,
 				AAD060010000000000000001 /* KeychainCredentialManagerTests.swift in Sources */,
 				CD4320100000000000000001 /* CaptureFrameRateTests.swift in Sources */,
+				5CA000000000000000000003 /* ScheduledCaptureQueueTests.swift in Sources */,
 				35D23935EC554B1B97085056 /* AV2ScratchDirectoryTests.swift in Sources */,
 				FF13CD1ED3C14E4EB0F4D822 /* AV2ResourceRecoveryTests.swift in Sources */,
 				042DE77076B347F3863AE8A9 /* MergeCompatibilityPolicyTests.swift in Sources */,

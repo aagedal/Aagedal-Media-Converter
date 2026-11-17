@@ -9,20 +9,27 @@ import OSLog
 
 /// Prevents the Mac from going to sleep while at least one caller holds an assertion.
 ///
-/// Uses `IOPMAssertionCreateWithName` with `kIOPMAssertionTypePreventUserIdleSystemSleep`,
+/// `shared` uses `IOPMAssertionCreateWithName` with `kIOPMAssertionTypePreventUserIdleSystemSleep`,
 /// which stops the system from idling to sleep but still allows the display to dim/turn off.
+/// `display` uses `kIOPMAssertionTypePreventUserIdleDisplaySleep`, which keeps the display (and
+/// so the system) awake: screen recording and scheduled recordings need it, since a sleeping
+/// display locks the screen and ScreenCaptureKit stops delivering video and audio.
 /// Reference-counted by token — multiple features (scheduled recordings, scheduled downloads,
 /// watch-folder monitoring) can hold the assertion concurrently, and the underlying IOKit
 /// assertion is only released when the last holder releases its token.
 final class PowerAssertion: @unchecked Sendable {
-    static let shared = PowerAssertion()
+    static let shared = PowerAssertion(type: kIOPMAssertionTypePreventUserIdleSystemSleep)
+    static let display = PowerAssertion(type: kIOPMAssertionTypePreventUserIdleDisplaySleep)
 
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "PowerAssertion")
     private let lock = NSLock()
     private var holders: [UUID: String] = [:]
     private var assertionID: IOPMAssertionID = IOPMAssertionID(0)
+    private let type: String
 
-    private init() {}
+    private init(type: String) {
+        self.type = type
+    }
 
     /// Acquire an assertion. Returns a token that must be passed to ``release(_:)`` to drop it.
     /// Safe to call off the main actor.
@@ -36,7 +43,7 @@ final class PowerAssertion: @unchecked Sendable {
         if wasEmpty {
             var id: IOPMAssertionID = IOPMAssertionID(0)
             let result = IOPMAssertionCreateWithName(
-                kIOPMAssertionTypePreventUserIdleSystemSleep as CFString,
+                type as CFString,
                 IOPMAssertionLevel(kIOPMAssertionLevelOn),
                 reason as CFString,
                 &id

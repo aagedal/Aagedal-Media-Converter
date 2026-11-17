@@ -298,12 +298,15 @@ final class VirtualDisplayManager: ObservableObject {
     /// null display detaches it into the extended desktop. Scoped to the session
     /// so it doesn't persist into the user's saved display preferences.
     private func ensureExtended(_ id: CGDirectDisplayID) {
+        // Current macOS creates it extended already, and breaking a mirror that doesn't exist fails.
+        guard CGDisplayIsInMirrorSet(id) != 0 else { return }
         var config: CGDisplayConfigRef?
         guard CGBeginDisplayConfiguration(&config) == .success, let config else { return }
         CGConfigureDisplayMirrorOfDisplay(config, id, kCGNullDirectDisplay)
-        if CGCompleteDisplayConfiguration(config, .forSession) != .success {
+        let result = CGCompleteDisplayConfiguration(config, .forSession)
+        if result != .success {
             CGCancelDisplayConfiguration(config)
-            logger.error("Couldn’t switch virtual display \(id, privacy: .public) to extended mode")
+            logger.error("Couldn’t switch virtual display \(id, privacy: .public) to extended mode (CGError \(result.rawValue, privacy: .public))")
         }
     }
 
