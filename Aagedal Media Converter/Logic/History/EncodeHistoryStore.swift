@@ -315,6 +315,14 @@ final class EncodeHistoryStore {
             ?? allRollups.first { $0.deviceID == id && !$0.deviceName.isEmpty }?.deviceName
     }
 
+    /// `id` while it names one of several Macs in the merged history, else nil
+    /// (all Macs): a Mac whose data is gone can't stay selected unseen.
+    func statisticsDeviceFilter(_ id: String?) -> String? {
+        guard let id else { return nil }
+        let ids = historyDeviceIDs
+        return ids.count > 1 && ids.contains(id) ? id : nil
+    }
+
     /// Macs with data in the merged history, this one first.
     var historyDeviceIDs: [String] {
         var others = Set(allRecords.compactMap(\.deviceID) + allRollups.compactMap(\.deviceID) + allSessions.compactMap(\.deviceID))

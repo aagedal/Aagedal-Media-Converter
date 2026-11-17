@@ -545,6 +545,24 @@ final class EncodeHistorySyncTests: XCTestCase {
         XCTAssertEqual(try cloudFileNames(in: newFolder), ["device-a.json"])
     }
 
+    // MARK: - Statistics filter
+
+    func testStatisticsMacFilterFallsBackToAllMacsWhenTheMacIsGone() async throws {
+        let a = makeStore("a"), b = makeStore("b")
+        try recordEncode(on: a)
+        try recordEncode(on: b)
+        b.flush()
+        await a.reloadRemote()
+        XCTAssertEqual(a.statisticsDeviceFilter("device-b"), "device-b")
+        XCTAssertEqual(a.statisticsDeviceFilter("device-a"), "device-a")
+        XCTAssertNil(a.statisticsDeviceFilter("device-z"))
+
+        await a.removeSyncedDevice("device-b")
+        XCTAssertNil(a.statisticsDeviceFilter("device-b"))
+        // One Mac left: the picker is hidden, so no filter either.
+        XCTAssertNil(a.statisticsDeviceFilter("device-a"))
+    }
+
     // MARK: - Helpers
 
     /// The sync folder as the settings report it; nil while unavailable.
