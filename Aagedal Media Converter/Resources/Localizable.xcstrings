@@ -3151,61 +3151,61 @@
         }
       }
     },
-    "Dialogue dashes put two speakers who share a subtitle on separate lines starting with “– ”. Speaker names label each change of voice. The NeMo Speech diarization model tells up to four speakers apart; it is a 112 MB download on first use." : {
+    "Dialogue dashes put two speakers who share a subtitle on separate lines starting with “– ”. Speaker names label each change of voice. The NeMo Speech diarization model tells up to eight speakers apart; it is a 107 MB download on first use." : {
       "comment" : "Explains the speaker change options.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Mit Dialogstrichen stehen zwei Sprecher in einem Untertitel auf getrennten Zeilen, die mit „– “ beginnen. Sprechernamen kennzeichnen jeden Stimmwechsel. Das Diarisierungsmodell von NeMo Speech unterscheidet bis zu vier Sprecher; es wird bei der ersten Verwendung geladen (112 MB)."
+            "value" : "Mit Dialogstrichen stehen zwei Sprecher in einem Untertitel auf getrennten Zeilen, die mit „– “ beginnen. Sprechernamen kennzeichnen jeden Stimmwechsel. Das Diarisierungsmodell von NeMo Speech unterscheidet bis zu acht Sprecher; es wird bei der ersten Verwendung geladen (107 MB)."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Con guiones de diálogo, dos hablantes que comparten un subtítulo aparecen en líneas separadas que empiezan con «– ». Los nombres de hablantes marcan cada cambio de voz. El modelo de diarización de NeMo Speech distingue hasta cuatro hablantes; se descarga la primera vez que se usa (112 MB)."
+            "value" : "Con guiones de diálogo, dos hablantes que comparten un subtítulo aparecen en líneas separadas que empiezan con «– ». Los nombres de hablantes marcan cada cambio de voz. El modelo de diarización de NeMo Speech distingue hasta ocho hablantes; se descarga la primera vez que se usa (107 MB)."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Avec les tirets de dialogue, deux locuteurs partageant un sous-titre sont placés sur des lignes séparées commençant par « – ». Les noms des locuteurs signalent chaque changement de voix. Le modèle de diarisation de NeMo Speech distingue jusqu’à quatre locuteurs ; il est téléchargé à la première utilisation (112 Mo)."
+            "value" : "Avec les tirets de dialogue, deux locuteurs partageant un sous-titre sont placés sur des lignes séparées commençant par « – ». Les noms des locuteurs signalent chaque changement de voix. Le modèle de diarisation de NeMo Speech distingue jusqu’à huit locuteurs ; il est téléchargé à la première utilisation (107 Mo)."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Con i trattini di dialogo, due parlanti nello stesso sottotitolo vanno su righe separate che iniziano con «– ». I nomi dei parlanti segnalano ogni cambio di voce. Il modello di diarizzazione di NeMo Speech distingue fino a quattro parlanti e viene scaricato al primo utilizzo (112 MB)."
+            "value" : "Con i trattini di dialogo, due parlanti nello stesso sottotitolo vanno su righe separate che iniziano con «– ». I nomi dei parlanti segnalano ogni cambio di voce. Il modello di diarizzazione di NeMo Speech distingue fino a otto parlanti e viene scaricato al primo utilizzo (107 MB)."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "会話ダッシュでは、1つの字幕を共有する2人の話者をそれぞれ「– 」で始まる別の行に表示します。話者名では声が切り替わるたびに名前を付けます。NeMo Speech の話者分離モデルが最大4人の話者を区別します。このモデル（112 MB）は初回使用時にダウンロードされます。"
+            "value" : "会話ダッシュでは、1つの字幕を共有する2人の話者をそれぞれ「– 」で始まる別の行に表示します。話者名では声が切り替わるたびに名前を付けます。NeMo Speech の話者分離モデルが最大8人の話者を区別します。このモデル（107 MB）は初回使用時にダウンロードされます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "대화 대시를 사용하면 한 자막을 공유하는 두 화자가 “– ”로 시작하는 별도의 줄에 표시됩니다. 화자 이름은 목소리가 바뀔 때마다 표시됩니다. NeMo Speech 화자 분리 모델이 최대 4명의 화자를 구분하며, 이 모델(112MB)은 처음 사용할 때 다운로드됩니다."
+            "value" : "대화 대시를 사용하면 한 자막을 공유하는 두 화자가 “– ”로 시작하는 별도의 줄에 표시됩니다. 화자 이름은 목소리가 바뀔 때마다 표시됩니다. NeMo Speech 화자 분리 모델이 최대 8명의 화자를 구분하며, 이 모델(107MB)은 처음 사용할 때 다운로드됩니다."
           }
         },
         "nb" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Med replikkstreker får to talere som deler en undertekst, hver sin linje som starter med «– ». Talernavn merker hvert stemmebytte. Diariseringsmodellen i NeMo Speech skiller opptil fire talere fra hverandre; den lastes ned første gang den brukes (112 MB)."
+            "value" : "Med replikkstreker får to talere som deler en undertekst, hver sin linje som starter med «– ». Talernavn merker hvert stemmebytte. Diariseringsmodellen i NeMo Speech skiller opptil åtte talere fra hverandre; den lastes ned første gang den brukes (107 MB)."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Com travessões de diálogo, dois falantes que compartilham uma legenda ficam em linhas separadas começando com “– ”. Os nomes dos falantes indicam cada troca de voz. O modelo de diarização do NeMo Speech diferencia até quatro falantes; ele é baixado no primeiro uso (112 MB)."
+            "value" : "Com travessões de diálogo, dois falantes que compartilham uma legenda ficam em linhas separadas começando com “– ”. Os nomes dos falantes indicam cada troca de voz. O modelo de diarização do NeMo Speech diferencia até oito falantes; ele é baixado no primeiro uso (107 MB)."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "使用对话破折号时，同一条字幕中的两位说话人会分行显示，每行以“– ”开头。说话人名称会在每次换人说话时标注。NeMo Speech 说话人分离模型最多可区分四位说话人，该模型（112 MB）会在首次使用时下载。"
+            "value" : "使用对话破折号时，同一条字幕中的两位说话人会分行显示，每行以“– ”开头。说话人名称会在每次换人说话时标注。NeMo Speech 说话人分离模型最多可区分八位说话人，该模型（107 MB）会在首次使用时下载。"
           }
         }
       }

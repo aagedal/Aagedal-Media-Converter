@@ -25,8 +25,8 @@ voice activity detection, Whisper, wav2vec2 forced alignment and diarization:
    to Core ML, gives per-frame character probabilities; `CTCForcedAligner` runs
    Viterbi over them to place every word. Without an aligner for the language,
    Whisper's own timing is kept.
-4. **Speakers.** NeMo Speech's Sortformer diarizer (`nemotron-3-diarization`,
-   112 MB, downloaded on first use, up to four speakers) runs only when speaker
+4. **Speakers.** NeMo Speech's Sortformer v3 diarizer (`nemotron-3-diarization`,
+   107 MB, downloaded on first use, up to eight speakers) runs only when speaker
    changes are on. Each word gets the speaker whose segments overlap it
    most. The cue builder then uses dialogue dashes ("– " on each line when two
    speakers share a cue) or speaker names.
@@ -49,7 +49,7 @@ All on a synthetic clip with a known layout (two `say` voices, 4 s or 6 s pauses
   speech-only audio rather than relying on the filter's VAD.
 - Diarization ran 12 minutes of audio in 10 s on an M-series GPU, and its
   speech regions were within 0.25 s of the truth. It was the first speech
-  finder, but it needs a 112 MB download, so the bundled Silero model took over
+  finder, but it needs a 107 MB download, so the bundled Silero model took over
   and diarization is only used for speakers.
 - The Swift Silero port matches whisper.cpp 1.9.2 (built from the FFmpeg build's
   static libraries): probabilities within 0.021 (whisper.cpp rounds convolution
