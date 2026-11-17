@@ -844,6 +844,9 @@ enum FFMPEGCommandBuilder {
         }
 
         var loudnessTrackCount = 0
+        // Whether the only filter graph is the adjustments' audio one, which leaves the picture alone.
+        var addsAudioOnlyGraph = false
+        let hadFilterGraph = ffmpegArgs.contains { ["-filter_complex", "-lavfi", "-filter_complex_script"].contains($0) }
         if let resolved = adjustments, preset.outputsAudioTrack, !isMuted, !isImageSequenceInput,
            resolved.adjustments.hasAudioAdjustments || resolved.loudness != nil {
             let sourceAudioStreamCount = replacesSourceAudio
@@ -897,6 +900,7 @@ enum FFMPEGCommandBuilder {
                     preparationError: error.message
                 )
             case .success(let count):
+                addsAudioOnlyGraph = !hadFilterGraph
                 if let chainError {
                     return FFMPEGCommand(
                         arguments: [], normalizedTrimStart: normalizedTrimStart,
@@ -984,6 +988,10 @@ enum FFMPEGCommandBuilder {
                 arguments += ["-metadata:c:\(index)", "title=\(title)"]
             }
         }
+        var colorPlanArguments = arguments
+        if addsAudioOnlyGraph {
+            removeArgumentPair("-filter_complex", value: nil, from: &colorPlanArguments)
+        }
         if !isImageSequenceInput, visualSourceURL == nil, customInputArguments == nil,
            UntaggedColorPlan.appliesTo(preset),
            let stream = sourceMetadata?.primaryVideoStream,
@@ -999,7 +1007,7 @@ enum FFMPEGCommandBuilder {
                sourceCodedWidth: stream.width,
                sourceCodedHeight: stream.height,
                sourcePixelAspectRatio: geometry.pixelAspectRatio ?? 1,
-               arguments: arguments
+               arguments: colorPlanArguments
            ) {
             plan.apply(to: &arguments, inputPath: inputURL.path)
         }
@@ -3210,7 +3218,7 @@ struct UntaggedColorPlan: Equatable, Sendable {
     /// Filters that leave the frame size alone.
     private static let sizeNeutralFilters: Set<String> = [
         "fps", "format", "setfield", "fieldorder", "yadif", "bwdif", "setpts", "null",
-        "interlace", "hqdn3d", "setdar",
+        "interlace", "hqdn3d", "setdar", "hflip", "vflip", "fade", "subtitles",
     ]
 
     /// Output pixel size of a linear chain of app-generated filters, or nil when any
@@ -3233,6 +3241,10 @@ struct UntaggedColorPlan: Equatable, Sendable {
             case "setsar":
                 guard value == "1/1" || value == "1" else { return nil }
                 sar = 1
+            case "transpose" where value == "clock" || value == "cclock":
+                // The adjustments' rotation: the picture and its pixel aspect turn with it.
+                (w, h) = (h, w)
+                sar = 1 / sar
             case "scale" where value == "'trunc(ih*dar/2)*2:trunc(ih/2)*2'" || value == "trunc(ih*dar/2)*2:trunc(ih/2)*2":
                 let dar = w * sar / h
                 w = even(h * dar)

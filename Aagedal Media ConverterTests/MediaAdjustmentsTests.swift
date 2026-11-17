@@ -418,6 +418,40 @@ final class MediaAdjustmentsTests: XCTestCase {
         }
     }
 
+    func testAudioAndPictureAdjustmentsKeepTheUntaggedColorFix() async throws {
+        let fixture = try await Fixture.make(audioTracks: 1, size: "1280x720")
+        defer { fixture.remove() }
+        let metadata = try await BoundedVideoMetadataProbe.metadata(for: fixture.source)
+        XCTAssertNil(metadata.primaryVideoStream?.colorSpace)
+        let suite = "adjustments-proxy-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(ProxyResolutionLimit.r480.rawValue, forKey: AppConstants.proxyResolutionLimitKey)
+        let settings = CodecExportSettings(preset: .proxy, defaults: defaults)
+        func command(rotation: MediaAdjustments.Rotation) async -> [String] {
+            var adjustments = MediaAdjustments()
+            adjustments.audioGain = 6
+            adjustments.flipHorizontal = true
+            adjustments.videoFadeIn = 0.5
+            adjustments.rotation = rotation
+            return await FFMPEGCommandBuilder.buildCommand(
+                inputURL: fixture.source, outputFileURL: fixture.directory.appendingPathComponent("proxy.mov"),
+                preset: .proxy, codecSettings: settings,
+                comment: "", includeDateTag: false, trimStart: nil, trimEnd: nil,
+                sourceMetadata: metadata, adjustments: ResolvedMediaAdjustments(adjustments: adjustments, globalLoudness: .init())
+            ).arguments
+        }
+        // HD downscaled to an SD proxy changes the class players assume, so the source is tagged.
+        let upright = await command(rotation: .none)
+        XCTAssertTrue(upright.contains("-filter_complex"))
+        let input = try XCTUnwrap(upright.indices.first { upright[$0] == "-i" && upright[$0 + 1] == fixture.source.path })
+        XCTAssertEqual(Array(upright[(input - 6)..<input]),
+                       ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"], "\(upright)")
+        // Turned to portrait, the proxy is 480 × 854: still HD to players, so nothing changes.
+        let portrait = await command(rotation: .clockwise90)
+        XCTAssertFalse(portrait.contains("-color_primaries"), "\(portrait)")
+    }
+
     func testParsesLoudnormStatisticsInGraphOrder() {
         let log = """
         [Parsed_loudnorm_3 @ 0x7b9ac09440]

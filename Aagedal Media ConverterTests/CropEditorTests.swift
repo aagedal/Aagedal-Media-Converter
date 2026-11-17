@@ -303,6 +303,18 @@ final class UntaggedColorPlanTests: XCTestCase {
         XCTAssertEqual(crop.width, 1280)
         XCTAssertEqual(crop.height, 720)
 
+        // The adjustments' stages: rotation turns the picture and its pixel aspect; flips,
+        // fades and burned-in subtitles keep the size.
+        let rotated = try XCTUnwrap(UntaggedColorPlan.predictedOutputSize(
+            filterChain: "transpose=clock,hflip,vflip,subtitles=filename=/subs/a\\,b.srt:force_style=FontSize=20,"
+                + "fade=t=in:st=0:d=1,scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1",
+            width: 720, height: 576, pixelAspectRatio: 64.0 / 45.0
+        ))
+        XCTAssertEqual(rotated.width, 404)
+        XCTAssertEqual(rotated.height, 720)
+        XCTAssertNil(UntaggedColorPlan.predictedOutputSize(
+            filterChain: "transpose=clock_flip", width: 1920, height: 1080, pixelAspectRatio: 1
+        ))
         XCTAssertNil(UntaggedColorPlan.predictedOutputSize(
             filterChain: "scale=iw/2:ih/2", width: 1920, height: 1080, pixelAspectRatio: 1
         ))
