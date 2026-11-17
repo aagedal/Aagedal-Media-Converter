@@ -264,15 +264,28 @@ enum MediaAdjustmentsPlan {
         }
     }
 
+    /// Presets without maps rely on automatic stream selection, which a filter graph
+    /// disables and which keeps one audio track across all inputs. Maps the streams
+    /// it would pick from a single input.
+    static func insertAutomaticMaps(into ffmpegArgs: inout [String], audioInput: Int, hasAudio: Bool) {
+        guard !ffmpegArgs.contains("-map") else { return }
+        var maps: [String] = []
+        if !ffmpegArgs.contains("-vn") { maps += ["-map", "0:v:0?"] }
+        if hasAudio { maps += ["-map", "\(audioInput):a:0"] }
+        ffmpegArgs.insert(contentsOf: maps, at: 0)
+    }
+
     /// Rewrites audio maps so every audio output runs through its chain. Generic
     /// maps are expanded with `audioStreamCount`; filter graph outputs are extended.
+    /// The chain is asked for each track's position and, when the track is read
+    /// straight from a file, that input's index (nil for filter graph outputs).
     /// Returns the number of chains it placed, in graph order, or an error.
     static func applyAudioChains(
         to ffmpegArgs: inout [String],
         placement: AudioChainPlacement,
         defaultAudioInput: Int = 0,
         audioStreamCount: (Int) -> Int,
-        chain: (Int) -> String
+        chain: (_ index: Int, _ input: Int?) -> String
     ) -> Result<Int, AdjustmentError> {
         guard !ffmpegArgs.contains("-an") else { return .success(0) }
         if ffmpegArgs.indices.contains(where: { index in
@@ -284,19 +297,19 @@ enum MediaAdjustmentsPlan {
             return .failure(.copiedAudio)
         }
 
-        // Presets without maps rely on automatic stream selection, which any filter graph disables.
-        if !ffmpegArgs.contains("-map") {
-            var maps: [String] = []
-            if !ffmpegArgs.contains("-vn") { maps += ["-map", "0:v:0?"] }
-            if audioStreamCount(defaultAudioInput) > 0 { maps += ["-map", "\(defaultAudioInput):a:0"] }
-            ffmpegArgs.insert(contentsOf: maps, at: 0)
-        }
+        insertAutomaticMaps(into: &ffmpegArgs, audioInput: defaultAudioInput, hasAudio: audioStreamCount(defaultAudioInput) > 0)
         expandGenericAudioMaps(in: &ffmpegArgs, audioStreamCount: audioStreamCount)
 
         switch placement {
         case .outputs: return .success(applyOutputChains(to: &ffmpegArgs, chain: chain))
         case .sources: return .success(applySourceChains(to: &ffmpegArgs, chain: chain))
         }
+    }
+
+    /// The input index of a `N:a:M` reference.
+    private static func inputIndex(ofSourceAudioReference value: String) -> Int? {
+        guard isSourceAudioReference(value) else { return nil }
+        return value.split(separator: ":").first.flatMap { Int($0) }
     }
 
     private static func isSourceAudioReference(_ value: String) -> Bool {
@@ -344,7 +357,7 @@ enum MediaAdjustmentsPlan {
         }
     }
 
-    private static func applyOutputChains(to ffmpegArgs: inout [String], chain: (Int) -> String) -> Int {
+    private static func applyOutputChains(to ffmpegArgs: inout [String], chain: (Int, Int?) -> String) -> Int {
         var segments: [String] = []
         var outputIndex = 0
         var index = 0
@@ -363,7 +376,7 @@ enum MediaAdjustmentsPlan {
                 continue
             }
             let label = "afx\(outputIndex)"
-            segments.append("\(source)\(chain(outputIndex))[\(label)]")
+            segments.append("\(source)\(chain(outputIndex, inputIndex(ofSourceAudioReference: value)))[\(label)]")
             ffmpegArgs[index + 1] = "[\(label)]"
             outputIndex += 1
         }
@@ -371,7 +384,7 @@ enum MediaAdjustmentsPlan {
         return outputIndex
     }
 
-    private static func applySourceChains(to ffmpegArgs: inout [String], chain: (Int) -> String) -> Int {
+    private static func applySourceChains(to ffmpegArgs: inout [String], chain: (Int, Int?) -> String) -> Int {
         // Collect each source audio pad's uses, in a stable order.
         let pattern = /\[(\d+):a:(\d+)\]/
         var uses: [String: Int] = [:]
@@ -398,7 +411,7 @@ enum MediaAdjustmentsPlan {
             let names = (0..<count).map { "asrc\(position)_\($0)" }
             labels[reference] = names
             let split = count > 1 ? ",asplit=\(count)" : ""
-            segments.append("[\(reference)]\(chain(position))\(split)" + names.map { "[\($0)]" }.joined())
+            segments.append("[\(reference)]\(chain(position, inputIndex(ofSourceAudioReference: reference)))\(split)" + names.map { "[\($0)]" }.joined())
         }
         var nextUse: [String: Int] = [:]
         func take(_ reference: String) -> String {

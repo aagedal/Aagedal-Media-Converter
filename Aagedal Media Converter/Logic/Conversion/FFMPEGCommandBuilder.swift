@@ -854,7 +854,9 @@ enum FFMPEGCommandBuilder {
             if let replacementInputIndex {
                 if replacesSourceAudio {
                     MediaAdjustmentsPlan.redirectSourceAudio(to: replacementInputIndex, in: &ffmpegArgs)
-                } else if ffmpegArgs.contains("-map") {
+                } else if !ffmpegArgs.contains("-an") {
+                    // Automatic selection keeps one audio track from either input; map both instead.
+                    MediaAdjustmentsPlan.insertAutomaticMaps(into: &ffmpegArgs, audioInput: 0, hasAudio: sourceAudioStreamCount > 0)
                     ffmpegArgs += ["-map", "\(replacementInputIndex):a"]
                 }
             }
@@ -884,13 +886,18 @@ enum FFMPEGCommandBuilder {
                 audioStreamCount: { input in
                     input == replacementInputIndex ? replacementAudioStreamCount : sourceAudioStreamCount
                 },
-                chain: { index in
+                chain: { index, input in
                     let measurement = loudnessMeasurements.flatMap { $0.indices.contains(index) ? $0[index] : nil }
                     // Silence measures -inf and is left as it is.
                     let skipsLoudness = loudnessMeasurements != nil
                         && !(measurement.map(MediaAdjustmentsPlan.measurementIsUsable) ?? false)
+                    var trackAdjustments = resolved.adjustments
+                    // The export volume is set while hearing the source track, so it leaves replacement audio alone.
+                    if let replacementInputIndex, replacesSourceAudio || input == replacementInputIndex {
+                        trackAdjustments.audioGain = nil
+                    }
                     switch MediaAdjustmentsPlan.audioFilterChain(
-                        for: resolved.adjustments, loudness: skipsLoudness ? nil : resolved.loudness,
+                        for: trackAdjustments, loudness: skipsLoudness ? nil : resolved.loudness,
                         measurement: measurement, context: context
                     ) {
                     case .success(let chain): return chain ?? "anull"

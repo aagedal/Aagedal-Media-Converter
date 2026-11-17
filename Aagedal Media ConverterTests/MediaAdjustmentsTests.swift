@@ -125,26 +125,30 @@ final class MediaAdjustmentsTests: XCTestCase {
     }
 
     func testOutputChainsExpandGenericMapsAndExtendRoutingGraphs() throws {
-        var direct = ["-map", "0:v:0", "-map", "0:a?", "-c:v", "libx264", "-c:a", "aac"]
+        var direct = ["-map", "0:v:0", "-map", "0:a?", "-map", "1:a", "-c:v", "libx264", "-c:a", "aac"]
+        var inputs: [Int?] = []
         let directCount = try MediaAdjustmentsPlan.applyAudioChains(
-            to: &direct, placement: .outputs, audioStreamCount: { _ in 2 }, chain: { "volume=\($0)" }
+            to: &direct, placement: .outputs, audioStreamCount: { $0 == 0 ? 2 : 1 },
+            chain: { index, input in inputs.append(input); return "volume=\(index)" }
         ).get()
-        XCTAssertEqual(directCount, 2)
+        XCTAssertEqual(directCount, 3)
+        XCTAssertEqual(inputs, [0, 0, 1])
         XCTAssertEqual(direct, [
-            "-filter_complex", "[0:a:0]volume=0[afx0];[0:a:1]volume=1[afx1]",
-            "-map", "0:v:0", "-map", "[afx0]", "-map", "[afx1]", "-c:v", "libx264", "-c:a", "aac",
+            "-filter_complex", "[0:a:0]volume=0[afx0];[0:a:1]volume=1[afx1];[1:a:0]volume=2[afx2]",
+            "-map", "0:v:0", "-map", "[afx0]", "-map", "[afx1]", "-map", "[afx2]", "-c:v", "libx264", "-c:a", "aac",
         ])
 
         var routed = ["-filter_complex", "[0:a:0]pan=stereo|c0=c1|c1=c0[aout]", "-map", "0:v:0", "-map", "[aout]"]
         _ = try MediaAdjustmentsPlan.applyAudioChains(
-            to: &routed, placement: .outputs, audioStreamCount: { _ in 1 }, chain: { _ in "anull" }
+            to: &routed, placement: .outputs, audioStreamCount: { _ in 1 },
+            chain: { _, input in XCTAssertNil(input, "A graph output has no single input"); return "anull" }
         ).get()
         XCTAssertEqual(routed[1], "[0:a:0]pan=stereo|c0=c1|c1=c0[aout];[aout]anull[afx0]")
         XCTAssertEqual(Array(routed.suffix(2)), ["-map", "[afx0]"])
 
         var copied = ["-map", "0:a:0", "-c:a:0", "copy"]
         XCTAssertEqual(
-            MediaAdjustmentsPlan.applyAudioChains(to: &copied, placement: .outputs, audioStreamCount: { _ in 1 }, chain: { _ in "anull" }),
+            MediaAdjustmentsPlan.applyAudioChains(to: &copied, placement: .outputs, audioStreamCount: { _ in 1 }, chain: { _, _ in "anull" }),
             .failure(.copiedAudio)
         )
     }
@@ -155,7 +159,7 @@ final class MediaAdjustmentsTests: XCTestCase {
             "-map", "0:v:0", "-map", "[l]", "-map", "[r]", "-map", "[keep]", "-map", "0:a:1",
         ]
         let count = try MediaAdjustmentsPlan.applyAudioChains(
-            to: &split, placement: .sources, audioStreamCount: { _ in 2 }, chain: { "volume=\($0)" }
+            to: &split, placement: .sources, audioStreamCount: { _ in 2 }, chain: { index, _ in "volume=\(index)" }
         ).get()
         XCTAssertEqual(count, 2)
         XCTAssertEqual(split[1], "[0:a:0]volume=0,asplit=2[asrc0_0][asrc0_1];[0:a:1]volume=1[asrc1_0];"
@@ -432,6 +436,36 @@ final class MediaAdjustmentsTests: XCTestCase {
         XCTAssertEqual(probe.sampleRate, 44100)
     }
 
+    func testAddedAudioReachesPresetsWithoutMapsAndKeepsItsOwnVolume() async throws {
+        let fixture = try await Fixture.make(audioTracks: 1)
+        defer { fixture.remove() }
+        let suite = "adjustments-custom-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let slot = try XCTUnwrap(ExportPreset.custom1.customSlotIndex)
+        defaults.set("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a pcm_s16le", forKey: AppConstants.customPresetCommandKey(for: slot))
+        defaults.set(true, forKey: AppConstants.customPresetApplyCropKey(for: slot))
+        let settings = try XCTUnwrap(CodecExportSettings(preset: .custom1, defaults: defaults))
+        XCTAssertFalse(settings.ffmpegArguments.contains("-map"))
+
+        var adjustments = MediaAdjustments()
+        adjustments.replacementAudio = .init(path: fixture.replacementAudio.path, mode: .add)
+        adjustments.audioGain = 6
+        let output = fixture.directory.appendingPathComponent("added.mov")
+        let command = try await fixture.export(
+            preset: .custom1, adjustments: ResolvedMediaAdjustments(adjustments: adjustments, globalLoudness: .init()),
+            to: output, codecSettings: settings
+        )
+        let graph = try XCTUnwrap(command.arguments.firstIndex(of: "-filter_complex").map { command.arguments[$0 + 1] })
+        let chains = graph.split(separator: ";").map(String.init)
+        XCTAssertEqual(chains.count, 2, graph)
+        XCTAssertTrue(chains[0].hasPrefix("[0:a:0]") && chains[0].contains("volume=6dB"), graph)
+        XCTAssertTrue(chains[1].hasPrefix("[1:a:0]") && !chains[1].contains("volume="), "The export volume is for the source track: \(graph)")
+        let probe = try await fixture.probe(output)
+        XCTAssertEqual(probe.audioTracks, 2)
+        XCTAssertEqual(probe.width, 320)
+    }
+
     func testAudioAndPictureAdjustmentsKeepTheUntaggedColorFix() async throws {
         let fixture = try await Fixture.make(audioTracks: 1, size: "1280x720")
         defer { fixture.remove() }
@@ -539,13 +573,14 @@ private struct Fixture {
     /// Builds, measures when loudness is on, rebuilds and encodes, as `FFMPEGConverter` does.
     func export(
         preset: ExportPreset, adjustments: ResolvedMediaAdjustments, to output: URL,
-        trimStart: Double? = nil, trimEnd: Double? = nil
+        trimStart: Double? = nil, trimEnd: Double? = nil, codecSettings: CodecExportSettings? = nil
     ) async throws -> FFMPEGCommand {
         let metadata = try await BoundedVideoMetadataProbe.metadata(for: source)
         func build(_ measurements: [LoudnormMeasurement]?) async -> FFMPEGCommand {
             await FFMPEGCommandBuilder.buildCommand(
                 inputURL: source, outputFileURL: output, preset: preset,
-                codecSettings: CodecExportSettings(preset: preset, defaults: UserDefaults(suiteName: "adjustments-\(UUID())")!),
+                codecSettings: codecSettings
+                    ?? CodecExportSettings(preset: preset, defaults: UserDefaults(suiteName: "adjustments-\(UUID())")!),
                 comment: "", includeDateTag: false, trimStart: trimStart, trimEnd: trimEnd,
                 sourceMetadata: metadata, adjustments: adjustments, loudnessMeasurements: measurements
             )
