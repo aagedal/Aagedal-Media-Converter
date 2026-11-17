@@ -942,6 +942,46 @@ final class SourceAudioMeterTests: XCTestCase {
             XCTAssertEqual(levels[index], 20 * log10(Float(index + 1) / 10), accuracy: 0.01)
         }
     }
+
+    /// A probed channel count that differs from the decoded stream must neither mix
+    /// channels together nor stretch the waveform's time axis.
+    func testChannelWaveformKeepsChannelsAndTimelineWhenProbedCountIsWrong() async throws {
+        let path = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("channels.mkv")
+        let result = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: path),
+            arguments: ["-hide_banner", "-loglevel", "error", "-nostdin",
+                        "-f", "lavfi", "-i", "aevalsrc=0.5|0.25:s=48000:d=2:c=stereo",
+                        "-f", "lavfi", "-i", "aevalsrc=0.1|0.2|0.3|0.4|0.5|0.6|0.7|0.8:s=48000:d=2:c=7.1",
+                        "-map", "0:a", "-map", "1:a", "-c:a", "pcm_f32le", "-y", url.path],
+            timeout: .seconds(20)
+        ))
+        XCTAssertTrue(result.succeeded, result.standardErrorText)
+
+        // Stereo described as 5.1: the real channels keep their place, the rest are silent.
+        let wide = try await NativeWaveformRenderer.generateChannelWaveforms(
+            url: url, ffmpegPath: path, streamIndex: 0, channelCount: 6, channelLayout: "5.1", duration: 2
+        ).channelEnvelopes
+        XCTAssertEqual(wide.count, 6)
+        for (index, channel) in wide.enumerated() {
+            XCTAssertEqual(channel.duration, 2, accuracy: 0.01)
+            let expected: Float = index == 0 ? 0.5 : index == 1 ? 0.25 : 0
+            XCTAssertEqual(channel.peak(from: 0, to: 2, level: 0).maximum, expected, accuracy: 0.001)
+        }
+
+        // 7.1 described as stereo: the first two channels, unmixed.
+        let narrow = try await NativeWaveformRenderer.generateChannelWaveforms(
+            url: url, ffmpegPath: path, streamIndex: 1, channelCount: 2, channelLayout: "stereo", duration: 2
+        ).channelEnvelopes
+        XCTAssertEqual(narrow.count, 2)
+        for (index, channel) in narrow.enumerated() {
+            XCTAssertEqual(channel.duration, 2, accuracy: 0.01)
+            XCTAssertEqual(channel.peak(from: 0, to: 2, level: 0).maximum, Float(index + 1) / 10, accuracy: 0.001)
+        }
+    }
 }
 
 final class TrimmedStreamCopyMergeTests: XCTestCase {

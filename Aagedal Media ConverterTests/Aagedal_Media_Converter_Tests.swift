@@ -5285,9 +5285,9 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertTrue(waveform.channelEnvelopes.allSatisfy { !$0.powerLevels.isEmpty })
         let request = try XCTUnwrap(runner.lastRequest)
         XCTAssertTrue(request.arguments.contains("0:a:1"))
-        XCTAssertTrue(request.arguments.contains("aresample=48000:async=1:first_pts=0"))
+        XCTAssertTrue(request.arguments.contains("pan=2c|c0=c0|c1=c1,aresample=48000:async=1:first_pts=0"))
         XCTAssertEqual(request.arguments.last, "pipe:1")
-        // Multichannel streams keep their layout instead of being remixed.
+        // Multichannel streams map channels one to one instead of being remixed.
         XCTAssertFalse(request.arguments.contains("-ac"))
         XCTAssertFalse(request.redactedCommandDescription.contains("/private/fixture/stereo.wav"))
     }

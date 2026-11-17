@@ -622,12 +622,21 @@ struct NativeWaveformRenderer {
                                                 duration: duration)
         var arguments = ["-hide_banner", "-loglevel", "error", "-nostdin", "-i", url.path,
                          "-vn", "-map", "0:a:\(streamIndex)"]
-        // Multichannel streams keep their layout; a stream of unknown width is
-        // mixed down so the interleaved PCM always matches the expected count.
-        if channels == 1 { arguments += ["-ac", "1"] }
+        // The interleaved PCM must always have exactly `channels` channels, or the
+        // envelopes mix channels and stretch in time. A stream of unknown width is
+        // mixed down; a wider one maps source channels one to one without remixing,
+        // so a wrong probe or a mid-stream layout change drops or silences channels.
+        // pan accepts at most 64 channels.
+        var filters: [String] = []
+        if channels == 1 || channels > 64 {
+            arguments += ["-ac", "\(channels)"]
+        } else {
+            filters.append("pan=\(channels)c|" + (0..<channels).map { "c\($0)=c\($0)" }.joined(separator: "|"))
+        }
+        // Preserve delayed tracks and timestamp gaps on the source timeline.
+        filters.append("aresample=\(sampleRate):async=1:first_pts=0")
         arguments += [
-            // Preserve delayed tracks and timestamp gaps on the source timeline.
-            "-af", "aresample=\(sampleRate):async=1:first_pts=0", "-ar", "\(sampleRate)",
+            "-af", filters.joined(separator: ","), "-ar", "\(sampleRate)",
             "-f", "f32le", "-c:a", "pcm_f32le", "pipe:1"
         ]
         let request = SubprocessRequest(
