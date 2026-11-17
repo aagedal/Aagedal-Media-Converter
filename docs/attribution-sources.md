@@ -15,7 +15,8 @@ pins. Apple SDKs, system libraries and general build tools are not redistributed
 - **FFmpeg 9.0.2:** one archive holds the complete corresponding source of the
   bundled build (SVT-AV1 4.3.0, libaom 3.15.3): the FFmpeg tree with its source
   patches (Metal YADIF teardown, libopenjpeg frame-size caps and IMF profiles,
-  canonical Whisper JSON), every linked library source and the replay recipe.
+  canonical Whisper JSON, MOV field order for H.264), every linked library source
+  and the replay recipe.
   Extract it and follow its `README.md` to run `bash rebuild.sh`. Install Xcode with
   its Metal compiler, CMake, Meson, Ninja, pkg-config, Python 3, and the usual build
   utilities. Evidence is in

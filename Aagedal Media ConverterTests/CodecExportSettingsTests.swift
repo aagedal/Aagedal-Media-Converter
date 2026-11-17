@@ -568,6 +568,63 @@ final class CodecExportSettingsTests: XCTestCase {
         }
     }
 
+    /// Apple players and NLEs take H.264 field order from the MOV `fiel` atom, which stock
+    /// ffmpeg leaves out. The bundled build writes it for MOV; MP4 has no such atom.
+    func testStreamCopyToMOVKeepsH264FieldOrderWithTheBundledFFmpeg() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("mov-fiel-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let runner = SubprocessRunner()
+        // Field detail: 1 or 9 is top field first, 6 or 14 bottom field first.
+        let sources: [(name: String, x264: [String], details: Set<UInt8>, fields: UInt8)] = [
+            ("tff", ["-vf", "setfield=tff", "-flags", "+ilme+ildct", "-x264-params", "tff=1"], [1, 9], 2),
+            ("bff", ["-vf", "setfield=bff", "-flags", "+ilme+ildct", "-x264-params", "bff=1"], [6, 14], 2),
+            ("progressive", [], [0], 1),
+        ]
+        for source in sources {
+            let input = directory.appendingPathComponent("\(source.name).mkv")
+            let encode = try await runner.run(SubprocessRequest(
+                executableURL: URL(fileURLWithPath: ffmpeg),
+                arguments: ["-y", "-v", "error", "-f", "lavfi", "-i", "testsrc2=d=0.4:s=1920x1080:r=25",
+                            "-c:v", "libx264", "-preset", "ultrafast"] + source.x264 + [input.path]
+            ))
+            XCTAssertTrue(encode.succeeded, "\(source.name): \(encode.standardErrorText)")
+            for container in [StreamCopyContainer.mov, .mp4] {
+                let label = "\(source.name) \(container.rawValue)"
+                defaults.set(container.rawValue, forKey: AppConstants.streamCopyContainerKey)
+                let settings = try XCTUnwrap(CodecExportSettings(preset: .streamCopy, defaults: defaults))
+                let output = directory.appendingPathComponent("\(source.name)-copy.\(settings.outputExtension(for: input))")
+                let command = await FFMPEGCommandBuilder.buildCommand(
+                    inputURL: input, outputFileURL: output, preset: .streamCopy, codecSettings: settings,
+                    comment: "", includeDateTag: false, trimStart: nil, trimEnd: nil
+                )
+                let copy = try await runner.run(SubprocessRequest(
+                    executableURL: URL(fileURLWithPath: ffmpeg), arguments: command.arguments
+                ))
+                XCTAssertTrue(copy.succeeded, "\(label): \(copy.standardErrorText)")
+                let fiel = try fielAtom(in: output)
+                if container == .mov {
+                    XCTAssertEqual(fiel?.fields, source.fields, label)
+                    XCTAssertTrue(fiel.map { source.details.contains($0.detail) } ?? false, "\(label): \(String(describing: fiel))")
+                } else {
+                    XCTAssertNil(fiel, label)
+                }
+            }
+        }
+    }
+
+    /// The 10-byte `fiel` atom of a QuickTime sample description: field count, then field detail.
+    private func fielAtom(in url: URL) throws -> (fields: UInt8, detail: UInt8)? {
+        let data = try Data(contentsOf: url)
+        let pattern = Data([0, 0, 0, 10]) + Data("fiel".utf8)
+        guard let range = data.range(of: pattern), range.upperBound + 2 <= data.endIndex else { return nil }
+        return (data[range.upperBound], data[range.upperBound + 1])
+    }
+
     func testDNxHRArgumentsFollowProfileAndContainer() throws {
         let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
