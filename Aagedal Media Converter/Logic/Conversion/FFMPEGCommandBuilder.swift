@@ -435,6 +435,18 @@ enum FFMPEGCommandBuilder {
             }
             adjustments = nil
         }
+        if preset == .imageSequence, let resolved = adjustments {
+            switch imageSequenceAdjustments(resolved) {
+            case .success(let pictureOnly):
+                adjustments = pictureOnly
+            case .failure(let error):
+                return FFMPEGCommand(
+                    arguments: [], normalizedTrimStart: normalizedTrimStart,
+                    normalizedTrimEnd: normalizedTrimEnd, effectiveDuration: nil,
+                    preparationError: error.message
+                )
+            }
+        }
         let replacementAudio = (preset.outputsAudioTrack && !isMuted) ? adjustments?.adjustments.replacementAudio : nil
         let replacesSourceAudio = replacementAudio?.mode == .replace
         // Routing describes the source's tracks, which replaced audio no longer uses.
@@ -1029,12 +1041,30 @@ extension FFMPEGCommandBuilder {
             return String(localized: "Adjustments and loudness normalization are not available when the video is generated from audio (waveform or still image).")
         }
         if customInputArguments != nil {
-            return String(localized: "Adjustments and loudness normalization are not available for merged clips, image sequences and AV2 sources.")
+            return sourceAdjustmentsUnsupportedReason
         }
         if !(codecSettings?.appliesCrop ?? preset.appliesCrop) {
             return String(localized: "This custom preset does not allow the app to add filters, so adjustments cannot be applied.")
         }
         return nil
+    }
+
+    static var sourceAdjustmentsUnsupportedReason: String {
+        String(localized: "Adjustments and loudness normalization are not available for merged clips, image sequences and AV2 sources.")
+    }
+
+    /// Image sequence exports carry their sound in a WAV sidecar that is extracted
+    /// without the audio chain, so only picture adjustments reach them. Item audio
+    /// changes (speed included) are refused; the global loudness default is dropped.
+    static func imageSequenceAdjustments(
+        _ resolved: ResolvedMediaAdjustments
+    ) -> Result<ResolvedMediaAdjustments?, MediaAdjustmentsPlan.AdjustmentError> {
+        guard !resolved.adjustments.hasAudioAdjustments, !(resolved.loudness != nil && resolved.loudnessIsExplicit) else {
+            return .failure(.unsupportedOutput(sourceAdjustmentsUnsupportedReason))
+        }
+        var pictureOnly = resolved
+        pictureOnly.loudness = nil
+        return .success(pictureOnly.isActive ? pictureOnly : nil)
     }
 
     /// Mono-track deliveries are normalized per source track before the split, so a

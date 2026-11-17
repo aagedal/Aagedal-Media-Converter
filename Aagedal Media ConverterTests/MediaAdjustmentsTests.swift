@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import AVFoundation
+import os
 import XCTest
 @testable import Aagedal_Media_Converter
 
@@ -220,6 +221,89 @@ final class MediaAdjustmentsTests: XCTestCase {
             adjustments: ResolvedMediaAdjustments(adjustments: explicit, globalLoudness: global)
         )
         XCTAssertNotNil(rejected.preparationError)
+    }
+
+    // MARK: - Outputs that cannot take every adjustment
+
+    func testMergesRefuseClipAdjustmentsButNotTheGlobalLoudnessDefault() {
+        var item = VideoItem(url: URL(fileURLWithPath: "/private/clip.mov"), name: "Clip", size: 0,
+                             duration: "00:00:01", status: .waiting, progress: 0, eta: nil)
+        XCTAssertFalse(ConversionManager.mergeRefusesAdjustments(of: item))
+        var adjustments = MediaAdjustments()
+        adjustments.audioGain = 0.02
+        adjustments.loudness = .off
+        item.adjustments = adjustments
+        XCTAssertFalse(ConversionManager.mergeRefusesAdjustments(of: item), "Inaudible volume and loudness off change nothing")
+        adjustments.loudness = .on
+        item.adjustments = adjustments
+        XCTAssertTrue(ConversionManager.mergeRefusesAdjustments(of: item))
+        adjustments.loudness = .useDefault
+        adjustments.rotation = .clockwise90
+        item.adjustments = adjustments
+        XCTAssertTrue(ConversionManager.mergeRefusesAdjustments(of: item))
+    }
+
+    func testGeneratedVideoRefusesExplicitAdjustmentsBeforeTheSwiftWaveformEngine() async {
+        var adjustments = MediaAdjustments()
+        adjustments.audioGain = 6
+        var request = ConversionRequest(
+            inputURL: URL(fileURLWithPath: "/private/missing.wav"), outputURL: URL(fileURLWithPath: "/private/missing-out"),
+            preset: .h264, includeDateTag: false,
+            adjustments: ResolvedMediaAdjustments(adjustments: adjustments, globalLoudness: .enabledEBU),
+            waveformRequest: WaveformVideoRequest(
+                width: 32, height: 32, backgroundHex: "000000", foregroundHex: "FFFFFF",
+                normalizeAudio: false, style: .linear, frameRate: 24, renderingEngine: .swift,
+                swiftStyle: .capsules, bandCount: 16, frequencyDistribution: .logarithmic,
+                foregroundGradientEnabled: false, foregroundGradientEndHex: "FFFFFF",
+                backgroundGradientEnabled: false, backgroundGradientEndHex: "000000", waveformOpacity: 1
+            )
+        )
+        let expected = FFMPEGCommandBuilder.adjustmentsUnsupportedReason(
+            preset: .h264, codecSettings: nil, customInputArguments: nil, generatesVideo: true
+        )
+        XCTAssertNotNil(expected)
+        XCTAssertEqual(FFMPEGConverter.unsupportedAdjustmentsReason(for: request, codecSettings: nil), expected)
+
+        let reason = OSAllocatedUnfairLock<String?>(initialState: nil)
+        let converter = FFMPEGConverter(ffmpegPathProvider: { nil })
+        await converter.convert(request: request, progressUpdate: { _, _ in }, completion: { success, error in
+            XCTAssertFalse(success)
+            reason.withLock { $0 = error }
+        })
+        XCTAssertEqual(reason.withLock { $0 }, expected)
+
+        // The global default alone is skipped where it cannot apply.
+        request.adjustments = ResolvedMediaAdjustments(adjustments: nil, globalLoudness: .enabledEBU)
+        XCTAssertNil(FFMPEGConverter.unsupportedAdjustmentsReason(for: request, codecSettings: nil))
+    }
+
+    func testImageSequenceExportsKeepPictureAdjustmentsAndRefuseSoundChanges() async {
+        var picture = MediaAdjustments()
+        picture.rotation = .clockwise90
+        let kept = FFMPEGCommandBuilder.imageSequenceAdjustments(
+            ResolvedMediaAdjustments(adjustments: picture, globalLoudness: .enabledEBU)
+        )
+        XCTAssertEqual(try kept.get()?.adjustments.rotation, .clockwise90)
+        XCTAssertNil(try kept.get()?.loudness, "The WAV sidecar is not normalized, so the default is skipped")
+        XCTAssertNil(try FFMPEGCommandBuilder.imageSequenceAdjustments(
+            ResolvedMediaAdjustments(adjustments: nil, globalLoudness: .enabledEBU)
+        ).get())
+
+        var loudness = MediaAdjustments()
+        loudness.loudness = .on
+        var speed = MediaAdjustments()
+        speed.speed = 2
+        var volume = MediaAdjustments()
+        volume.audioGain = 6
+        for adjustments in [loudness, speed, volume] {
+            let command = await FFMPEGCommandBuilder.buildCommand(
+                inputURL: URL(fileURLWithPath: "/private/source.mov"),
+                outputFileURL: URL(fileURLWithPath: "/private/out/frame_%06d.png"),
+                preset: .imageSequence, comment: "", includeDateTag: false, trimStart: nil, trimEnd: nil,
+                adjustments: ResolvedMediaAdjustments(adjustments: adjustments, globalLoudness: .init())
+            )
+            XCTAssertEqual(command.preparationError, FFMPEGCommandBuilder.sourceAdjustmentsUnsupportedReason)
+        }
     }
 
     // MARK: - End to end with the bundled FFmpeg

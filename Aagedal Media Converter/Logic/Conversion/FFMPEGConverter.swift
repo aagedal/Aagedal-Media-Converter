@@ -374,6 +374,10 @@ actor FFMPEGConverter {
         let sourceCommentSettings = commentSettings ?? CommentSettings()
         let capturedCommentSettings = request.metadataEditorSettings?.writesComment == false
             ? sourceCommentSettings.withoutAffixes : sourceCommentSettings
+        if let reason = Self.unsupportedAdjustmentsReason(for: request, codecSettings: capturedCodecSettings) {
+            completion(false, reason)
+            return
+        }
         guard let ffmpegPath = ffmpegPathProvider() else {
             Self.logger.error("FFMPEG binary not found")
             completion(false, "FFmpeg binary not found")
@@ -2576,4 +2580,15 @@ actor FFMPEGConverter {
         await FFMPEGProbeService.getVideoDuration(for: url)
     }
 
+    /// The command builder refuses explicit adjustments it cannot apply, but the Swift
+    /// waveform engine, AVC-Intra audio pre-processing and AV2 export never reach it.
+    /// Refuse them up front as it would; the global loudness default is skipped there.
+    static func unsupportedAdjustmentsReason(for request: ConversionRequest, codecSettings: CodecExportSettings?) -> String? {
+        guard request.adjustments?.hasExplicitAdjustments == true else { return nil }
+        return FFMPEGCommandBuilder.adjustmentsUnsupportedReason(
+            preset: request.preset, codecSettings: codecSettings,
+            customInputArguments: request.customInputArguments,
+            generatesVideo: request.waveformRequest != nil || request.synthesizedVideoRequest != nil
+        )
+    }
 }
