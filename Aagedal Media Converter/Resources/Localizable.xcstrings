@@ -3210,6 +3210,65 @@
         }
       }
     },
+    "Each clip is saved as its own file. The time is the selected clip’s output timecode, and the value after / is that clip’s length." : {
+      "comment" : "Help for the group editor's timecode readout when the group's clips are saved as separate files instead of merged.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Jeder Clip wird als eigene Datei gespeichert. Die Zeit ist der Ausgabe-Timecode des ausgewählten Clips, der Wert nach / ist die Länge dieses Clips."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cada clip se guarda como un archivo independiente. El tiempo es el código de tiempo de salida del clip seleccionado y el valor tras / es la duración de ese clip."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Chaque clip est enregistré dans son propre fichier. Le temps est le timecode de sortie du clip sélectionné, et la valeur après / est la durée de ce clip."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ogni clip viene salvata come file a sé. Il tempo è il timecode di uscita della clip selezionata e il valore dopo / è la durata di quella clip."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "各クリップは個別のファイルとして保存されます。時間は選択したクリップの出力タイムコードで、/ の後の値はそのクリップの長さです。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "각 클립은 별도의 파일로 저장됩니다. 시간은 선택한 클립의 출력 타임코드이며, / 뒤의 값은 해당 클립의 길이입니다."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hvert klipp lagres som en egen fil. Tiden er utdata-tidskoden til det valgte klippet, og verdien etter / er lengden på klippet."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cada clipe é salvo como um arquivo próprio. O tempo é o timecode de saída do clipe selecionado, e o valor após / é a duração desse clipe."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "每个剪辑都保存为单独的文件。时间为所选剪辑的输出时间码，/ 后的值为该剪辑的时长。"
+          }
+        }
+      }
+    },
     "Export volume" : {
       "localizations" : {
         "de" : {

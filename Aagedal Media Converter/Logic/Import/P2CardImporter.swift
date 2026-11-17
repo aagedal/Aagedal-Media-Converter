@@ -13,14 +13,16 @@ import OSLog
 /// Panasonic P2 cards store each clip as separate OP-Atom MXF files: one for the
 /// video (`CONTENTS/VIDEO/<clip>.MXF`) and one per audio channel
 /// (`CONTENTS/AUDIO/<clip>00.MXF`, `01`, …), described by `CONTENTS/CLIP/<clip>.XML`.
-/// ffmpeg can't open them as one source, so each shot is stream-copied into a
-/// single Matroska file holding the video and every audio channel, and the queue
-/// uses that file like any other. Shots split across several clips (spanned
-/// recordings, even across cards) are joined in the same pass.
+/// ffmpeg can't open them as one source, so each shot is rewrapped into a single
+/// OP1a MXF file holding the video and every audio channel, and the queue uses
+/// that file like any other MXF camera clip: Stream Copy keeps it MXF, or writes
+/// MOV, MP4 or MKV when that container is chosen. Shots split across several
+/// clips (spanned recordings, even across cards) are joined in the same pass.
 ///
-/// Matroska, because the MOV muxer drops the field order of H.264 (interlaced
-/// AVC-Intra would then skip deinterlacing) and the MXF muxer rejects
-/// AVC-Intra frame sizes on stream copy.
+/// bmxtranswrap does the rewrap: it keeps the AVC-Intra class labels, field
+/// order and timecode. A shot it can't read is stream-copied by ffmpeg into
+/// Matroska instead, because ffmpeg's MOV muxer drops the field order of H.264
+/// (interlaced AVC-Intra would then skip deinterlacing).
 enum P2CardImporter {
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "P2CardImporter")
 
@@ -404,13 +406,19 @@ actor P2ClipRewrapper {
     private var stopping: [String: Task<URL, Error>] = [:]
     private let runner: any SubprocessRunning = SubprocessRunner()
 
+    /// The OP1a MXF rewrap. Older versions wrote Matroska only; such a shot is rewrapped again.
     static func outputURL(for shot: P2CardImporter.Shot) -> URL {
         AppConstants.p2ClipsDirectory
             .appendingPathComponent(shot.cacheKey, isDirectory: true)
-            .appendingPathComponent("\(shot.name).mkv")
+            .appendingPathComponent("\(shot.name).mxf")
     }
 
-    /// `progress` receives the number of bytes written so far.
+    /// The Matroska rewrap, for shots bmxtranswrap can't read.
+    static func matroskaOutputURL(for shot: P2CardImporter.Shot) -> URL {
+        outputURL(for: shot).deletingPathExtension().appendingPathExtension("mkv")
+    }
+
+    /// `progress` receives about how many bytes have been written so far.
     func rewrap(_ shot: P2CardImporter.Shot, progress: @escaping @Sendable (Int64) -> Void) async throws -> URL {
         let output = Self.outputURL(for: shot)
         if FileManager.default.fileExists(atPath: output.path) {
@@ -429,7 +437,7 @@ actor P2ClipRewrapper {
                 // A cancel that came after the move leaves a finished file; use it.
                 if let url = try? await previous?.value { return url }
                 try Task.checkCancellation()
-                return try await Self.perform(shot, to: output, runner: runner, progress: progress)
+                return try await Self.perform(shot, runner: runner, progress: progress)
             }
             inFlight[key] = InFlight(task: task, waiters: 1)
         }
@@ -460,17 +468,15 @@ actor P2ClipRewrapper {
 
     private static func perform(
         _ shot: P2CardImporter.Shot,
-        to output: URL,
         runner: any SubprocessRunning,
         progress: @escaping @Sendable (Int64) -> Void
     ) async throws -> URL {
-        guard let ffmpegPath = BinaryPathResolver.ffmpegPath else { throw P2CardImporter.RewrapError.ffmpegMissing }
-
         let hasVideo = shot.clips.allSatisfy { $0.videoURL != nil }
         // Every part of a spanned shot must contribute each channel; use the channels all parts have.
         let channelCount = shot.clips.map(\.audioURLs.count).min() ?? 0
         guard hasVideo || channelCount > 0 else { throw P2CardImporter.RewrapError.noEssence(shot.name) }
 
+        let output = outputURL(for: shot)
         let directory = output.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
@@ -481,6 +487,42 @@ actor P2ClipRewrapper {
             .volumeAvailableCapacityForImportantUsage, available < sourceBytes + spaceMargin {
             throw P2CardImporter.RewrapError.insufficientSpace(shot.name)
         }
+
+        // bmx needs a picture track for the timecode rate; audio-only shots go to Matroska.
+        if hasVideo, let bmxPath = BinaryPathResolver.bmxtranswrapPath {
+            do {
+                let partial = directory.appendingPathComponent("\(shot.name).partial.mxf")
+                logger.info("Rewrapping P2 shot \(shot.name, privacy: .public) to MXF (\(shot.clips.count) clip(s), \(channelCount) audio channel(s))")
+                try await run(
+                    SubprocessRequest(
+                        executableURL: URL(fileURLWithPath: bmxPath),
+                        arguments: bmxArguments(for: shot, channelCount: channelCount, output: partial),
+                        timeout: timeout,
+                        standardOutputCaptureLimit: 0,
+                        standardErrorCaptureLimit: 64 * 1024
+                    ),
+                    shot: shot, partial: partial, runner: runner,
+                    // `-p` reports `12.3%`; scale it to the bytes read so far.
+                    report: { line in
+                        guard line.hasSuffix("%"),
+                              let percent = Double(line.dropLast().trimmingCharacters(in: .whitespaces)) else { return nil }
+                        return Int64(Double(sourceBytes) * min(max(percent, 0), 100) / 100)
+                    },
+                    progress: progress
+                )
+                return try finish(shot, partial: partial, output: output)
+            } catch {
+                try Task.checkCancellation()
+                logger.warning("bmxtranswrap couldn't rewrap P2 shot \(shot.name, privacy: .public), using Matroska: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+
+        let matroska = matroskaOutputURL(for: shot)
+        if FileManager.default.fileExists(atPath: matroska.path) {
+            markUsed(matroska, cardRoot: shot.cardRoot)
+            return matroska
+        }
+        guard let ffmpegPath = BinaryPathResolver.ffmpegPath else { throw P2CardImporter.RewrapError.ffmpegMissing }
 
         var listFiles: [URL] = []
         let partial = directory.appendingPathComponent("\(shot.name).partial.mkv")
@@ -512,8 +554,7 @@ actor P2ClipRewrapper {
             inputIndex += 1
         }
         arguments += maps + ["-c", "copy"]
-        if let timecode = shot.clips[0].startTimecode,
-           timecode.range(of: #"^\d{2}:\d{2}:\d{2}[:;.]\d{2}$"#, options: .regularExpression) != nil {
+        if let timecode = startTimecode(of: shot) {
             arguments += ["-timecode", timecode]
         }
         if let date = shot.clips[0].recordingDate {
@@ -521,29 +562,77 @@ actor P2ClipRewrapper {
         }
         arguments += ["-f", "matroska", partial.path]
 
-        let request = SubprocessRequest(
-            executableURL: URL(fileURLWithPath: ffmpegPath),
-            arguments: arguments,
-            timeout: timeout,
-            standardOutputCaptureLimit: 0,
-            standardErrorCaptureLimit: 64 * 1024
+        logger.info("Rewrapping P2 shot \(shot.name, privacy: .public) to Matroska (\(shot.clips.count) clip(s), \(channelCount) audio channel(s))")
+        try await run(
+            SubprocessRequest(
+                executableURL: URL(fileURLWithPath: ffmpegPath),
+                arguments: arguments,
+                timeout: timeout,
+                standardOutputCaptureLimit: 0,
+                standardErrorCaptureLimit: 64 * 1024
+            ),
+            shot: shot, partial: partial, runner: runner,
+            // `-progress` reports blocks of key=value lines; use the latest total_size.
+            report: { line in
+                line.hasPrefix("total_size=") ? Int64(line.dropFirst("total_size=".count)) : nil
+            },
+            progress: progress
         )
-        logger.info("Rewrapping P2 shot \(shot.name, privacy: .public) (\(shot.clips.count) clip(s), \(channelCount) audio channel(s))")
+        return try finish(shot, partial: partial, output: matroska)
+    }
 
+    /// bmxtranswrap reads the clips of a shot in order (`--no-reorder`) and joins them
+    /// with its sequence reader; the video and audio files of one clip share a package.
+    nonisolated static func bmxArguments(for shot: P2CardImporter.Shot, channelCount: Int, output: URL) -> [String] {
+        var arguments = ["-p", "-t", "op1a", "--no-reorder", "--clip", shot.name]
+        // The sequence reader starts discontinuous parts at 00:00:00:00; keep the first clip's.
+        if let timecode = startTimecode(of: shot) { arguments += ["-y", timecode] }
+        if let date = shot.clips[0].recordingDate {
+            // `YYYY-MM-DDThh:mm:ss:qm`, with qm in 1/250 s.
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(identifier: "UTC")
+            formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss':00'"
+            arguments += ["--create-date", formatter.string(from: date)]
+        }
+        arguments += ["-o", output.path]
+        for clip in shot.clips {
+            arguments += (clip.videoURL.map { [$0.path] } ?? []) + clip.audioURLs.prefix(channelCount).map(\.path)
+        }
+        return arguments
+    }
+
+    /// The first clip's start timecode, when it is in `hh:mm:ss:ff` form (`;` or `.` for drop frame).
+    private nonisolated static func startTimecode(of shot: P2CardImporter.Shot) -> String? {
+        guard let timecode = shot.clips[0].startTimecode,
+              timecode.range(of: #"^\d{2}:\d{2}:\d{2}[:;.]\d{2}$"#, options: .regularExpression) != nil else { return nil }
+        return timecode
+    }
+
+    /// Runs a rewrap into `partial`, passing the latest progress line that `report` turns
+    /// into bytes on to `progress`. Removes `partial` unless the tool succeeds.
+    private static func run(
+        _ request: SubprocessRequest,
+        shot: P2CardImporter.Shot,
+        partial: URL,
+        runner: any SubprocessRunning,
+        report: @escaping @Sendable (String) -> Int64?,
+        progress: @escaping @Sendable (Int64) -> Void
+    ) async throws {
         let result: SubprocessResult
-        // A `-progress` line can be split across output chunks; keep the unfinished end.
+        // A progress line can be split across output chunks; keep the unfinished end.
         let unfinishedLine = OSAllocatedUnfairLock(initialState: "")
         do {
             result = try await runner.run(request) { chunk in
-                // `-progress` reports blocks of key=value lines; use the latest total_size.
                 guard chunk.stream == .standardOutput, let text = String(data: chunk.data, encoding: .utf8) else { return }
+                // ffmpeg ends lines with `\n`, bmx's progress with `\r`.
                 let lines = unfinishedLine.withLock { unfinished in
-                    var lines = (unfinished + text).components(separatedBy: "\n")
+                    var lines = (unfinished + text).split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+                        .map(String.init)
                     unfinished = lines.removeLast()
                     return lines
                 }
-                guard let line = lines.last(where: { $0.hasPrefix("total_size=") }),
-                      let bytes = Int64(line.dropFirst("total_size=".count)) else { return }
+                guard let bytes = lines.reversed().lazy.compactMap(report).first else { return }
                 progress(bytes)
             }
         } catch {
@@ -554,9 +643,11 @@ actor P2ClipRewrapper {
             try? FileManager.default.removeItem(at: partial)
             try Task.checkCancellation()
             let diagnostic = result.standardErrorText.trimmingCharacters(in: .whitespacesAndNewlines)
-            throw P2CardImporter.RewrapError.failed(shot.name, diagnostic.isEmpty ? "ffmpeg exited with status \(result.terminationStatus)" : diagnostic)
+            throw P2CardImporter.RewrapError.failed(shot.name, diagnostic.isEmpty ? "\(request.executableURL.lastPathComponent) exited with status \(result.terminationStatus)" : diagnostic)
         }
+    }
 
+    private static func finish(_ shot: P2CardImporter.Shot, partial: URL, output: URL) throws -> URL {
         try? FileManager.default.removeItem(at: output)
         try FileManager.default.moveItem(at: partial, to: output)
         if let date = shot.clips[0].recordingDate {
@@ -597,6 +688,14 @@ actor P2ClipRewrapper {
         let root = URL(fileURLWithPath: path, isDirectory: true)
         guard P2CardImporter.isCardRoot(root), card(root, holds: url) else { return nil }
         return root
+    }
+
+    /// When the camera recorded a rewrapped shot, from its clip metadata on the card. The
+    /// MXF rewrap doesn't carry it in a form the metadata probe reads.
+    nonisolated static func recordingDate(forRewrap url: URL) -> Date? {
+        guard let root = cardRoot(forRewrap: url) else { return nil }
+        let xml = root.appendingPathComponent("CONTENTS/CLIP/\(url.deletingPathExtension().lastPathComponent).XML")
+        return (try? Data(contentsOf: xml)).flatMap(ClipXMLParser.parse)?.recordingDate
     }
 
     /// Whether the card at `root` still holds the shot rewrapped to `url`, and is not a

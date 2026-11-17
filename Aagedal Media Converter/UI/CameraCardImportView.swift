@@ -42,6 +42,8 @@ struct CameraCardImportView: View {
     let onReviewDateSplit: () -> Void
 
     private let presetManager = PresetManager.shared
+    /// Shared with the Stream Copy preset settings.
+    @AppStorage(AppConstants.streamCopyContainerKey) private var streamCopyContainer = AppConstants.defaultStreamCopyContainer
     @State private var servers: [UploadServerEntry] = []
     @State private var selectedServerID: UUID?
 
@@ -153,6 +155,19 @@ struct CameraCardImportView: View {
                 }
                 .labelsHidden()
                 .frame(minWidth: 180, idealWidth: 220, maxWidth: 320)
+            }
+
+            if selectedPreset == .streamCopy {
+                LabeledContent("Container") {
+                    Picker("", selection: $streamCopyContainer) {
+                        ForEach(StreamCopyContainer.allCases) { container in
+                            Text(container.rawValue).tag(container.rawValue)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .help("Choose output container format, or keep the source format.")
+                }
             }
 
             if isVideoLoopPreset {

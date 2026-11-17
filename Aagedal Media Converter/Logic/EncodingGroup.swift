@@ -125,6 +125,40 @@ struct EncodingGroup: Identifiable, Equatable, Sendable {
             }
         }
     }
+
+    /// Without a merge every clip is saved as its own file, so clips split from one
+    /// source would write the same output. Later clips with a name already in use get
+    /// `_2`, `_3`, … after it. A merge writes one file and is left alone.
+    mutating func separateClipOutputNames(preset: ExportPreset) {
+        guard !concatEnabled else { return }
+        if sequentialNamingEnabled {
+            normalizeSequentialNaming()
+            return
+        }
+        let names = items.map { item in
+            let parts = FileNameProcessor.outputNameParts(
+                inputURL: item.url, override: item.outputFileNameOverride,
+                counter: item.customCounterValue, preset: preset
+            )
+            return parts.baseName + parts.suffix
+        }
+        // The file system ignores case.
+        let taken = Set(names.map { $0.lowercased() })
+        var used = Set<String>()
+        for index in items.indices {
+            var name = names[index]
+            if used.contains(name.lowercased()) {
+                var number = 2
+                while taken.union(used).contains("\(names[index])_\(number)".lowercased()) {
+                    number += 1
+                }
+                name = "\(names[index])_\(number)"
+                items[index].outputFileNameOverride = name
+                items[index].outputURL = nil
+            }
+            used.insert(name.lowercased())
+        }
+    }
 }
 
 // MARK: - Queue Entry

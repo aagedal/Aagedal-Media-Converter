@@ -281,20 +281,22 @@ struct GroupEditorView: View {
             header
                 .disabled(group.status == .converting)
             Divider()
-            if group.concatEnabled {
-                StitchingEditorView(group: $group, isStreamCopy: effectivePreset == .streamCopy,
-                                    selectedClipIDs: $selectedClipIDs) {
-                    itemList
-                }
-            } else {
+            // Without a merge the timeline edits each clip's trim; every clip is saved on its own.
+            StitchingEditorView(group: $group, isStreamCopy: effectivePreset == .streamCopy,
+                                mergesClips: group.concatEnabled, selectedClipIDs: $selectedClipIDs) {
                 itemList
-                    .disabled(group.status == .converting)
             }
             Divider()
             footer
         }
         .background(Color(nsColor: .windowBackgroundColor))
-        .onAppear { onTitleChange(group.name) }
+        .onAppear {
+            onTitleChange(group.name)
+            group.separateClipOutputNames(preset: effectivePreset)
+        }
+        // Splitting or cutting a range adds clips from the same source.
+        .onChange(of: group.items.map(\.id)) { _, _ in group.separateClipOutputNames(preset: effectivePreset) }
+        .onChange(of: group.concatEnabled) { _, _ in group.separateClipOutputNames(preset: effectivePreset) }
         .onChange(of: group.name) { _, newValue in
             onTitleChange(newValue)
         }

@@ -1621,6 +1621,22 @@ struct ContentView: View {
             if let camera = await VideoFileUtils.fetchCameraMetadata(for: url) {
                 cameraMetadata[url] = camera
             }
+            // A P2 shot's recording date is in its clip metadata on the card, not in the rewrap.
+            if cameraMetadata[url]?.creationDate == nil, let recorded = P2ClipRewrapper.recordingDate(forRewrap: url) {
+                let camera = cameraMetadata[url] ?? .empty
+                cameraMetadata[url] = CameraMetadata(
+                    deviceManufacturer: camera.deviceManufacturer,
+                    deviceModelName: camera.deviceModelName,
+                    deviceSerialNumber: camera.deviceSerialNumber,
+                    lensModelName: camera.lensModelName,
+                    timeZone: camera.timeZone,
+                    captureGammaEquation: camera.captureGammaEquation,
+                    recordingModeType: camera.recordingModeType,
+                    captureFps: camera.captureFps,
+                    creationDate: recorded,
+                    userDescriptiveMetadata: camera.userDescriptiveMetadata
+                )
+            }
         }
         guard !Task.isCancelled, cameraCardImportState?.id == state.id else { return }
         cardDateSplitReview = CameraCardDateSplitReviewState(

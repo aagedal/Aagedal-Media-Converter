@@ -62,6 +62,18 @@
 - Downloading a video that is already in the output folder shows File already exists with a Redownload button again, instead of adding the existing file as a new download.
 - Cancelling a live stream recorded from its start with yt-dlp-rs gives it up to 10 seconds to finish the file, instead of 2.
 
+### P2 cards
+
+- P2 clips are now rewrapped into one OP1a MXF file per recording instead of Matroska, so Stream Copy keeps them as MXF by default, ready for Avid, Premiere and Resolve. The AVC-Intra class, field order, timecode and every audio channel are kept, and merging clips from a card gives one MXF too.
+- Import Camera Card shows a Container menu when Stream Copy is selected, so the clips can be written as MOV, MP4 or MKV instead. It is the same setting as in Settings › Presets.
+- A clip that can't be rewrapped into MXF is still copied into Matroska as before. Cards imported with an earlier version are rewrapped again the next time they are imported.
+- The recording-date review uses the date in each clip's P2 metadata.
+
+### Group editor
+
+- The timeline editor now also opens for groups without Merge, such as a camera card imported as separate clips. Trim, split, reorder and cut ranges the same way; each clip is still saved as its own file. The timecode shows the selected clip's output timecode, and markers, which only merged files carry, can't be added.
+- Clips split from one source in a group without Merge get their own output names (`_2`, `_3`, …), so they no longer save over each other.
+
 ### Other fixes
 
 - TV (HEVC 10-bit 4:2:2) and TV (AVC-Intra MXF) exports set to 50i or 59.94i have 25 or 29.97 frames per second, each holding two fields. They used to have twice as many frames, every one repeated, at 50 or 59.94 frames per second.

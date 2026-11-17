@@ -217,6 +217,131 @@ final class P2CardImporterTests: XCTestCase {
         XCTAssertEqual(progress.failureMessage, "One.\nTwo.")
     }
 
+    // MARK: - Rewrapping real essence
+
+    private var binaries: URL {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Aagedal Media Converter/Binaries", isDirectory: true)
+    }
+
+    private func run(_ tool: String, _ arguments: [String], in directory: URL? = nil) async throws -> SubprocessResult {
+        let result = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: binaries.appendingPathComponent(tool), arguments: arguments,
+            currentDirectoryURL: directory, timeout: .seconds(60)
+        ))
+        guard result.succeeded else {
+            throw NSError(domain: "P2CardImporterTests", code: Int(result.terminationStatus),
+                          userInfo: [NSLocalizedDescriptionKey: "\(tool): \(result.standardErrorText)"])
+        }
+        return result
+    }
+
+    /// Replaces a clip's placeholder files with DVCPRO HD 1080i video and two mono PCM
+    /// channels as OP-Atom MXF sharing one package, like a P2 camera writes them.
+    private func writeP2Essence(for name: String, timecode: String) async throws {
+        let work = card.appendingPathComponent("work-\(name)", isDirectory: true)
+        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: work) }
+        _ = try await run("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=s=1440x1080:r=25:d=0.4", "-vf", "setfield=tff",
+            "-c:v", "dvvideo", "-pix_fmt", "yuv422p", "-flags", "+ilme+ildct", "-f", "rawvideo", "video.dv"], in: work)
+        _ = try await run("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "sine=f=440:d=0.4:r=48000", "-ac", "2", "-c:a", "pcm_s24le", "audio.wav"], in: work)
+        _ = try await run("raw2bmx", ["-t", "avid", "-f", "25", "-y", timecode, "-o", "clip",
+                                      "--dv100_1080i", "video.dv", "--wave", "audio.wav"], in: work)
+        let contents = card.appendingPathComponent("CONTENTS")
+        for (file, destination) in [("clip_v1.mxf", "VIDEO/\(name).MXF"), ("clip_a1.mxf", "AUDIO/\(name)00.MXF"),
+                                    ("clip_a2.mxf", "AUDIO/\(name)01.MXF")] {
+            let target = contents.appendingPathComponent(destination)
+            try FileManager.default.removeItem(at: target)
+            try FileManager.default.moveItem(at: work.appendingPathComponent(file), to: target)
+        }
+    }
+
+    /// Rewraps the card's only shot, with no earlier rewrap of it left over.
+    private func rewrapOnlyShot() async throws -> URL {
+        let shot = try XCTUnwrap(P2CardImporter.shots(from: P2CardImporter.clips(onCard: card)).first)
+        let folder = P2ClipRewrapper.outputURL(for: shot).deletingLastPathComponent()
+        try? FileManager.default.removeItem(at: folder)
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        return try await P2ClipRewrapper.shared.rewrap(shot) { _ in }
+    }
+
+    private func probe(_ url: URL) async throws -> String {
+        let result = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: binaries.appendingPathComponent("ffmpeg"), arguments: ["-hide_banner", "-i", url.path],
+            timeout: .seconds(60)
+        ))
+        return result.standardErrorText
+    }
+
+    func testSpannedShotIsRewrappedToOneMXFWithTimecodeAndFieldOrder() async throws {
+        let unique = String(UUID().uuidString.prefix(4))
+        try addClip("0001\(unique)", audio: 2, shot: ("SHOT-\(unique)", 0), timecode: "10:00:00:00")
+        try addClip("0002\(unique)", audio: 2, shot: ("SHOT-\(unique)", 10), timecode: "10:00:00:10")
+        try await writeP2Essence(for: "0001\(unique)", timecode: "10:00:00:00")
+        try await writeP2Essence(for: "0002\(unique)", timecode: "10:00:00:10")
+
+        let output = try await rewrapOnlyShot()
+        XCTAssertEqual(output.pathExtension, "mxf")
+        XCTAssertEqual(output.deletingPathExtension().lastPathComponent, "0001\(unique)")
+        let info = try await probe(output)
+        XCTAssertTrue(info.contains("timecode        : 10:00:00:00"), info)
+        XCTAssertTrue(info.contains("Duration: 00:00:00.80"), info)
+        XCTAssertTrue(info.contains("dvvideo") && info.contains("top first"), info)
+        XCTAssertEqual(info.components(separatedBy: "Audio: pcm_s24le").count - 1, 2, info)
+        // Stream Copy keeps the card's MXF by default.
+        let suite = "P2StreamCopy.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        XCTAssertEqual(CodecExportSettings(preset: .streamCopy, defaults: defaults)?.outputExtension(for: output), "mxf")
+    }
+
+    func testShotBMXCannotReadIsRewrappedToMatroska() async throws {
+        let name = "0001\(UUID().uuidString.prefix(4))"
+        try addClip(name, audio: 2)
+        // ffmpeg's OP-Atom files each have their own package, which bmx can't join into one clip.
+        let contents = card.appendingPathComponent("CONTENTS")
+        _ = try await run("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=s=1920x1080:r=25:d=0.4", "-c:v", "dnxhd", "-b:v", "36M",
+            "-pix_fmt", "yuv422p", "-f", "mxf_opatom", contents.appendingPathComponent("VIDEO/\(name).MXF").path])
+        for channel in 0..<2 {
+            _ = try await run("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y",
+                "-f", "lavfi", "-i", "sine=f=440:d=0.4:r=48000", "-c:a", "pcm_s24le", "-f", "mxf_opatom",
+                contents.appendingPathComponent(String(format: "AUDIO/%@%02d.MXF", name, channel)).path])
+        }
+
+        let output = try await rewrapOnlyShot()
+        XCTAssertEqual(output.pathExtension, "mkv")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: P2ClipRewrapper.outputURL(for: try XCTUnwrap(
+            P2CardImporter.shots(from: P2CardImporter.clips(onCard: card)).first)).path))
+        let info = try await probe(output)
+        XCTAssertTrue(info.contains("TIMECODE        : 00:29:18:09"), info)
+        XCTAssertTrue(info.contains("Video: dnxhd"), info)
+        XCTAssertEqual(info.components(separatedBy: "Audio: pcm_s24le").count - 1, 2, info)
+    }
+
+    func testBMXArgumentsJoinTheClipsInShotOrder() throws {
+        try addClip("0001AA", audio: 4, shot: ("SHOT1", 0))
+        try addClip("0002BB", audio: 2, shot: ("SHOT1", 100))
+        let shot = try XCTUnwrap(P2CardImporter.shots(from: P2CardImporter.clips(onCard: card)).first)
+        let output = URL(fileURLWithPath: "/rewrap/0001AA.partial.mxf")
+        let arguments = P2ClipRewrapper.bmxArguments(for: shot, channelCount: 2, output: output)
+        let contents = card.appendingPathComponent("CONTENTS")
+        XCTAssertEqual(arguments, [
+            "-p", "-t", "op1a", "--no-reorder", "--clip", "0001AA",
+            "-y", "00:29:18:09", "--create-date", "2016-02-13T22:50:40:00",
+            "-o", output.path,
+            // Only the channels every part has.
+            contents.appendingPathComponent("VIDEO/0001AA.MXF").path,
+            contents.appendingPathComponent("AUDIO/0001AA00.MXF").path,
+            contents.appendingPathComponent("AUDIO/0001AA01.MXF").path,
+            contents.appendingPathComponent("VIDEO/0002BB.MXF").path,
+            contents.appendingPathComponent("AUDIO/0002BB00.MXF").path,
+            contents.appendingPathComponent("AUDIO/0002BB01.MXF").path,
+        ])
+    }
+
     func testDuplicateClipsFromACopiedCardAreJoinedOnce() throws {
         try addClip("0001AA", audio: 2, shot: ("SHOT1", 0))
         let clips = P2CardImporter.clips(onCard: card)
