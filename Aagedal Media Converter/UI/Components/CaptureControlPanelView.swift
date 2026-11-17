@@ -298,7 +298,15 @@ struct CaptureControlPanelView: View {
             }
             .onChange(of: captureManager.recordingDisplayIDs) { _, _ in schedulePanelResize() }
             .onChange(of: currentPreviewBox) { _, _ in schedulePanelResize() }
-            .onChange(of: captureManager.isProcessing) { _, _ in schedulePanelResize() }
+            .onChange(of: captureManager.isProcessing) { _, isProcessing in
+                schedulePanelResize()
+                // Record mode stays open after a scheduled recording (see the overlay controller's
+                // handleRecordingStopped); the stop cleared the previews, so start them again.
+                if !isProcessing, !captureManager.isRecording,
+                   !scheduleQueue.entries.isEmpty || scheduleQueue.didStartRecording {
+                    Task { await refreshPreviews() }
+                }
+            }
             .onChange(of: focusedDisplayID) { _, _ in schedulePanelResize() }
             .task(id: scheduleQueue.entries.first) {
                 guard let next = scheduleQueue.entries.first else { return }
