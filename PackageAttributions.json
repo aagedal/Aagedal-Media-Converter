@@ -97,7 +97,7 @@
       "identity": "sparkle",
       "path": "SwiftPackages/sparkle",
       "sourceURL": "https://github.com/sparkle-project/Sparkle",
-      "revision": "ac2def288cbff5cfc7df3ffef6abdf45b72bcb0a",
+      "revision": "ab7d71291238df6e0492143b120c9b696a35f603",
       "license": "MIT AND BSD-2-Clause AND Zlib",
       "licenseFile": "Licenses/sparkle-LICENSE.txt"
     },

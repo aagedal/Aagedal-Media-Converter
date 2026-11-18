@@ -90,6 +90,7 @@
 - Exports with Export matte sidecar turned on always write the `_matte` file. Some ordinary queue conversions went through the shared job engine, which left it out.
 - Interlaced H.264 and AVC-Intra copied or encoded to MOV keep their field order. FFmpeg left out the QuickTime field-order atom for H.264, so editing apps could treat these files as progressive. MP4 is unchanged.
 - Corrected about 2,750 translations in all nine languages, Norwegian included: wrong word senses (a crop as in farming, a share as in stocks), leftover English and inconsistent terms.
+- Updated Sparkle, the app updater, to 2.10.1. Its installer now runs its progress helper from inside the app instead of copying it to a cache folder.
 
 # v.4.7.0
 
