@@ -119,7 +119,7 @@ struct Aagedal_Media_Converter_App: App {
         .windowToolbarStyle(.automatic)
         .windowResizability(.contentMinSize)
         .commands {
-            MainAppCommands(sparkleUpdater: sparkleUpdater)
+            MainAppCommands(sparkleUpdater: sparkleUpdater, shortcuts: ShortcutRegistry.shared)
         }
         Settings {
             SettingsView().keyboardShortcut(",",modifiers: .command)
@@ -146,6 +146,8 @@ struct Aagedal_Media_Converter_App: App {
 struct MainAppCommands: Commands {
     @Environment(\.openWindow) private var openWindow
     let sparkleUpdater: SparkleUpdater
+    /// Menu items show the shortcuts chosen in Settings → Shortcuts.
+    @ObservedObject var shortcuts: ShortcutRegistry
 
     var body: some Commands {
         // Disable "New Window" — replaced by "New Encoding Group"
@@ -153,7 +155,7 @@ struct MainAppCommands: Commands {
             Button("New Encoding Group") {
                 NotificationCenter.default.post(name: .createEncodingGroup, object: nil)
             }
-            .keyboardShortcut("n", modifiers: .command)
+            .keyboardShortcut(shortcuts.menuShortcut(for: .newEncodingGroup))
         }
 
         // "Check for Updates…" for direct-download installs. Hidden for
@@ -170,12 +172,12 @@ struct MainAppCommands: Commands {
             Button("Import…") {
                 NotificationCenter.default.post(name: .showFileImporter, object: nil)
             }
-            .keyboardShortcut("i", modifiers: .command)
+            .keyboardShortcut(shortcuts.menuShortcut(for: .importFiles))
 
             Button("Import Camera Card…") {
                 NotificationCenter.default.post(name: .showCameraCardImporter, object: nil)
             }
-            .keyboardShortcut("i", modifiers: [.command, .shift])
+            .keyboardShortcut(shortcuts.menuShortcut(for: .importCameraCard))
 
             Divider()
 
@@ -196,7 +198,7 @@ struct MainAppCommands: Commands {
             Button("Show Metadata") {
                 MetadataWindowController.shared.showWindow()
             }
-            .keyboardShortcut("i", modifiers: .option)
+            .keyboardShortcut(shortcuts.menuShortcut(for: .openMetadata))
         }
         CommandGroup(replacing: .appInfo) {
             Button("About Aagedal Media Converter") {

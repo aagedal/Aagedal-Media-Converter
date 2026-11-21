@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AA5C0005SHORTCUTKEYBOARD /* ShortcutKeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5C0006SHORTCUTKEYBOARD /* ShortcutKeyboardView.swift */; };
+		AA5C0003SHORTCUTREGISTRY /* ShortcutRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5C0004SHORTCUTREGISTRY /* ShortcutRegistry.swift */; };
+		AA5C0001SHORTCUTKEYMAP01 /* ShortcutKeymap.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5C0002SHORTCUTKEYMAP01 /* ShortcutKeymap.swift */; };
 		DCPV01TESTS00000000001 /* DCPValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCPV01TESTS00000000002 /* DCPValidatorTests.swift */; };
 		DCPV01VVIEW00000000001 /* DCPValidatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCPV01VVIEW00000000002 /* DCPValidatorView.swift */; };
 		DCPV01VALID00000000001 /* DCPValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCPV01VALID00000000002 /* DCPValidator.swift */; };
@@ -21,7 +24,7 @@
 		EA25C0011234567890000001 /* YTDLPCookieSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA25C0011234567890000002 /* YTDLPCookieSource.swift */; };
 		F14AA070D0CA4AB1A0B157B1 /* AudioMeterBenchmarkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F14AA070D0CA4AB1A0B157B2 /* AudioMeterBenchmarkTests.swift */; };
 		3068888A137E42F3A0BD3EDC /* KeyboardShortcutSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64183E70C2B54C9D87A2C3AA /* KeyboardShortcutSettingsTests.swift */; };
-		3E3AFCB991AB43B29AD7B9CE /* KeyboardShortcutSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6DECDFA138A4F6AA59674EA /* KeyboardShortcutSettings.swift */; };
+		3E3AFCB991AB43B29AD7B9CE /* KeyboardShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6DECDFA138A4F6AA59674EA /* KeyboardShortcuts.swift */; };
 		00B3F16A9264F886CA667DAC /* NativeWaveformVideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E03D85E11E51D07B7265C81 /* NativeWaveformVideoRenderer.swift */; };
 		C74ED10E65DCC0EF69F11847 /* WaveformAnimationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E0CBEC23A29C1580128E20E /* WaveformAnimationState.swift */; };
 		9C8ABCF0773A19D493FC2B6C /* NativeWaveformVideoRenderer+AdvancedStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9F84AE256167D3A6CCD4B3C /* NativeWaveformVideoRenderer+AdvancedStyles.swift */; };
@@ -493,6 +496,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		AA5C0006SHORTCUTKEYBOARD /* ShortcutKeyboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutKeyboardView.swift; sourceTree = "<group>"; };
+		AA5C0004SHORTCUTREGISTRY /* ShortcutRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutRegistry.swift; sourceTree = "<group>"; };
+		AA5C0002SHORTCUTKEYMAP01 /* ShortcutKeymap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutKeymap.swift; sourceTree = "<group>"; };
 		DCPV01TESTS00000000002 /* DCPValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DCPValidatorTests.swift; sourceTree = "<group>"; };
 		DCPV01VVIEW00000000002 /* DCPValidatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DCPValidatorView.swift; sourceTree = "<group>"; };
 		DCPV01VALID00000000002 /* DCPValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DCPValidator.swift; sourceTree = "<group>"; };
@@ -507,7 +513,7 @@
 		EA25C0011234567890000002 /* YTDLPCookieSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = YTDLPCookieSource.swift; path = YTDLP/YTDLPCookieSource.swift; sourceTree = "<group>"; };
 		F14AA070D0CA4AB1A0B157B2 /* AudioMeterBenchmarkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMeterBenchmarkTests.swift; sourceTree = "<group>"; };
 		64183E70C2B54C9D87A2C3AA /* KeyboardShortcutSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutSettingsTests.swift; sourceTree = "<group>"; };
-		E6DECDFA138A4F6AA59674EA /* KeyboardShortcutSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutSettings.swift; sourceTree = "<group>"; };
+		E6DECDFA138A4F6AA59674EA /* KeyboardShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcuts.swift; sourceTree = "<group>"; };
 		02B1DCFCB3DC44408B8C4598 /* MergeCompatibilityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MergeCompatibilityPolicy.swift; sourceTree = "<group>"; };
 		045E9C8BA166403190A5B12D /* ImageSequenceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSequenceSettings.swift; sourceTree = "<group>"; };
 		06E2B90D341C4818B814DED4 /* UploadLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadLifecycleTests.swift; sourceTree = "<group>"; };
@@ -1130,7 +1136,9 @@
 				A8BC351DE2F5457C97F6B648 /* MediaAdjustments.swift */,
 				AE38B73146584B3EA484D5F8 /* OutputFolderSelectionService.swift */,
 				EE7542FB9D7445F09123B467 /* CommentSettings.swift */,
-				E6DECDFA138A4F6AA59674EA /* KeyboardShortcutSettings.swift */,
+				E6DECDFA138A4F6AA59674EA /* KeyboardShortcuts.swift */,
+				AA5C0004SHORTCUTREGISTRY /* ShortcutRegistry.swift */,
+				AA5C0002SHORTCUTKEYMAP01 /* ShortcutKeymap.swift */,
 				204052BD416D4C0D98872778 /* ConversionFollowUp.swift */,
 				4875611B4C8E4E829800286B /* PackageMetadataSettings.swift */,
 				CF2A7FD698474D319CF8046A /* ConversionPreparationSettings.swift */,
@@ -1581,6 +1589,7 @@
 				8E4DF2722ECBBE38007B6277 /* WatchFolderSettingsView.swift */,
 				8E14774A2ECF6BDE00C805AA /* UpdateSettingsView.swift */,
 				8E13CD4050F24D1788FD6C8C /* ShortcutsSettingsView.swift */,
+				AA5C0006SHORTCUTKEYBOARD /* ShortcutKeyboardView.swift */,
 				8ECEBC1F2ED8782800F1F67C /* MetadataSettingsView.swift */,
 				07D71BE05D85B5DEBAEB0A7A /* YTDLPSettingsView.swift */,
 				A907D1D50000000000000404 /* ManagedToolVersionControls.swift */,
@@ -2073,7 +2082,9 @@
 				004B1E1BEE3A4FCF82434E38 /* MediaAdjustments.swift in Sources */,
 				12B0864F27DD4CD6BADB329A /* OutputFolderSelectionService.swift in Sources */,
 				1122330BD4DA4103ACF80E38 /* CommentSettings.swift in Sources */,
-				3E3AFCB991AB43B29AD7B9CE /* KeyboardShortcutSettings.swift in Sources */,
+				3E3AFCB991AB43B29AD7B9CE /* KeyboardShortcuts.swift in Sources */,
+				AA5C0003SHORTCUTREGISTRY /* ShortcutRegistry.swift in Sources */,
+				AA5C0001SHORTCUTKEYMAP01 /* ShortcutKeymap.swift in Sources */,
 				CE5F75F4C4B14D14BD081FC8 /* ConversionFollowUp.swift in Sources */,
 				ENCHIST0001BF0000000 /* EncodeHistoryModels.swift in Sources */,
 				ENCHIST0002BF0000000 /* EncodeHistoryTracker.swift in Sources */,
@@ -2121,6 +2132,7 @@
 				8EE0BB9C2E0892B70096171D /* SettingsView.swift in Sources */,
 				8E14774B2ECF6BDE00C805AA /* UpdateSettingsView.swift in Sources */,
 				8E37A8C2E5334343AD98BD43 /* ShortcutsSettingsView.swift in Sources */,
+				AA5C0005SHORTCUTKEYBOARD /* ShortcutKeyboardView.swift in Sources */,
 				8E4DF26F2ECBAD35007B6277 /* PresetSettingsView.swift in Sources */,
 				B1C2D3E4F5061728394A5B70 /* ScreenCaptureSettingsView.swift in Sources */,
 				8E9B52592ED65199006E6A10 /* AudioRoutingService.swift in Sources */,

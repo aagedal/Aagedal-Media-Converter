@@ -577,8 +577,13 @@ struct SettingsView: View {
             case .shortcuts:
                 return [
                     String(localized: "Customize keyboard shortcuts"),
-                    String(localized: "Restore Defaults")
-                ]
+                    String(localized: "Restore Defaults"),
+                    String(localized: "Keyboard preset"),
+                    String(localized: "Main Window"),
+                    String(localized: "Trim View"),
+                    String(localized: "Fullscreen Player"),
+                    String(localized: "Built-in Shortcuts…")
+                ] + ShortcutCommand.allCases.map(\.title)
             case .agentAccess:
                 return [
                     String(localized: "When enabled, the signed helper accepts requests from local MCP clients and sends them to this app. The app remains the owner of every accepted conversion."),

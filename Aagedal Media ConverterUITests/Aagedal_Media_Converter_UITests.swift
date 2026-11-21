@@ -478,21 +478,22 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         element("settings.search").click()
         element("settings.search").typeText("Customize keyboard shortcuts")
         element("settings.tab.shortcuts").click()
-        let shortcut = element("settings.shortcuts.download")
+        let shortcut = element("settings.shortcuts.main.showURLInput.0")
         XCTAssertTrue(shortcut.waitForExistence(timeout: 5))
         let originalValue = shortcut.value as? String
-        attachWindowScreenshot(named: "Settings - customizable shortcuts")
+        attachWindowScreenshot(named: "Settings - shortcut editor")
         shortcut.click()
-        XCTAssertTrue(recorderText(containing: "Change Keyboard Shortcut").waitForExistence(timeout: 5))
+        XCTAssertTrue(recorderText(containing: "Press the new shortcut").waitForExistence(timeout: 5))
         app.typeKey("q", modifierFlags: .command)
-        XCTAssertTrue(recorderText(containing: "This combination is reserved for another app or system command. Choose another shortcut.").waitForExistence(timeout: 5))
+        XCTAssertTrue(recorderText(containing: "This shortcut is reserved for a standard macOS command.").waitForExistence(timeout: 5))
+        shortcut.click()
         app.typeKey("g", modifierFlags: [])
-        XCTAssertTrue(recorderText(containing: "Use a letter, number, or Return with Command, Control, or Option.").waitForExistence(timeout: 5))
+        XCTAssertTrue(recorderText(containing: "Include Command, Option or Control.").waitForExistence(timeout: 5))
         attachWindowScreenshot(named: "Settings - shortcut recorder validation")
-        app.typeKey(XCUIKeyboardKey.escape.rawValue, modifierFlags: [])
-        XCTAssertTrue(shortcut.waitForExistence(timeout: 5))
+        // Clicking the field twice cancels recording.
+        shortcut.click()
+        shortcut.click()
         XCTAssertEqual(shortcut.value as? String, originalValue)
-        XCTAssertFalse(recorderText(containing: "Change Keyboard Shortcut").exists)
     }
 
     @MainActor
