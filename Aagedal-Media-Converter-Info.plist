@@ -50,6 +50,26 @@
 	<string>i3xudeqe+09I7n+FVFHmPxBa8cEWc3/ljLk3Y9bTEkY=</string>
 	<key>SUAutomaticallyUpdate</key>
 	<true/>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.json</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Media Converter Keyboard Preset</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.aagedal.mediaconverter.keyboard-preset</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>amckeys</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict>

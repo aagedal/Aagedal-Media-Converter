@@ -3637,57 +3637,44 @@ private struct GlobalKeyboardShortcutHandler: NSViewRepresentable {
             guard monitor == nil else { return }
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 guard let self else { return event }
-                
-                let hasCommand = event.modifierFlags.contains(.command)
-                let hasOption = event.modifierFlags.contains(.option)
-                let hasShift = event.modifierFlags.contains(.shift)
-                let hasControl = event.modifierFlags.contains(.control)
-                
+
                 // Do not route main-window commands into Settings, players, or sheets.
-                // Local event monitors are delivered on the main thread.
+                // Queue commands are left to the queue's own monitor, which stands aside
+                // while overlays are open. Local event monitors are delivered on the main thread.
                 let eventWindowNumber = event.windowNumber
-                guard let hostView = self.hostView,
-                      MainActor.assumeIsolated({
-                          guard let window = hostView.window else { return false }
-                          return window.windowNumber == eventWindowNumber && window.isKeyWindow && window.attachedSheet == nil
-                      }) else { return event }
-
-                let settings = KeyboardShortcutSettings()
-                if let action = MainWindowShortcut.allCases.first(where: { settings.binding(for: $0).matches(event) }) {
-                    guard !event.isARepeat else { return nil }
-                    switch action {
-                    case .watchFolder: self.onToggleWatchFolder()
-                    case .outputFolder: self.onSelectOutputFolder()
-                    case .merge: self.onToggleMerge()
-                    case .resetAll: self.onResetAll()
-                    case .conversion: self.onToggleConversion(false)
-                    case .download: self.onShowURLInput()
-                    case .capture: self.onShowCapture()
-                    case .presets: self.onShowPresetQuickSelect()
-                    case .shortcuts: self.onShowShortcuts()
-                    }
-                    return nil
+                guard let hostView = self.hostView, let pressed = ShortcutBinding.pressed(event) else { return event }
+                let match = MainActor.assumeIsolated { () -> ShortcutCommand? in
+                    guard let window = hostView.window,
+                          window.windowNumber == eventWindowNumber, window.isKeyWindow, window.attachedSheet == nil,
+                          let command = ShortcutRegistry.shared.command(for: pressed, in: .main),
+                          !command.isQueueCommand else { return nil }
+                    // Focused text keeps the keys that type or edit it.
+                    if window.firstResponder is NSText && !command.runsWhileEditingText(pressed) { return nil }
+                    return command
                 }
+                guard let command = match else { return event }
 
-                // Cmd+1 through Cmd+0: Quick select preset by index (only when no sheets are open)
-                if hasCommand && !hasOption && !hasShift && !hasControl {
-                    let numberKeyCodes: [UInt16] = [
-                        UInt16(kVK_ANSI_1), UInt16(kVK_ANSI_2), UInt16(kVK_ANSI_3),
-                        UInt16(kVK_ANSI_4), UInt16(kVK_ANSI_5), UInt16(kVK_ANSI_6),
-                        UInt16(kVK_ANSI_7), UInt16(kVK_ANSI_8), UInt16(kVK_ANSI_9),
-                        UInt16(kVK_ANSI_0)  // 0 = 10th preset
-                    ]
-                    if let index = numberKeyCodes.firstIndex(of: event.keyCode) {
-                        // Only consume event if it was actually handled
-                        if self.onSelectPresetByIndex(index) {
-                            return nil
-                        }
-                        // Otherwise pass through to let sheets handle it
-                        return event
-                    }
+                if let index = command.presetIndex {
+                    // Only consume the key when a preset was selected, so sheets still receive it.
+                    return self.onSelectPresetByIndex(index) ? nil : event
                 }
-
-                return event
+                guard !event.isARepeat else { return nil }
+                switch command {
+                case .newEncodingGroup: NotificationCenter.default.post(name: .createEncodingGroup, object: nil)
+                case .importFiles: NotificationCenter.default.post(name: .showFileImporter, object: nil)
+                case .importCameraCard: NotificationCenter.default.post(name: .showCameraCardImporter, object: nil)
+                case .toggleWatchFolder: self.onToggleWatchFolder()
+                case .selectOutputFolder: self.onSelectOutputFolder()
+                case .toggleMerge: self.onToggleMerge()
+                case .resetAll: self.onResetAll()
+                case .toggleConversion: self.onToggleConversion(false)
+                case .showURLInput: self.onShowURLInput()
+                case .openCapture: self.onShowCapture()
+                case .showPresetQuickSelect: self.onShowPresetQuickSelect()
+                case .showShortcuts: self.onShowShortcuts()
+                default: return event
+                }
+                return nil
             }
         }
         
