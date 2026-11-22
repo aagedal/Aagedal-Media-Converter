@@ -428,19 +428,10 @@ struct VideoFileListView: View {
                     onNavigateDown: { handleNavigateSelection(direction: .down) },
                     onSort: handleSortShortcut,
                     onDelete: deleteSelectedItems,
-                    onPrimaryPreview: handlePlayFullscreenShortcut,
-                    onPrimaryAction: handleTrimShortcut,
                     onSelectAll: selectAllItems,
+                    onShowRandomTip: { currentTip = RandomTips.randomTip(excluding: currentTip) },
                     disableNavigation: disableKeyboardNavigation
                 )
-
-                // Control+R to show a new random tip
-                Button(action: { currentTip = RandomTips.randomTip(excluding: currentTip) }) {
-                    EmptyView()
-                }
-                .keyboardShortcut("r", modifiers: [.control])
-                .frame(width: 0, height: 0)
-                .opacity(0)
             }
         }
         .onChange(of: droppedFiles.isEmpty) { wasEmpty, isEmpty in
@@ -1799,9 +1790,8 @@ private struct KeyEventHandlingView: NSViewRepresentable {
     var onSort: () -> Void
     // Standard list shortcuts
     var onDelete: () -> Void
-    var onPrimaryPreview: () -> Void   // Space: fullscreen preview
-    var onPrimaryAction: () -> Void    // Return: open trim
     var onSelectAll: () -> Void        // ⌘A
+    var onShowRandomTip: () -> Void
     // Flag to disable navigation when overlays are open
     var disableNavigation: Bool
 
@@ -1829,9 +1819,8 @@ private struct KeyEventHandlingView: NSViewRepresentable {
             onNavigateDown: onNavigateDown,
             onSort: onSort,
             onDelete: onDelete,
-            onPrimaryPreview: onPrimaryPreview,
-            onPrimaryAction: onPrimaryAction,
             onSelectAll: onSelectAll,
+            onShowRandomTip: onShowRandomTip,
             disableNavigation: disableNavigation
         )
     }
@@ -1871,9 +1860,8 @@ private struct KeyEventHandlingView: NSViewRepresentable {
         context.coordinator.onNavigateDown = onNavigateDown
         context.coordinator.onSort = onSort
         context.coordinator.onDelete = onDelete
-        context.coordinator.onPrimaryPreview = onPrimaryPreview
-        context.coordinator.onPrimaryAction = onPrimaryAction
         context.coordinator.onSelectAll = onSelectAll
+        context.coordinator.onShowRandomTip = onShowRandomTip
         context.coordinator.disableNavigation = disableNavigation
     }
 
@@ -1910,9 +1898,8 @@ private struct KeyEventHandlingView: NSViewRepresentable {
         var onNavigateDown: () -> Void
         var onSort: () -> Void
         var onDelete: () -> Void
-        var onPrimaryPreview: () -> Void
-        var onPrimaryAction: () -> Void
         var onSelectAll: () -> Void
+        var onShowRandomTip: () -> Void
         var disableNavigation: Bool
         private var monitor: Any?
 
@@ -1939,9 +1926,8 @@ private struct KeyEventHandlingView: NSViewRepresentable {
             onNavigateDown: @escaping () -> Void,
             onSort: @escaping () -> Void,
             onDelete: @escaping () -> Void,
-            onPrimaryPreview: @escaping () -> Void,
-            onPrimaryAction: @escaping () -> Void,
             onSelectAll: @escaping () -> Void,
+            onShowRandomTip: @escaping () -> Void,
             disableNavigation: Bool
         ) {
             self.onForward = onForward
@@ -1966,9 +1952,8 @@ private struct KeyEventHandlingView: NSViewRepresentable {
             self.onNavigateDown = onNavigateDown
             self.onSort = onSort
             self.onDelete = onDelete
-            self.onPrimaryPreview = onPrimaryPreview
-            self.onPrimaryAction = onPrimaryAction
             self.onSelectAll = onSelectAll
+            self.onShowRandomTip = onShowRandomTip
             self.disableNavigation = disableNavigation
         }
 
@@ -2014,236 +1999,53 @@ private struct KeyEventHandlingView: NSViewRepresentable {
                     return event
                 }
 
-                // Check if a text field or text view is the first responder
-                // If so, pass through Arrow keys for cursor movement within the text
-                // Note: Tab is NOT passed through - it's handled by focusComment to move between fields
-                let firstResponder = MainActor.assumeIsolated { NSApp.keyWindow?.firstResponder }
-                if let firstResponder {
-                    let isTextInput = firstResponder is NSTextView || firstResponder is NSTextField
-                    if isTextInput {
-                        // Pass through Arrow keys when editing text for cursor movement
-                        if event.keyCode == kVK_UpArrow ||
-                           event.keyCode == kVK_DownArrow ||
-                           event.keyCode == kVK_LeftArrow ||
-                           event.keyCode == kVK_RightArrow {
-                            return event
-                        }
-                    }
+                let editingText = MainActor.assumeIsolated { () -> Bool in
+                    guard let responder = NSApp.keyWindow?.firstResponder else { return false }
+                    return responder is NSTextView || responder is NSTextField
                 }
 
-                let hasCommand = event.modifierFlags.contains(.command)
-                let hasOption = event.modifierFlags.contains(.option)
-                let hasShift = event.modifierFlags.contains(.shift)
-                let hasControl = event.modifierFlags.contains(.control)
-
-                // Delete / Backspace (with or without ⌘): delete selected rows.
-                // Skip if a text field is editing — the isTextInput early return above
-                // only intercepts arrow keys, so explicitly guard here too.
-                if event.keyCode == kVK_Delete || event.keyCode == kVK_ForwardDelete {
-                    if !hasOption && !hasShift && !hasControl {
-                        if let firstResponder, firstResponder is NSTextView || firstResponder is NSTextField {
-                            return event
-                        }
-                        self.onDelete()
-                        return nil
-                    }
-                }
-
-                // Space: fullscreen preview (QuickLook-style) on the focused item
-                if !hasCommand && !hasOption && !hasShift && !hasControl && event.keyCode == kVK_Space {
-                    if let firstResponder, firstResponder is NSTextView || firstResponder is NSTextField {
-                        return event
-                    }
-                    self.onPrimaryPreview()
-                    return nil
-                }
-
-                // Return / Enter: open trim preview on the focused item
-                if !hasCommand && !hasOption && !hasShift && !hasControl
-                    && (event.keyCode == kVK_Return || event.keyCode == kVK_ANSI_KeypadEnter) {
-                    if let firstResponder, firstResponder is NSTextView || firstResponder is NSTextField {
-                        return event
-                    }
-                    self.onPrimaryAction()
-                    return nil
-                }
-
-                // ⌘A: select all rows
-                if hasCommand && !hasOption && !hasShift && !hasControl && event.keyCode == kVK_ANSI_A {
-                    if let firstResponder, firstResponder is NSTextView || firstResponder is NSTextField {
-                        return event
-                    }
+                // ⌘A selects all rows, like the standard Select All command it stands in for.
+                if event.modifierFlags.intersection([.command, .option, .shift, .control]) == .command
+                    && event.keyCode == kVK_ANSI_A {
+                    if editingText { return event }
                     self.onSelectAll()
                     return nil
                 }
 
-                // Tab handling (no command/option/control)
-                if event.keyCode == kVK_Tab {
-                    let disallowedModifiers: NSEvent.ModifierFlags = [.command, .option, .control]
-                    if !event.modifierFlags.intersection(disallowedModifiers).isEmpty {
-                        return event
-                    }
-                    if hasShift {
-                        self.onBackward()
-                    } else {
-                        self.onForward()
-                    }
-                    return nil
-                }
-                
-                // CMD+T: Open Trim (single selection)
-                if hasCommand && !hasOption && !hasShift && !hasControl && event.keyCode == kVK_ANSI_T {
-                    self.onTrim()
-                    return nil
-                }
+                guard let pressed = ShortcutBinding.pressed(event),
+                      let command = MainActor.assumeIsolated({ ShortcutRegistry.shared.command(for: pressed, in: .main) }),
+                      command.isQueueCommand else { return event }
+                // Focused text keeps the keys that type or edit it, but Tab still moves
+                // between the comment fields.
+                if editingText && !command.runsWhileEditingText(pressed) { return event }
 
-                // CMD+Option+T: Toggle subtitles on selected items
-                if hasCommand && hasOption && !hasShift && !hasControl && event.keyCode == kVK_ANSI_T {
-                    self.onToggleSubtitles()
-                    return nil
+                switch command {
+                case .openTrim: self.onTrim()
+                case .playFullscreen: self.onPlayFullscreen()
+                case .openTimecode: self.onTimecode()
+                case .openAudioRouting: self.onAudioConfig()
+                case .openMetadata: self.onMetadata()
+                case .openCrop: self.onCrop()
+                case .removeSelected: self.onDelete()
+                case .resetSelected: self.onResetSelected()
+                case .toggleTranscription: self.onToggleSubtitles()
+                case .toggleDateTag: self.onToggleDateTag()
+                case .toggleMute: self.onToggleMute()
+                case .toggleUpload: self.onToggleUpload()
+                case .toggleSourceUpload: self.onToggleSourceUpload()
+                case .toggleAutoEncode: self.onToggleAutoEncode()
+                case .selectPrevious: self.onNavigateUp()
+                case .selectNext: self.onNavigateDown()
+                case .moveItemsUp: self.onMoveUp()
+                case .moveItemsDown: self.onMoveDown()
+                case .deselectAll: self.onDeselectAll()
+                case .cycleSort: self.onSort()
+                case .nextComment: self.onForward()
+                case .previousComment: self.onBackward()
+                case .showRandomTip: self.onShowRandomTip()
+                default: return event
                 }
-                
-                // Option+C: Open Crop mode (opens trim editor with crop enabled)
-                if hasOption && !hasCommand && !hasShift && !hasControl && event.keyCode == kVK_ANSI_C {
-                    self.onCrop()
-                    return nil
-                }
-                
-                // Option+T: Open Timecode
-                if hasOption && !hasCommand && !hasShift && !hasControl && event.keyCode == kVK_ANSI_T {
-                    self.onTimecode()
-                    return nil
-                }
-                
-                // Option+A: Open Audio Config
-                if hasOption && !hasCommand && !hasShift && !hasControl && event.keyCode == kVK_ANSI_A {
-                    self.onAudioConfig()
-                    return nil
-                }
-                
-                // Option+I: Open Metadata Info (single or multiple selection for comparison)
-                // Note: CMD+I is used for Import, so we use Option+I instead
-                // Skip if we're in a sheet (trim view uses Option+I to clear trim start)
-                if hasOption && !hasCommand && !hasShift && !hasControl && event.keyCode == kVK_ANSI_I {
-                    // Check if the key window IS a sheet (has a sheetParent) or HAS a sheet attached
-                    let isInSheet = MainActor.assumeIsolated {
-                        if let keyWindow = NSApp.keyWindow {
-                            return keyWindow.sheetParent != nil || keyWindow.attachedSheet != nil
-                        }
-                        return false
-                    }
-                    if isInSheet {
-                        return event  // Pass through to let the sheet handle it
-                    }
-                    self.onMetadata()
-                    return nil
-                }
-                
-                // CTRL+D: Toggle Date Tag
-                if hasControl && !hasOption && !hasShift && !hasCommand && event.keyCode == kVK_ANSI_D {
-                    self.onToggleDateTag()
-                    return nil
-                }
-                
-                // CMD+F: Play Fullscreen
-                if hasCommand && !hasOption && !hasShift && !hasControl && event.keyCode == kVK_ANSI_F {
-                    self.onPlayFullscreen()
-                    return nil
-                }
-                
-                // Option+D: Deselect all items
-                if hasOption && !hasCommand && !hasShift && !hasControl && event.keyCode == kVK_ANSI_D {
-                    self.onDeselectAll()
-                    return nil
-                }
-                
-                // CMD+R: Reset selected items
-                if hasCommand && !hasOption && !hasShift && !hasControl && event.keyCode == kVK_ANSI_R {
-                    self.onResetSelected()
-                    return nil
-                }
-                
-                // CMD+Up Arrow: Move selection up in queue
-                // Skip if we're in a sheet (crop view uses CMD+Up to move crop box)
-                if hasCommand && !hasOption && !hasShift && !hasControl && event.keyCode == kVK_UpArrow {
-                    let isInSheet = MainActor.assumeIsolated {
-                        if let keyWindow = NSApp.keyWindow {
-                            return keyWindow.sheetParent != nil || keyWindow.attachedSheet != nil
-                        }
-                        return false
-                    }
-                    if isInSheet {
-                        return event  // Pass through to let the sheet handle it
-                    }
-                    self.onMoveUp()
-                    return nil
-                }
-
-                // CMD+Down Arrow: Move selection down in queue
-                // Skip if we're in a sheet (crop view uses CMD+Down to move crop box)
-                if hasCommand && !hasOption && !hasShift && !hasControl && event.keyCode == kVK_DownArrow {
-                    let isInSheet = MainActor.assumeIsolated {
-                        if let keyWindow = NSApp.keyWindow {
-                            return keyWindow.sheetParent != nil || keyWindow.attachedSheet != nil
-                        }
-                        return false
-                    }
-                    if isInSheet {
-                        return event  // Pass through to let the sheet handle it
-                    }
-                    self.onMoveDown()
-                    return nil
-                }
-
-                // Ctrl+M: Toggle mute on selected items
-                if hasControl && !hasCommand && !hasOption && !hasShift && event.keyCode == kVK_ANSI_M {
-                    self.onToggleMute()
-                    return nil
-                }
-
-                // CMD+U: Toggle upload on selected items
-                if hasCommand && !hasOption && !hasShift && !hasControl && event.keyCode == kVK_ANSI_U {
-                    self.onToggleUpload()
-                    return nil
-                }
-
-                // CMD+Option+U: Toggle source file upload on selected items
-                if hasCommand && hasOption && !hasShift && !hasControl && event.keyCode == kVK_ANSI_U {
-                    self.onToggleSourceUpload()
-                    return nil
-                }
-
-                // CMD+E: Toggle auto-encode on selected items (for download items)
-                if hasCommand && !hasOption && !hasShift && !hasControl && event.keyCode == kVK_ANSI_E {
-                    self.onToggleAutoEncode()
-                    return nil
-                }
-
-                // Ctrl+S: Cycle through sort modes
-                if hasControl && !hasCommand && !hasOption && !hasShift && event.keyCode == kVK_ANSI_S {
-                    self.onSort()
-                    return nil
-                }
-
-                // Plain Up Arrow: Navigate selection up (skip if navigation disabled for overlays)
-                if !hasCommand && !hasOption && !hasShift && !hasControl && event.keyCode == kVK_UpArrow {
-                    if !self.disableNavigation {
-                        self.onNavigateUp()
-                        return nil
-                    }
-                    return event
-                }
-
-                // Plain Down Arrow: Navigate selection down (skip if navigation disabled for overlays)
-                if !hasCommand && !hasOption && !hasShift && !hasControl && event.keyCode == kVK_DownArrow {
-                    if !self.disableNavigation {
-                        self.onNavigateDown()
-                        return nil
-                    }
-                    return event
-                }
-
-                return event
+                return nil
             }
         }
 

@@ -277,190 +277,63 @@ struct PreviewPlayerView: View {
             return false
         }
 
-        // CMD + Arrow keys: Move crop box (when crop mode is active)
-        if modifiers.contains(.command) && isCropControlsExpanded {
-            if let direction = specialKey {
-                switch direction {
-                case .leftArrow:
-                    moveCropBox(dx: -0.01, dy: 0)
-                    return true
-                case .rightArrow:
-                    moveCropBox(dx: 0.01, dy: 0)
-                    return true
-                case .upArrow:
-                    moveCropBox(dx: 0, dy: -0.01)
-                    return true
-                case .downArrow:
-                    moveCropBox(dx: 0, dy: 0.01)
-                    return true
-                default:
-                    break
-                }
-            }
-        }
-
-        if specialKey == .downArrow {
-            // Down: Jump forward 10 frames
-            controller.seekByFrames(10)
-            return true
-        } else if specialKey == .upArrow {
-            // Up: Jump backward 10 frames
-            controller.seekByFrames(-10)
-            return true
-        } else if specialKey == .leftArrow {
-            controller.seekByFrames(-1)
-            return true
-        } else if specialKey == .rightArrow {
-            controller.seekByFrames(1)
-            return true
-        }
-
-        let lowerKey = key.lowercased()
-
-        // Space to toggle playback
-        if key == " " {
-            controller.togglePlayback()
-            return true
-        }
-
-        // Check for number keys, +, -, ., : to activate timecode input (only if no modifiers and not already editing)
+        // Number keys, +, -, ., : and ; start timecode input (only without modifiers and not already editing)
         let noModifiers = modifiers.intersection([.command, .option, .control, .shift]).isEmpty
-        if noModifiers && !isEditingTimecode {
-            let isNumberOrTimecodeChar = key.rangeOfCharacter(from: CharacterSet(charactersIn: "0123456789+-.:;")) != nil
-            if isNumberOrTimecodeChar {
-                // Activate timecode input with this character
-                timecodeActivationTrigger = key
-                return true
-            }
+        if noModifiers && !isEditingTimecode && specialKey == nil
+            && key.rangeOfCharacter(from: CharacterSet(charactersIn: "0123456789+-.:;")) != nil {
+            timecodeActivationTrigger = key
+            return true
         }
 
-        if modifiers.contains(.command) {
-            switch lowerKey {
-            case "a":
-                controller.isAudioMeterEnabled.toggle()
-                return true
-            case "l":
-                item.loopPlayback.toggle()
-                return true
-            case "f":
-                openFullscreenPlayer()
-                return true
-            case "s":
-                // CMD+S: Capture screenshot
-                captureScreenshot()
-                return true
-            case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-                // CMD+1...9: Select aspect ratio presets (when crop mode is active)
-                if isCropControlsExpanded, let index = Int(lowerKey) {
-                    let ratios = AspectRatio.allCases
-                    if index >= 1 && index <= ratios.count {
-                        selectCropAspectRatio(ratios[index - 1])
-                        return true
-                    }
-                }
-                return false
-            case "0":
-                // CMD+0: Reset crop
-                if isCropControlsExpanded {
-                    resetCrop()
-                    return true
-                }
-                return false
-            case "=", "+":
-                // CMD+= or CMD++: Scale crop box larger
-                if isCropControlsExpanded {
-                    scaleCropBox(factor: 1.05)
-                    return true
-                }
-                return false
-            case "-":
-                // CMD+-: Scale crop box smaller
-                if isCropControlsExpanded {
-                    scaleCropBox(factor: 0.95)
-                    return true
-                }
-                return false
-            default:
-                return false
-            }
-        }
+        guard let binding = ShortcutBinding.pressed(characters: key, modifierFlags: modifiers, specialKey: specialKey),
+              let command = ShortcutRegistry.shared.command(for: binding, in: .trim) else { return false }
+        return perform(command)
+    }
 
-        if modifiers.contains(.option) {
-            switch lowerKey {
-            case "i":
-                handleTrimInPoint(clearToStart: true)
-                return true
-            case "o":
-                handleTrimOutPoint(clearToEnd: true)
-                return true
-            case "x":
-                resetTrim()
-                return true
-            case "j":
-                controller.slowReverse()
-                return true
-            case "l":
-                controller.slowForward()
-                return true
-            default:
-                return false
-            }
+    /// Runs a trim-view command, returning false when it does not apply right now.
+    private func perform(_ command: ShortcutCommand) -> Bool {
+        if command.category == .crop && command != .trimToggleCrop && !isCropControlsExpanded { return false }
+        if let ratio = command.cropAspectRatio {
+            selectCropAspectRatio(ratio)
+            return true
         }
-
-        // Check for Shift+I/O to jump to trim positions
-        // Must have shift, and must NOT have command/option/control
-        let hasShift = modifiers.contains(.shift)
-        let hasOtherModifiers = !modifiers.intersection([.command, .option, .control]).isEmpty
-        
-        if hasShift && !hasOtherModifiers {
-            switch lowerKey {
-            case "i":
-                controller.seekTo(item.effectiveTrimStart)
-                return true
-            case "o":
-                controller.seekTo(item.effectiveTrimEnd)
-                return true
-            default:
-                return false
-            }
-        }
-
-        // Check for plain I/O (no modifiers) to set trim positions
-        let disallowedModifiers = modifiers.intersection([.command, .option, .control, .shift])
-        if !disallowedModifiers.isEmpty {
-            return false
-        }
-
-        switch lowerKey {
-        case "i":
-            handleTrimInPoint(clearToStart: false)
-            return true
-        case "o":
-            handleTrimOutPoint(clearToEnd: false)
-            return true
-        case "j":
-            controller.startReverseSimulation()
-            return true
-        case "k":
-            controller.togglePlayback()
-            return true
-        case "l":
-            controller.fastForward()
-            return true
-        case "c":
+        switch command {
+        case .trimTogglePlayback: controller.togglePlayback()
+        case .trimPlayReverse: controller.startReverseSimulation()
+        case .trimPlayForward: controller.fastForward()
+        case .trimSlowReverse: controller.slowReverse()
+        case .trimSlowForward: controller.slowForward()
+        case .trimToggleLoop: item.loopPlayback.toggle()
+        case .trimPreviousFrame: controller.seekByFrames(-1)
+        case .trimNextFrame: controller.seekByFrames(1)
+        case .trimBackTenFrames: controller.seekByFrames(-10)
+        case .trimForwardTenFrames: controller.seekByFrames(10)
+        case .trimSetIn: handleTrimInPoint(clearToStart: false)
+        case .trimSetOut: handleTrimOutPoint(clearToEnd: false)
+        case .trimClearIn: handleTrimInPoint(clearToStart: true)
+        case .trimClearOut: handleTrimOutPoint(clearToEnd: true)
+        case .trimClearBoth: resetTrim()
+        case .trimGoToIn: controller.seekTo(item.effectiveTrimStart)
+        case .trimGoToOut: controller.seekTo(item.effectiveTrimEnd)
+        case .trimToggleTimecodeMode:
+            guard !isEditingTimecode else { return false }
+            timecodeDisplayMode.toggle()
+        case .trimToggleAudioMeter: controller.isAudioMeterEnabled.toggle()
+        case .trimCaptureScreenshot: captureScreenshot()
+        case .trimOpenFullscreen: openFullscreenPlayer()
+        case .trimToggleCrop:
             isCropControlsExpanded.toggle()
             // Sync crop overlay with controls state
             controller.isCropEnabled = isCropControlsExpanded
-            return true
-        case "t":
-            // T: Toggle timecode display mode (when not editing timecode)
-            if !isEditingTimecode {
-                timecodeDisplayMode.toggle()
-                return true
-            }
-            return false
-        default:
-            return false
+        case .trimResetCrop: resetCrop()
+        case .trimCropLarger: scaleCropBox(factor: 1.05)
+        case .trimCropSmaller: scaleCropBox(factor: 0.95)
+        case .trimMoveCropLeft: moveCropBox(dx: -0.01, dy: 0)
+        case .trimMoveCropRight: moveCropBox(dx: 0.01, dy: 0)
+        case .trimMoveCropUp: moveCropBox(dx: 0, dy: -0.01)
+        case .trimMoveCropDown: moveCropBox(dx: 0, dy: 0.01)
+        default: return false
         }
+        return true
     }
 }

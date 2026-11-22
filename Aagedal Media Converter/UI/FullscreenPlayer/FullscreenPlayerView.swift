@@ -1458,227 +1458,96 @@ private struct FullscreenKeyboardHandler: NSViewRepresentable {
 
                 guard let characters = event.charactersIgnoringModifiers else { return event }
 
-                let keyCode = event.keyCode
-                let modifiers = event.modifierFlags
-                let hasOption = modifiers.contains(.option)
-                let hasCommand = modifiers.contains(.command)
-                let hasShift = modifiers.contains(.shift)
-                let hasControl = modifiers.contains(.control)
-                let noModifiers = !hasOption && !hasCommand && !hasShift && !hasControl
-
                 // Escape to close
-                if keyCode == 53 {
+                if event.keyCode == 53 {
                     self.onClose()
                     return nil
                 }
 
-                let lower = characters.lowercased()
-
-                // CMD+B: Go to previous item in queue
-                if hasCommand && !hasShift && !hasOption && !hasControl && lower == "b" {
-                    if self.canGoToPrevious, let onPrevious = self.onPreviousItem {
-                        DispatchQueue.main.async {
-                            onPrevious()
-                        }
-                    }
-                    // Always consume the event to prevent propagation to other handlers
-                    return nil
-                }
-
-                // CMD+N: Go to next item in queue
-                if hasCommand && !hasShift && !hasOption && !hasControl && lower == "n" {
-                    if self.canGoToNext, let onNext = self.onNextItem {
-                        DispatchQueue.main.async {
-                            onNext()
-                        }
-                    }
-                    // Always consume the event to prevent propagation to other handlers
-                    return nil
-                }
-
-                // T (no modifiers): Toggle timecode mode
-                if noModifiers && !self.isEditingTimecode && lower == "t" {
+                // Number keys and timecode characters to activate timecode input
+                let noModifiers = event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty
+                if noModifiers && characters.rangeOfCharacter(from: CharacterSet(charactersIn: "0123456789+-.:;")) != nil {
                     DispatchQueue.main.async { [weak self] in
-                        self?.onToggleTimecodeMode()
+                        self?.onTimecodeInput(characters)
                     }
                     return nil
                 }
 
-                // A (no modifiers): Toggle Auto Next
-                if noModifiers && !self.isEditingTimecode && lower == "a" {
-                    DispatchQueue.main.async { [weak self] in
-                        self?.onToggleAutoNext()
-                    }
-                    return nil
+                guard let pressed = ShortcutBinding.pressed(event),
+                      let command = MainActor.assumeIsolated({ ShortcutRegistry.shared.command(for: pressed, in: .fullscreen) }) else {
+                    return event
                 }
-
-                // CMD+L: Toggle Loop Queue (only when Auto Next is enabled)
-                if hasCommand && !hasShift && !hasOption && !hasControl && lower == "l" && self.isAutoNextEnabled {
-                    DispatchQueue.main.async { [weak self] in
-                        self?.onToggleLoop()
-                    }
-                    return nil
-                }
-
-                // Trim shortcuts (I, O, Shift+I, Shift+O, Option+I, Option+O, Option+X)
-                if !self.isEditingTimecode && !hasCommand && !hasControl {
-                    // Option+X: Clear all trim points
-                    if hasOption && !hasShift && lower == "x" {
-                        DispatchQueue.main.async { [weak self] in
-                            self?.onClearAllTrim()
-                        }
-                        return nil
-                    }
-
-                    // Option+I: Clear trim in
-                    if hasOption && !hasShift && lower == "i" {
-                        DispatchQueue.main.async { [weak self] in
-                            self?.onClearTrimIn()
-                        }
-                        return nil
-                    }
-
-                    // Option+O: Clear trim out
-                    if hasOption && !hasShift && lower == "o" {
-                        DispatchQueue.main.async { [weak self] in
-                            self?.onClearTrimOut()
-                        }
-                        return nil
-                    }
-
-                    // Shift+I: Seek to trim in
-                    if hasShift && !hasOption && lower == "i" {
-                        DispatchQueue.main.async { [weak self] in
-                            self?.onSeekToTrimIn()
-                        }
-                        return nil
-                    }
-
-                    // Shift+O: Seek to trim out
-                    if hasShift && !hasOption && lower == "o" {
-                        DispatchQueue.main.async { [weak self] in
-                            self?.onSeekToTrimOut()
-                        }
-                        return nil
-                    }
-
-                    // I (no modifiers): Set trim in at current position
-                    if noModifiers && lower == "i" {
-                        DispatchQueue.main.async { [weak self] in
-                            self?.onSetTrimIn()
-                        }
-                        return nil
-                    }
-
-                    // O (no modifiers): Set trim out at current position
-                    if noModifiers && lower == "o" {
-                        DispatchQueue.main.async { [weak self] in
-                            self?.onSetTrimOut()
-                        }
-                        return nil
-                    }
-                }
-
-                // Number keys and timecode characters to activate timecode input (when not already editing)
-                // Exclude 't' since it's used for timecode mode toggle
-                if noModifiers && !self.isEditingTimecode {
-                    let timecodeChars = CharacterSet(charactersIn: "0123456789+-.:;")
-                    if characters.rangeOfCharacter(from: timecodeChars) != nil {
-                        DispatchQueue.main.async { [weak self] in
-                            self?.onTimecodeInput(characters)
-                        }
-                        return nil
-                    }
-                }
-
-                // M: Toggle mute. Cmd+Up/Down: volume ±10% (Ctrl+Up/Down belong to Mission Control)
-                if noModifiers && lower == "m" {
-                    let controller = self.controller
-                    MainActor.assumeIsolated { controller.isMuted.toggle() }
-                    return nil
-                }
-                if hasCommand && !hasControl && !hasOption && !hasShift,
-                   keyCode == UInt16(kVK_UpArrow) || keyCode == UInt16(kVK_DownArrow) {
-                    let delta: Double = keyCode == UInt16(kVK_UpArrow) ? 10 : -10
-                    let controller = self.controller
-                    MainActor.assumeIsolated {
-                        controller.volume = min(100, max(0, controller.volume + delta))
-                        if delta > 0 { controller.isMuted = false }
-                    }
-                    return nil
-                }
-
-                // CMD+S: Capture screenshot
-                if hasCommand && !hasShift && !hasOption && !hasControl && lower == "s" {
-                    DispatchQueue.main.async { [weak self] in
-                        self?.captureScreenshot()
-                    }
-                    return nil
-                }
-
-                // Option+J/L: slow reverse/forward
-                if hasOption && !hasCommand && !hasControl {
-                    let controller = self.controller
-                    if lower == "j" {
-                        MainActor.assumeIsolated { controller.slowReverse() }
-                        return nil
-                    } else if lower == "l" {
-                        MainActor.assumeIsolated { controller.slowForward() }
-                        return nil
-                    }
-                }
-
-                // Only consume keys we actually use
-                let shouldConsume: Bool = {
-                    if characters == " " { return true }
-                    if lower == "j" || lower == "k" || lower == "l" { return true }
-                    switch Int(keyCode) {
-                    case kVK_LeftArrow, kVK_RightArrow, kVK_UpArrow, kVK_DownArrow:
-                        return true
-                    default:
-                        return false
-                    }
-                }()
-
-                guard shouldConsume else { return event }
-
-                let controller = self.controller
-                MainActor.assumeIsolated {
-                    if characters == " " {
-                        controller.togglePlayback()
-                        return
-                    }
-
-                    switch lower {
-                    case "j":
-                        controller.startReverseSimulation()
-                        return
-                    case "k":
-                        controller.togglePlayback()
-                        return
-                    case "l":
-                        controller.fastForward()
-                        return
-                    default:
-                        break
-                    }
-
-                    switch Int(keyCode) {
-                    case kVK_LeftArrow:
-                        controller.seekByFrames(-1)
-                    case kVK_RightArrow:
-                        controller.seekByFrames(1)
-                    case kVK_UpArrow:
-                        controller.seekByFrames(-10)
-                    case kVK_DownArrow:
-                        controller.seekByFrames(10)
-                    default:
-                        break
-                    }
-                }
-
-                return nil
+                return self.perform(command) ? nil : event
             }
+        }
+
+        /// Runs a fullscreen-player command, returning false when it does not apply right now.
+        private func perform(_ command: ShortcutCommand) -> Bool {
+            let controller = self.controller
+            switch command {
+            case .fullscreenPreviousItem:
+                if self.canGoToPrevious, let onPrevious = self.onPreviousItem {
+                    DispatchQueue.main.async { onPrevious() }
+                }
+                // Always consume the event to prevent propagation to other handlers
+            case .fullscreenNextItem:
+                if self.canGoToNext, let onNext = self.onNextItem {
+                    DispatchQueue.main.async { onNext() }
+                }
+            case .fullscreenToggleTimecodeMode:
+                DispatchQueue.main.async { [weak self] in self?.onToggleTimecodeMode() }
+            case .fullscreenToggleAutoNext:
+                DispatchQueue.main.async { [weak self] in self?.onToggleAutoNext() }
+            case .fullscreenToggleLoopQueue:
+                // Loop Queue only applies while Auto Next is on.
+                guard self.isAutoNextEnabled else { return false }
+                DispatchQueue.main.async { [weak self] in self?.onToggleLoop() }
+            case .fullscreenClearBoth:
+                DispatchQueue.main.async { [weak self] in self?.onClearAllTrim() }
+            case .fullscreenClearIn:
+                DispatchQueue.main.async { [weak self] in self?.onClearTrimIn() }
+            case .fullscreenClearOut:
+                DispatchQueue.main.async { [weak self] in self?.onClearTrimOut() }
+            case .fullscreenGoToIn:
+                DispatchQueue.main.async { [weak self] in self?.onSeekToTrimIn() }
+            case .fullscreenGoToOut:
+                DispatchQueue.main.async { [weak self] in self?.onSeekToTrimOut() }
+            case .fullscreenSetIn:
+                DispatchQueue.main.async { [weak self] in self?.onSetTrimIn() }
+            case .fullscreenSetOut:
+                DispatchQueue.main.async { [weak self] in self?.onSetTrimOut() }
+            case .fullscreenCaptureScreenshot:
+                DispatchQueue.main.async { [weak self] in self?.captureScreenshot() }
+            case .fullscreenToggleMute:
+                MainActor.assumeIsolated { controller.isMuted.toggle() }
+            case .fullscreenVolumeUp, .fullscreenVolumeDown:
+                let delta: Double = command == .fullscreenVolumeUp ? 10 : -10
+                MainActor.assumeIsolated {
+                    controller.volume = min(100, max(0, controller.volume + delta))
+                    if delta > 0 { controller.isMuted = false }
+                }
+            case .fullscreenTogglePlayback:
+                MainActor.assumeIsolated { controller.togglePlayback() }
+            case .fullscreenPlayReverse:
+                MainActor.assumeIsolated { controller.startReverseSimulation() }
+            case .fullscreenFastForward:
+                MainActor.assumeIsolated { controller.fastForward() }
+            case .fullscreenSlowReverse:
+                MainActor.assumeIsolated { controller.slowReverse() }
+            case .fullscreenSlowForward:
+                MainActor.assumeIsolated { controller.slowForward() }
+            case .fullscreenPreviousFrame:
+                MainActor.assumeIsolated { controller.seekByFrames(-1) }
+            case .fullscreenNextFrame:
+                MainActor.assumeIsolated { controller.seekByFrames(1) }
+            case .fullscreenBackTenFrames:
+                MainActor.assumeIsolated { controller.seekByFrames(-10) }
+            case .fullscreenForwardTenFrames:
+                MainActor.assumeIsolated { controller.seekByFrames(10) }
+            default:
+                return false
+            }
+            return true
         }
 
         func teardown() {

@@ -87,7 +87,6 @@ struct ConversionToolbarView: ToolbarContent {
             }
             .accessibilityIdentifier("toolbar.import")
             .help("Import video files")
-            .keyboardShortcut("i", modifiers: .command)
 
             Button(action: onShowDownload) {
                 Label("Download", systemImage: "arrow.down.circle")

@@ -31,6 +31,13 @@
 
 - Media Analysis › Video can detect black frames and scene cuts. Click a result to jump to it; scene cuts show a thumbnail. Results can be exported as JSON or as markers in a DaVinci Resolve EDL.
 
+### Keyboard shortcuts
+
+- Settings › Shortcuts is now a shortcut editor. An on-screen keyboard, labelled for your keyboard layout, colours each key by the command it runs; click or hold ⌘ ⌥ ⌃ ⇧ to see the other combinations, and click a key to list everything it does.
+- Shortcuts in the main window, the trim view and the fullscreen player can all be changed, separately, so a key can do different things in each. Each command can have two shortcuts. Record one in the command list or drag a command onto a key; reserved keys are explained, and a key that is taken can be reassigned.
+- Save sets of shortcuts as presets, switch between them, and share them as .amckeys files to import on another Mac.
+- Menu items show the shortcuts you choose. Option shortcuts no longer fire while you type in a comment field, so ⌥ characters can be typed there. Shortcuts customised in earlier versions are kept.
+
 ### Whisper transcription
 
 - Whisper now hears only the speech. The built-in Silero voice detector finds where people talk, and silence and music are left out, so Whisper no longer invents text in them and its timestamps no longer drift after long pauses.
