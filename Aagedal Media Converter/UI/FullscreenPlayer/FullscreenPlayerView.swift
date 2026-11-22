@@ -1474,10 +1474,15 @@ private struct FullscreenKeyboardHandler: NSViewRepresentable {
                 }
 
                 let candidates = ShortcutBinding.candidates(for: event)
-                guard let command = MainActor.assumeIsolated({ ShortcutRegistry.shared.match(candidates, in: .fullscreen)?.command }) else {
-                    return event
+                let (command, bareKeyCommand) = MainActor.assumeIsolated {
+                    (ShortcutRegistry.shared.match(candidates, in: .fullscreen)?.command,
+                     ShortcutRegistry.shared.bareKeyMatch(candidates, in: .fullscreen))
                 }
-                return self.perform(command) ? nil : event
+                if let command, self.perform(command) { return nil }
+                // Arrows, Space and J/K/L with modifiers that do nothing here (such as ⇧→)
+                // run what the bare key runs, as they always have.
+                guard let bareKeyCommand else { return event }
+                return self.perform(bareKeyCommand) ? nil : event
             }
         }
 

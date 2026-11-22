@@ -47,6 +47,11 @@ struct ShortcutBinding: Codable, Hashable, Sendable {
     var normalized: ShortcutBinding {
         var result = self
         result.key = key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        // "+" is Shift-= on U.S. keyboards and its own key on many others; both mean the = binding.
+        if result.key == "+" {
+            result.key = "="
+            result.shift = false
+        }
         return result
     }
     var isEmpty: Bool { normalized.key.isEmpty }
@@ -75,8 +80,6 @@ struct ShortcutBinding: Codable, Hashable, Sendable {
     /// only Shift applied (as `charactersIgnoringModifiers` reports it).
     static func pressed(key: String, modifiers: ShortcutModifiers) -> ShortcutBinding? {
         guard !key.isEmpty else { return nil }
-        // "+" is Shift-= on U.S. keyboards and its own key on many others; both mean the = binding.
-        if key == "+" { return ShortcutBinding(key: "=", modifiers: modifiers.subtracting(.shift)) }
         return ShortcutBinding(key: key, modifiers: modifiers).normalized
     }
 
@@ -88,11 +91,21 @@ struct ShortcutBinding: Codable, Hashable, Sendable {
         guard (shortcut.command || shortcut.control) && !Self.textEditingKeys.contains(shortcut.key) else { return false }
         return shortcut.command || !Self.textEditingControlKeys.contains(shortcut.key)
     }
-    /// Menus show only chords that never take keys from text entry; the window's key
-    /// monitors deliver every other shortcut.
+    /// Menus show function keys and chords with ⌘, ⌥ or ⌃ on a character key; the window's
+    /// key monitors deliver the rest. While text has focus, the chords that type or edit text
+    /// go to the text instead (see `ShortcutRegistry.installTextEditingGuard`).
     var isMenuKeyEquivalent: Bool {
         let shortcut = normalized
-        return shortcut.isFunctionKey || ((shortcut.command || shortcut.control) && !Self.namedKeys.contains(shortcut.key))
+        return shortcut.isFunctionKey || ((shortcut.command || shortcut.option || shortcut.control) && !Self.namedKeys.contains(shortcut.key))
+    }
+
+    /// The bare key that a press with modifiers falls back to when the modified chord runs
+    /// nothing, such as ⇧→ stepping a frame like →. The players have always treated these
+    /// keys that way.
+    func bareKeyFallback(in context: ShortcutContext) -> ShortcutBinding? {
+        let shortcut = normalized
+        guard !shortcut.modifiers.isEmpty, context.bareKeyFallbackKeys.contains(shortcut.key) else { return nil }
+        return ShortcutBinding(key: shortcut.key)
     }
 }
 
@@ -202,6 +215,15 @@ extension ShortcutContext {
         }
         return nil
     }
+
+    /// Keys whose modified presses run the bare key's command when the chord itself runs nothing.
+    var bareKeyFallbackKeys: Set<String> {
+        switch self {
+        case .main: []
+        case .trim: ["left", "right", "up", "down", "space"]
+        case .fullscreen: ["left", "right", "up", "down", "space", "j", "k", "l"]
+        }
+    }
 }
 
 // MARK: - Keymap
@@ -292,12 +314,20 @@ struct Keymap: Equatable, Sendable {
     /// Rebuilds a keymap from saved choices. Commands absent from `saved` (such as ones
     /// added since it was written) take their defaults unless a saved choice already
     /// uses them; saved shortcuts that are invalid or already in use are left out and counted.
+    /// A command whose saved shortcuts are all left out takes its defaults too, so a
+    /// shortcut that a later version reserves does not leave the command without one.
     static func restoring(_ saved: [String: [ShortcutBinding]]) -> (keymap: Keymap, rejected: Int) {
         var keymap = Keymap()
         var rejected = 0
+        var unsaved: [ShortcutCommand] = []
         for command in ShortcutCommand.allCases {
             keymap.shortcuts[command] = []
-            for binding in saved[command.rawValue] ?? [] where !binding.isEmpty {
+            guard let choices = saved[command.rawValue] else {
+                unsaved.append(command)
+                continue
+            }
+            let nonEmpty = choices.filter { !$0.isEmpty }
+            for binding in nonEmpty {
                 let slot = keymap.bindings(for: command).count
                 if slot < slotCount && keymap.validationError(binding, for: command, slot: slot) == nil {
                     keymap.set(binding, for: command, slot: slot)
@@ -305,10 +335,12 @@ struct Keymap: Equatable, Sendable {
                     rejected += 1
                 }
             }
+            // An empty list is a deliberate choice to have no shortcut.
+            if !nonEmpty.isEmpty && keymap.bindings(for: command).isEmpty { unsaved.append(command) }
         }
         // New or changed defaults must not erase an existing custom map.
         // Leave such a command unbound if its default is already in use.
-        for command in ShortcutCommand.allCases where saved[command.rawValue] == nil {
+        for command in unsaved {
             for binding in command.defaultBindings where keymap.assignment(of: binding, in: command.context) == nil {
                 keymap.set(binding, for: command, slot: keymap.bindings(for: command).count)
             }

@@ -1772,7 +1772,9 @@ private struct StitchingSequencePreview: View {
 
     private var preview: some View {
         PreviewPlayerContent(item: $item, controller: controller, showsPlaybackControls: false,
-                             togglePlaybackControls: {}, keyHandler: { key, modifiers, _ in
+                             togglePlaybackControls: {}, keyHandler: { event in
+            let key = event.charactersIgnoringModifiers ?? ""
+            let modifiers = event.modifierFlags
             guard item.status != .converting,
                   !(NSApp.keyWindow?.firstResponder is NSTextView) else { return false }
             let shortcutModifiers = modifiers.intersection([.command, .control, .option, .shift])

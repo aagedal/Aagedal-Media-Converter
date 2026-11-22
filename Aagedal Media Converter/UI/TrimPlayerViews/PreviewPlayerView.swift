@@ -269,7 +269,7 @@ struct PreviewPlayerView: View {
         }
     }
 
-    private func handleKeyCommand(key: String, modifiers: NSEvent.ModifierFlags, specialKey: NSEvent.SpecialKey? = nil) -> Bool {
+    private func handleKeyCommand(_ event: NSEvent) -> Bool {
         // Native field editors own selection, cursor movement, and typed text.
         // Let AppKit deliver these events instead of treating them as playback commands.
         if let responder = NSApp.keyWindow?.firstResponder,
@@ -278,19 +278,21 @@ struct PreviewPlayerView: View {
         }
 
         // Number keys, +, -, ., : and ; start timecode input (only without modifiers and not already editing)
-        let noModifiers = modifiers.intersection([.command, .option, .control, .shift]).isEmpty
-        if noModifiers && !isEditingTimecode && specialKey == nil
+        let key = event.charactersIgnoringModifiers ?? ""
+        let noModifiers = event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty
+        if noModifiers && !isEditingTimecode && event.specialKey == nil
             && key.rangeOfCharacter(from: CharacterSet(charactersIn: "0123456789+-.:;")) != nil {
             timecodeActivationTrigger = key
             return true
         }
 
-        guard let binding = ShortcutBinding.pressed(characters: key, modifierFlags: modifiers, specialKey: specialKey) else { return false }
-        if let command = ShortcutRegistry.shared.command(for: binding, in: .trim), perform(command) { return true }
+        // The candidates include the U.S. key at the same position, so non-Latin layouts reach ⌘S, I, O and J/K/L.
+        let candidates = ShortcutBinding.candidates(for: event)
+        let registry = ShortcutRegistry.shared
+        if let command = registry.match(candidates, in: .trim)?.command, perform(command) { return true }
         // Arrows and Space with modifiers that do nothing here (such as ⌘→ while the crop
         // controls are closed, or ⇧→) run what the bare key runs, as they always have.
-        guard !binding.modifiers.isEmpty, ["left", "right", "up", "down", "space"].contains(binding.key),
-              let command = ShortcutRegistry.shared.command(for: ShortcutBinding(key: binding.key), in: .trim) else { return false }
+        guard let command = registry.bareKeyMatch(candidates, in: .trim) else { return false }
         return perform(command)
     }
 

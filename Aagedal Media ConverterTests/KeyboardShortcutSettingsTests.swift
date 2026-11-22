@@ -126,22 +126,44 @@ final class KeyboardShortcutSettingsTests: XCTestCase {
         XCTAssertFalse(ShortcutCommand.nextComment.runsWhileEditingText(key("n")), "Only Tab leaves the comment text")
         XCTAssertFalse(ShortcutCommand.previousComment.runsWhileEditingText(key("space")))
         XCTAssertTrue(key("i", .command).isMenuKeyEquivalent)
-        XCTAssertFalse(key("i", .option).isMenuKeyEquivalent)
+        XCTAssertTrue(key("i", .option).isMenuKeyEquivalent, "The text-editing guard keeps ⌥I for focused text")
+        XCTAssertTrue(key("n", .control).isMenuKeyEquivalent)
+        XCTAssertFalse(key("i", .shift).isMenuKeyEquivalent)
         XCTAssertFalse(key("return", .command).isMenuKeyEquivalent)
         XCTAssertTrue(key("f5").isMenuKeyEquivalent)
+        XCTAssertFalse(key("n", .control).isSafeDuringTextEditing, "⌃N moves the insertion point down a line")
+    }
+
+    func testModifiedPlayerKeysFallBackToTheBareKey() throws {
+        XCTAssertEqual(key("right", .shift).bareKeyFallback(in: .fullscreen), key("right"))
+        XCTAssertEqual(key("space", .shift).bareKeyFallback(in: .trim), key("space"))
+        XCTAssertEqual(key("l", .shift).bareKeyFallback(in: .fullscreen), key("l"))
+        XCTAssertNil(key("l", .shift).bareKeyFallback(in: .trim), "The trim view has only ever done this for arrows and Space")
+        XCTAssertNil(key("right").bareKeyFallback(in: .fullscreen), "A bare key has nothing to fall back to")
+        XCTAssertNil(key("down", .command).bareKeyFallback(in: .main))
+        try withDefaults { defaults in
+            let registry = ShortcutRegistry(defaults: defaults)
+            XCTAssertEqual(registry.bareKeyMatch([key("left", .option)], in: .fullscreen), .fullscreenPreviousFrame)
+            XCTAssertEqual(registry.bareKeyMatch([key("о", .shift), key("j", .shift)], in: .fullscreen), .fullscreenPlayReverse,
+                           "The U.S. key at the same position counts on non-Latin layouts")
+            XCTAssertNil(registry.match([key("right", .shift)], in: .fullscreen))
+        }
     }
 
     func testKeyPresses() {
         XCTAssertEqual(ShortcutBinding.pressed(key: "+", modifiers: [.command, .shift]), key("=", .command))
         XCTAssertEqual(ShortcutBinding.pressed(key: "I", modifiers: .shift), key("i", .shift))
-        XCTAssertEqual(ShortcutBinding.pressed(characters: " ", modifierFlags: [], specialKey: nil), key("space"))
-        XCTAssertEqual(ShortcutBinding.pressed(characters: "\u{F702}", modifierFlags: .command, specialKey: .leftArrow), key("left", .command))
-        XCTAssertEqual(ShortcutBinding.pressed(characters: "\u{1b}", modifierFlags: [], specialKey: nil), key("escape"))
-        XCTAssertEqual(ShortcutBinding.pressed(characters: "L", modifierFlags: [.option, .shift], specialKey: nil), key("l", [.option, .shift]))
-        XCTAssertNil(ShortcutBinding.pressed(characters: "", modifierFlags: [], specialKey: nil))
-        let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0, windowNumber: 0,
-                                     context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36)
-        XCTAssertEqual(event.flatMap { ShortcutBinding.pressed($0) }, key("return", .command))
+        func pressed(_ characters: String, _ keyCode: UInt16, _ flags: NSEvent.ModifierFlags = []) -> ShortcutBinding? {
+            NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil,
+                             characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode)
+                .flatMap { ShortcutBinding.pressed($0) }
+        }
+        XCTAssertEqual(pressed("\r", 36, .command), key("return", .command))
+        XCTAssertEqual(pressed(" ", 49), key("space"))
+        XCTAssertEqual(pressed("\u{F702}", 123, .command), key("left", .command))
+        XCTAssertEqual(pressed("\u{1b}", 53), key("escape"))
+        XCTAssertEqual(pressed("L", 37, [.option, .shift]), key("l", [.option, .shift]))
+        XCTAssertNil(pressed("", 37))
         XCTAssertEqual(key("delete", .command).display, "⌘⌫")
         XCTAssertEqual(ShortcutModifiers.allCombinations.count, 16)
     }
@@ -159,6 +181,19 @@ final class KeyboardShortcutSettingsTests: XCTestCase {
         // Latin letters keep their layout's meaning: the French A key types "q".
         XCTAssertEqual(candidates("q", 0, .option), [key("q", .option)])
         XCTAssertEqual(candidates("ø", 41, .command), [key("ø", .command)], "Keys other than letters and digits have no fallback")
+        XCTAssertEqual(ShortcutBinding.candidates(typed: key("е", [.command, .shift]), keyCode: 17), [key("е", [.command, .shift]), key("t", [.command, .shift])])
+        // The editor records the U.S. key, so the shortcut also works after a switch to a Latin layout.
+        let russianT = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0, windowNumber: 0, context: nil,
+                                        characters: "е", charactersIgnoringModifiers: "е", isARepeat: false, keyCode: 17)
+        XCTAssertEqual(russianT.flatMap { ShortcutBinding.recorded($0) }, key("t", .command))
+        let russianKey = VirtualKey(id: "t", keyCode: 17, role: .key(base: "е", shifted: "е"), width: 1, label: "Е", shiftedLabel: nil)
+        XCTAssertEqual(russianKey.candidates(with: .command), [key("е", .command), key("t", .command)])
+        XCTAssertEqual(russianKey.binding(with: .command), key("t", .command))
+        XCTAssertEqual(russianKey.match(with: .command, in: Keymap.defaults.commandsByBinding(in: .main))?.command, .openTrim,
+                       "The on-screen keyboard shows ⌘T on the key that types Е")
+        // Select All goes by the typed character: the AZERTY key at the U.S. A position types Q.
+        XCTAssertFalse(candidates("q", 0, .command).contains(key("a", .command)))
+        XCTAssertTrue(candidates("a", 12, .command).contains(key("a", .command)))
         try withDefaults { defaults in
             let registry = ShortcutRegistry(defaults: defaults)
             XCTAssertEqual(registry.match(candidates("е", 17, .command), in: .main)?.command, .openTrim)
@@ -183,6 +218,24 @@ final class KeyboardShortcutSettingsTests: XCTestCase {
         XCTAssertTrue(restored.keymap.bindings(for: .showRandomTip).isEmpty, "The saved choice keeps ⌃R")
         XCTAssertEqual(restored.rejected, 2)
         XCTAssertEqual(restored.keymap[.toggleConversion], key("return", .command), "Omitted commands keep their defaults")
+
+        // A command whose saved shortcuts are all reserved now gets its default back.
+        let reserved = Keymap.restoring([ShortcutCommand.toggleMerge.rawValue: [key("m", .command)],
+                                         ShortcutCommand.resetAll.rawValue: [key("h", .command)],
+                                         ShortcutCommand.toggleMute.rawValue: []])
+        XCTAssertEqual(reserved.keymap.bindings(for: .toggleMerge), [key("m", .option)])
+        XCTAssertEqual(reserved.keymap.bindings(for: .resetAll), ShortcutCommand.resetAll.defaultBindings)
+        XCTAssertTrue(reserved.keymap.bindings(for: .toggleMute).isEmpty, "An empty list is a choice to have no shortcut")
+        XCTAssertEqual(reserved.rejected, 2)
+    }
+
+    func testPlusMeansTheEqualsKey() {
+        XCTAssertEqual(key("+", .command).normalized, key("=", .command))
+        XCTAssertEqual(key("+", [.command, .shift]).normalized, key("=", .command))
+        let restored = Keymap.restoring([ShortcutCommand.trimCropLarger.rawValue: [key("+", [.command, .option])]])
+        XCTAssertEqual(restored.keymap.bindings(for: .trimCropLarger), [key("=", [.command, .option])])
+        XCTAssertEqual(restored.keymap.command(for: ShortcutBinding.pressed(key: "+", modifiers: [.command, .option, .shift])!, in: .trim),
+                       .trimCropLarger)
     }
 
     func testPresetFiles() throws {
@@ -242,7 +295,27 @@ final class KeyboardShortcutSettingsTests: XCTestCase {
             XCTAssertEqual(registry.bindings(for: .toggleUpload), [key("u", .command), key("e", .command)])
             XCTAssertTrue(registry.bindings(for: .toggleAutoEncode).isEmpty)
             XCTAssertEqual(registry.menuShortcut(for: .importFiles), KeyboardShortcut("i", modifiers: .command))
-            XCTAssertNil(registry.menuShortcut(for: .openMetadata), "Option chords stay out of menus")
+            XCTAssertEqual(registry.menuShortcut(for: .openMetadata), KeyboardShortcut("i", modifiers: .option))
+            // The text-editing guard leaves ⌘I to the menu but hands ⌥I to focused text.
+            XCTAssertEqual(registry.menuBinding(matching: [key("i", .option)]), key("i", .option))
+            XCTAssertFalse(key("i", .option).isSafeDuringTextEditing)
+            XCTAssertTrue(key("i", .command).isSafeDuringTextEditing)
+            XCTAssertNil(registry.menuBinding(matching: [key("u", .option)]))
+        }
+    }
+
+    func testModifiedFollowsTheActivePreset() throws {
+        try withDefaults { defaults in
+            let registry = ShortcutRegistry(defaults: defaults)
+            XCTAssertFalse(registry.isModified)
+            XCTAssertNil(registry.set(key("y", .command), for: .openCapture, slot: 1))
+            XCTAssertTrue(registry.isModified)
+            XCTAssertNil(registry.savePreset(named: "Mine"))
+            XCTAssertFalse(registry.isModified)
+            XCTAssertNil(registry.renamePreset("Mine", to: "Ours"))
+            XCTAssertFalse(registry.isModified)
+            registry.deletePreset(named: "Ours")
+            XCTAssertTrue(registry.isModified, "The keymap now differs from the built-in preset")
         }
     }
 
@@ -262,6 +335,12 @@ final class KeyboardShortcutSettingsTests: XCTestCase {
         try withDefaults { defaults in
             defaults.set(Data("invalid JSON".utf8), forKey: ShortcutRegistry.legacyStorageKey)
             XCTAssertEqual(ShortcutRegistry(defaults: defaults).keymap, .defaults)
+        }
+        try withDefaults { defaults in
+            // Earlier versions allowed ⌘M, which is now Minimize; Merge keeps its default.
+            let legacy: [String: [String: UInt]] = ["merge": ["keyCode": 46, "modifierBits": NSEvent.ModifierFlags.command.rawValue]]
+            defaults.set(try JSONEncoder().encode(legacy), forKey: ShortcutRegistry.legacyStorageKey)
+            XCTAssertEqual(ShortcutRegistry(defaults: defaults).bindings(for: .toggleMerge), [key("m", .option)])
         }
     }
 

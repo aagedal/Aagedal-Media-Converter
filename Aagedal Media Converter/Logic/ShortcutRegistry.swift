@@ -16,10 +16,19 @@ final class ShortcutRegistry: ObservableObject {
         didSet { lookup = Self.lookup(for: keymap) }
     }
     /// Saved presets, not counting the built-in default.
-    @Published private(set) var presets: [KeyboardPreset]
+    @Published private(set) var presets: [KeyboardPreset] {
+        didSet { activePresetKeymap = Self.resolvedKeymap(ofPreset: activePresetName, in: presets) }
+    }
     /// The preset the keymap was last switched to or saved as; edits since then mark it modified.
-    @Published private(set) var activePresetName: String
+    @Published private(set) var activePresetName: String {
+        didSet { activePresetKeymap = Self.resolvedKeymap(ofPreset: activePresetName, in: presets) }
+    }
     private var lookup: [ShortcutContext: [ShortcutBinding: ShortcutCommand]]
+    /// The active preset's keymap, kept so that `isModified` stays cheap for the editor.
+    private var activePresetKeymap: Keymap?
+    /// While the editor records a shortcut, every key goes to the recorder.
+    var isRecording = false
+    private var textEditingGuard: Any?
     private let defaults: UserDefaults
     static let storageKey = "keyboardShortcuts.v2"
     static let presetsKey = "keyboardShortcutPresets.v1"
@@ -44,6 +53,7 @@ final class ShortcutRegistry: ObservableObject {
         let active = defaults.string(forKey: Self.activePresetKey) ?? KeyboardPreset.builtInName
         presets = saved
         activePresetName = saved.contains { $0.name == active } ? active : KeyboardPreset.builtInName
+        activePresetKeymap = Self.resolvedKeymap(ofPreset: activePresetName, in: saved)
         if defaults.object(forKey: Self.legacyStorageKey) != nil { persist() }
     }
 
@@ -53,12 +63,19 @@ final class ShortcutRegistry: ObservableObject {
 
     func bindings(for command: ShortcutCommand) -> [ShortcutBinding] { keymap.bindings(for: command) }
     func command(for binding: ShortcutBinding, in context: ShortcutContext) -> ShortcutCommand? { lookup[context]?[binding] }
+    /// Every assigned shortcut of a context and its command.
+    func commandsByBinding(in context: ShortcutContext) -> [ShortcutBinding: ShortcutCommand] { lookup[context] ?? [:] }
     /// The command that the first of a key press's candidate shortcuts runs, and that shortcut.
     func match(_ candidates: [ShortcutBinding], in context: ShortcutContext) -> (command: ShortcutCommand, binding: ShortcutBinding)? {
         for binding in candidates {
             if let command = command(for: binding, in: context) { return (command, binding) }
         }
         return nil
+    }
+    /// The command that the bare key of a press runs, for presses whose own chord runs
+    /// nothing in a player (see `ShortcutBinding.bareKeyFallback(in:)`).
+    func bareKeyMatch(_ candidates: [ShortcutBinding], in context: ShortcutContext) -> ShortcutCommand? {
+        match(candidates.compactMap { $0.bareKeyFallback(in: context) }, in: context)?.command
     }
     /// The shortcut a menu item shows: the first one menus can deliver without taking keys from text.
     func menuShortcut(for command: ShortcutCommand) -> KeyboardShortcut? {
@@ -97,7 +114,10 @@ final class ShortcutRegistry: ObservableObject {
     }
     var isBuiltInPresetActive: Bool { activePresetName == KeyboardPreset.builtInName }
     /// Whether the keymap has changed since its preset was applied or saved.
-    var isModified: Bool { preset(named: activePresetName).map { $0.resolved.keymap != keymap } ?? true }
+    var isModified: Bool { activePresetKeymap.map { $0 != keymap } ?? true }
+    private static func resolvedKeymap(ofPreset name: String, in presets: [KeyboardPreset]) -> Keymap? {
+        name == KeyboardPreset.builtInName ? .defaults : presets.first { $0.name == name }?.resolved.keymap
+    }
     /// The keymap under the active preset's name, as a file would share it.
     var currentPreset: KeyboardPreset { KeyboardPreset(name: activePresetName, keymap: keymap) }
     /// Switches to a preset, returning how many of its shortcuts this version could not use.
@@ -202,7 +222,8 @@ extension ShortcutBinding {
         15: "r", 16: "y", 17: "t", 18: "1", 19: "2", 20: "3", 21: "4", 22: "6", 23: "5", 25: "9", 26: "7", 28: "8", 29: "0",
         31: "o", 32: "u", 34: "i", 35: "p", 37: "l", 38: "j", 40: "k", 45: "n", 46: "m"]
 
-    /// The shortcut a key press produces, matching how the editor's keyboard labels keys.
+    /// The shortcut a key press types on the current layout, matching how the editor's
+    /// keyboard labels keys.
     static func pressed(_ event: NSEvent) -> ShortcutBinding? {
         guard let key = keyCodeNames[event.keyCode] ?? event.charactersIgnoringModifiers?.lowercased() else { return nil }
         return pressed(key: key, modifiers: ShortcutModifiers(event.modifierFlags))
@@ -212,44 +233,18 @@ extension ShortcutBinding {
     /// that is not a Latin letter or digit, the U.S. letter or digit at the same position.
     /// Non-Latin layouts then still reach ⌘T, and French ones ⌘1, as the menus do.
     static func candidates(for event: NSEvent) -> [ShortcutBinding] {
-        guard let typed = pressed(event) else { return [] }
+        pressed(event).map { candidates(typed: $0, keyCode: event.keyCode) } ?? []
+    }
+    /// The candidates for a key that types `typed`, as `candidates(for:)` gives them.
+    static func candidates(typed: ShortcutBinding, keyCode: UInt16) -> [ShortcutBinding] {
         let isLatinLetterOrDigit = typed.key.count == 1 && typed.key.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber) }
-        guard !isLatinLetterOrDigit, let key = usLetterAndDigitKeys[event.keyCode] else { return [typed] }
-        return [typed, ShortcutBinding(key: key, modifiers: ShortcutModifiers(event.modifierFlags))]
+        guard !isLatinLetterOrDigit, let key = usLetterAndDigitKeys[keyCode] else { return [typed] }
+        return [typed, ShortcutBinding(key: key, modifiers: typed.modifiers)]
     }
-
-    /// The shortcut for a key press described by its characters, as the trim view's
-    /// key handlers report it.
-    static func pressed(characters: String, modifierFlags: NSEvent.ModifierFlags, specialKey: NSEvent.SpecialKey?) -> ShortcutBinding? {
-        let named: String?
-        switch specialKey {
-        case .leftArrow?: named = "left"
-        case .rightArrow?: named = "right"
-        case .upArrow?: named = "up"
-        case .downArrow?: named = "down"
-        case .home?: named = "home"
-        case .end?: named = "end"
-        case .pageUp?: named = "pageup"
-        case .pageDown?: named = "pagedown"
-        case .delete?, .deleteForward?, .backspace?: named = "delete"
-        case .carriageReturn?, .enter?, .newline?: named = "return"
-        case .tab?, .backTab?: named = "tab"
-        case .f1?: named = "f1"
-        case .f2?: named = "f2"
-        case .f3?: named = "f3"
-        case .f4?: named = "f4"
-        case .f5?: named = "f5"
-        case .f6?: named = "f6"
-        case .f7?: named = "f7"
-        case .f8?: named = "f8"
-        case .f9?: named = "f9"
-        case .f10?: named = "f10"
-        case .f11?: named = "f11"
-        case .f12?: named = "f12"
-        default: named = [" ": "space", "\u{1b}": "escape", "\r": "return", "\t": "tab", "\u{19}": "tab", "\u{7f}": "delete"][characters]
-        }
-        return pressed(key: named ?? characters.lowercased(), modifiers: ShortcutModifiers(modifierFlags))
-    }
+    /// The shortcut the editor records for a key press: the last candidate, which is the
+    /// U.S. letter or digit when the layout types something else there. It then works
+    /// after a switch to any other layout, as menu shortcuts do.
+    static func recorded(_ event: NSEvent) -> ShortcutBinding? { candidates(for: event).last }
 
     var keyEquivalent: KeyEquivalent? {
         guard !isEmpty else { return nil }
@@ -282,4 +277,38 @@ extension ShortcutBinding {
         return result
     }
     var keyboardShortcut: KeyboardShortcut? { keyEquivalent.map { KeyboardShortcut($0, modifiers: eventModifiers) } }
+}
+
+// MARK: - Menu shortcuts and text entry
+
+extension ShortcutCommand {
+    /// Commands with a menu item, whose shortcut the menu delivers in every window.
+    static let menuCommands: [ShortcutCommand] = [.newEncodingGroup, .importFiles, .importCameraCard, .openMetadata]
+}
+
+extension ShortcutRegistry {
+    /// Menus take their key equivalents before focused text sees the key, so a menu
+    /// shortcut such as ⌥I or ⌃N would otherwise stop the text from typing or editing.
+    /// This guard hands those presses straight to the text instead.
+    func installTextEditingGuard() {
+        guard textEditingGuard == nil else { return }
+        textEditingGuard = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let candidates = ShortcutBinding.candidates(for: event)
+            let handedToText = MainActor.assumeIsolated { () -> Bool in
+                let registry = ShortcutRegistry.shared
+                guard !registry.isRecording,
+                      let textView = event.window?.firstResponder as? NSTextView, textView.isEditable,
+                      let binding = registry.menuBinding(matching: candidates),
+                      !binding.isSafeDuringTextEditing else { return false }
+                textView.keyDown(with: event)
+                return true
+            }
+            return handedToText ? nil : event
+        }
+    }
+    /// The menu shortcut among a key press's candidates, if any.
+    func menuBinding(matching candidates: [ShortcutBinding]) -> ShortcutBinding? {
+        let menuBindings = ShortcutCommand.menuCommands.compactMap { command in keymap.bindings(for: command).first { $0.isMenuKeyEquivalent } }
+        return candidates.first { menuBindings.contains($0) }
+    }
 }

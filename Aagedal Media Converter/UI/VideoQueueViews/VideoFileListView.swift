@@ -2009,14 +2009,15 @@ private struct KeyEventHandlingView: NSViewRepresentable {
                 }
 
                 // ⌘A selects all rows, like the standard Select All command it stands in for.
-                if event.modifierFlags.intersection([.command, .option, .shift, .control]) == .command
-                    && event.keyCode == kVK_ANSI_A {
+                // It goes by the typed character, as other shortcuts do, so the AZERTY Q key
+                // (where U.S. keyboards have A) still quits.
+                let candidates = ShortcutBinding.candidates(for: event)
+                if candidates.contains(ShortcutBinding(key: "a", modifiers: .command)) {
                     if editingText { return event }
                     self.onSelectAll()
                     return nil
                 }
 
-                let candidates = ShortcutBinding.candidates(for: event)
                 guard let found = MainActor.assumeIsolated({ ShortcutRegistry.shared.match(candidates, in: .main) }),
                       found.command.isQueueCommand else { return event }
                 let (command, pressed) = found

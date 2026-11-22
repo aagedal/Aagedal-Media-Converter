@@ -24,11 +24,22 @@ struct VirtualKey: Identifiable, Hashable {
     /// The legend above the main one, such as ! over 1.
     let shiftedLabel: String?
 
-    /// The shortcut this key produces with the given modifiers held, matching
-    /// `ShortcutBinding.pressed(_:)` for the same press.
-    func binding(with modifiers: ShortcutModifiers) -> ShortcutBinding? {
-        guard case let .key(base, shifted) = role else { return nil }
-        return ShortcutBinding.pressed(key: modifiers.contains(.shift) ? shifted : base, modifiers: modifiers)
+    /// The shortcuts a press of this key with the given modifiers may mean, matching
+    /// `ShortcutBinding.candidates(for:)` for the same press.
+    func candidates(with modifiers: ShortcutModifiers) -> [ShortcutBinding] {
+        guard case let .key(base, shifted) = role,
+              let typed = ShortcutBinding.pressed(key: modifiers.contains(.shift) ? shifted : base, modifiers: modifiers) else { return [] }
+        return keyCode.map { ShortcutBinding.candidates(typed: typed, keyCode: $0) } ?? [typed]
+    }
+    /// The shortcut the editor assigns to this key with the given modifiers held, matching
+    /// `ShortcutBinding.recorded(_:)`: the U.S. letter or digit where the layout types another character.
+    func binding(with modifiers: ShortcutModifiers) -> ShortcutBinding? { candidates(with: modifiers).last }
+    /// The command a press of this key runs, and the shortcut that runs it.
+    func match(with modifiers: ShortcutModifiers, in commands: [ShortcutBinding: ShortcutCommand]) -> (command: ShortcutCommand, binding: ShortcutBinding)? {
+        for binding in candidates(with: modifiers) {
+            if let command = commands[binding] { return (command, binding) }
+        }
+        return nil
     }
     /// Every distinct shortcut this key can produce, fewest modifiers first.
     var bindings: [(modifiers: ShortcutModifiers, binding: ShortcutBinding)] {
@@ -72,7 +83,7 @@ struct VirtualKeyboardLayout: Equatable {
     func key(id: VirtualKey.ID?) -> VirtualKey? { keys.first { $0.id == id } }
     /// The key that produces a shortcut on this layout, if any does.
     func key(for binding: ShortcutBinding) -> VirtualKey? {
-        keys.first { $0.binding(with: binding.modifiers) == binding.normalized }
+        keys.first { $0.candidates(with: binding.modifiers).contains(binding.normalized) }
     }
 
     private enum Spec {
@@ -303,8 +314,8 @@ private struct KeyboardRows: View {
                 .opacity(0.5)
         case .key:
             let binding = key.binding(with: layer)
-            let command = binding.flatMap { commands[$0] }
-            let others = key.bindings.filter { $0.binding != binding }.compactMap { commands[$0.binding] }
+            let command = key.match(with: layer, in: commands)?.command
+            let others = key.bindings.filter { $0.binding != binding }.compactMap { key.match(with: $0.modifiers, in: commands)?.command }
             Button { select(key) } label: {
                 KeyCapView(key: key, command: command, reserved: command == nil ? binding?.reservation(in: context)?.title : nil,
                            otherLayers: others, isSelected: selectedKeyID == key.id, isHighlighted: highlightedKeyIDs.contains(key.id),
@@ -321,7 +332,7 @@ private struct KeyboardRows: View {
     }
 
     private func summary(_ key: VirtualKey) -> String {
-        let lines = key.bindings.compactMap { entry in commands[entry.binding].map { "\(entry.binding.display)  \($0.title)" } }
+        let lines = key.bindings.compactMap { entry in key.match(with: entry.modifiers, in: commands).map { "\(entry.binding.display)  \($0.command.title)" } }
         return ([key.name] + (lines.isEmpty ? [String(localized: "No shortcuts")] : lines)).joined(separator: "\n")
     }
 }
@@ -396,7 +407,7 @@ private struct KeyCapView: View {
 struct KeyDetailView: View {
     let key: VirtualKey?
     let context: ShortcutContext
-    let keymap: Keymap
+    let commands: [ShortcutBinding: ShortcutCommand]
     let layer: ShortcutModifiers
     let selectedCommand: ShortcutCommand?
     let assign: (ShortcutBinding) -> Void
@@ -409,17 +420,19 @@ struct KeyDetailView: View {
                 HStack {
                     Text(key.name).font(.headline)
                     Spacer()
-                    let used = key.bindings.filter { keymap.command(for: $0.binding, in: context) != nil }.count
+                    let used = key.bindings.filter { key.match(with: $0.modifiers, in: commands) != nil }.count
                     Text("\(used) of \(key.bindings.count) used").font(.caption).foregroundStyle(.secondary)
                 }
                 ScrollView {
                     VStack(spacing: 2) {
                         let current = key.binding(with: layer)
-                        ForEach(key.bindings.map { $0.binding }, id: \.self) { binding in row(binding, inLayer: binding == current) }
+                        ForEach(Array(key.bindings.enumerated()), id: \.offset) { _, entry in
+                            row(entry.binding, assigned: key.match(with: entry.modifiers, in: commands), inLayer: entry.binding == current)
+                        }
                     }
                 }
                 if let selectedCommand, selectedCommand.context == context, let binding = key.binding(with: layer),
-                   keymap.command(for: binding, in: context) == nil, binding.validationError(for: selectedCommand) == nil {
+                   key.match(with: layer, in: commands) == nil, binding.validationError(for: selectedCommand) == nil {
                     Button(String(localized: "Assign “\(selectedCommand.title)” to \(binding.display)")) { assign(binding) }
                         .frame(maxWidth: .infinity)
                 }
@@ -436,8 +449,9 @@ struct KeyDetailView: View {
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.07)))
     }
 
-    private func row(_ binding: ShortcutBinding, inLayer: Bool) -> some View {
-        let command = keymap.command(for: binding, in: context)
+    /// One modifier combination of the key, and the command its press runs, if any.
+    private func row(_ binding: ShortcutBinding, assigned: (command: ShortcutCommand, binding: ShortcutBinding)?, inLayer: Bool) -> some View {
+        let command = assigned?.command
         return HStack(spacing: 8) {
             Text(verbatim: binding.display)
                 .font(.callout.monospaced())
@@ -453,7 +467,7 @@ struct KeyDetailView: View {
                 }
                 .buttonStyle(.plain)
                 .help(command.title)
-                Button { remove(binding) } label: { Image(systemName: "xmark.circle.fill") }
+                Button { remove(assigned?.binding ?? binding) } label: { Image(systemName: "xmark.circle.fill") }
                     .buttonStyle(.plain)
                     .foregroundStyle(.tertiary)
                     .help("Remove this shortcut")
