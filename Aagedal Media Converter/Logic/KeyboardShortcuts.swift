@@ -298,9 +298,10 @@ enum ShortcutCommand: String, CaseIterable, Identifiable, Sendable {
     /// apart from timecode, and queue keys are left to focused text.
     var allowsUnmodifiedKey: Bool { context != .main || isQueueCommand }
     /// Whether a shortcut runs this command while a text field has focus. Tab moves
-    /// between the queue's comment fields, so those commands run from inside them.
+    /// between the queue's comment fields, so the comment commands take it from inside them;
+    /// any other key bound to them stays with the text.
     func runsWhileEditingText(_ binding: ShortcutBinding) -> Bool {
-        self == .nextComment || self == .previousComment || binding.isSafeDuringTextEditing
+        ((self == .nextComment || self == .previousComment) && binding.normalized.key == "tab") || binding.isSafeDuringTextEditing
     }
 
     /// The preset position (0 for the first) that a Select Preset command picks.

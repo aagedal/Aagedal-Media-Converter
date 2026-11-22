@@ -749,7 +749,11 @@ struct VideoFileListView: View {
             })
             return inDroppedFiles || inEncodingGroup
         }
-        guard !selectedIDs.isEmpty else { return }
+        // With nothing selected, do what the Show Metadata menu item does.
+        guard !selectedIDs.isEmpty else {
+            MetadataWindowController.shared.showWindow()
+            return
+        }
         onOpenMetadata?(Array(selectedIDs))
     }
     
@@ -2012,9 +2016,10 @@ private struct KeyEventHandlingView: NSViewRepresentable {
                     return nil
                 }
 
-                guard let pressed = ShortcutBinding.pressed(event),
-                      let command = MainActor.assumeIsolated({ ShortcutRegistry.shared.command(for: pressed, in: .main) }),
-                      command.isQueueCommand else { return event }
+                let candidates = ShortcutBinding.candidates(for: event)
+                guard let found = MainActor.assumeIsolated({ ShortcutRegistry.shared.match(candidates, in: .main) }),
+                      found.command.isQueueCommand else { return event }
+                let (command, pressed) = found
                 // Focused text keeps the keys that type or edit it, but Tab still moves
                 // between the comment fields.
                 if editingText && !command.runsWhileEditingText(pressed) { return event }

@@ -53,6 +53,13 @@ final class ShortcutRegistry: ObservableObject {
 
     func bindings(for command: ShortcutCommand) -> [ShortcutBinding] { keymap.bindings(for: command) }
     func command(for binding: ShortcutBinding, in context: ShortcutContext) -> ShortcutCommand? { lookup[context]?[binding] }
+    /// The command that the first of a key press's candidate shortcuts runs, and that shortcut.
+    func match(_ candidates: [ShortcutBinding], in context: ShortcutContext) -> (command: ShortcutCommand, binding: ShortcutBinding)? {
+        for binding in candidates {
+            if let command = command(for: binding, in: context) { return (command, binding) }
+        }
+        return nil
+    }
     /// The shortcut a menu item shows: the first one menus can deliver without taking keys from text.
     func menuShortcut(for command: ShortcutCommand) -> KeyboardShortcut? {
         keymap.bindings(for: command).first { $0.isMenuKeyEquivalent }?.keyboardShortcut
@@ -165,10 +172,7 @@ final class ShortcutRegistry: ObservableObject {
             "watchFolder": .toggleWatchFolder, "outputFolder": .selectOutputFolder, "merge": .toggleMerge, "resetAll": .resetAll,
             "conversion": .toggleConversion, "download": .showURLInput, "capture": .openCapture, "presets": .showPresetQuickSelect,
             "shortcuts": .showShortcuts]
-        let keys: [UInt16: String] = [
-            0: "a", 1: "s", 2: "d", 3: "f", 4: "h", 5: "g", 6: "z", 7: "x", 8: "c", 9: "v", 11: "b", 12: "q", 13: "w", 14: "e",
-            15: "r", 16: "y", 17: "t", 18: "1", 19: "2", 20: "3", 21: "4", 22: "6", 23: "5", 25: "9", 26: "7", 28: "8", 29: "0",
-            31: "o", 32: "u", 34: "i", 35: "p", 36: "return", 37: "l", 38: "j", 40: "k", 45: "n", 46: "m"]
+        let keys = ShortcutBinding.usLetterAndDigitKeys.merging([36: "return"]) { current, _ in current }
         var choices: [String: [ShortcutBinding]] = [:]
         for (name, legacy) in saved {
             guard let command = commands[name], let key = keys[legacy.keyCode] else { continue }
@@ -192,10 +196,26 @@ extension ShortcutModifiers {
 }
 
 extension ShortcutBinding {
+    /// The letters and digits of a U.S. keyboard by virtual key code.
+    static let usLetterAndDigitKeys: [UInt16: String] = [
+        0: "a", 1: "s", 2: "d", 3: "f", 4: "h", 5: "g", 6: "z", 7: "x", 8: "c", 9: "v", 11: "b", 12: "q", 13: "w", 14: "e",
+        15: "r", 16: "y", 17: "t", 18: "1", 19: "2", 20: "3", 21: "4", 22: "6", 23: "5", 25: "9", 26: "7", 28: "8", 29: "0",
+        31: "o", 32: "u", 34: "i", 35: "p", 37: "l", 38: "j", 40: "k", 45: "n", 46: "m"]
+
     /// The shortcut a key press produces, matching how the editor's keyboard labels keys.
     static func pressed(_ event: NSEvent) -> ShortcutBinding? {
         guard let key = keyCodeNames[event.keyCode] ?? event.charactersIgnoringModifiers?.lowercased() else { return nil }
         return pressed(key: key, modifiers: ShortcutModifiers(event.modifierFlags))
+    }
+
+    /// The shortcuts a key press may mean, in order: the one the layout types and, when
+    /// that is not a Latin letter or digit, the U.S. letter or digit at the same position.
+    /// Non-Latin layouts then still reach ⌘T, and French ones ⌘1, as the menus do.
+    static func candidates(for event: NSEvent) -> [ShortcutBinding] {
+        guard let typed = pressed(event) else { return [] }
+        let isLatinLetterOrDigit = typed.key.count == 1 && typed.key.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber) }
+        guard !isLatinLetterOrDigit, let key = usLetterAndDigitKeys[event.keyCode] else { return [typed] }
+        return [typed, ShortcutBinding(key: key, modifiers: ShortcutModifiers(event.modifierFlags))]
     }
 
     /// The shortcut for a key press described by its characters, as the trim view's

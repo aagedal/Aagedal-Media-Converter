@@ -285,8 +285,12 @@ struct PreviewPlayerView: View {
             return true
         }
 
-        guard let binding = ShortcutBinding.pressed(characters: key, modifierFlags: modifiers, specialKey: specialKey),
-              let command = ShortcutRegistry.shared.command(for: binding, in: .trim) else { return false }
+        guard let binding = ShortcutBinding.pressed(characters: key, modifierFlags: modifiers, specialKey: specialKey) else { return false }
+        if let command = ShortcutRegistry.shared.command(for: binding, in: .trim), perform(command) { return true }
+        // Arrows and Space with modifiers that do nothing here (such as ⌘→ while the crop
+        // controls are closed, or ⇧→) run what the bare key runs, as they always have.
+        guard !binding.modifiers.isEmpty, ["left", "right", "up", "down", "space"].contains(binding.key),
+              let command = ShortcutRegistry.shared.command(for: ShortcutBinding(key: binding.key), in: .trim) else { return false }
         return perform(command)
     }
 
