@@ -37,7 +37,7 @@
 - Shortcuts in the main window, the trim view and the fullscreen player can all be changed, separately, so a key can do different things in each. Each command can have two shortcuts. Record one in the command list or drag a command onto a key; reserved keys are explained, and a key that is taken can be reassigned.
 - Save sets of shortcuts as presets, switch between them, and share them as .amckeys files to import on another Mac.
 - Menu items show the shortcuts you choose. Option shortcuts no longer fire while you type in a comment field, so ⌥ characters can be typed there, and neither do Control keys that edit text, such as ⌃D and ⌃K. Shortcuts customised in earlier versions are kept.
-- On keyboard layouts that don't type Latin letters, such as Russian or Greek, and on French layouts for digits, a letter or digit shortcut also works from the key in that position on a U.S. keyboard.
+- On keyboard layouts that don't type Latin letters, such as Russian or Greek, and on French layouts for digits, a letter or digit shortcut also works from the key in that position on a U.S. keyboard, in the trim view too. Shortcuts recorded on such a layout keep working after a switch to another layout.
 
 ### Whisper transcription
 

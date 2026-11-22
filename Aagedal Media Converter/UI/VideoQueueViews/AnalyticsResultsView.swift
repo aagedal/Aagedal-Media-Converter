@@ -1035,8 +1035,8 @@ private struct QualityInspectionView: View {
                     .pickerStyle(.segmented)
                     .accessibilityIdentifier("analysis.inspection.preview")
                     ZStack {
-                        MPVVideoView(player: player, keyHandler: { key, _, _ in
-                            guard key == " ", !preparing else { return false }
+                        MPVVideoView(player: player, keyHandler: { event in
+                            guard event.charactersIgnoringModifiers == " ", !preparing else { return false }
                             player.togglePause()
                             return true
                         })

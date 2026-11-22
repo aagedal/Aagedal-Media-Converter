@@ -104,8 +104,8 @@ struct AudioPhaseAnalysisView: View {
                 .frame(width: 340)
                 VStack(alignment: .leading, spacing: 12) {
                     ZStack {
-                        MPVVideoView(player: player, keyHandler: { key, _, _ in
-                            guard key == " ", previewReady else { return false }
+                        MPVVideoView(player: player, keyHandler: { event in
+                            guard event.charactersIgnoringModifiers == " ", previewReady else { return false }
                             player.togglePause()
                             return true
                         })

@@ -13,7 +13,7 @@ struct PreviewPlayerContent: View {
     @ObservedObject var controller: PreviewPlayerController
     let showsPlaybackControls: Bool
     let togglePlaybackControls: () -> Void
-    let keyHandler: (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool
+    let keyHandler: (NSEvent) -> Bool
     @Binding var currentPlaybackTime: Double
     /// Aspect ratio chosen in the crop panel. Kept outside `item.cropConfig` because an
     /// uncropped frame stores no config, yet a lock chosen for it must still apply to drags.
@@ -342,7 +342,7 @@ private struct PlayerContainerView: NSViewRepresentable {
     let controller: PreviewPlayerController
     let showsPlaybackControls: Bool
     let showsTransparency: Bool
-    let keyHandler: (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool
+    let keyHandler: (NSEvent) -> Bool
 
     func makeNSView(context: Context) -> TransparentAVPlayerView {
         let playerView = TransparentAVPlayerView()
@@ -384,9 +384,9 @@ private struct PlayerContainerView: NSViewRepresentable {
         private var monitor: Any?
         private weak var attachedView: AVPlayerView?
         var showsPlaybackControls: Bool = false
-        private let keyHandler: (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool
+        private let keyHandler: (NSEvent) -> Bool
 
-        init(keyHandler: @escaping (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool) {
+        init(keyHandler: @escaping (NSEvent) -> Bool) {
             self.keyHandler = keyHandler
         }
 
@@ -407,8 +407,8 @@ private struct PlayerContainerView: NSViewRepresentable {
                     return event
                 }
 
-                guard let characters = event.charactersIgnoringModifiers, !characters.isEmpty else { return event }
-                let handled = self.keyHandler(characters, event.modifierFlags, event.specialKey)
+                guard event.charactersIgnoringModifiers?.isEmpty == false else { return event }
+                let handled = self.keyHandler(event)
                 return handled ? nil : event
             }
         }
@@ -424,7 +424,7 @@ private struct PlayerContainerView: NSViewRepresentable {
 /// Invisible NSView that captures keyboard events for image sequence preview.
 /// Uses the same NSEvent local monitor pattern as PlayerContainerView.
 private struct KeyboardCapturingView: NSViewRepresentable {
-    let keyHandler: (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool
+    let keyHandler: (NSEvent) -> Bool
 
     func makeNSView(context: Context) -> KeyCapturingNSView {
         let view = KeyCapturingNSView()
@@ -443,17 +443,17 @@ private struct KeyboardCapturingView: NSViewRepresentable {
     final class Coordinator: NSObject {
         private var monitor: Any?
         weak var attachedView: NSView?
-        private let keyHandler: (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool
+        private let keyHandler: (NSEvent) -> Bool
 
-        init(keyHandler: @escaping (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool) {
+        init(keyHandler: @escaping (NSEvent) -> Bool) {
             self.keyHandler = keyHandler
             super.init()
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 guard let self else { return event }
                 guard let view = self.attachedView,
                       MainActor.assumeIsolated({ view.window?.isKeyWindow == true }) else { return event }
-                guard let characters = event.charactersIgnoringModifiers, !characters.isEmpty else { return event }
-                let handled = self.keyHandler(characters, event.modifierFlags, event.specialKey)
+                guard event.charactersIgnoringModifiers?.isEmpty == false else { return event }
+                let handled = self.keyHandler(event)
                 return handled ? nil : event
             }
         }

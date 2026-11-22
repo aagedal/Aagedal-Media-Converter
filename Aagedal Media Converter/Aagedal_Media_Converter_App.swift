@@ -270,6 +270,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         await PreviewAssetGenerator.shared.terminateAllProcesses()
     }
 
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Menu shortcuts such as ⌥I must not take typing keys from focused text.
+        ShortcutRegistry.shared.installTextEditingGuard()
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         let runningCount = EncodeHistoryStore.shared.runningItemCount
         if runningCount > 0, Self.shouldConfirmQuitWhileEncoding, !Self.confirmQuitWhileEncoding(runningCount: runningCount) {

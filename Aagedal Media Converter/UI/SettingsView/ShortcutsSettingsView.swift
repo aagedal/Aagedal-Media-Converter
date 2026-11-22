@@ -49,7 +49,7 @@ struct ShortcutsSettingsView: View {
         VStack(alignment: .leading, spacing: 10) {
             presetBar
             contextBar
-            VirtualKeyboardView(layout: layout, context: context, commands: registry.keymap.commandsByBinding(in: context), layer: layer,
+            VirtualKeyboardView(layout: layout, context: context, commands: registry.commandsByBinding(in: context), layer: layer,
                                 selectedKeyID: selectedKeyID, highlightedKeyIDs: highlightedKeyIDs,
                                 select: { selectedKeyID = $0.id },
                                 toggleModifier: { clickedModifiers.formSymmetricDifference($0) },
@@ -59,7 +59,7 @@ struct ShortcutsSettingsView: View {
             filterBar
             HStack(alignment: .top, spacing: 12) {
                 commandTable
-                KeyDetailView(key: selectedKey, context: context, keymap: registry.keymap, layer: layer, selectedCommand: selectedCommand,
+                KeyDetailView(key: selectedKey, context: context, commands: registry.commandsByBinding(in: context), layer: layer, selectedCommand: selectedCommand,
                               assign: { binding in selectedCommand.map { assign(binding, to: $0, slot: nil) } },
                               remove: { binding in remove(binding) },
                               selectCommand: { selectedCommand = $0 })
@@ -280,7 +280,9 @@ struct ShortcutsSettingsView: View {
     /// Keys holding any shortcut of the selected command, in any modifier layer.
     private var highlightedKeyIDs: Set<VirtualKey.ID> {
         guard let selectedCommand, selectedCommand.context == context else { return [] }
-        return Set(registry.bindings(for: selectedCommand).flatMap { binding in layout.keys.filter { $0.binding(with: binding.modifiers) == binding }.map(\.id) })
+        return Set(registry.bindings(for: selectedCommand).flatMap { binding in
+            layout.keys.filter { $0.candidates(with: binding.modifiers).contains(binding) }.map(\.id)
+        })
     }
 
     private var contextCategories: [ShortcutCategory] {
@@ -500,7 +502,10 @@ final class ShortcutRecorder: ObservableObject {
         let command: ShortcutCommand
         let slot: Int
     }
-    @Published private(set) var target: Target?
+    @Published private(set) var target: Target? {
+        // Keeps the text-editing guard from handing the recorded key to a focused field.
+        didSet { ShortcutRegistry.shared.isRecording = target != nil }
+    }
     @Published private(set) var heldModifiers: ShortcutModifiers = []
     var record: ((ShortcutBinding, Target) -> Void)?
     private var monitors: [Any] = []
@@ -517,7 +522,9 @@ final class ShortcutRecorder: ObservableObject {
         // otherwise handle, so that reserved chords can be explained rather than run.
         let keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             let window = event.window
-            let pressed = ShortcutBinding.pressed(event)
+            // Recorded by U.S. position where the layout types another character, so the
+            // shortcut keeps working after a switch to another layout.
+            let pressed = ShortcutBinding.recorded(event)
             let recorded = !event.isARepeat && MainActor.assumeIsolated { () -> Bool in
                 guard let self, let target = self.target, window === self.window else { return false }
                 self.target = nil

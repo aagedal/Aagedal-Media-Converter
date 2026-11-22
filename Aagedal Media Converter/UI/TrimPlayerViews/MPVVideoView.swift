@@ -91,7 +91,7 @@ final class MPVViewController: NSViewController {
 
 struct MPVVideoView: NSViewControllerRepresentable {
     let player: MPVPlayer
-    let keyHandler: (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool
+    let keyHandler: (NSEvent) -> Bool
 
     func makeNSViewController(context: Context) -> MPVViewController {
         let viewController = MPVViewController(player: player)
@@ -109,10 +109,10 @@ struct MPVVideoView: NSViewControllerRepresentable {
 
     final class Coordinator: NSObject, @unchecked Sendable {
         private var monitor: Any?
-        private let keyHandler: (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool
+        private let keyHandler: (NSEvent) -> Bool
         weak var viewController: MPVViewController?
 
-        init(keyHandler: @escaping (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool) {
+        init(keyHandler: @escaping (NSEvent) -> Bool) {
             self.keyHandler = keyHandler
             super.init()
 
@@ -129,10 +129,10 @@ struct MPVVideoView: NSViewControllerRepresentable {
                     return event
                 }
 
-                guard let characters = event.charactersIgnoringModifiers, !characters.isEmpty else { return event }
+                guard event.charactersIgnoringModifiers?.isEmpty == false else { return event }
 
                 // Process keyboard events - the handler decides if they should be handled
-                let handled = self.keyHandler(characters, event.modifierFlags, event.specialKey)
+                let handled = self.keyHandler(event)
                 return handled ? nil : event
             }
         }
