@@ -3642,15 +3642,16 @@ private struct GlobalKeyboardShortcutHandler: NSViewRepresentable {
                 // Queue commands are left to the queue's own monitor, which stands aside
                 // while overlays are open. Local event monitors are delivered on the main thread.
                 let eventWindowNumber = event.windowNumber
-                guard let hostView = self.hostView, let pressed = ShortcutBinding.pressed(event) else { return event }
+                guard let hostView = self.hostView else { return event }
+                let candidates = ShortcutBinding.candidates(for: event)
                 let match = MainActor.assumeIsolated { () -> ShortcutCommand? in
                     guard let window = hostView.window,
                           window.windowNumber == eventWindowNumber, window.isKeyWindow, window.attachedSheet == nil,
-                          let command = ShortcutRegistry.shared.command(for: pressed, in: .main),
-                          !command.isQueueCommand else { return nil }
+                          let found = ShortcutRegistry.shared.match(candidates, in: .main),
+                          !found.command.isQueueCommand else { return nil }
                     // Focused text keeps the keys that type or edit it.
-                    if window.firstResponder is NSText && !command.runsWhileEditingText(pressed) { return nil }
-                    return command
+                    if window.firstResponder is NSText && !found.command.runsWhileEditingText(found.binding) { return nil }
+                    return found.command
                 }
                 guard let command = match else { return event }
 

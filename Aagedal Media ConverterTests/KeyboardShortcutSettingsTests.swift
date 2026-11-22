@@ -114,11 +114,17 @@ final class KeyboardShortcutSettingsTests: XCTestCase {
 
     func testTextEditingKeepsTypingAndNavigationKeys() {
         XCTAssertTrue(ShortcutCommand.toggleConversion.runsWhileEditingText(key("return", .command)))
-        XCTAssertTrue(ShortcutCommand.toggleDateTag.runsWhileEditingText(key("d", .control)))
+        XCTAssertTrue(ShortcutCommand.cycleSort.runsWhileEditingText(key("s", .control)))
+        XCTAssertFalse(ShortcutCommand.toggleDateTag.runsWhileEditingText(key("d", .control)), "⌃D deletes forward in text")
+        XCTAssertFalse(ShortcutCommand.showShortcuts.runsWhileEditingText(key("k", .control)), "⌃K deletes to the line end in text")
+        XCTAssertTrue(ShortcutCommand.toggleDateTag.runsWhileEditingText(key("d", [.command, .control])))
         XCTAssertFalse(ShortcutCommand.moveItemsUp.runsWhileEditingText(key("up", .command)))
         XCTAssertFalse(ShortcutCommand.openCrop.runsWhileEditingText(key("c", .option)), "Option types characters")
         XCTAssertFalse(ShortcutCommand.removeSelected.runsWhileEditingText(key("delete", .command)))
         XCTAssertTrue(ShortcutCommand.nextComment.runsWhileEditingText(key("tab")))
+        XCTAssertTrue(ShortcutCommand.previousComment.runsWhileEditingText(key("tab", .shift)))
+        XCTAssertFalse(ShortcutCommand.nextComment.runsWhileEditingText(key("n")), "Only Tab leaves the comment text")
+        XCTAssertFalse(ShortcutCommand.previousComment.runsWhileEditingText(key("space")))
         XCTAssertTrue(key("i", .command).isMenuKeyEquivalent)
         XCTAssertFalse(key("i", .option).isMenuKeyEquivalent)
         XCTAssertFalse(key("return", .command).isMenuKeyEquivalent)
@@ -138,6 +144,26 @@ final class KeyboardShortcutSettingsTests: XCTestCase {
         XCTAssertEqual(event.flatMap { ShortcutBinding.pressed($0) }, key("return", .command))
         XCTAssertEqual(key("delete", .command).display, "⌘⌫")
         XCTAssertEqual(ShortcutModifiers.allCombinations.count, 16)
+    }
+
+    func testKeyPressesOnOtherLayoutsAlsoMatchTheUSKey() throws {
+        func candidates(_ characters: String, _ keyCode: UInt16, _ flags: NSEvent.ModifierFlags) -> [ShortcutBinding] {
+            NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil,
+                             characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode)
+                .map { ShortcutBinding.candidates(for: $0) } ?? []
+        }
+        // Russian: the T key types "е".
+        XCTAssertEqual(candidates("е", 17, .command), [key("е", .command), key("t", .command)])
+        // French: the 1 key types "&" without Shift.
+        XCTAssertEqual(candidates("&", 18, .command), [key("&", .command), key("1", .command)])
+        // Latin letters keep their layout's meaning: the French A key types "q".
+        XCTAssertEqual(candidates("q", 0, .option), [key("q", .option)])
+        XCTAssertEqual(candidates("ø", 41, .command), [key("ø", .command)], "Keys other than letters and digits have no fallback")
+        try withDefaults { defaults in
+            let registry = ShortcutRegistry(defaults: defaults)
+            XCTAssertEqual(registry.match(candidates("е", 17, .command), in: .main)?.command, .openTrim)
+            XCTAssertEqual(registry.match(candidates("&", 18, .command), in: .main)?.command, .selectPreset1)
+        }
     }
 
     func testRestoringKeepsChoicesAndDropsInvalidShortcuts() {

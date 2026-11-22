@@ -26,6 +26,9 @@ struct ShortcutBinding: Codable, Hashable, Sendable {
     static let namedKeys = ["left", "right", "up", "down", "home", "end", "pageup", "pagedown", "delete", "return", "escape", "space", "tab"]
     /// Keys that move the insertion point or delete text, which focused text keeps even with ⌘ or ⌃.
     static let textEditingKeys: Set<String> = ["left", "right", "up", "down", "home", "end", "pageup", "pagedown", "delete"]
+    /// Control-letter chords that Cocoa text fields use for editing, such as ⌃A (line start),
+    /// ⌃D (delete forward) and ⌃K (delete to line end).
+    static let textEditingControlKeys: Set<String> = ["a", "b", "d", "e", "f", "h", "k", "l", "n", "o", "p", "t", "v", "y"]
     static let functionKeys = (1...12).map { "f\($0)" }
     /// macOS virtual key codes of the keys that have names rather than characters.
     /// Forward delete and keypad enter share the names of delete and return.
@@ -78,10 +81,12 @@ struct ShortcutBinding: Codable, Hashable, Sendable {
     }
 
     /// Whether the shortcut may run while text has focus: function keys, and Command or
-    /// Control chords other than those that move the insertion point or delete text.
+    /// Control chords other than those that move the insertion point or edit text.
     var isSafeDuringTextEditing: Bool {
         let shortcut = normalized
-        return shortcut.isFunctionKey || ((shortcut.command || shortcut.control) && !Self.textEditingKeys.contains(shortcut.key))
+        if shortcut.isFunctionKey { return true }
+        guard (shortcut.command || shortcut.control) && !Self.textEditingKeys.contains(shortcut.key) else { return false }
+        return shortcut.command || !Self.textEditingControlKeys.contains(shortcut.key)
     }
     /// Menus show only chords that never take keys from text entry; the window's key
     /// monitors deliver every other shortcut.

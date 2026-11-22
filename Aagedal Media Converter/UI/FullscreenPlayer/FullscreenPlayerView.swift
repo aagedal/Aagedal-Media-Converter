@@ -1473,8 +1473,8 @@ private struct FullscreenKeyboardHandler: NSViewRepresentable {
                     return nil
                 }
 
-                guard let pressed = ShortcutBinding.pressed(event),
-                      let command = MainActor.assumeIsolated({ ShortcutRegistry.shared.command(for: pressed, in: .fullscreen) }) else {
+                let candidates = ShortcutBinding.candidates(for: event)
+                guard let command = MainActor.assumeIsolated({ ShortcutRegistry.shared.match(candidates, in: .fullscreen)?.command }) else {
                     return event
                 }
                 return self.perform(command) ? nil : event
