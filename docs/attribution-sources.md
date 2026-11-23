@@ -12,18 +12,20 @@ pins. Apple SDKs, system libraries and general build tools are not redistributed
 
 ## Source material
 
-- **FFmpeg 9.0.2:** one archive holds the complete corresponding source of the
-  bundled build of 2026-11-16 (SVT-AV1 4.3.0, libaom 3.15.3, libjxl 0.13.0,
-  HarfBuzz 15.1.0): the FFmpeg tree with its source patches (Metal YADIF teardown,
-  libopenjpeg frame-size caps and IMF profiles, canonical Whisper JSON with
-  `initial_prompt` and word details, MOV field order for H.264), every linked
-  library source and the replay recipe.
+- **FFmpeg 9.1:** one archive holds the complete corresponding source of the
+  bundled build of 2026-11-22 (SVT-AV1 4.3.0, libaom 3.15.3, libjxl 0.13.0,
+  HarfBuzz 15.1.0): the FFmpeg tree with its source patches (libopenjpeg
+  frame-size caps and IMF profiles, canonical Whisper JSON with `initial_prompt`
+  and word details, MOV field order for H.264), every linked library source and
+  the replay recipe. The Metal YADIF teardown fix is upstream in 9.1.
   Extract it and follow its `README.md` to run `bash rebuild.sh`. Install Xcode with
   its Metal compiler, CMake, Meson, Ninja, pkg-config, Python 3, and the usual build
   utilities. Evidence is in
-  `docs/provenance/4.8-local-builds/ffmpeg-9.0.2-2026-11-16/`; the 4.7 build is
-  described in `docs/provenance/4.7-local-builds/ffmpeg-9.0.2-svt-av1-4.3.0/` and
-  the 4.5 captures in `docs/provenance/4.5-local-builds/`.
+  `docs/provenance/4.8-local-builds/ffmpeg-9.1-2026-11-22/`; the FFmpeg 9.0.2
+  build used through 4.8.0 beta 2 is described in
+  `docs/provenance/4.8-local-builds/ffmpeg-9.0.2-2026-11-16/`, the 4.7 build in
+  `docs/provenance/4.7-local-builds/ffmpeg-9.0.2-svt-av1-4.3.0/` and the 4.5
+  captures in `docs/provenance/4.5-local-builds/`.
 - **rclone:** the reviewed minimal source revision with only the unused `serve s3`
   command removed; its S3 storage backend remains. The archive includes the
   exact source patch, Go toolchain/module inputs, notices and `rebuild.py`, plus
@@ -161,3 +163,16 @@ reassembled from the workspace that produced the bundled binary
 `ffmpeg-9.0.2-2026-11-16-source.tar.gz` replaces the SVT-AV1 4.3.0 archive. Evidence,
 including the signature, notarization record and the replay recipe, is in
 `docs/provenance/4.8-local-builds/ffmpeg-9.0.2-2026-11-16/`.
+
+## FFmpeg 9.1, 2026-11-22 build — 2026-11-23
+
+The bundled FFmpeg is the signed and notarized full 9.1 build from
+ffmpeg-apple-silicon `88fdd9f` (PR #9, clean). Library versions and configure
+options are unchanged from the 2026-11-16 build. The YADIF VideoToolbox teardown
+patch is retired because the fix is upstream in 9.1; the OpenJPEG, Whisper and MOV
+`fiel` patches are carried forward. The build workspace also held unused
+`sources/vvenc`, `sources/vvdec` and `sources/x265` git clones (the build compiles
+`vvenc-1.14.0`, `vvdec-3.2.1` and `x265-4.2`), so notices and source were collected
+from a copy without them. `ffmpeg-9.1-2026-11-22-source.tar.gz` replaces the 9.0.2
+archive. Evidence, including the signature, notarization record and the replay
+recipe, is in `docs/provenance/4.8-local-builds/ffmpeg-9.1-2026-11-22/`.

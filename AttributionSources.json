@@ -26,10 +26,10 @@
       "sha256": "e0fb1eab57712cbfdb3014db08894a7fbe7526f92de35299c64b24c89cb2568e"
     },
     {
-      "component": "FFmpeg 9.0.2 build (2026-11-16)",
-      "path": "build/attribution/ffmpeg-9.0.2-2026-11-16-source.tar.gz",
-      "bytes": 184977095,
-      "sha256": "515fdac398fdede674949bb94e94614701992204eb08f173daf402eab12fcf32"
+      "component": "FFmpeg 9.1 build (2026-11-22)",
+      "path": "build/attribution/ffmpeg-9.1-2026-11-22-source.tar.gz",
+      "bytes": 184559153,
+      "sha256": "1ffba8fe4f00a7e7edf4aa4a1c27cb40f2df6f2c96045b1d3dc50855a5f5d40b"
     },
     {
       "component": "MPVKit: gnutls",

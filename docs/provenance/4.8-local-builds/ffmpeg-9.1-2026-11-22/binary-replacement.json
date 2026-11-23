@@ -1,0 +1,29 @@
+{
+  "previousSHA256": "18c8235278b7b478377c2c4ad04824f91e8867c879cb63827352640004e538af",
+  "sha256": "6d6f006028ef0b18aaf8c03ff9a4ee4fa17b9f6a133fa666d49523089ff3d20b",
+  "bytes": 60719776,
+  "mode": "0755",
+  "architecture": "arm64",
+  "minimumMacOS": "11.0",
+  "sourceVersion": "9.1",
+  "buildSystemRepository": "https://github.com/aagedal/ffmpeg-apple-silicon",
+  "buildSystemRevision": "88fdd9f613078bfa68cf53b6b03a0e796e697765",
+  "workingTreeModified": false,
+  "dependencyChanges": {
+    "FFmpeg": "9.0.2 -> 9.1"
+  },
+  "sourcePatches": [
+    "scripts/ffmpeg/libopenjpegenc-max-size.patch",
+    "scripts/ffmpeg/libopenjpegenc-imf.patch",
+    "scripts/ffmpeg/af_whisper-canonical-json.patch",
+    "scripts/ffmpeg/af_whisper-word-details.patch",
+    "scripts/ffmpeg/movenc-h264-fiel.patch"
+  ],
+  "retiredPatches": {
+    "scripts/ffmpeg/yadif-videotoolbox-autorelease.patch": "Upstream in FFmpeg 9.1"
+  },
+  "sourceNote": "Full build of every library and FFmpeg from one workspace (ffmpeg-apple-silicon PR #9). Library versions are unchanged from the 2026-11-16 build. The workspace's unused sources/vvenc, sources/vvdec and sources/x265 git clones (the build uses vvenc-1.14.0, vvdec-3.2.1 and x265-4.2) are left out of the notices and source archive. Its corresponding-source archive replaces the FFmpeg 9.0.2 archive of the 2026-11-16 build.",
+  "signature": "Developer ID Application: Truls Aagedal (3R5QGG9DW6); hardened runtime; secure timestamp 2026-11-22 21:31:28 CET",
+  "cdhash": "f14314b8be85815e744d42d4f301b90a35d9e1e2",
+  "notarizationStatus": "Accepted (notarytool job 518e1112-7ae8-475f-b1b4-c04a3963a897, notarization.json)"
+}
