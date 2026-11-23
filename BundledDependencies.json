@@ -140,10 +140,10 @@
       "sha256": "e0fb1eab57712cbfdb3014db08894a7fbe7526f92de35299c64b24c89cb2568e"
     },
     {
-      "component": "FFmpeg 9.0.2 build (2026-11-16)",
-      "path": "build/attribution/ffmpeg-9.0.2-2026-11-16-source.tar.gz",
-      "bytes": 184977095,
-      "sha256": "515fdac398fdede674949bb94e94614701992204eb08f173daf402eab12fcf32"
+      "component": "FFmpeg 9.1 build (2026-11-22)",
+      "path": "build/attribution/ffmpeg-9.1-2026-11-22-source.tar.gz",
+      "bytes": 184559153,
+      "sha256": "1ffba8fe4f00a7e7edf4aa4a1c27cb40f2df6f2c96045b1d3dc50855a5f5d40b"
     },
     {
       "component": "MPVKit: gnutls",
@@ -860,8 +860,8 @@
     },
     {
       "path": "Aagedal Media Converter/Binaries/ffmpeg",
-      "bytes": 60310128,
-      "sha256": "18c8235278b7b478377c2c4ad04824f91e8867c879cb63827352640004e538af",
+      "bytes": 60719776,
+      "sha256": "6d6f006028ef0b18aaf8c03ff9a4ee4fa17b9f6a133fa666d49523089ff3d20b",
       "mode": "0755",
       "architectures": [
         "arm64"
@@ -880,6 +880,7 @@
         "/System/Library/Frameworks/CoreText.framework/Versions/A/CoreText",
         "/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo",
         "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation",
+        "/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit",
         "/System/Library/Frameworks/Metal.framework/Versions/A/Metal",
         "/System/Library/Frameworks/OpenGL.framework/Versions/A/OpenGL",
         "/System/Library/Frameworks/Security.framework/Versions/A/Security",
@@ -893,12 +894,12 @@
         "/usr/lib/libz.1.dylib"
       ],
       "component": "FFmpeg",
-      "version": "9.0.2",
+      "version": "9.1",
       "license": "GPL-3.0-or-later",
       "licenseFile": "Licenses/ffmpeg-LICENSE.txt",
       "reportedLicense": "GPL-3.0-or-later",
       "requiredSourceComponents": [
-        "FFmpeg 9.0.2 build (2026-11-16)"
+        "FFmpeg 9.1 build (2026-11-22)"
       ]
     },
     {
@@ -1294,8 +1295,8 @@
     },
     {
       "path": "Licenses/ffmpeg-LICENSE.txt",
-      "bytes": 725020,
-      "sha256": "a18a26651b7924743e4d0abdc15de9af775c9951531edfc27b457f09ed22ac11"
+      "bytes": 724998,
+      "sha256": "a3b38f7b067751e0c5d8a5be143c77a0e20a0cf7d8630d76d99e8c349edb7405"
     },
     {
       "path": "Licenses/geonames-LICENSE.txt",
@@ -1356,7 +1357,7 @@
   "summary": {
     "toolCount": 13,
     "libraryCount": 12,
-    "totalBytes": 190871648,
+    "totalBytes": 191281296,
     "entriesMissingLocalLicenseFile": []
   }
 }

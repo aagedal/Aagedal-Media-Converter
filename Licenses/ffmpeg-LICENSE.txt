@@ -1,4 +1,4 @@
-FFmpeg 9.0.2 and source dependency notices
+FFmpeg 9.1 and source dependency notices
 
 This application distributes a GPL version 3 or later FFmpeg build. The source
 companion supplied with this release contains its library sources and build
@@ -298,7 +298,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 ========================================================================
-sources/ffmpeg-9.0.2/COPYING.GPLv2
+sources/ffmpeg-9.1/COPYING.GPLv2
 ========================================================================
 
                     GNU GENERAL PUBLIC LICENSE
@@ -642,7 +642,7 @@ library.  If this is what you want to do, use the GNU Lesser General
 Public License instead of this License.
 
 ========================================================================
-sources/ffmpeg-9.0.2/COPYING.GPLv3
+sources/ffmpeg-9.1/COPYING.GPLv3
 ========================================================================
 
                     GNU GENERAL PUBLIC LICENSE
@@ -1321,7 +1321,7 @@ Public License instead of this License.  But first, please read
 <http://www.gnu.org/philosophy/why-not-lgpl.html>.
 
 ========================================================================
-sources/ffmpeg-9.0.2/COPYING.LGPLv2.1
+sources/ffmpeg-9.1/COPYING.LGPLv2.1
 ========================================================================
 
                   GNU LESSER GENERAL PUBLIC LICENSE
@@ -1828,7 +1828,7 @@ necessary.  Here is a sample; alter the names:
 That's all there is to it!
 
 ========================================================================
-sources/ffmpeg-9.0.2/COPYING.LGPLv3
+sources/ffmpeg-9.1/COPYING.LGPLv3
 ========================================================================
 
                    GNU LESSER GENERAL PUBLIC LICENSE
@@ -1998,7 +1998,7 @@ permanent authorization for you to choose that version for the
 Library.
 
 ========================================================================
-sources/ffmpeg-9.0.2/LICENSE.md
+sources/ffmpeg-9.1/LICENSE.md
 ========================================================================
 
 # License
@@ -2108,7 +2108,7 @@ The following libraries are under LGPL version 3:
 When combining them with FFmpeg, use the configure option `--enable-version3` to
 upgrade FFmpeg to the LGPL v3.
 
-The VMAF, mbedTLS, RK MPI, OpenCORE and VisualOn libraries are under the Apache License
+The mbedTLS, RK MPI, OpenCORE, VisualOn and libastcenc libraries are under the Apache License
 2.0. That license is incompatible with the LGPL v2.1 and the GPL v2, but not with
 version 3 of those licenses. So to combine these libraries with FFmpeg, the
 license version needs to be upgraded by passing `--enable-version3` to configure.
@@ -2130,7 +2130,7 @@ incompatible with the GPLv2 and v3. To the best of our knowledge, they are
 compatible with the LGPL.
 
 ========================================================================
-sources/ffmpeg-9.0.2/doc/authors.texi
+sources/ffmpeg-9.1/doc/authors.texi
 ========================================================================
 
 @chapter Authors
@@ -2146,7 +2146,7 @@ Maintainers for the specific components are listed in the file
 @file{MAINTAINERS} in the source code tree.
 
 ========================================================================
-sources/ffmpeg-9.0.2/tests/checkasm/ext/LICENSE
+sources/ffmpeg-9.1/tests/checkasm/ext/LICENSE
 ========================================================================
 
 BSD 2-Clause License
@@ -2178,7 +2178,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ========================================================================
-sources/ffmpeg-9.0.2/tests/checkasm/ext/src/html_data/LICENSE
+sources/ffmpeg-9.1/tests/checkasm/ext/src/html_data/LICENSE
 ========================================================================
 
 Copyright (c) 2025 Niklas Haas
@@ -2211,7 +2211,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ========================================================================
-sources/ffmpeg-9.0.2-photo-agent/COPYING.GPLv2
+sources/ffmpeg-9.1-photo-agent/COPYING.GPLv2
 ========================================================================
 
                     GNU GENERAL PUBLIC LICENSE
@@ -2555,7 +2555,7 @@ library.  If this is what you want to do, use the GNU Lesser General
 Public License instead of this License.
 
 ========================================================================
-sources/ffmpeg-9.0.2-photo-agent/COPYING.GPLv3
+sources/ffmpeg-9.1-photo-agent/COPYING.GPLv3
 ========================================================================
 
                     GNU GENERAL PUBLIC LICENSE
@@ -3234,7 +3234,7 @@ Public License instead of this License.  But first, please read
 <http://www.gnu.org/philosophy/why-not-lgpl.html>.
 
 ========================================================================
-sources/ffmpeg-9.0.2-photo-agent/COPYING.LGPLv2.1
+sources/ffmpeg-9.1-photo-agent/COPYING.LGPLv2.1
 ========================================================================
 
                   GNU LESSER GENERAL PUBLIC LICENSE
@@ -3741,7 +3741,7 @@ necessary.  Here is a sample; alter the names:
 That's all there is to it!
 
 ========================================================================
-sources/ffmpeg-9.0.2-photo-agent/COPYING.LGPLv3
+sources/ffmpeg-9.1-photo-agent/COPYING.LGPLv3
 ========================================================================
 
                    GNU LESSER GENERAL PUBLIC LICENSE
@@ -3911,7 +3911,7 @@ permanent authorization for you to choose that version for the
 Library.
 
 ========================================================================
-sources/ffmpeg-9.0.2-photo-agent/LICENSE.md
+sources/ffmpeg-9.1-photo-agent/LICENSE.md
 ========================================================================
 
 # License
@@ -4021,7 +4021,7 @@ The following libraries are under LGPL version 3:
 When combining them with FFmpeg, use the configure option `--enable-version3` to
 upgrade FFmpeg to the LGPL v3.
 
-The VMAF, mbedTLS, RK MPI, OpenCORE and VisualOn libraries are under the Apache License
+The mbedTLS, RK MPI, OpenCORE, VisualOn and libastcenc libraries are under the Apache License
 2.0. That license is incompatible with the LGPL v2.1 and the GPL v2, but not with
 version 3 of those licenses. So to combine these libraries with FFmpeg, the
 license version needs to be upgraded by passing `--enable-version3` to configure.
@@ -4043,7 +4043,7 @@ incompatible with the GPLv2 and v3. To the best of our knowledge, they are
 compatible with the LGPL.
 
 ========================================================================
-sources/ffmpeg-9.0.2-photo-agent/doc/authors.texi
+sources/ffmpeg-9.1-photo-agent/doc/authors.texi
 ========================================================================
 
 @chapter Authors
@@ -4059,7 +4059,7 @@ Maintainers for the specific components are listed in the file
 @file{MAINTAINERS} in the source code tree.
 
 ========================================================================
-sources/ffmpeg-9.0.2-photo-agent/tests/checkasm/ext/LICENSE
+sources/ffmpeg-9.1-photo-agent/tests/checkasm/ext/LICENSE
 ========================================================================
 
 BSD 2-Clause License
@@ -4091,7 +4091,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ========================================================================
-sources/ffmpeg-9.0.2-photo-agent/tests/checkasm/ext/src/html_data/LICENSE
+sources/ffmpeg-9.1-photo-agent/tests/checkasm/ext/src/html_data/LICENSE
 ========================================================================
 
 Copyright (c) 2025 Niklas Haas

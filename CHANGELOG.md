@@ -49,7 +49,7 @@
 - New Names and terms field: Whisper reads them before each part of the audio, which nudges it toward your spelling of names and places.
 - With Language set to Auto, word timing uses the language Whisper detected.
 - Japanese, Chinese and Korean subtitles: Japanese and Chinese are no longer one long "word" per phrase. They are split into words, joined without spaces, and lines break between words, not before particles. Lines are shorter (13 characters for Japanese and 16 for Chinese and Korean at the default line length), reading times follow those languages, sentences and clauses end at 。！？、，, and Whisper's ASCII commas in Chinese and Japanese become full-width.
-- The bundled FFmpeg (still 9.0.2) has an updated whisper filter: correctly escaped output, an initial prompt, and word confidence and language in its word list. A failed transcription now stops with an error instead of leaving partial subtitles.
+- The bundled FFmpeg has an updated whisper filter: correctly escaped output, an initial prompt, and word confidence and language in its word list. A failed transcription now stops with an error instead of leaving partial subtitles.
 
 ### Encode history and statistics
 
@@ -98,6 +98,7 @@
 - Exports with Export matte sidecar turned on always write the `_matte` file. Some ordinary queue conversions went through the shared job engine, which left it out.
 - Interlaced H.264 and AVC-Intra copied or encoded to MOV keep their field order. FFmpeg left out the QuickTime field-order atom for H.264, so editing apps could treat these files as progressive. MP4 is unchanged.
 - Corrected about 2,750 translations in all nine languages, Norwegian included: wrong word senses (a crop as in farming, a share as in stocks), leftover English and inconsistent terms.
+- Updated the bundled FFmpeg to 9.1, with the same libraries and the app's own changes (the whisper filter, JPEG 2000 size limits for DCP and IMF, and the MOV field order for H.264).
 - Updated Sparkle, the app updater, to 2.10.1. Its installer now runs its progress helper from inside the app instead of copying it to a cache folder.
 
 # v.4.7.0
