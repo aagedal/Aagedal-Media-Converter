@@ -1,6 +1,6 @@
 # Aagedal Media Converter Improvement Plan
 
-Last reviewed: 2026-11-12 (after 4.7.0)
+Last reviewed: 2026-11-24 (pre-4.8.0)
 
 This is the current backlog: what is still open, grouped by theme, with links to
 the evidence. Keep it short. Record implementation and validation details in a
@@ -97,7 +97,6 @@ These need a person, real hardware or a live service:
 
 ## Release and dependency hygiene
 
-- Bump the Homebrew cask for 4.7.0.
 - Resolve the remaining unattributed tool/dylib licenses in
   `BundledDependencies.json` (5).
 - Measure download size and launch/import memory before any binary cleanup; optimize

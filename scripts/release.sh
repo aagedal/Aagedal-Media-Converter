@@ -60,6 +60,9 @@ while [[ "${1:-}" == --* ]]; do
             ;;
     esac
 done
+if [[ $# -gt 2 ]]; then
+    usage
+fi
 
 # Every path below is relative to the repository root.
 cd "$(dirname "$0")/.."
@@ -386,11 +389,21 @@ if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
             --notes-file "$BETA_NOTES"
     else
         echo "==> Creating draft GitHub release $RELEASE_TAG"
-        gh release create "$RELEASE_TAG" --draft \
-            --repo "$GITHUB_OWNER/$GITHUB_REPO" \
-            --target "$RELEASE_COMMIT" \
-            --title "$RELEASE_TITLE" \
-            --generate-notes
+        RELEASE_NOTES_MD="$BUILD_DIR/release-notes.md"
+        if python3 -B -c 'import sys; sys.path.insert(0, "scripts"); m = __import__("changelog-to-html"); print(m.extract_section(open("CHANGELOG.md").read(), sys.argv[1]))' \
+            "$MARKETING_VERSION" > "$RELEASE_NOTES_MD" 2>/dev/null; then
+            gh release create "$RELEASE_TAG" --draft \
+                --repo "$GITHUB_OWNER/$GITHUB_REPO" \
+                --target "$RELEASE_COMMIT" \
+                --title "$RELEASE_TITLE" \
+                --notes-file "$RELEASE_NOTES_MD"
+        else
+            gh release create "$RELEASE_TAG" --draft \
+                --repo "$GITHUB_OWNER/$GITHUB_REPO" \
+                --target "$RELEASE_COMMIT" \
+                --title "$RELEASE_TITLE" \
+                --generate-notes
+        fi
     fi
     # Upload sources first and stop on any failure before publishing the draft.
     # curl streams each file and displays transfer progress rather than a spinner.

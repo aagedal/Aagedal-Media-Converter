@@ -253,12 +253,53 @@ final class KeyboardShortcutSettingsTests: XCTestCase {
         }
         var newer = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
         newer["version"] = KeyboardPreset.fileVersion + 1
+        // Even if a future version changes the shortcuts schema, version is checked first.
+        newer["shortcuts"] = ["unexpectedFutureFormat": true]
         XCTAssertThrowsError(try KeyboardPreset(fileData: JSONSerialization.data(withJSONObject: newer))) { error in
             guard case KeyboardPresetError.newerVersion = error else { return XCTFail("\(error)") }
+        }
+        var zeroVersion = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        zeroVersion["version"] = 0
+        XCTAssertThrowsError(try KeyboardPreset(fileData: JSONSerialization.data(withJSONObject: zeroVersion))) { error in
+            guard case KeyboardPresetError.notAPreset = error else { return XCTFail("\(error)") }
         }
         // Shortcuts are written without their unused modifiers.
         let written = try XCTUnwrap(try JSONSerialization.jsonObject(with: JSONEncoder().encode(key("b", .command))) as? [String: Any])
         XCTAssertEqual(Set(written.keys), ["key", "command"])
+    }
+
+    func testDeadKeysAreNotAssignableOnVirtualKeyboard() {
+        let deadBoth = VirtualKey(id: "dead", keyCode: 24, role: .key(base: "´", shifted: "`"), width: 1,
+                                  label: "´", shiftedLabel: "`", deadUnshifted: true, deadShifted: true)
+        XCTAssertTrue(deadBoth.candidates(with: .command).isEmpty)
+        XCTAssertNil(deadBoth.binding(with: .command))
+        XCTAssertTrue(deadBoth.bindings.isEmpty)
+
+        let deadUnshiftedOnly = VirtualKey(id: "halfDead", keyCode: 30, role: .key(base: "¨", shifted: "^"), width: 1,
+                                           label: "¨", shiftedLabel: "^", deadUnshifted: true, deadShifted: false)
+        XCTAssertTrue(deadUnshiftedOnly.candidates(with: .command).isEmpty)
+        XCTAssertEqual(deadUnshiftedOnly.binding(with: [.command, .shift]), key("^", [.command, .shift]))
+    }
+
+    func testShortcutRecorderClearsRecordingStateOnWindowResignAndDeinit() {
+        let window = NSWindow(contentRect: .zero, styleMask: [], backing: .buffered, defer: false)
+        var cancelled = 0
+        do {
+            let recorder = ShortcutRecorder()
+            recorder.onCancel = { cancelled += 1 }
+            recorder.toggle(.init(command: .openTrim, slot: 0), in: window)
+            XCTAssertTrue(ShortcutRegistry.shared.isRecording)
+
+            NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: window)
+            XCTAssertNil(recorder.target)
+            XCTAssertFalse(ShortcutRegistry.shared.isRecording)
+            XCTAssertEqual(cancelled, 1)
+
+            // Dropping a recorder mid-recording must still release isRecording on deinit.
+            recorder.toggle(.init(command: .openTrim, slot: 0), in: window)
+            XCTAssertTrue(ShortcutRegistry.shared.isRecording)
+        }
+        XCTAssertFalse(ShortcutRegistry.shared.isRecording)
     }
 
     // MARK: Registry

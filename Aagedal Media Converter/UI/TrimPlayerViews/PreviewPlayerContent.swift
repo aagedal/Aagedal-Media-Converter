@@ -359,6 +359,11 @@ private struct PlayerContainerView: NSViewRepresentable {
         nsView.showsFrameSteppingButtons = showsPlaybackControls
         nsView.showsTimecodes = showsPlaybackControls
         context.coordinator.showsPlaybackControls = showsPlaybackControls
+        context.coordinator.keyHandler = keyHandler
+    }
+
+    static func dismantleNSView(_ nsView: TransparentAVPlayerView, coordinator: Coordinator) {
+        coordinator.teardown()
     }
 
     func makeCoordinator() -> Coordinator {
@@ -384,7 +389,7 @@ private struct PlayerContainerView: NSViewRepresentable {
         private var monitor: Any?
         private weak var attachedView: AVPlayerView?
         var showsPlaybackControls: Bool = false
-        private let keyHandler: (NSEvent) -> Bool
+        var keyHandler: (NSEvent) -> Bool
 
         init(keyHandler: @escaping (NSEvent) -> Bool) {
             self.keyHandler = keyHandler
@@ -413,10 +418,15 @@ private struct PlayerContainerView: NSViewRepresentable {
             }
         }
 
-        deinit {
+        func teardown() {
             if let monitor {
                 NSEvent.removeMonitor(monitor)
+                self.monitor = nil
             }
+        }
+
+        deinit {
+            teardown()
         }
     }
 }
@@ -434,7 +444,13 @@ private struct KeyboardCapturingView: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ nsView: KeyCapturingNSView, context: Context) {}
+    func updateNSView(_ nsView: KeyCapturingNSView, context: Context) {
+        context.coordinator.keyHandler = keyHandler
+    }
+
+    static func dismantleNSView(_ nsView: KeyCapturingNSView, coordinator: Coordinator) {
+        coordinator.teardown()
+    }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(keyHandler: keyHandler)
@@ -443,7 +459,7 @@ private struct KeyboardCapturingView: NSViewRepresentable {
     final class Coordinator: NSObject {
         private var monitor: Any?
         weak var attachedView: NSView?
-        private let keyHandler: (NSEvent) -> Bool
+        var keyHandler: (NSEvent) -> Bool
 
         init(keyHandler: @escaping (NSEvent) -> Bool) {
             self.keyHandler = keyHandler
@@ -458,10 +474,15 @@ private struct KeyboardCapturingView: NSViewRepresentable {
             }
         }
 
-        deinit {
+        func teardown() {
             if let monitor {
                 NSEvent.removeMonitor(monitor)
+                self.monitor = nil
             }
+        }
+
+        deinit {
+            teardown()
         }
     }
 }

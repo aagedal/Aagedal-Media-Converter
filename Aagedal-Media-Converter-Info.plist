@@ -32,14 +32,6 @@
 			</array>
 		</dict>
 	</array>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Viewer</string>
-		</dict>
-		<dict/>
-	</array>
 	<key>NSScreenCaptureUsageDescription</key>
 	<string>Screen capture is used to record your screen with system audio.</string>
 	<key>NSMicrophoneUsageDescription</key>
@@ -68,17 +60,6 @@
 					<string>amckeys</string>
 				</array>
 			</dict>
-		</dict>
-	</array>
-	<key>UTImportedTypeDeclarations</key>
-	<array>
-		<dict>
-			<key>UTTypeConformsTo</key>
-			<array/>
-			<key>UTTypeIcons</key>
-			<dict/>
-			<key>UTTypeTagSpecification</key>
-			<dict/>
 		</dict>
 	</array>
 </dict>

@@ -101,6 +101,11 @@ struct MPVVideoView: NSViewControllerRepresentable {
 
     func updateNSViewController(_ nsViewController: MPVViewController, context: Context) {
         context.coordinator.viewController = nsViewController
+        context.coordinator.keyHandler = keyHandler
+    }
+
+    static func dismantleNSViewController(_ nsViewController: MPVViewController, coordinator: Coordinator) {
+        coordinator.teardown()
     }
 
     func makeCoordinator() -> Coordinator {
@@ -109,7 +114,7 @@ struct MPVVideoView: NSViewControllerRepresentable {
 
     final class Coordinator: NSObject, @unchecked Sendable {
         private var monitor: Any?
-        private let keyHandler: (NSEvent) -> Bool
+        var keyHandler: (NSEvent) -> Bool
         weak var viewController: MPVViewController?
 
         init(keyHandler: @escaping (NSEvent) -> Bool) {
@@ -137,10 +142,15 @@ struct MPVVideoView: NSViewControllerRepresentable {
             }
         }
 
-        deinit {
+        func teardown() {
             if let monitor {
                 NSEvent.removeMonitor(monitor)
+                self.monitor = nil
             }
+        }
+
+        deinit {
+            teardown()
         }
     }
 }

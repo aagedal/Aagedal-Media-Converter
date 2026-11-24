@@ -365,6 +365,10 @@ struct KeyboardPreset: Codable, Equatable, Identifiable, Sendable {
     /// The preset's keymap, and how many of its shortcuts this version cannot use.
     var resolved: (keymap: Keymap, rejected: Int) { Keymap.restoring(shortcuts) }
 
+    private struct FileHeader: Decodable {
+        var format: String
+        var version: Int
+    }
     private struct File: Codable {
         var format: String
         var version: Int
@@ -381,10 +385,15 @@ struct KeyboardPreset: Codable, Equatable, Identifiable, Sendable {
 extension KeyboardPreset {
     init(name: String, keymap: Keymap) { self.init(name: name, shortcuts: keymap.savedForm) }
     init(fileData data: Data) throws {
-        guard let file = try? JSONDecoder().decode(File.self, from: data), file.format == Self.fileFormat else {
+        guard let header = try? JSONDecoder().decode(FileHeader.self, from: data),
+              header.format == Self.fileFormat,
+              header.version >= 1 else {
             throw KeyboardPresetError.notAPreset
         }
-        guard file.version <= Self.fileVersion else { throw KeyboardPresetError.newerVersion }
+        guard header.version <= Self.fileVersion else { throw KeyboardPresetError.newerVersion }
+        guard let file = try? JSONDecoder().decode(File.self, from: data) else {
+            throw KeyboardPresetError.notAPreset
+        }
         let name = file.name.trimmingCharacters(in: .whitespacesAndNewlines)
         self.init(name: name.isEmpty ? String(localized: "Imported Shortcuts") : name, shortcuts: file.shortcuts)
     }

@@ -1303,6 +1303,7 @@ struct ContentView: View {
 
     private var keyboardShortcutHandler: some View {
         GlobalKeyboardShortcutHandler(
+            isDisabled: anySheetOrOverlayOpen,
             onToggleWatchFolder: { watchFolderModeEnabled.toggle() },
             onSelectOutputFolder: {
                 Task {
@@ -3544,6 +3545,7 @@ struct ContentView_Previews: PreviewProvider {
 // MARK: - Global Keyboard Shortcut Handler
 
 private struct GlobalKeyboardShortcutHandler: NSViewRepresentable {
+    var isDisabled: Bool
     var onToggleWatchFolder: () -> Void
     var onSelectOutputFolder: () -> Void
     var onToggleMerge: () -> Void
@@ -3557,6 +3559,7 @@ private struct GlobalKeyboardShortcutHandler: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
+            isDisabled: isDisabled,
             onToggleWatchFolder: onToggleWatchFolder,
             onSelectOutputFolder: onSelectOutputFolder,
             onToggleMerge: onToggleMerge,
@@ -3579,6 +3582,7 @@ private struct GlobalKeyboardShortcutHandler: NSViewRepresentable {
     }
     
     func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.isDisabled = isDisabled
         context.coordinator.onToggleWatchFolder = onToggleWatchFolder
         context.coordinator.onSelectOutputFolder = onSelectOutputFolder
         context.coordinator.onToggleMerge = onToggleMerge
@@ -3596,6 +3600,7 @@ private struct GlobalKeyboardShortcutHandler: NSViewRepresentable {
     }
     
     final class Coordinator {
+        var isDisabled: Bool
         var onToggleWatchFolder: () -> Void
         var onSelectOutputFolder: () -> Void
         var onToggleMerge: () -> Void
@@ -3610,6 +3615,7 @@ private struct GlobalKeyboardShortcutHandler: NSViewRepresentable {
         private var monitor: Any?
 
         init(
+            isDisabled: Bool,
             onToggleWatchFolder: @escaping () -> Void,
             onSelectOutputFolder: @escaping () -> Void,
             onToggleMerge: @escaping () -> Void,
@@ -3621,6 +3627,7 @@ private struct GlobalKeyboardShortcutHandler: NSViewRepresentable {
             onSelectPresetByIndex: @escaping (Int) -> Bool,
             onShowShortcuts: @escaping () -> Void
         ) {
+            self.isDisabled = isDisabled
             self.onToggleWatchFolder = onToggleWatchFolder
             self.onSelectOutputFolder = onSelectOutputFolder
             self.onToggleMerge = onToggleMerge
@@ -3638,11 +3645,11 @@ private struct GlobalKeyboardShortcutHandler: NSViewRepresentable {
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 guard let self else { return event }
 
-                // Do not route main-window commands into Settings, players, or sheets.
+                // Do not route main-window commands into Settings, players, sheets, or overlays.
                 // Queue commands are left to the queue's own monitor, which stands aside
                 // while overlays are open. Local event monitors are delivered on the main thread.
                 let eventWindowNumber = event.windowNumber
-                guard let hostView = self.hostView else { return event }
+                guard !self.isDisabled, let hostView = self.hostView else { return event }
                 let candidates = ShortcutBinding.candidates(for: event)
                 let match = MainActor.assumeIsolated { () -> ShortcutCommand? in
                     guard let window = hostView.window,

@@ -1,21 +1,25 @@
 # Keyboard Shortcuts
 
-In **Settings → Shortcuts**, click a binding under **Customize keyboard shortcuts** to record a new combination for nine main-window actions. Use Command, Control, or Option with a letter, number, or Return. Conflicting app commands are reserved; Escape cancels recording. Use **Use Default** for one action or **Restore Defaults** for all nine. Bindings apply immediately, persist on this Mac, and follow physical key positions shown with U.S. key labels.
+In **Settings → Shortcuts**, customize shortcuts across the **Main Window**, **Trim View**, and **Fullscreen Player** separately. An on-screen keyboard labelled for your current keyboard layout shows what each key runs in each modifier layer (click or hold ⌘ ⌥ ⌃ ⇧). Each command can have up to two shortcuts: click a shortcut field to record, drag a command onto a key, or click a key to inspect and assign combinations in Key Details. Save custom layouts as named presets and share or import them as `.amckeys` files. Reserved macOS and built-in shortcuts are protected; clicking **Built-in Shortcuts…** lists the fixed shortcuts for sheets, overlays, and secondary windows.
 
-The list below shows the default bindings. Player, editor, and navigation shortcuts currently remain fixed.
+On keyboard layouts that do not type Latin letters (such as Russian or Greek), and on French layouts for digits, letter and digit shortcuts also match the key at the corresponding U.S. position.
+
+The list below shows the default bindings.
 
 
 ## Main Window
 
 ### File Operations
+- Command + N: New encoding group
 - Command + I: Open import dialogue
+- Command + Shift + I: Import camera card
 - Command + D: Show URL input overlay (for downloading)
 - Command + P: Open preset quick-select overlay
 - Option + F: Select output folder
 - Option + W: Toggle watch folder (if no watch folder is selected you will be asked for one)
 
 ### Conversion
-- Command + Enter: Start/Stop Encoding
+- Command + Return: Start/Stop Encoding
 - Option + M: Toggle merging of clips (only available if all input files are in the same format)
 - Command + 1-9, 0: Instantly select preset at that position (0 = 10th)
 
@@ -28,7 +32,7 @@ The list below shows the default bindings. Player, editor, and navigation shortc
 - Control + S: Cycle through sort modes
 
 ### Item Management
-- Command + Backspace: Remove selected items from the queue
+- Delete or Command + Delete: Remove selected items from the queue
 - Command + R: Reset the conversion status of the selected items
 - Command + Shift + R: Reset conversion status of all items in the queue
 - Control + D: Toggle the metadata date tag on selected items
@@ -46,8 +50,8 @@ The list below shows the default bindings. Player, editor, and navigation shortc
 
 ## Single Item Selected in Main Window
 
-- Command + T: Open trim view
-- Command + F: Open fullscreen player
+- Command + T or Return: Open trim view
+- Command + F or Space: Open fullscreen player
 - Option + T: Open Timecode override view
 - Option + A: Open Audio Routing view
 - Option + I: Open metadata view
@@ -59,13 +63,14 @@ The list below shows the default bindings. Player, editor, and navigation shortc
 ## Trim View
 
 ### Playback
-- Space: Toggle play/pause
+- Space or K: Toggle play/pause
 - J/K/L: Play backwards, play/pause, play forwards (like in most NLEs)
 - Option + J / Option + L: Slow reverse / slow forward
 - Command + L: Toggle loop mode (only available for the native AVPlayer for technical reasons)
 
 ### Navigation
 - Arrow Left/Right: Go to previous/next frame
+- Arrow Up/Down: Seek back/forward 10 frames
 - I/O: Set in and out point
 - Option + I / Option + O: Clear the in or out point
 - Option + X: Clear both trim points
@@ -88,10 +93,10 @@ The list below shows the default bindings. Player, editor, and navigation shortc
 ## Fullscreen Player
 
 ### Playback
-- Space: Toggle playback
+- Space or K: Toggle playback
 - J: Start reverse playback simulation
-- K: Toggle playback
 - L: Fast forward
+- Option + J / Option + L: Slow reverse / slow forward
 
 ### Navigation
 - Left Arrow: Seek back 1 frame
@@ -142,6 +147,7 @@ The list below shows the default bindings. Player, editor, and navigation shortc
 
 ## Settings Window
 
+- Command + F: Focus Settings search
 - Control + 1: General
 - Control + 2: Metadata
 - Control + 3: Presets
@@ -188,6 +194,7 @@ The list below shows the default bindings. Player, editor, and navigation shortc
 - Command + 2–9: 21:9, 16:9, 3:2, 4:3, 1:1, 3:4, 2:3 and 9:16 aspect ratios
 - Command + 0: Reset crop
 - Command + + / Command + -: Scale the crop box larger or smaller
+- Command + Arrow keys: Move the crop box
 - Hold Shift before dragging: Keep the crop box's shape
 
 

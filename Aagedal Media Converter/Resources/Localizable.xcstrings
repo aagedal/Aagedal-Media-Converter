@@ -43380,60 +43380,60 @@
         }
       }
     },
-    "Bundles FFmpeg, mpv, tesseract, asdcplib, bmx and rclone; optionally downloads yt-dlp, Deno, whisper.cpp and Parakeet at runtime. Each component is distributed under its own license. Bundled license notices are available below; see the source repository for component details." : {
+    "Bundles FFmpeg, mpv, tesseract, asdcplib, bmx, rclone, AVM, SSIMULACRA2, yt-dlp-rs, NeMo Speech and Silero VAD; optionally downloads yt-dlp, Deno, Parakeet and transcription models at runtime. Each component is distributed under its own license. Bundled license notices are available below; see the source repository for component details." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Enthält FFmpeg, mpv, tesseract, asdcplib, bmx und rclone; lädt optional yt-dlp, Deno, whisper.cpp und Parakeet zur Laufzeit herunter. Jede Komponente wird unter einer eigenen Lizenz vertrieben. Die gebündelten Lizenzhinweise sind unten verfügbar. Einzelheiten zu den Komponenten finden Sie im Quell-Repository."
+            "value" : "Enthält FFmpeg, mpv, tesseract, asdcplib, bmx, rclone, AVM, SSIMULACRA2, yt-dlp-rs, NeMo Speech und Silero VAD; lädt optional yt-dlp, Deno, Parakeet und Transkriptionsmodelle zur Laufzeit herunter. Jede Komponente wird unter einer eigenen Lizenz vertrieben. Die gebündelten Lizenzhinweise sind unten verfügbar. Einzelheiten zu den Komponenten finden Sie im Quell-Repository."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Incluye FFmpeg, mpv, tesseract, asdcplib, bmx y rclone; opcionalmente descarga yt-dlp, Deno, whisper.cpp y Parakeet en tiempo de ejecución. Cada componente se distribuye bajo su propia licencia. Los avisos de licencia incluidos están disponibles a continuación; consulte el repositorio de origen para obtener detalles sobre los componentes."
+            "value" : "Incluye FFmpeg, mpv, tesseract, asdcplib, bmx, rclone, AVM, SSIMULACRA2, yt-dlp-rs, NeMo Speech y Silero VAD; opcionalmente descarga yt-dlp, Deno, Parakeet y modelos de transcripción en tiempo de ejecución. Cada componente se distribuye bajo su propia licencia. Los avisos de licencia incluidos están disponibles a continuación; consulte el repositorio de origen para obtener detalles sobre los componentes."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Intègre FFmpeg, mpv, tesseract, asdcplib, bmx et rclone ; télécharge éventuellement yt-dlp, Deno, whisper.cpp et Parakeet à l’exécution. Chaque composant est distribué sous sa propre licence. Les avis de licence des composants intégrés sont disponibles ci-dessous ; consultez le référentiel source pour les détails des composants."
+            "value" : "Intègre FFmpeg, mpv, tesseract, asdcplib, bmx, rclone, AVM, SSIMULACRA2, yt-dlp-rs, NeMo Speech et Silero VAD ; télécharge éventuellement yt-dlp, Deno, Parakeet et des modèles de transcription à l’exécution. Chaque composant est distribué sous sa propre licence. Les avis de licence des composants intégrés sont disponibles ci-dessous ; consultez le référentiel source pour les détails des composants."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Include FFmpeg, mpv, tesseract, asdcplib, bmx e rclone; scarica opzionalmente yt-dlp, Deno, whisper.cpp e Parakeet in fase di runtime. Ogni componente è distribuito con la propria licenza. Gli avvisi di licenza dei componenti inclusi sono disponibili di seguito; vedere il repository di origine per i dettagli dei componenti."
+            "value" : "Include FFmpeg, mpv, tesseract, asdcplib, bmx, rclone, AVM, SSIMULACRA2, yt-dlp-rs, NeMo Speech e Silero VAD; scarica opzionalmente yt-dlp, Deno, Parakeet e modelli di trascrizione in fase di runtime. Ogni componente è distribuito con la propria licenza. Gli avvisi di licenza dei componenti inclusi sono disponibili di seguito; vedere il repository di origine per i dettagli dei componenti."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "FFmpeg、mpv、tesseract、asdcplib、bmx、および rclone をバンドルします。オプションで、実行時に yt-dlp、Deno、whisper.cpp、および Parakeet をダウンロードします。各コンポーネントは独自のライセンスに基づいて配布されます。バンドルされたライセンス通知は以下から入手できます。コンポーネントの詳細については、ソース リポジトリを参照してください。"
+            "value" : "FFmpeg、mpv、tesseract、asdcplib、bmx、rclone、AVM、SSIMULACRA2、yt-dlp-rs、NeMo Speech、および Silero VAD をバンドルします。オプションで、実行時に yt-dlp、Deno、Parakeet、および文字起こしモデルをダウンロードします。各コンポーネントは独自のライセンスに基づいて配布されます。バンドルされたライセンス通知は以下から入手できます。コンポーネントの詳細については、ソース リポジトリを参照してください。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "FFmpeg, mpv, tesseract, asdcplib, bmx 및 rclone 번들; 선택적으로 런타임 시 yt-dlp, Deno, whisper.cpp 및 Parakeet를 다운로드합니다. 각 구성 요소는 자체 라이선스에 따라 배포됩니다. 번들 라이센스 공지는 아래에서 확인할 수 있습니다. 구성 요소 세부 정보는 소스 저장소를 참조하세요."
+            "value" : "FFmpeg, mpv, tesseract, asdcplib, bmx, rclone, AVM, SSIMULACRA2, yt-dlp-rs, NeMo Speech 및 Silero VAD 번들; 선택적으로 런타임 시 yt-dlp, Deno, Parakeet 및 전사 모델을 다운로드합니다. 각 구성 요소는 자체 라이선스에 따라 배포됩니다. 번들 라이센스 공지는 아래에서 확인할 수 있습니다. 구성 요소 세부 정보는 소스 저장소를 참조하세요."
           }
         },
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Inkluderer FFmpeg, mpv, tesseract, asdcplib, bmx og rclone; kan laste ned yt-dlp, Deno, whisper.cpp og Parakeet ved behov. Hver komponent distribueres under sin egen lisens. Medfølgende lisenstekster er tilgjengelige nedenfor; se kildekodelageret for detaljer om komponentene."
+            "value" : "Inkluderer FFmpeg, mpv, tesseract, asdcplib, bmx, rclone, AVM, SSIMULACRA2, yt-dlp-rs, NeMo Speech og Silero VAD; kan laste ned yt-dlp, Deno, Parakeet og transkripsjonsmodeller ved behov. Hver komponent distribueres under sin egen lisens. Medfølgende lisenstekster er tilgjengelige nedenfor; se kildekodelageret for detaljer om komponentene."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Inclui FFmpeg, mpv, tesseract, asdcplib, bmx e rclone; opcionalmente, baixa yt-dlp, Deno, whisper.cpp e Parakeet em tempo de execução. Cada componente é distribuído sob sua própria licença. Os avisos de licença incluídos estão disponíveis abaixo; consulte o repositório de origem para obter detalhes dos componentes."
+            "value" : "Inclui FFmpeg, mpv, tesseract, asdcplib, bmx, rclone, AVM, SSIMULACRA2, yt-dlp-rs, NeMo Speech e Silero VAD; opcionalmente, baixa yt-dlp, Deno, Parakeet e modelos de transcrição em tempo de execução. Cada componente é distribuído sob sua própria licença. Os avisos de licença incluídos estão disponíveis abaixo; consulte o repositório de origem para obter detalhes dos componentes."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "捆绑了 FFmpeg、mpv、tesseract、asdcplib、bmx 和 rclone；可选择在运行时下载 yt-dlp、Deno、whisper.cpp 和 Parakeet。每个组件都根据自己的许可证分发。下面提供了捆绑的许可声明；有关组件详细信息，请参阅源存储库。"
+            "value" : "捆绑了 FFmpeg、mpv、tesseract、asdcplib、bmx、rclone、AVM、SSIMULACRA2、yt-dlp-rs、NeMo Speech 和 Silero VAD；可选择在运行时下载 yt-dlp、Deno、Parakeet 和转录模型。每个组件都根据自己的许可证分发。下面提供了捆绑的许可声明；有关组件详细信息，请参阅源存储库。"
           }
         }
       }
@@ -68749,60 +68749,60 @@
         }
       }
     },
-    "FFMPEG version: 9.0.1" : {
+    "FFMPEG version: 9.1" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "FFMPEG-Version: 9.0.1"
+            "value" : "FFMPEG-Version: 9.1"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "FFMPEG versión: 9.0.1"
+            "value" : "FFMPEG versión: 9.1"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Version de FFMPEG : 9.0.1"
+            "value" : "Version de FFMPEG : 9.1"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Versione FFMPEG: 9.0.1"
+            "value" : "Versione FFMPEG: 9.1"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "FFMPEG バージョン: 9.0.1"
+            "value" : "FFMPEG バージョン: 9.1"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "FFMPEG 버전: 9.0.1"
+            "value" : "FFMPEG 버전: 9.1"
           }
         },
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "FFMPEG-versjon: 9.0.1"
+            "value" : "FFMPEG-versjon: 9.1"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Versão FFMPEG: 9.0.1"
+            "value" : "Versão FFMPEG: 9.1"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "FFMPEG版本：9.0.1"
+            "value" : "FFMPEG版本：9.1"
           }
         }
       }

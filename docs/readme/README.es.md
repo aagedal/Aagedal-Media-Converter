@@ -30,11 +30,11 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 - **Conversión por lotes** de casi cualquier archivo de vídeo o audio (alternativa a Shutter Encoder o Handbrake)
 - **Reproducción** a pantalla completa con código de tiempo y controles JKL (alternativa a IINA o VLC)
 - **Consulta y comparación de metadatos**, incluida la detección de C2PA (alternativa a MediaInfo)
+- **Análisis** de sonoridad, silencios, picos, fase estéreo y calidad del vídeo codificado
 - **Descarga** de vídeos de sitios web, con programación y descarga de emisiones en directo
 - **Grabación de pantalla** con audio del sistema y pista de micrófono separada opcional (alternativa a OBS)
 - **Transcripción** de vídeo y audio a subtítulos SRT
 - **Subida** a un servidor tras la conversión
-
 - **Unir** clips en una línea de tiempo con previsualización de la secuencia y recorte con desplazamiento de los clips siguientes
 - **Automatizar conversiones mediante MCP local** con acceso opcional para agentes
 
@@ -85,6 +85,23 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 - Elimina o reordena pistas de audio
     - No funciona con el preajuste Stream Copy
 
+### Ajustes
+
+Haz clic derecho en un archivo de la cola y elige **Ajustes…** para configurar, por archivo:
+- **Rotar** 90°/180° y **voltear** horizontal o verticalmente (se aplica después del recorte de encuadre y antes del escalado del preajuste)
+- **Velocidad** de 0,25× a 4× con conservación del tono del audio
+- **Fundido** de vídeo desde/hacia negro, y fundido de entrada y salida de audio
+- **Desfase de audio** para corregir clips desincronizados (los valores positivos retrasan el audio)
+- **Reemplazar o añadir audio** desde otro archivo, alineado con el recorte de duración y ajustado a la duración del vídeo
+- **Incrustar subtítulos** desde una pista de subtítulos de texto o un archivo SRT, ASS o VTT, con tamaño de fuente, contorno o recuadro y posición. Los subtítulos de imagen (PGS, DVD) requieren primero reconocimiento OCR a SRT.
+- Anulación por archivo de la normalización de sonoridad
+
+Los ajustes requieren un preajuste con recodificación; no están disponibles para Stream Copy, DCP, IMF, AV2, uniones ni vídeos generados de formas de onda.
+
+### Normalización de sonoridad
+
+Activa **Normalize Loudness** en Ajustes → Preajustes para normalizar cada pista de audio recodificada según EBU R128 (−23 LUFS, −1 dBTP), ATSC A/85, streaming (−14 LUFS), web/podcast (−16 LUFS) o un objetivo personalizado. Cada pista se mide en una primera pasada y después se normaliza con el filtro `loudnorm` de FFmpeg aplicando ganancia lineal cuando el programa lo permite. En preajustes de televisión con pistas mono, como AVC-Intra, la medición se realiza por pista de origen antes de la división, de modo que se conserva el balance estéreo.
+
 ### Unir archivos de la cola
 
 - Une archivos con el mismo códec, resolución, frecuencia de fotogramas, profundidad de bits y pistas de audio
@@ -100,14 +117,14 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 
 ### Acceso local para agentes
 
-Activa **Settings → Agent Access**, autoriza las carpetas de origen y copia la configuración para tu cliente MCP. El auxiliar incluido permite a los agentes explorar e inspeccionar medios autorizados, planificar conversiones, enviar trabajos, seguir su progreso y cancelarlos en la cola de la aplicación. Están disponibles los 17 preajustes integrados; los preajustes FFmpeg personalizados quedan excluidos. Las exportaciones IMF son experimentales.
+Activa **Settings → Agent Access**, autoriza las carpetas de origen y copia la configuración para tu cliente MCP. El auxiliar incluido permite a los agentes explorar e inspeccionar medios autorizados, planificar conversiones, enviar trabajos, seguir su progreso y cancelarlos en la cola de la aplicación. Están disponibles 21 preajustes integrados (todos los preajustes integrados excepto Lossless FFV1); los espacios FFmpeg personalizados quedan excluidos. Las exportaciones IMF son experimentales.
 
 Los trabajos aceptados continúan tras desconectar el cliente. Los planes duran 15 minutos y los resultados de trabajos terminados están disponibles durante 30 días. Las exportaciones mediante agentes desactivan el código de tiempo de salida. Consulta la [guía de configuración y flujo de trabajo](../../Documentation/LOCAL_AGENT_ACCESS.md) para la autorización de carpetas, la configuración de clientes y la recuperación de trabajos.
 
 ### Animaciones de formas de onda de audio
 
 - Genera animaciones de formas de onda para archivos que solo contienen audio
-- Cinco preajustes con opciones de color y normalización
+- 7 estilos nativos en Swift (entre ellos Halo, Orb, Ridgeline y LED Meter) además de 5 estilos clásicos de FFmpeg, con paletas de degradado y opciones de color, opacidad, fondo transparente y normalización
 
 ### Capturas con la resolución y profundidad de bits del original
 
@@ -128,6 +145,18 @@ El botón de cámara del reproductor de recorte captura imágenes con la resoluc
 - Campo de comentario por archivo para añadir metadatos opcionales, por ejemplo créditos
 - Etiqueta de fecha opcional (Generated [YYYYMMDD]), prefijo y sufijo en el campo, antes del comentario
 - Consulta y comparación de metadatos
+
+### Análisis multimedia
+
+![Muestras verificadas de SSIMULACRA2 junto a la reproducción del original](../images/ssimulacra2-frame-inspection-en.png)
+Pulsa el botón de gráfico en un archivo de la cola para consultar sus informes de audio y vídeo.
+
+- Mide la sonoridad del programa completo y el pico real en pistas individuales, pares mono personalizados o grupos mono 5.1; exporta informes completos en JSON o PDF.
+- Detecta intervalos de silencio y de pico, compara el balance de canales o comprueba la correlación estéreo y la mezcla a mono. Salta a las secciones medidas en la previsualización en pausa y exporta las mediciones completas en JSON.
+- Detecta intervalos en negro (`blackdetect` de FFmpeg, con duración mínima, proporción de imagen y umbral de píxel ajustables) y cortes de escena (`scdet` de FFmpeg, con umbral ajustable y una miniatura por corte) en el vídeo original. Haz clic en un evento para inspeccionarlo en la previsualización en pausa y exporta los resultados en JSON o como marcadores EDL para Resolve. Consulta los formatos de informe de [negros](../../docs/video-black-report-format.md) y [cortes de escena](../../docs/video-scene-cut-report-format.md).
+- Tras la codificación, compara el vídeo con VMAF, PSNR, XPSNR o muestras de SSIMULACRA2. Inspecciona la calidad a lo largo del tiempo, alterna entre la reproducción del original y del resultado y salta a los tramos con menor puntuación.
+- SSIMULACRA2 compara fotogramas decodificados verificados hasta el límite seleccionado, incluso en clips cortos. Los vídeos se indexan primero; cuantas más muestras, mayor será el tiempo de análisis.
+- Exporta la calidad de vídeo como JSON a resolución completa o como PDF A4 paginado con líneas de tiempo, puntuaciones por componente y avisos de comparación. Consulta [la interpretación de puntuaciones y detalles del informe](../../docs/video-quality-report-format.md).
 
 ### Aviso de reproducción automática a los 15 segundos para VideoLoop
 
@@ -168,7 +197,13 @@ Codificación SVT-AV1 con soporte de 10 bits y alta eficiencia de compresión. S
 
 Codificación AV2 experimental con el codificador de referencia AOM AVM incluido (`avmenc`), introducida en una versión preliminar. Admite 8/10 bits, calidad constante o bitrate variable, y velocidad y resolución configurables. La codificación paralela por segmentos utiliza varios núcleos de CPU en modo de calidad constante.
 
-Elige IVF (`.ivf`) solo con vídeo o Matroska (`.mkv`) con audio AAC u Opus. La codificación de referencia es muy lenta y el flujo de bits, aún en evolución, requiere un decodificador compatible con AV2. La aplicación puede decodificar AV2 para conversiones y miniaturas, pero todavía no admite reproducción interactiva. Usa AV2 para experimentar, no como formato de entrega.
+El codificador y el decodificador incluidos utilizan AVM `1.0.0-445-g14342caad` (14 de octubre de 2026). Estas herramientas siguen siendo experimentales; consulta la [validación de compilación y compatibilidad](../../docs/av2-integrated-encoder-2026-10-14.md) para ver el código fuente fijado, las instrucciones de recompilación y las comprobaciones.
+
+Elige IVF (`.ivf`) solo con vídeo o Matroska (`.mkv`) con audio AAC u Opus. La codificación de referencia es muy lenta y la reproducción requiere un decodificador compatible con AV2. La aplicación puede decodificar AV2 para conversiones y miniaturas, pero todavía no admite reproducción interactiva. Usa AV2 para experimentar, no como formato de entrega.
+
+#### VP9 / WebM
+
+VP9 libre de regalías para la web, codificado con libvpx en calidad constante (CRF con objetivo de bitrate cero) y multihilo por filas. Elige el valor CRF, una velocidad de Best a Realtime, 8 bits (perfil 0) o 10 bits (perfil 2) y un límite de resolución. El audio se codifica en Opus con bitrate seleccionable. Genera archivos WebM o Matroska (`.mkv`). Opus no admite algunas distribuciones de canales, como `5.1(side)`; haz la mezcla reducida de esas pistas mediante la reasignación de audio.
 
 #### TV (HEVC 10-bit 4:2:2)
 
@@ -178,6 +213,10 @@ Formato de entrega para televisión con HEVC de 10 bits 4:2:2 por hardware, reso
 
 Formato de televisión en contenedor MXF. AVC-Intra de 10 bits 4:2:2 con clases seleccionables de 50/100/200 Mbps, resolución y frecuencia, y 4/8/16 canales mono de audio PCM de 24 bits.
 
+#### XDCAM HD422 (MXF)
+
+Entrega para televisión en Sony XDCAM HD422: MPEG-2 4:2:2 Profile @ High Level, CBR de 50 Mbps con GOP largo (GOP cerrados de 12 fotogramas a 25/50 Hz y 15 a 29,97/59,94 Hz, dos fotogramas B) en un archivo MXF OP1a. Elige entre 1080i50, 1080p25, 1080i59.94, 1080p29.97, 720p50 o 720p59.94. El material de origen se escala con bandas laterales o horizontales (pillarbox o letterbox) a ráster completo 16:9, y el audio se entrega en 4 u 8 pistas mono PCM de 24 bits a 48 kHz.
+
 #### Stream copy
 
 Copia los flujos de audio y vídeo existentes a un nuevo archivo, conservando códecs, metadatos y extensión originales. Útil para recortar y unir.
@@ -186,13 +225,21 @@ Copia los flujos de audio y vídeo existentes a un nuevo archivo, conservando c�
 
 Apple ProRes (yuv422p10) para másteres fáciles de editar. Incluye los primeros flujos de vídeo y audio, conserva audio PCM de 24 bits y usa los bitrates estándar de ProRes. El perfil predeterminado se elige en los ajustes de preajustes.
 
+#### DNxHR
+
+Avid DNxHR a la resolución original para edición y masterización: LB, SQ o HQ (8 bits 4:2:2), HQX (10 bits 4:2:2) o 444 (10 bits 4:4:4). Elige contenedor MOV o MXF. Todas las pistas de audio se conservan en PCM de 24 bits (remuestreadas a 48 kHz en MXF).
+
+#### CineForm
+
+GoPro CineForm a la resolución original en contenedor MOV, para edición y acabado: YUV de 10 bits 4:2:2, RGB de 12 bits 4:4:4 o RGB de 12 bits 4:4:4 con canal alfa. Elige una calidad desde Low hasta Film Scan 3+ (Film Scan 1 por defecto). El códec almacena como máximo 12 bits por canal, por lo que las fuentes de 16 bits se reducen a 12 bits. El codificador de FFmpeg requiere una anchura múltiplo de 16, así que otros anchos se rellenan con negro a los lados. Todas las pistas de audio se conservan en PCM de 24 bits.
+
 #### Proxy
 
 Proxies ligeros en HEVC, ProRes Proxy o DNxHR con límites de resolución configurables. Conserva todos los canales de audio como PCM sin comprimir, ideal para edición offline y una subcarpeta Proxy junto al material original.
 
 #### DCP (Digital Cinema Package)
 
-Exportación DCP conforme a SMPTE. Codifica vídeo como JPEG 2000 en espacio XYZ de 12 bits con conversión desde BT.709, lo encapsula en MXF con asdcp-wrap y genera los XML SMPTE necesarios (CPL, PKL, ASSETMAP, VOLINDEX). Admite 2K y 4K en Flat, Scope y Full a 24/25/30/48 fps, con bitrate configurable de 100–250 Mbps. El audio se exporta como PCM de 24 bits en una pista MXF separada. Los metadatos por elemento incluyen título, tipo de contenido, anotación, clasificación y idioma del audio. Escalado: ajustar con bandas o llenar recortando.
+Exportación de Digital Cinema Package. Codifica vídeo como JPEG 2000 en espacio XYZ de 12 bits con conversión desde BT.709, lo encapsula en MXF con asdcp-wrap y genera los XML del paquete (CPL, PKL, ASSETMAP, VOLINDEX). Admite 2K y 4K en Flat, Scope y Full a 24/25/30/48 fps, con bitrate configurable de 100–250 Mbps. El audio se exporta como PCM de 24 bits en una pista MXF separada. Los metadatos por elemento incluyen título, tipo de contenido, anotación, clasificación y idioma del audio. Escalado: ajustar con bandas o llenar recortando.
 
 #### IMF App 2e / RDD 45 (experimental)
 
@@ -204,15 +251,15 @@ Importa y exporta secuencias en PNG, JPEG, TIFF, EXR, DPX, BMP, TGA, SGI, JPEG X
 
 #### Animated Stills
 
-Secuencias animadas en GIF, AVIF o PNG animado (APNG), seleccionables en los ajustes de preajustes.
+Secuencias animadas en GIF, AVIF, PNG animado (APNG), WebP animado o JPEG XL animado, seleccionables en los ajustes de preajustes.
 
-#### Audio Only AAC
+#### Lossless (FFV1)
 
-Mezcla reducida a estéreo en AAC que conserva la imagen estéreo y reduce considerablemente el tamaño.
+Codificación de archivo FFV1 matemáticamente sin pérdidas en Matroska (`.mkv`) con audio PCM sin comprimir.
 
-#### Audio Only WAV
+#### Audio Only
 
-WAV sin comprimir que conserva todos los canales siempre que sea posible.
+Extrae o transcodifica audio como WAV (PCM sin comprimir conservando todos los canales), FLAC, ALAC o AAC/MP4, configurable en los ajustes de preajustes.
 
 #### 10 preajustes FFmpeg personalizados
 
@@ -274,6 +321,8 @@ Previsualiza una secuencia junto a la lista de clips, con miniaturas, formas de 
 ---
 
 ## Uso
+
+La interfaz de la aplicación está disponible en inglés, noruego bokmål, alemán, español, francés, italiano, japonés, coreano, portugués de Brasil y chino simplificado. Sigue el idioma preferido configurado para la app en Ajustes del Sistema de macOS. Las ocho traducciones recién añadidas son una primera versión; las cadenas pendientes de revisión lingüística están marcadas como **Needs Review** en `Aagedal Media Converter/Resources/Localizable.xcstrings`.
 
 1. Abre la aplicación.
 2. Arrastra vídeos a la ventana o pulsa el botón más para importarlos.
