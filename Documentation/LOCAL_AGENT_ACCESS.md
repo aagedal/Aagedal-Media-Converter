@@ -31,7 +31,7 @@ unavailable or a grant is lost, reconnect the drive or select the location again
 in the app and make a new plan. A plan lasts 15 minutes, and submission rechecks
 access, source identity, and output collisions. Existing outputs are preserved.
 
-Agent Access lists all 21 built-in presets. All can be planned and run:
+Agent Access lists 21 built-in presets (all built-in presets except Lossless FFV1). All can be planned and run:
 Video Loop, Video Loop with Sound, Animated Still, H.264, HEVC, AV1, AV2,
 TV HEVC, TV AVC-Intra, ProRes, Proxy, Audio Only, Stream Copy, Image Sequence,
 DCP, XDCAM HD422, DNxHR, CineForm, and VP9, plus the experimental IMF App 2e and RDD 45
@@ -70,7 +70,7 @@ notification interrupts the wait without cancelling the conversion. Use
 `cancel_job` to stop the actual job.
 
 Ordinary manual conversions and separate-file groups use durable shared jobs for
-13 built-in presets. Package/image-sequence exports, merged groups, generated
+17 built-in presets. Package/image-sequence exports, merged groups, generated
 video, custom presets, recursive exports, and jobs with upload, transcription, or
 analytics follow-ups retain their existing execution paths. Repeat exports with
 existing output files also retain the existing executor's unique-name policy. Resetting a terminal shared row starts fresh UI work and keeps

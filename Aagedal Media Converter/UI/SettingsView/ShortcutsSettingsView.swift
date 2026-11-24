@@ -72,6 +72,7 @@ struct ShortcutsSettingsView: View {
         .onAppear {
             recorder.install()
             recorder.record = { binding, target in assign(binding, to: target.command, slot: target.slot) }
+            recorder.onCancel = { status = nil }
         }
         .onDisappear { recorder.uninstall() }
         .onChange(of: context) { _, _ in
@@ -83,7 +84,8 @@ struct ShortcutsSettingsView: View {
             layout = .current()
         }
         .dropDestination(for: URL.self) { urls, _ in
-            guard let url = urls.first(where: { $0.pathExtension == KeyboardPreset.fileExtension }) else { return false }
+            guard let url = urls.first(where: { $0.pathExtension.lowercased() == KeyboardPreset.fileExtension }) else { return false }
+            recorder.cancel()
             importPreset(from: url)
             return true
         }
@@ -167,7 +169,10 @@ struct ShortcutsSettingsView: View {
                 Button("Export…", action: export)
                 Divider()
                 Button("Rename…") { prompt(.rename) }.disabled(registry.isBuiltInPresetActive)
-                Button("Delete…") { confirmDelete = true }.disabled(registry.isBuiltInPresetActive)
+                Button("Delete…") {
+                    recorder.cancel()
+                    confirmDelete = true
+                }.disabled(registry.isBuiltInPresetActive)
                 Divider()
                 Button("Revert to Saved Preset") { confirmingDiscard(.switchTo(registry.activePresetName)) }.disabled(!registry.isModified)
                 Button("Restore Defaults") { confirmingDiscard(.switchTo(KeyboardPreset.builtInName)) }
@@ -179,13 +184,11 @@ struct ShortcutsSettingsView: View {
             .fixedSize()
             .help("More preset actions")
             .accessibilityLabel("More preset actions")
-            if let data = try? registry.currentPreset.fileData() {
-                ShareLink(item: KeyboardPresetShareItem(name: activePresetTitle, data: data),
-                          preview: SharePreview(activePresetTitle, image: Image(systemName: "keyboard"))) {
-                    Image(systemName: "square.and.arrow.up")
-                }
-                .help("Share the current shortcuts as a preset file.")
+            ShareLink(item: KeyboardPresetShareItem(name: activePresetTitle, preset: registry.currentPreset),
+                      preview: SharePreview(activePresetTitle, image: Image(systemName: "keyboard"))) {
+                Image(systemName: "square.and.arrow.up")
             }
+            .help("Share the current shortcuts as a preset file.")
         }
     }
 
@@ -196,6 +199,7 @@ struct ShortcutsSettingsView: View {
     }
 
     private func confirmingDiscard(_ action: PresetAction) {
+        recorder.cancel()
         if registry.isModified { pendingDiscard = action } else { perform(action) }
     }
     private func perform(_ action: PresetAction) {
@@ -212,6 +216,7 @@ struct ShortcutsSettingsView: View {
         rejected == 0 ? "" : " " + String(localized: "Shortcuts skipped because they are reserved or duplicated: \(rejected)")
     }
     private func prompt(_ prompt: NamePrompt) {
+        recorder.cancel()
         proposedName = prompt == .rename || !registry.isBuiltInPresetActive ? registry.activePresetName : String(localized: "My Shortcuts")
         if prompt == .saveAs, registry.preset(named: proposedName) != nil { proposedName += " " + String(localized: "Copy") }
         namePrompt = prompt
@@ -234,6 +239,7 @@ struct ShortcutsSettingsView: View {
         }
     }
     private func chooseImport() {
+        recorder.cancel()
         let panel = NSOpenPanel()
         panel.title = String(localized: "Import Keyboard Preset")
         panel.allowedContentTypes = [.mediaConverterKeyboardPreset, .json]
@@ -247,6 +253,7 @@ struct ShortcutsSettingsView: View {
         catch { status = .error(String(localized: "Could not import \(url.lastPathComponent): \(error.localizedDescription)")) }
     }
     private func export() {
+        recorder.cancel()
         let panel = NSSavePanel()
         panel.title = String(localized: "Export Keyboard Preset")
         panel.nameFieldStringValue = KeyboardPresetShareItem.fileName(for: activePresetTitle)
@@ -271,7 +278,10 @@ struct ShortcutsSettingsView: View {
             .fixedSize()
             .accessibilityIdentifier("settings.shortcuts.context")
             Spacer()
-            Button("Built-in Shortcuts…") { showsBuiltInShortcuts = true }
+            Button("Built-in Shortcuts…") {
+                recorder.cancel()
+                showsBuiltInShortcuts = true
+            }
                 .buttonStyle(.link)
                 .help("Shortcuts in overlays, sheets and other windows, which cannot be changed")
         }
@@ -403,6 +413,8 @@ struct ShortcutsSettingsView: View {
                                  recorder.toggle(target)
                                  if recorder.target != nil {
                                      status = .info(String(localized: "Press the new shortcut for “\(command.title)”. Click the field again to cancel."))
+                                 } else {
+                                     status = nil
                                  }
                              },
                              clear: { remove(binding) })
@@ -478,7 +490,7 @@ extension UTType {
 /// The current shortcuts as a preset file, for the share menu.
 struct KeyboardPresetShareItem: Transferable {
     let name: String
-    let data: Data
+    let preset: KeyboardPreset
 
     static func fileName(for name: String) -> String {
         name.components(separatedBy: CharacterSet(charactersIn: "/:\\")).joined(separator: "-") + "." + KeyboardPreset.fileExtension
@@ -488,7 +500,7 @@ struct KeyboardPresetShareItem: Transferable {
             let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let url = directory.appendingPathComponent(fileName(for: item.name))
-            try item.data.write(to: url)
+            try item.preset.fileData().write(to: url)
             return SentTransferredFile(url)
         }
     }
@@ -504,18 +516,38 @@ final class ShortcutRecorder: ObservableObject {
     }
     @Published private(set) var target: Target? {
         // Keeps the text-editing guard from handing the recorded key to a focused field.
-        didSet { ShortcutRegistry.shared.isRecording = target != nil }
+        didSet {
+            let active = target != nil
+            isActivelyRecording = active
+            ShortcutRegistry.shared.isRecording = active
+            if !active {
+                removeWindowObservers()
+                window = nil
+            }
+        }
     }
     @Published private(set) var heldModifiers: ShortcutModifiers = []
     var record: ((ShortcutBinding, Target) -> Void)?
-    private var monitors: [Any] = []
+    var onCancel: (() -> Void)?
+    nonisolated(unsafe) private var monitors: [Any] = []
+    nonisolated(unsafe) private var windowObservers: [NSObjectProtocol] = []
+    nonisolated(unsafe) private var isActivelyRecording = false
     private weak var window: NSWindow?
 
-    func toggle(_ newTarget: Target) {
-        target = target == newTarget ? nil : newTarget
-        window = NSApp.keyWindow
+    func toggle(_ newTarget: Target, in targetWindow: NSWindow? = NSApp.keyWindow) {
+        if target == newTarget {
+            target = nil
+        } else {
+            window = targetWindow
+            target = newTarget
+            observeWindow(targetWindow)
+        }
     }
-    func cancel() { target = nil }
+    func cancel() {
+        let wasRecording = target != nil
+        target = nil
+        if wasRecording { onCancel?() }
+    }
     func install() {
         guard monitors.isEmpty else { return }
         // Recording takes every key in the editor's window, including ones menus would
@@ -528,7 +560,11 @@ final class ShortcutRecorder: ObservableObject {
             let recorded = !event.isARepeat && MainActor.assumeIsolated { () -> Bool in
                 guard let self, let target = self.target, window === self.window else { return false }
                 self.target = nil
-                if let pressed { self.record?(pressed, target) }
+                if let pressed {
+                    self.record?(pressed, target)
+                } else {
+                    self.onCancel?()
+                }
                 return true
             }
             return recorded ? nil : event
@@ -542,8 +578,38 @@ final class ShortcutRecorder: ObservableObject {
     func uninstall() {
         monitors.forEach(NSEvent.removeMonitor)
         monitors.removeAll()
+        removeWindowObservers()
         target = nil
         heldModifiers = []
+    }
+
+    private func observeWindow(_ window: NSWindow?) {
+        removeWindowObservers()
+        guard let window else { return }
+        let center = NotificationCenter.default
+        let names: [Notification.Name] = [NSWindow.didResignKeyNotification, NSWindow.willCloseNotification]
+        windowObservers = names.map { name in
+            center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.cancel() }
+            }
+        }
+    }
+
+    private func removeWindowObservers() {
+        windowObservers.forEach(NotificationCenter.default.removeObserver)
+        windowObservers.removeAll()
+    }
+
+    deinit {
+        monitors.forEach(NSEvent.removeMonitor)
+        windowObservers.forEach(NotificationCenter.default.removeObserver)
+        if isActivelyRecording {
+            if Thread.isMainThread {
+                MainActor.assumeIsolated { ShortcutRegistry.shared.isRecording = false }
+            } else {
+                Task { @MainActor in ShortcutRegistry.shared.isRecording = false }
+            }
+        }
     }
 }
 

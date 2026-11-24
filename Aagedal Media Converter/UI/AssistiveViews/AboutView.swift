@@ -40,7 +40,7 @@ struct AboutView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
-            Text("FFMPEG version: 9.0.1")
+            Text("FFMPEG version: 9.1")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
@@ -58,7 +58,7 @@ struct AboutView: View {
                     .font(.footnote)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
-                Text("Bundles FFmpeg, mpv, tesseract, asdcplib, bmx and rclone; optionally downloads yt-dlp, Deno, whisper.cpp and Parakeet at runtime. Each component is distributed under its own license. Bundled license notices are available below; see the source repository for component details.")
+                Text("Bundles FFmpeg, mpv, tesseract, asdcplib, bmx, rclone, AVM, SSIMULACRA2, yt-dlp-rs, NeMo Speech and Silero VAD; optionally downloads yt-dlp, Deno, Parakeet and transcription models at runtime. Each component is distributed under its own license. Bundled license notices are available below; see the source repository for component details.")
                     .font(.footnote)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)

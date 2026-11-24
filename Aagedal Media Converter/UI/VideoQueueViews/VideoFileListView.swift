@@ -779,11 +779,8 @@ struct VideoFileListView: View {
 
         guard !selectedIndices.isEmpty else { return }
 
-        // Check if Option key is pressed
-        let optionKeyPressed = NSEvent.modifierFlags.contains(.option)
-
         for index in selectedIndices {
-            onReset(index, optionKeyPressed)
+            onReset(index, false)
         }
     }
 

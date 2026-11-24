@@ -563,7 +563,7 @@ struct SettingsView: View {
                 return [
                     String(localized: "Aagedal Media Converter"),
                     String(localized: "Minimalist FFMPEG frontend written in Swift and SwiftUI."),
-                    String(localized: "FFMPEG version: 9.0.1"),
+                    String(localized: "FFMPEG version: 9.1"),
                     String(localized: "Updates"),
                     String(localized: "Automatically check for updates"),
                     String(localized: "Check frequency"),

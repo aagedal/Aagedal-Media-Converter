@@ -116,13 +116,13 @@ Turn on **Normalize Loudness** in Settings → Presets to normalize every re-enc
 - Mark recording continuations explicitly and optionally split groups after gaps over two hours. Compatibility checks help identify clips that can be stitched.
 
 ### Local agent access
-Enable **Settings → Agent Access**, approve source folders, and copy the setup for your MCP client. The bundled helper lets agents browse and inspect approved media, plan conversions, submit jobs, follow progress, and cancel work in the app queue. All 21 built-in presets are available; custom FFmpeg slots are excluded. IMF exports are experimental.
+Enable **Settings → Agent Access**, approve source folders, and copy the setup for your MCP client. The bundled helper lets agents browse and inspect approved media, plan conversions, submit jobs, follow progress, and cancel work in the app queue. 21 built-in presets are available (all built-in presets except Lossless FFV1); custom FFmpeg slots are excluded. IMF exports are experimental.
 
 Accepted jobs continue after a client disconnects. Plans last 15 minutes and terminal results remain available for 30 days. Agent exports disable output timecode. See the [setup and workflow guide](Documentation/LOCAL_AGENT_ACCESS.md) for folder approvals, client setup, and job recovery.
 
 ### Generate Audio Waveform Animation
-- Generate Audio Waveform Animations for audio only files
-- 5 different presets, with color and normalization options
+- Generate Audio Waveform Animations for audio-only files
+- 7 native Swift styles (including Halo, Orb, Ridgeline, and LED Meter) plus 5 classic FFmpeg styles, with gradient palettes, color, opacity, transparent-background, and normalization options
 
 ### Quickly Grab Screenshots at source resoltuion and bit depth
 In the trim player there is a camera button that allows capturing still images. Images will automatically be captured at source resolution. By default the app will capture screenshots in JPEG XL. Format for screenshots and can be changed in the settings on a per bit-depth basis. Also a setting to specify what to do with alpha-channel video.
@@ -188,7 +188,7 @@ Next-generation SVT-AV1 encoding with 10-bit support. High compression efficienc
 #### AV2 (experimental)
 Experimental AV2 encoding using the bundled AOM AVM reference encoder (`avmenc`), introduced in a preview release. Supports 8/10-bit output, constant-quality or variable-bitrate encoding, and configurable speed and resolution. Parallel chunked encoding uses multiple CPU cores in constant-quality mode.
 
-The bundled encoder and decoder use AVM `1.0.0-175-g0da4c3647` (October 12, 2026). The tools remain experimental; see [build and compatibility validation](docs/av2-update-2026-10-14.md) for the pinned source, rebuild instructions, and checks.
+The bundled encoder and decoder use AVM `1.0.0-445-g14342caad` (October 14, 2026). The tools remain experimental; see [build and compatibility validation](docs/av2-integrated-encoder-2026-10-14.md) for the pinned source, rebuild instructions, and checks.
 
 Choose video-only IVF (`.ivf`) or Matroska (`.mkv`) with AAC or Opus audio. Reference encoding is very slow, and playback requires an AV2-capable decoder. The app can decode AV2 files for conversion and thumbnails, but interactive playback is not available yet. Treat AV2 as a format for experimentation rather than delivery.
 
@@ -229,13 +229,13 @@ Experimental IMF package export with one image track and one PCM audio track. Pa
 Import and export image sequences in PNG, JPEG, TIFF, EXR, DPX, BMP, TGA, SGI, JPEG XL, and JPEG 2000. Import auto-detects frame numbering and supports gaps. Audio files can be associated with a sequence for playback and export. Frame rate is configurable per-sequence and can be auto-derived from associated audio duration. Exports include optional metadata sidecar files (Markdown or JSON) with color space, codec, and camera information.
 
 #### Animated Stills
-Animated still sequence built as GIF, AVIF, or animated PNG (APNG), selectable from the Preset Settings menu.
+Animated still sequence built as GIF, AVIF, animated PNG (APNG), animated WebP, or animated JPEG XL, selectable from the Preset Settings menu.
 
-#### Audio Only AAC
-Stereo down-mix AAC file that keeps stereo spacing while drastically reducing file size.
+#### Lossless (FFV1)
+Mathematically lossless FFV1 archival encoding in Matroska (`.mkv`) with uncompressed PCM audio.
 
-#### Audio Only WAV
-Uncompressed WAV export that retains every audio channel wherever possible.
+#### Audio Only
+Extract or transcode audio as WAV (uncompressed PCM keeping all channels), FLAC, ALAC, or AAC/MP4, configurable in Preset Settings.
 
 #### 10 Custom FFMPEG presets
 Ten custom presets (C1–C10) let you supply your own output arguments, suffixes, and extensions. Input parameters are handled for you, but note that -copy paths cannot combine with the crop or audio-routing toggles that live in Preset Settings.

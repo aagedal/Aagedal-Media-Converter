@@ -23,11 +23,20 @@ struct VirtualKey: Identifiable, Hashable {
     let label: String
     /// The legend above the main one, such as ! over 1.
     let shiftedLabel: String?
+    /// Dead keys produce no character on key-down (`charactersIgnoringModifiers == ""`),
+    /// so shortcuts cannot be triggered from them in the affected shift state.
+    var deadUnshifted: Bool = false
+    var deadShifted: Bool = false
+
+    func isDeadKey(with modifiers: ShortcutModifiers) -> Bool {
+        modifiers.contains(.shift) ? deadShifted : deadUnshifted
+    }
 
     /// The shortcuts a press of this key with the given modifiers may mean, matching
     /// `ShortcutBinding.candidates(for:)` for the same press.
     func candidates(with modifiers: ShortcutModifiers) -> [ShortcutBinding] {
-        guard case let .key(base, shifted) = role,
+        guard !isDeadKey(with: modifiers),
+              case let .key(base, shifted) = role,
               let typed = ShortcutBinding.pressed(key: modifiers.contains(.shift) ? shifted : base, modifiers: modifiers) else { return [] }
         return keyCode.map { ShortcutBinding.candidates(typed: typed, keyCode: $0) } ?? [typed]
     }
@@ -167,22 +176,32 @@ struct VirtualKeyboardLayout: Equatable {
             return VirtualKey(id: id, keyCode: code, role: .key(base: name, shifted: name), width: width,
                               label: labels[name] ?? ShortcutBinding(key: name).keyLabel, shiftedLabel: nil)
         }
-        let (base, shifted) = characters(for: code, layoutData: layoutData) ?? usCharacters[code] ?? ("?", "?")
+        let translated = characters(for: code, layoutData: layoutData)
+        let (base, shifted) = translated.map { ($0.base, $0.shifted) } ?? usCharacters[code] ?? ("?", "?")
         let lowered = (base.lowercased(), shifted.lowercased())
         // Letters show one legend; keys whose Shift character differs show both, as printed caps do.
         let showsShifted = lowered.1 != lowered.0 && !shifted.isEmpty
         // Some lowercase letters, such as ß, have no single-letter capital.
         let capital = base.uppercased()
         return VirtualKey(id: id, keyCode: code, role: .key(base: lowered.0, shifted: lowered.1), width: width,
-                          label: capital.count == base.count ? capital : base, shiftedLabel: showsShifted ? shifted : nil)
+                          label: capital.count == base.count ? capital : base, shiftedLabel: showsShifted ? shifted : nil,
+                          deadUnshifted: translated?.deadUnshifted ?? false, deadShifted: translated?.deadShifted ?? false)
     }
 
-    /// The characters the input source types for a key, unshifted and with Shift.
-    private static func characters(for keyCode: UInt16, layoutData: Data?) -> (String, String)? {
+    /// The characters the input source types for a key, unshifted and with Shift,
+    /// along with whether either shift state is a dead key on the current layout.
+    private static func characters(for keyCode: UInt16, layoutData: Data?) -> (base: String, shifted: String, deadUnshifted: Bool, deadShifted: Bool)? {
         guard let layoutData else { return nil }
-        return layoutData.withUnsafeBytes { raw -> (String, String)? in
+        return layoutData.withUnsafeBytes { raw -> (base: String, shifted: String, deadUnshifted: Bool, deadShifted: Bool)? in
             guard let layout = raw.baseAddress?.assumingMemoryBound(to: UCKeyboardLayout.self) else { return nil }
-            func translate(_ modifierState: UInt32) -> String? {
+            func translate(_ modifierState: UInt32) -> (character: String, isDead: Bool)? {
+                var deadCheckState: UInt32 = 0
+                var deadCheckLength = 0
+                var deadCheckChars = [UniChar](repeating: 0, count: 4)
+                let deadStatus = UCKeyTranslate(layout, keyCode, UInt16(kUCKeyActionDown), modifierState, UInt32(LMGetKbdType()),
+                                                0, &deadCheckState, deadCheckChars.count, &deadCheckLength, &deadCheckChars)
+                let isDead = deadStatus == noErr && deadCheckState != 0 && deadCheckLength == 0
+
                 var deadKeyState: UInt32 = 0
                 var length = 0
                 var characters = [UniChar](repeating: 0, count: 4)
@@ -190,10 +209,12 @@ struct VirtualKeyboardLayout: Equatable {
                                             OptionBits(1 << kUCKeyTranslateNoDeadKeysBit), &deadKeyState, characters.count, &length, &characters)
                 guard status == noErr, length > 0 else { return nil }
                 let string = String(utf16CodeUnits: characters, count: length)
-                return string.unicodeScalars.allSatisfy { !CharacterSet.controlCharacters.contains($0) } ? string : nil
+                guard string.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }) else { return nil }
+                return (string, isDead)
             }
             guard let base = translate(0) else { return nil }
-            return (base, translate(UInt32(shiftKey >> 8) & 0xFF) ?? base)
+            let shifted = translate(UInt32(shiftKey >> 8) & 0xFF) ?? base
+            return (base.character, shifted.character, base.isDead, shifted.isDead)
         }
     }
 

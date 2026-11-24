@@ -86,6 +86,24 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 - Slett eller endre rekkefølgen på lydspor
     - Fungerer ikke med Stream Copy-forvalget
 
+### Justeringer
+
+Høyreklikk på en fil i køen og velg **Justeringer…** for å stille inn per fil:
+
+- **Roter** 90°/180° og **vend** horisontalt eller vertikalt (brukes etter beskjæring, før skaleringen i forvalget)
+- **Hastighet** fra 0,25× til 4× med bevart tonehøyde på lyden
+- **Inn- og uttoning** av video fra/til svart, samt inn- og uttoning av lyd
+- **Lydforskyvning** for å rette opp usynkroniserte klipp (positive verdier forsinker lyden)
+- **Erstatt eller legg til lyd** fra en annen fil, justert etter trimmingen og tilpasset videoens lengde
+- **Brenn inn undertekster** fra et tekstbasert undertekstspor eller en SRT-, ASS- eller VTT-fil, med skriftstørrelse, omriss eller boks og plassering. Bildebaserte undertekster (PGS, DVD) må først OCR-konverteres til SRT.
+- Overstyring av lydstyrkenormalisering per fil
+
+Justeringer krever et forvalg som omkoder; de er ikke tilgjengelige for Stream Copy, DCP, IMF, AV2, sammenslåinger eller generert bølgeformvideo.
+
+### Lydstyrkenormalisering
+
+Slå på **Normalize Loudness** i Innstillinger → Forvalg for å normalisere hvert omkodede lydspor til EBU R128 (−23 LUFS, −1 dBTP), ATSC A/85, strømming (−14 LUFS), nett/podkast (−16 LUFS) eller et egendefinert mål. Hvert spor måles i første runde og normaliseres deretter med FFmpegs `loudnorm` med lineær forsterkning der programmet tillater det. Kringkastingsforvalg med monospor, som AVC-Intra, måles per kildespor før delingen slik at stereobalansen bevares.
+
 ### Slå sammen filer i køen
 
 - Slå sammen filer med samme kodek, oppløsning, bildefrekvens, bitdybde og lydspor
@@ -101,14 +119,14 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 
 ### Lokal agenttilgang
 
-Aktiver **Settings → Agent Access**, godkjenn kildemapper og kopier oppsettet for MCP-klienten din. Den medfølgende hjelperen lar agenter bla gjennom og undersøke godkjente medier, planlegge konverteringer, sende inn jobber, følge fremdrift og avbryte arbeid i appens kø. Alle 17 innebygde forvalg er tilgjengelige; egendefinerte FFmpeg-forvalg er unntatt. IMF-eksport er eksperimentelt.
+Aktiver **Settings → Agent Access**, godkjenn kildemapper og kopier oppsettet for MCP-klienten din. Den medfølgende hjelperen lar agenter bla gjennom og undersøke godkjente medier, planlegge konverteringer, sende inn jobber, følge fremdrift og avbryte arbeid i appens kø. 21 innebygde forvalg er tilgjengelige (alle innebygde forvalg unntatt Lossless FFV1); egendefinerte FFmpeg-forvalg er unntatt. IMF-eksport er eksperimentelt.
 
 Godkjente jobber fortsetter etter at klienten kobler fra. Planer er gyldige i 15 minutter, og resultater fra avsluttede jobber er tilgjengelige i 30 dager. Agenteksport deaktiverer utgående tidskode. Se [oppsetts- og arbeidsflytveiledningen](../../Documentation/LOCAL_AGENT_ACCESS.md) for mappegodkjenning, klientoppsett og gjenoppretting av jobber.
 
 ### Animerte lydbølgeformer
 
 - Lag animerte bølgeformer fra filer som bare inneholder lyd
-- Fem forvalg med farge- og normaliseringsalternativer
+- 7 innebygde Swift-stiler (inkludert Halo, Orb, Ridgeline og LED Meter) pluss 5 klassiske FFmpeg-stiler, med gradientpaletter, farge, gjennomsiktighet, gjennomsiktig bakgrunn og normaliseringsalternativer
 
 ### Skjermbilder med kildens oppløsning og bitdybde
 
@@ -137,6 +155,7 @@ Kameraknappen i trimspilleren tar stillbilder med kildens oppløsning. Standardf
 
 - Mål programlydstyrke og sann toppverdi for enkeltspor, egendefinerte monopar eller 5.1-monogrupper. Eksporter komplette JSON- eller PDF-rapporter.
 - Finn stillhet og toppintervaller, sammenlign kanalbalanse, eller kontroller stereokorrelasjon og mononedmiksing. Hopp til målte seksjoner i en pauset forhåndsvisning, og eksporter alle målinger som JSON.
+- Finn svarte intervaller (FFmpeg `blackdetect`, med justerbar minimumsvarighet, bildeandel og pikselterskel) og scenekutt (FFmpeg `scdet`, med justerbar terskel og miniatyrbilde per kutt) i kildevideoen. Klikk på en hendelse for å inspisere den i en pauset forhåndsvisning, og eksporter deretter JSON- eller Resolve EDL-markører. Se rapportformatene for [svarte intervaller](../../docs/video-black-report-format.md) og [scenekutt](../../docs/video-scene-cut-report-format.md).
 - Etter koding kan du sammenligne video med VMAF, PSNR, XPSNR eller utvalgte SSIMULACRA2-bilder. Se kvaliteten over tid, bytt mellom kilde og kodet video, og hopp til seksjonene med lavest målt kvalitet.
 - SSIMULACRA2 sammenligner verifiserte dekodede bilder opptil valgt grense, også i korte klipp. Videoene indekseres først; flere prøver tar lengre tid.
 - Eksporter videokvalitet som JSON med alle måleverdier eller en A4-PDF med tidslinjer, komponentverdier og sammenligningsadvarsler. Se [tolkning av verdier og rapportdetaljer](../video-quality-report-format.md).
@@ -180,7 +199,13 @@ SVT-AV1-koding med støtte for 10 bit og høy komprimeringseffektivitet. Kun pro
 
 Eksperimentell AV2-koding med den medfølgende AOM AVM-referansekoderen (`avmenc`), introdusert i en forhåndsversjon. Støtter 8/10 bit, konstant kvalitet eller variabel bitrate, samt justerbar hastighet og oppløsning. Parallell koding i segmenter bruker flere CPU-kjerner i modusen for konstant kvalitet.
 
-Velg IVF (`.ivf`) med bare video eller Matroska (`.mkv`) med AAC- eller Opus-lyd. Referansekoding er svært treg, og bitstrømmen er under utvikling og krever en AV2-kompatibel dekoder. Appen kan dekode AV2 for konvertering og miniatyrbilder, men støtter ennå ikke interaktiv avspilling. Bruk AV2 til eksperimentering fremfor levering.
+Den medfølgende koderen og dekoderen bruker AVM `1.0.0-445-g14342caad` (14. oktober 2026). Verktøyene er fortsatt eksperimentelle; se [bygg- og kompatibilitetsvalidering](../../docs/av2-integrated-encoder-2026-10-14.md) for låst kildeversjon, instruksjoner for ny kompilering og sjekker.
+
+Velg IVF (`.ivf`) med bare video eller Matroska (`.mkv`) med AAC- eller Opus-lyd. Referansekoding er svært treg, og avspilling krever en AV2-kompatibel dekoder. Appen kan dekode AV2 for konvertering og miniatyrbilder, men støtter ennå ikke interaktiv avspilling. Bruk AV2 til eksperimentering fremfor levering.
+
+#### VP9 / WebM
+
+Lisensfri VP9 for nett, kodet med libvpx ved konstant kvalitet (CRF med null som bitratemål) og radbasert flertråding. Velg CRF, hastighet fra Best til Realtime, 8-bit (profil 0) eller 10-bit (profil 2) samt oppløsningsgrense. Lyd kodes som Opus med valgbar bitrate. Gir WebM eller Matroska (`.mkv`). Opus kan ikke kode enkelte kanaloppsett, for eksempel `5.1(side)`; miks ned slike spor med lydomruting.
 
 #### TV (HEVC 10-bit 4:2:2)
 
@@ -190,6 +215,10 @@ Leveringsformat for kringkasting med maskinvarekodet HEVC 10-bit 4:2:2, justerba
 
 Kringkastingsformat i MXF. AVC-Intra 10-bit 4:2:2 med valgbare klasser (50/100/200 Mbps), oppløsning og bildefrekvens, samt 4/8/16 monokanaler med 24-bit PCM.
 
+#### XDCAM HD422 (MXF)
+
+Sony XDCAM HD422 for kringkastingslevering: MPEG-2 4:2:2 Profile @ High Level, 50 Mbps CBR lang GOP (lukkede GOP-er på 12 bilder ved 25/50 Hz og 15 ved 29,97/59,94 Hz, to B-bilder) i en MXF OP1a-fil. Velg 1080i50, 1080p25, 1080i59.94, 1080p29.97, 720p50 eller 720p59.94. Kilder skaleres med svarte felt på sidene eller oppe/nede til full 16:9-oppløsning, og lyd leveres som 4 eller 8 mono 24-bit 48 kHz PCM-spor.
+
 #### Stream copy
 
 Kopierer eksisterende lyd- og videostrømmer til en ny fil og bevarer opprinnelige kodeker, metadata og filendelse. Passer godt til trimming og sammenslåing.
@@ -197,6 +226,14 @@ Kopierer eksisterende lyd- og videostrømmer til en ny fil og bevarer opprinneli
 #### ProRes
 
 Apple ProRes (yuv422p10) for redigeringsvennlige masterfiler. Tar med første video- og lydstrøm, beholder 24-bit PCM-lyd og bruker standard ProRes-bitrater. Standardprofil velges i forvalgsinnstillingene.
+
+#### DNxHR
+
+Avid DNxHR i kildens oppløsning for redigering og mastering: LB, SQ eller HQ (8-bit 4:2:2), HQX (10-bit 4:2:2) eller 444 (10-bit 4:4:4). Velg MOV- eller MXF-kontainer. Alle lydspor beholdes som 24-bit PCM (omsamplet til 48 kHz i MXF).
+
+#### CineForm
+
+GoPro CineForm i kildens oppløsning i en MOV-kontainer, for redigering og etterarbeid: 10-bit 4:2:2 YUV, 12-bit 4:4:4 RGB eller 12-bit 4:4:4 RGB med alfakanal. Velg kvalitet fra Low til Film Scan 3+ (Film Scan 1 som standard). Kodeken lagrer maksimalt 12 bit per kanal, så 16-bit kilder reduseres til 12 bit. FFmpegs koder krever en bredde som er delelig med 16, så andre bredder fylles med svart på sidene. Alle lydspor beholdes som 24-bit PCM.
 
 #### Proxy
 
@@ -216,15 +253,15 @@ Importer og eksporter bildesekvenser i PNG, JPEG, TIFF, EXR, DPX, BMP, TGA, SGI,
 
 #### Animated Stills
 
-Animerte bildesekvenser som GIF, AVIF eller animert PNG (APNG), valgt i forvalgsinnstillingene.
+Animerte bildesekvenser som GIF, AVIF, animert PNG (APNG), animert WebP eller animert JPEG XL, valgt i forvalgsinnstillingene.
 
-#### Audio Only AAC
+#### Lossless (FFV1)
 
-AAC med stereonedmiks som bevarer stereobildet og reduserer filstørrelsen kraftig.
+Matematisk tapsfri FFV1-arkiveringskoding i Matroska (`.mkv`) med ukomprimert PCM-lyd.
 
-#### Audio Only WAV
+#### Audio Only
 
-Ukomprimert WAV som bevarer alle lydkanaler når det er mulig.
+Trekk ut eller omkod lyd som WAV (ukomprimert PCM som bevarer alle kanaler), FLAC, ALAC eller AAC/MP4, valgt i forvalgsinnstillingene.
 
 #### 10 egendefinerte FFmpeg-forvalg
 
