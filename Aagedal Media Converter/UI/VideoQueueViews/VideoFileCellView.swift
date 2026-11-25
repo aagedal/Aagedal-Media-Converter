@@ -1131,6 +1131,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         // checks the bar would sit frozen even though the label updates.
         if isFirstConfigure
             || prev?.status != config.status
+            || prev?.isQueuedInApplicationJob != config.isQueuedInApplicationJob
             || prev?.progress != config.progress
             || prev?.isDownloading != config.isDownloading
             || prev?.downloadProgress != config.downloadProgress
@@ -1167,6 +1168,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         if isFirstConfigure
             || prev?.isCompactMode != config.isCompactMode
             || prev?.status != config.status
+            || prev?.isQueuedInApplicationJob != config.isQueuedInApplicationJob
             || prev?.isDownloading != config.isDownloading
             || prev?.scheduledDownloadTime != config.scheduledDownloadTime || prev?.isQueuedForDownload != config.isQueuedForDownload
             || prev?.recursiveEncodingGenerations != config.recursiveEncodingGenerations
@@ -1202,6 +1204,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         if isFirstConfigure
             || prev?.isCompactMode != config.isCompactMode
             || prev?.status != config.status
+            || prev?.isQueuedInApplicationJob != config.isQueuedInApplicationJob
             || prev?.outputFileExists != config.outputFileExists
             || prev?.formattedOutputSize != config.formattedOutputSize
             || prev?.progress != config.progress
@@ -1241,6 +1244,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         // Status capsule — colored pill
         if isFirstConfigure
             || prev?.status != config.status
+            || prev?.isQueuedInApplicationJob != config.isQueuedInApplicationJob
             || prev?.isDownloading != config.isDownloading
             || prev?.isLiveStreamRecording != config.isLiveStreamRecording
             || prev?.waitingForLiveStream != config.waitingForLiveStream
@@ -1552,7 +1556,8 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     }
 
     private func updateProgressBar(config: VideoFileCellConfiguration) {
-        let isActive = config.status == .converting
+        let isActivelyConverting = config.status == .converting && !config.isQueuedInApplicationJob
+        let isActive = isActivelyConverting
             || config.isDownloading
             || config.uploadStatus == .uploading
             || config.subtitleStatus.isInProgress
@@ -1592,7 +1597,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         let tintColor: NSColor
         if config.isDownloading {
             tintColor = .systemPurple
-        } else if config.status == .converting {
+        } else if config.status == .converting && !config.isQueuedInApplicationJob {
             tintColor = .systemGreen
         } else if config.subtitleStatus.isInProgress {
             tintColor = .systemYellow

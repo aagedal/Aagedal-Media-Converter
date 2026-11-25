@@ -1062,6 +1062,8 @@ struct ApplicationJobRecord: Codable, Equatable, Sendable {
     var state: ApplicationJobState
     var stage: String?
     var progress: Double?
+    var activeSourceIndex: Int? = nil
+    var activeSourceProgress: Double? = nil
     var outputURLs: [URL]
     var diagnostic: String?
 }
@@ -1479,6 +1481,10 @@ actor ApplicationJobRegistry {
         record.outputURLs = outputURLs
         record.diagnostic = diagnostic
         if newState == .succeeded { record.progress = 1 }
+        if newState.isTerminal {
+            record.activeSourceIndex = nil
+            record.activeSourceProgress = nil
+        }
         records[jobID] = record
         return record
     }
@@ -1511,10 +1517,15 @@ actor ApplicationJobRegistry {
         _ jobID: ApplicationJobID,
         progress: Double?,
         stage: String?,
+        activeSourceIndex: Int? = nil,
+        activeSourceProgress: Double? = nil,
         now: Date = Date()
     ) throws -> ApplicationJobRecord {
         if let progress, !(0...1).contains(progress) {
             throw ApplicationJobError.invalidProgress(progress)
+        }
+        if let activeSourceProgress, !(0...1).contains(activeSourceProgress) {
+            throw ApplicationJobError.invalidProgress(activeSourceProgress)
         }
         guard var record = records[jobID] else {
             throw ApplicationJobError.unknownJob(jobID)
@@ -1522,8 +1533,34 @@ actor ApplicationJobRegistry {
         guard record.state == .running || record.state == .cancelling else {
             throw ApplicationJobError.invalidTransition(from: record.state, to: record.state)
         }
-        record.progress = progress
+        // Ignore late progress callbacks from a source whose output was already checkpointed.
+        if let activeSourceIndex, activeSourceIndex < record.outputURLs.count {
+            return record
+        }
+        // Keep per-source progress monotonic while the same source is running.
+        let effectiveSourceProgress: Double?
+        if let activeSourceIndex,
+           let incomingSourceProgress = activeSourceProgress,
+           record.activeSourceIndex == activeSourceIndex,
+           let existingSourceProgress = record.activeSourceProgress {
+            effectiveSourceProgress = max(existingSourceProgress, incomingSourceProgress)
+        } else {
+            effectiveSourceProgress = activeSourceProgress
+        }
+        let effectiveBatchProgress: Double?
+        if let activeSourceIndex,
+           let existingSourceIndex = record.activeSourceIndex,
+           activeSourceIndex == existingSourceIndex,
+           let incomingProgress = progress,
+           let existingProgress = record.progress {
+            effectiveBatchProgress = max(existingProgress, incomingProgress)
+        } else {
+            effectiveBatchProgress = progress
+        }
+        record.progress = effectiveBatchProgress
         record.stage = stage
+        record.activeSourceIndex = activeSourceIndex
+        record.activeSourceProgress = effectiveSourceProgress
         record.updatedAt = now
         records[jobID] = record
         return record
@@ -1550,6 +1587,10 @@ actor ApplicationJobRegistry {
             throw ApplicationJobCheckpointError.invalidOutputs
         }
         record.outputURLs = outputURLs
+        if let active = record.activeSourceIndex, active < outputURLs.count {
+            record.activeSourceIndex = nil
+            record.activeSourceProgress = nil
+        }
         record.updatedAt = now
         records[jobID] = record
     }
@@ -1565,6 +1606,8 @@ actor ApplicationJobRegistry {
         for jobID in orderedIDs {
             guard var record = records[jobID], !record.state.isTerminal else { continue }
             record.state = .interrupted
+            record.activeSourceIndex = nil
+            record.activeSourceProgress = nil
             record.updatedAt = now
             record.diagnostic = diagnostic
             records[jobID] = record
@@ -1779,6 +1822,20 @@ struct ApplicationConversionPlan: Codable, Equatable, Sendable {
 struct ApplicationJobProgressUpdate: Equatable, Sendable {
     let progress: Double?
     let stage: String?
+    let activeSourceIndex: Int?
+    let activeSourceProgress: Double?
+
+    init(
+        progress: Double?,
+        stage: String?,
+        activeSourceIndex: Int? = nil,
+        activeSourceProgress: Double? = nil
+    ) {
+        self.progress = progress
+        self.stage = stage
+        self.activeSourceIndex = activeSourceIndex
+        self.activeSourceProgress = activeSourceProgress
+    }
 }
 
 enum ApplicationJobExecutionResult: Equatable, Sendable {
@@ -2025,21 +2082,36 @@ actor ApplicationFFmpegJobExecutor {
                 : "Converting file \(index + 1) of \(plan.outputs.count)"
             await progress.report(ApplicationJobProgressUpdate(
                 progress: itemIndex / outputCount,
-                stage: fallbackStage
+                stage: fallbackStage,
+                activeSourceIndex: index,
+                activeSourceProgress: 0
             ))
             guard !cancellationRequested.contains(jobID) else {
                 return .cancelled(diagnostic: "Conversion cancelled.", outputURLs: completedOutputs)
             }
-            let progressSink = ApplicationFFmpegProgressSink { itemProgress, status in
-                let boundedProgress = min(max(itemProgress, 0), 1)
-                Task {
+            let (progressStream, progressContinuation) = AsyncStream.makeStream(
+                of: (Double, String?).self,
+                bufferingPolicy: .bufferingNewest(1)
+            )
+            let progressForwarder = Task {
+                var maxItemProgress = 0.0
+                for await (boundedProgress, status) in progressStream {
+                    maxItemProgress = max(maxItemProgress, boundedProgress)
                     await progress.report(ApplicationJobProgressUpdate(
-                        progress: (itemIndex + boundedProgress) / outputCount,
-                        stage: status ?? fallbackStage
+                        progress: (itemIndex + maxItemProgress) / outputCount,
+                        stage: status ?? fallbackStage,
+                        activeSourceIndex: index,
+                        activeSourceProgress: maxItemProgress
                     ))
                 }
             }
+            let progressSink = ApplicationFFmpegProgressSink { itemProgress, status in
+                let boundedProgress = min(max(itemProgress, 0), 1)
+                progressContinuation.yield((boundedProgress, status))
+            }
             let result = await runner.run(conversion, progressSink)
+            progressContinuation.finish()
+            await progressForwarder.value
 
             switch result {
             case .succeeded:
@@ -3118,10 +3190,19 @@ actor ApplicationJobService {
         _ jobID: ApplicationJobID,
         progress: Double?,
         stage: String?,
+        activeSourceIndex: Int? = nil,
+        activeSourceProgress: Double? = nil,
         now: Date = Date()
     ) async throws -> ApplicationJobRecord {
         try await ensureRestored(now: now)
-        let record = try await registry.updateProgress(jobID, progress: progress, stage: stage, now: now)
+        let record = try await registry.updateProgress(
+            jobID,
+            progress: progress,
+            stage: stage,
+            activeSourceIndex: activeSourceIndex,
+            activeSourceProgress: activeSourceProgress,
+            now: now
+        )
         await publishRecords()
         return record
     }
@@ -3317,7 +3398,9 @@ actor ApplicationJobService {
             _ = try? await self.updateProgress(
                 pending.jobID,
                 progress: update.progress,
-                stage: update.stage
+                stage: update.stage,
+                activeSourceIndex: update.activeSourceIndex,
+                activeSourceProgress: update.activeSourceProgress
             )
         }
         let result = await executor.execute(pending.jobID, pending.plan, progressReporter)

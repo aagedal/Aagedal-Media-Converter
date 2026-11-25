@@ -284,7 +284,8 @@ struct ContentView: View {
     }
 
     private var currentConvertingItem: VideoItem? {
-        allConversionItems.first { $0.status == .converting }
+        allConversionItems.first { $0.status == .converting && !$0.isQueuedInApplicationJob }
+            ?? allConversionItems.first { $0.status == .converting }
     }
 
     private var completedFileCount: Int {
@@ -338,9 +339,13 @@ struct ContentView: View {
     /// snapshot fresh. Runs on every queue change, so only IDs and statuses
     /// are collected up front.
     private func observeQueueForHistory() {
-        var statuses: [(id: UUID, status: ConversionManager.ConversionStatus)] = droppedFiles.map { ($0.id, $0.status) }
+        var statuses: [(id: UUID, status: ConversionManager.ConversionStatus)] = droppedFiles.map {
+            ($0.id, $0.isQueuedInApplicationJob ? .waiting : $0.status)
+        }
         for group in encodingGroups {
-            statuses.append(contentsOf: group.items.map { ($0.id, $0.status) })
+            statuses.append(contentsOf: group.items.map {
+                ($0.id, $0.isQueuedInApplicationJob ? .waiting : $0.status)
+            })
         }
         EncodeHistoryStore.shared.observe(statuses) { id in historyRow(for: id) }
         LastSessionStore.shared.scheduleUpdate()

@@ -95,12 +95,11 @@ extension FFMPEGConverter {
         effectiveDurationBox.value = command.effectiveDuration
         let frameStallTracker = FrameStallTracker()
         let progressThrottler = ProgressThrottler()
-        let frameRate = command.frameRate ?? 24.0
 
         let ffmpegProgressParser = FFMPEGProgressStreamParser(
             totalDuration: totalDurationBox,
             effectiveDuration: effectiveDurationBox,
-            frameRate: frameRate,
+            explicitFrameRate: command.frameRate,
             frameStallTracker: frameStallTracker,
             progressThrottler: progressThrottler,
             progressUpdate: progressUpdate

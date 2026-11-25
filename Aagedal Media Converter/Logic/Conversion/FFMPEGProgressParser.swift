@@ -69,6 +69,7 @@ final class FrameStallTracker: Sendable {
 final class ProgressThrottler: Sendable {
     private struct State {
         var lastDispatchTime: Date = .distantPast
+        var hasDispatchedCompletion: Bool = false
     }
 
     private let lock = OSAllocatedUnfairLock(initialState: State())
@@ -80,13 +81,16 @@ final class ProgressThrottler: Sendable {
     }
 
     /// Returns true if the update should be dispatched to the UI.
-    /// Always allows completion (progress >= 1.0) through immediately.
+    /// Allows the first completion update (progress >= 1.0) through immediately,
+    /// then throttles repeated 100% lines normally while FFmpeg flushes.
     func shouldDispatch(progress: Double) -> Bool {
-        // Never throttle completion
-        if progress >= 1.0 { return true }
-
         return lock.withLock { state in
             let now = Date()
+            if progress >= 1.0, !state.hasDispatchedCompletion {
+                state.hasDispatchedCompletion = true
+                state.lastDispatchTime = now
+                return true
+            }
             guard now.timeIntervalSince(state.lastDispatchTime) >= minInterval else {
                 return false
             }
@@ -106,6 +110,13 @@ enum FFMPEGProgressParser {
     ///   - effectiveDuration: The effective duration for ETA calculation (trimmed duration if applicable)
     ///   - frameRate: Video frame rate for frame-based progress calculation (default 24fps)
     ///   - frameStallTracker: Optional tracker for detecting frame stalls
+    ///   - progressThrottler: Optional throttler for UI updates
+    ///   - allowFrameFallback: Whether to fall back to frame-count estimation when `time=` is absent.
+    ///     Pass `false` once time-based progress has been observed so standalone `-progress pipe:2`
+    ///     `frame=<N>` lines cannot override time progress.
+    ///   - fallbackSpeed: Most recent `speed=Nx` value from earlier lines in the same pass, used
+    ///     when `-progress pipe:2` prints `out_time=` on its own line without `speed=`.
+    ///   - minProgress: Lower bound so progress within a single FFmpeg pass never moves backwards.
     ///   - progressUpdate: Callback to report progress updates
     /// - Returns: A tuple containing the updated total duration (if found) and the current progress
     static func handleOutput(
@@ -115,6 +126,9 @@ enum FFMPEGProgressParser {
         frameRate: Double = 24.0,
         frameStallTracker: FrameStallTracker? = nil,
         progressThrottler: ProgressThrottler? = nil,
+        allowFrameFallback: Bool = true,
+        fallbackSpeed: Double? = nil,
+        minProgress: Double = 0.0,
         progressUpdate: @escaping @Sendable (Double, String?) -> Void
     ) -> (Double?, (Double, String?)?) {
         var newTotalDuration = totalDuration
@@ -130,16 +144,29 @@ enum FFMPEGProgressParser {
         var progressTuple: (Double, String?)? = nil
 
         // Try time-based progress first (works for encoding)
-        if let progress = ParsingUtils.parseTimeProgress(from: output, totalDuration: durationForProgress) {
-            progressTuple = progress
-            if progressThrottler?.shouldDispatch(progress: progress.0) ?? true {
+        if let progress = ParsingUtils.parseTimeProgress(
+            from: output,
+            totalDuration: durationForProgress,
+            fallbackSpeed: fallbackSpeed
+        ) {
+            let monotonicProgress = max(minProgress, progress.0)
+            progressTuple = (monotonicProgress, progress.1)
+            if progressThrottler?.shouldDispatch(progress: monotonicProgress) ?? true {
                 Task { @MainActor in
-                    progressUpdate(progress.0, progress.1)
+                    progressUpdate(monotonicProgress, progress.1)
                 }
             }
         }
-        // Fall back to frame-based progress (works for stream copy)
-        else if let frameProgress = ParsingUtils.parseFrameProgress(from: output, totalDuration: durationForProgress, frameRate: frameRate) {
+        // Fall back to frame-based progress (works for stream copy), but never when
+        // time-based progress is already active or the line itself carries time=N/A.
+        else if allowFrameFallback,
+                !output.contains("time="),
+                let frameProgress = ParsingUtils.parseFrameProgress(
+                    from: output,
+                    totalDuration: durationForProgress,
+                    frameRate: frameRate,
+                    fallbackSpeed: fallbackSpeed
+                ) {
             var etaString = frameProgress.1
 
             // Check for frame stall (FFmpeg closing file)
@@ -149,10 +176,11 @@ enum FFMPEGProgressParser {
                 }
             }
 
-            progressTuple = (frameProgress.0, etaString)
-            if progressThrottler?.shouldDispatch(progress: frameProgress.0) ?? true {
+            let monotonicProgress = max(minProgress, frameProgress.0)
+            progressTuple = (monotonicProgress, etaString)
+            if progressThrottler?.shouldDispatch(progress: monotonicProgress) ?? true {
                 Task { @MainActor in
-                    progressUpdate(frameProgress.0, etaString)
+                    progressUpdate(monotonicProgress, etaString)
                 }
             }
         }

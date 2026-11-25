@@ -34,6 +34,7 @@ struct VideoFileCellConfiguration: Equatable {
     let applicationJobID: ApplicationJobID?
     let applicationJobOrigin: ApplicationJobOrigin?
     let applicationJobSettingsSummary: String?
+    var isQueuedInApplicationJob: Bool = false
     let comment: String
     var metadataEditorSettings: MetadataEditorSettings? = nil
     var sourceTextMetadata: ContainerTextMetadata = ContainerTextMetadata()

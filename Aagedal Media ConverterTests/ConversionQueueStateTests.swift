@@ -999,4 +999,167 @@ final class ApplicationJobRowProjectionTests: XCTestCase {
         XCTAssertEqual(registry.jobs.first?.sourceNames, ["legacy.mov"])
         XCTAssertEqual(registry.jobs.first?.state, .queued)
     }
+
+    func testMultiItemBatchProjectsProgressOnlyToActiveSource() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        let sources = (0..<4).map { folder.appendingPathComponent("clip\($0).mov") }
+        let outputs = (0..<4).map { folder.appendingPathComponent("clip\($0).mp4") }
+        try Data([1, 2, 3]).write(to: outputs[0])
+
+        let request = ApplicationConversionRequest(
+            origin: .manual,
+            requesterID: "projection-tests",
+            sourceURLs: sources,
+            destinationFolderURL: folder,
+            presetID: .h264
+        )
+        let registry = ApplicationJobRegistry()
+        var record = try await registry.accept(request).record
+        var items = sources.enumerated().map { idx, url in
+            VideoItem(url: url, name: "Clip \(idx)", size: 0, duration: "00:00:10",
+                      status: .waiting, progress: 0, eta: nil)
+        }
+
+        // Queued batch: every row is owned (converting) but flagged queued with 0 progress.
+        for idx in items.indices {
+            ApplicationJobRowProjection.apply(record, sourceIndex: idx, outputURL: outputs[idx], to: &items[idx])
+            XCTAssertEqual(items[idx].status, .converting)
+            XCTAssertTrue(items[idx].isQueuedInApplicationJob)
+            XCTAssertEqual(items[idx].progress, 0)
+            XCTAssertEqual(items[idx].statusMessage, "Queued")
+        }
+
+        // Running batch: item 0 finished, item 1 is at 40% with an FFmpeg ETA, items 2 & 3 wait.
+        _ = try await registry.transition(record.id, to: .running)
+        try await registry.checkpointOutputs(record.id, outputURLs: [outputs[0]], expectedOutputs: outputs)
+        // Stale callback from already-checkpointed item 0 must be ignored.
+        _ = try await registry.updateProgress(
+            record.id, progress: 0.24, stage: "00:00:01", activeSourceIndex: 0, activeSourceProgress: 0.96
+        )
+        record = try await registry.updateProgress(
+            record.id, progress: 0.35, stage: "00:00:12", activeSourceIndex: 1, activeSourceProgress: 0.40
+        )
+
+        for idx in items.indices {
+            ApplicationJobRowProjection.apply(record, sourceIndex: idx, outputURL: outputs[idx], to: &items[idx])
+        }
+
+        XCTAssertEqual(items[0].status, .done)
+        XCTAssertFalse(items[0].isQueuedInApplicationJob)
+        XCTAssertEqual(items[0].progress, 1.0)
+        XCTAssertNil(items[0].eta)
+
+        XCTAssertEqual(items[1].status, .converting)
+        XCTAssertFalse(items[1].isQueuedInApplicationJob)
+        XCTAssertEqual(items[1].progress, 0.40, accuracy: 0.0001)
+        XCTAssertEqual(items[1].eta, "00:00:12")
+        XCTAssertNil(items[1].statusMessage)
+
+        for idx in [2, 3] {
+            XCTAssertEqual(items[idx].status, .converting)
+            XCTAssertTrue(items[idx].isQueuedInApplicationJob)
+            XCTAssertEqual(items[idx].progress, 0.0)
+            XCTAssertNil(items[idx].eta)
+            XCTAssertEqual(items[idx].statusMessage, "Queued")
+        }
+
+        // Fallback derivation when activeSourceIndex/activeSourceProgress are nil.
+        record.activeSourceIndex = nil
+        record.activeSourceProgress = nil
+        record.stage = "Wrapping essence"
+        for idx in items.indices {
+            ApplicationJobRowProjection.apply(record, sourceIndex: idx, outputURL: outputs[idx], to: &items[idx])
+        }
+        XCTAssertFalse(items[1].isQueuedInApplicationJob)
+        XCTAssertEqual(items[1].progress, 0.40, accuracy: 0.0001)
+        XCTAssertNil(items[1].eta)
+        XCTAssertEqual(items[1].statusMessage, "Wrapping essence")
+        XCTAssertTrue(items[2].isQueuedInApplicationJob)
+        XCTAssertEqual(items[2].progress, 0.0)
+        XCTAssertTrue(items[3].isQueuedInApplicationJob)
+        XCTAssertEqual(items[3].progress, 0.0)
+
+        // Monotonic guard: a lower activeSourceProgress for the same source must not regress.
+        let nonRegressing = try await registry.updateProgress(
+            record.id, progress: 0.30, stage: "00:00:15", activeSourceIndex: 1, activeSourceProgress: 0.20
+        )
+        XCTAssertEqual(nonRegressing.activeSourceProgress ?? -1, 0.40, accuracy: 0.0001)
+        XCTAssertEqual(nonRegressing.progress ?? -1, 0.35, accuracy: 0.0001)
+    }
+
+    @MainActor
+    func testHighFPSProgressPipeDoesNotSpikeTo100OrRegress() async throws {
+        XCTAssertEqual(
+            ParsingUtils.parseVideoFrameRate(
+                from: "  Stream #0:0[0x1](und): Video: hevc (hvc1), 2160x3840, 60 fps, 60 tbr, 600 tbn"
+            ),
+            60.0
+        )
+        XCTAssertEqual(
+            ParsingUtils.parseVideoFrameRate(
+                from: "  Stream #0:0: Video: h264, 1920x1080, 59.94 fps, 59.94 tbr"
+            ),
+            59.94
+        )
+        XCTAssertNil(ParsingUtils.parseFrameNumber(from: "Duplicate frame 500"))
+        XCTAssertEqual(ParsingUtils.parseFrameNumber(from: "frame=96"), 96)
+
+        final class Collector: @unchecked Sendable {
+            var updates: [(Double, String?)] = []
+        }
+        let collector = Collector()
+        let parser = FFMPEGConverter.FFMPEGProgressStreamParser(
+            totalDuration: FFMPEGConverter.DurationBox(),
+            effectiveDuration: FFMPEGConverter.DurationBox(),
+            explicitFrameRate: nil,
+            frameStallTracker: FrameStallTracker(),
+            progressThrottler: ProgressThrottler(minInterval: 0),
+            progressUpdate: { value, status in
+                collector.updates.append((value, status))
+            }
+        )
+
+        // Simulate a 2-second 60fps clip emitting -progress pipe:2 blocks plus status lines.
+        // Without the fix, `frame=84` and `frame=96` fell back to 24fps (84/48 -> 100%)
+        // and then jumped backwards when `time=00:00:01.82` (91%) arrived.
+        let stderrSample = """
+          Duration: 00:00:02.00, start: 0.000000, bitrate: 4000 kb/s
+          Stream #0:0[0x1](und): Video: hevc (hvc1), 2160x3840, 60 fps, 60 tbr, 600 tbn
+        frame=   84 fps= 18 q=28.0 size=   512KiB time=00:00:01.38 bitrate=3036.8kbits/s speed=0.33x
+        frame=84
+        out_time=00:00:01.380000
+        speed=0.33x
+        progress=continue
+        frame=96
+        out_time=00:00:01.600000
+        speed=0.33x
+        progress=continue
+        frame=  109 fps= 18 q=28.0 size=   700KiB time=00:00:01.82 bitrate=3036.8kbits/s speed=0.33x
+        frame=109
+        out_time=00:00:01.820000
+        speed=0.33x
+        progress=continue
+        """
+        parser.consume(Data(stderrSample.utf8))
+        parser.finish()
+
+        // Wait for MainActor-dispatched progressUpdate closures to run.
+        await Task.yield()
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertFalse(collector.updates.isEmpty)
+        for pair in zip(collector.updates, collector.updates.dropFirst()) {
+            XCTAssertLessThanOrEqual(pair.0.0, pair.1.0, "Progress must never move backwards")
+        }
+        XCTAssertTrue(
+            collector.updates.allSatisfy { $0.0 < 0.99 },
+            "60fps frame=84/96/109 must not spike to 100% before clip finishes: \(collector.updates)"
+        )
+        XCTAssertEqual(collector.updates.last?.0 ?? 0, 0.91, accuracy: 0.01)
+        // `out_time=` lines retain an ETA via lastSpeed instead of dropping to nil.
+        XCTAssertTrue(collector.updates.allSatisfy { $0.1 != nil })
+    }
 }

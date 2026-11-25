@@ -12,8 +12,12 @@ import Foundation
 struct ParsingUtils {
     private static let durationRegex = try! NSRegularExpression(pattern: "Duration: (\\d+):(\\d+):(\\d+)\\.(\\d+)", options: .caseInsensitive)
     private static let timeRegex = try! NSRegularExpression(pattern: "time=(\\d+):(\\d+):(\\d+)\\.(\\d+)", options: .caseInsensitive)
-    private static let frameRegex = try! NSRegularExpression(pattern: "frame[=\\s]+(\\d+)", options: .caseInsensitive)
+    private static let frameRegex = try! NSRegularExpression(pattern: "frame=\\s*(\\d+)", options: .caseInsensitive)
     private static let speedRegex = try! NSRegularExpression(pattern: "speed=\\s*([\\d.]+)x", options: .caseInsensitive)
+    private static let streamVideoFPSRegex = try! NSRegularExpression(
+        pattern: #"Stream\s+#0:\d+[^\n]*Video:[^\n]*?,\s*(\d+(?:\.\d+)?)\s+(?:fps|tbr)\b"#,
+        options: .caseInsensitive
+    )
 
     static func parseDuration(from output: String) -> Double? {
         if let match = durationRegex.firstMatch(in: output, options: [], range: NSRange(location: 0, length: output.utf16.count)) {
@@ -31,6 +35,20 @@ struct ParsingUtils {
         return nil
     }
 
+    /// Parse input video frame rate from FFmpeg stream header lines
+    /// (e.g. `Stream #0:0: Video: ..., 60 fps, 60 tbr`).
+    static func parseVideoFrameRate(from output: String) -> Double? {
+        guard let match = streamVideoFPSRegex.firstMatch(
+            in: output, options: [], range: NSRange(location: 0, length: output.utf16.count)
+        ),
+        let fpsRange = Range(match.range(at: 1), in: output),
+        let fps = Double(output[fpsRange]),
+        fps > 0, fps <= 1000 else {
+            return nil
+        }
+        return fps
+    }
+
     /// Parse encoding speed from FFmpeg output (speed=Nx format)
     static func parseSpeed(from output: String) -> Double? {
         if let match = speedRegex.firstMatch(in: output, options: [], range: NSRange(location: 0, length: output.utf16.count)) {
@@ -44,7 +62,11 @@ struct ParsingUtils {
     }
 
     /// Parse time-based progress from FFmpeg output (time=HH:MM:SS.xx format)
-    static func parseTimeProgress(from output: String, totalDuration: Double?) -> (Double, String?)? {
+    static func parseTimeProgress(
+        from output: String,
+        totalDuration: Double?,
+        fallbackSpeed: Double? = nil
+    ) -> (Double, String?)? {
         guard let totalDuration = totalDuration, totalDuration > 0 else { return nil }
 
         // Match time= with positive values only (negative times from stream copy are invalid)
@@ -67,7 +89,7 @@ struct ParsingUtils {
 
                 var etaString: String? = nil
                 let remainingTime = max(totalDuration - currentTime, 0)
-                if let speed = parseSpeed(from: output), remainingTime > 0 {
+                if let speed = parseSpeed(from: output) ?? fallbackSpeed, remainingTime > 0 {
                     // ETA = remaining media time / encoding speed
                     let eta = remainingTime / speed
                     if eta.isFinite && eta < 86400 { // Cap at 24 hours
@@ -98,7 +120,12 @@ struct ParsingUtils {
     ///   - totalDuration: Total duration in seconds
     ///   - frameRate: Assumed frame rate (default 24fps)
     /// - Returns: Progress tuple (0-1) and ETA string, or nil if parsing fails
-    static func parseFrameProgress(from output: String, totalDuration: Double?, frameRate: Double = 24.0) -> (Double, String?, Int?)? {
+    static func parseFrameProgress(
+        from output: String,
+        totalDuration: Double?,
+        frameRate: Double = 24.0,
+        fallbackSpeed: Double? = nil
+    ) -> (Double, String?, Int?)? {
         guard let totalDuration = totalDuration, totalDuration > 0 else { return nil }
         guard let currentFrame = parseFrameNumber(from: output) else { return nil }
 
@@ -111,7 +138,7 @@ struct ParsingUtils {
         var etaString: String? = nil
         let remainingFrames = max(expectedFrames - Double(currentFrame), 0)
         let remainingMediaTime = remainingFrames / frameRate
-        if let speed = parseSpeed(from: output), remainingMediaTime > 0 {
+        if let speed = parseSpeed(from: output) ?? fallbackSpeed, remainingMediaTime > 0 {
             // ETA = remaining media time / encoding speed
             let eta = remainingMediaTime / speed
             if eta.isFinite && eta < 86400 && eta > 0 {
