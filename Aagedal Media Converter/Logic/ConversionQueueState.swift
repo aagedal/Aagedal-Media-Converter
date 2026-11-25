@@ -155,6 +155,7 @@ enum ApplicationJobRowProjection {
         item.applicationJobOrigin = nil
         item.applicationPresetID = nil
         item.applicationJobSettingsSummary = nil
+        item.isQueuedInApplicationJob = false
         return ApplicationJobSourceID(jobID: jobID, sourceIndex: index)
     }
 
@@ -176,40 +177,91 @@ enum ApplicationJobRowProjection {
         } else {
             item.analyticsSourceRange = AnalyticsSourceRange()
         }
-        item.progress = record.progress ?? 0
-        item.eta = nil
-        item.statusMessage = switch record.state {
-        case .queued: "Queued"
-        case .running: record.stage ?? "Encoding"
-        case .cancelling: "Cancelling"
-        case .succeeded: nil
-        case .failed: "Shared job failed"
-        case .cancelled: nil
-        case .interrupted: "Interrupted after app restart"
-        }
-        item.conversionError = switch record.state {
-        case .failed, .interrupted: record.diagnostic
-        default: nil
-        }
-        item.status = switch record.state {
-        // Treat queued shared jobs as active in the legacy row model. This keeps
-        // manual encode actions from claiming work already owned by the service.
-        case .queued, .running, .cancelling: .converting
-        case .succeeded: .done
-        case .failed, .interrupted: .failed
-        case .cancelled: .cancelled
-        }
+
         // A later failure or cancellation does not undo earlier batch outputs.
-        if record.outputURLs.indices.contains(sourceIndex) {
+        if record.outputURLs.indices.contains(sourceIndex) || record.state == .succeeded {
             item.status = .done
+            item.isQueuedInApplicationJob = false
+            item.progress = 1
+            item.eta = nil
             item.statusMessage = nil
             item.conversionError = nil
-        }
-        if item.status == .done {
-            item.progress = 1
             if previousStatus != .done || previousOutputURL != outputURL {
                 item.refreshOutputFileCache()
             }
+            return
+        }
+
+        switch record.state {
+        case .queued:
+            // Keep queued shared jobs marked converting in the legacy row model
+            // so manual encode actions cannot claim work owned by the service,
+            // while flagging them as queued so the row shows no progress bar.
+            item.status = .converting
+            item.isQueuedInApplicationJob = true
+            item.progress = 0
+            item.eta = nil
+            item.statusMessage = "Queued"
+            item.conversionError = nil
+        case .running, .cancelling:
+            let activeIndex = record.activeSourceIndex ?? record.outputURLs.count
+            item.status = .converting
+            item.conversionError = nil
+            if sourceIndex == activeIndex {
+                item.isQueuedInApplicationJob = false
+                if let activeProgress = record.activeSourceProgress {
+                    item.progress = min(max(activeProgress, 0), 1)
+                } else if let batchProgress = record.progress {
+                    let sourceCount = max(record.request.sourceURLs.count, 1)
+                    if sourceCount == 1 {
+                        item.progress = min(max(batchProgress, 0), 1)
+                    } else {
+                        let derived = batchProgress * Double(sourceCount) - Double(activeIndex)
+                        item.progress = min(max(derived, 0), 1)
+                    }
+                } else {
+                    item.progress = 0
+                }
+                if record.state == .cancelling {
+                    item.eta = nil
+                    item.statusMessage = "Cancelling"
+                } else if let stage = record.stage, progressIsDuration(stage) {
+                    item.eta = stage
+                    item.statusMessage = nil
+                } else {
+                    item.eta = nil
+                    item.statusMessage = record.stage ?? "Encoding"
+                }
+            } else {
+                item.isQueuedInApplicationJob = true
+                item.progress = 0
+                item.eta = nil
+                item.statusMessage = record.state == .cancelling ? "Cancelling" : "Queued"
+            }
+        case .succeeded:
+            // Handled above.
+            break
+        case .failed:
+            item.status = .failed
+            item.isQueuedInApplicationJob = false
+            item.progress = 0
+            item.eta = nil
+            item.statusMessage = "Shared job failed"
+            item.conversionError = record.diagnostic
+        case .interrupted:
+            item.status = .failed
+            item.isQueuedInApplicationJob = false
+            item.progress = 0
+            item.eta = nil
+            item.statusMessage = "Interrupted after app restart"
+            item.conversionError = record.diagnostic
+        case .cancelled:
+            item.status = .cancelled
+            item.isQueuedInApplicationJob = false
+            item.progress = 0
+            item.eta = nil
+            item.statusMessage = nil
+            item.conversionError = nil
         }
     }
 }

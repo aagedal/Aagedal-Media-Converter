@@ -1043,6 +1043,7 @@ struct VideoQueueTableView: NSViewRepresentable {
                 applicationJobID: item.applicationJobID,
                 applicationJobOrigin: item.applicationJobOrigin,
                 applicationJobSettingsSummary: item.applicationJobSettingsSummary,
+                isQueuedInApplicationJob: item.isQueuedInApplicationJob,
                 comment: item.comment,
                 metadataEditorSettings: item.metadataEditorSettings,
                 sourceTextMetadata: ContainerTextMetadata(description: metadata?.description, comment: metadata?.comment, sourceURL: metadata?.sourceURL),

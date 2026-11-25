@@ -27,14 +27,14 @@ extension VideoFileCellView {
     func updateToggleButtons(config: VideoFileCellConfiguration) {
         // --- Encode button (green play icon) ---
         encodeButton.isHidden = false
-        let isEncoding = config.status == .converting
+        let isEncoding = config.status == .converting && !config.isQueuedInApplicationJob
         encodeButton.image = VideoFileCellView.Symbol.playFill
         encodeButton.contentTintColor = isEncoding ? .systemGreen : .systemGreen.withAlphaComponent(0.75)
         // Only waiting, ungrouped rows not owned by a shared job can start on their own.
         let canEncodeNow = config.status == .waiting && !config.isGroupChild
             && config.applicationJobID == nil && !config.isDownloading && !config.isQueuedForDownload
         encodeButton.isEnabled = canEncodeNow
-        encodeButton.toolTip = isEncoding
+        encodeButton.toolTip = config.status == .converting
             ? String(localized: "Encoding in progress")
             : (config.isGroupChild
                 ? String(localized: "Encode the group from its header", comment: "Tooltip on a grouped item's disabled encode button.")
@@ -242,7 +242,11 @@ extension VideoFileCellView {
 
             switch config.status {
             case .waiting: return ("WAITING", "clock", .secondaryLabelColor)
-            case .converting: return ("ENCODING", "arrow.trianglehead.2.clockwise", .systemBlue)
+            case .converting:
+                if config.isQueuedInApplicationJob {
+                    return ("QUEUED", "clock", .secondaryLabelColor)
+                }
+                return ("ENCODING", "arrow.trianglehead.2.clockwise", .systemBlue)
             case .done: return ("DONE", "checkmark.circle", .systemGreen)
             case .failed: return ("FAILED", "exclamationmark.circle", .systemRed)
             case .cancelled: return ("CANCELLED", "xmark.circle", .secondaryLabelColor)
@@ -421,6 +425,10 @@ extension VideoFileCellView {
         case .waiting:
             return ""
         case .converting:
+            if config.isQueuedInApplicationJob {
+                if config.statusMessage == "Cancelling" { return "Cancelling" }
+                return ""
+            }
             let pct = Int(config.progress * 100)
             let stagePrefix: String = {
                 guard let stage = config.statusMessage, !stage.isEmpty else { return "" }

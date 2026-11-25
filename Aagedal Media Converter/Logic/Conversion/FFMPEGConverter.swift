@@ -1121,13 +1121,20 @@ actor FFMPEGConverter {
         }
         let frameStallTracker = FrameStallTracker()
         let progressThrottler = ProgressThrottler()
-        let frameRate = request.videoFrameRate ?? 24.0  // Default to 24fps if not provided
 
-        // For DCP / IMF exports, scale FFmpeg progress to 0-75% to leave room for post-processing steps
+        // Scale FFmpeg progress to leave room for post-processing steps so progress stays monotonic.
         let ffmpegProgressUpdate: @Sendable (Double, String?) -> Void
         if isDCPExport || isIMFExport {
             ffmpegProgressUpdate = { progress, eta in
                 progressUpdate(progress * 0.75, eta)
+            }
+        } else if needsBMXRewrap {
+            ffmpegProgressUpdate = { progress, eta in
+                progressUpdate(progress * 0.95, eta)
+            }
+        } else if avcIndexConcatInput != nil {
+            ffmpegProgressUpdate = { progress, eta in
+                progressUpdate(progress * 0.97, eta)
             }
         } else {
             ffmpegProgressUpdate = progressUpdate
@@ -1144,7 +1151,7 @@ actor FFMPEGConverter {
         let progressStreamParser = FFMPEGProgressStreamParser(
             totalDuration: totalDurationBox,
             effectiveDuration: effectiveDurationBox,
-            frameRate: frameRate,
+            explicitFrameRate: request.videoFrameRate,
             frameStallTracker: frameStallTracker,
             progressThrottler: progressThrottler,
             progressUpdate: gatedProgressUpdate
@@ -2510,7 +2517,11 @@ actor FFMPEGConverter {
         private let lock = NSLock()
         private let totalDuration: DurationBox
         private let effectiveDuration: DurationBox
-        private let frameRate: Double
+        private let explicitFrameRate: Double?
+        private var detectedFrameRate: Double?
+        private var hasTimeProgress = false
+        private var lastSpeed: Double?
+        private var maxProgress: Double = 0.0
         private let frameStallTracker: FrameStallTracker
         private let progressThrottler: ProgressThrottler
         private let progressUpdate: @Sendable (Double, String?) -> Void
@@ -2519,14 +2530,14 @@ actor FFMPEGConverter {
         init(
             totalDuration: DurationBox,
             effectiveDuration: DurationBox,
-            frameRate: Double,
+            explicitFrameRate: Double? = nil,
             frameStallTracker: FrameStallTracker,
             progressThrottler: ProgressThrottler,
             progressUpdate: @escaping @Sendable (Double, String?) -> Void
         ) {
             self.totalDuration = totalDuration
             self.effectiveDuration = effectiveDuration
-            self.frameRate = frameRate
+            self.explicitFrameRate = explicitFrameRate
             self.frameStallTracker = frameStallTracker
             self.progressThrottler = progressThrottler
             self.progressUpdate = progressUpdate
@@ -2558,13 +2569,25 @@ actor FFMPEGConverter {
 
         private func parse(_ output: String) {
             guard !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-            let (newTotalDuration, _) = FFMPEGProgressParser.handleOutput(
+            if explicitFrameRate == nil, detectedFrameRate == nil,
+               let parsedFPS = ParsingUtils.parseVideoFrameRate(from: output) {
+                detectedFrameRate = parsedFPS
+            }
+            if let speed = ParsingUtils.parseSpeed(from: output) {
+                lastSpeed = speed
+            }
+            let effectiveFrameRate = explicitFrameRate ?? detectedFrameRate ?? 24.0
+            let hadTimeLine = output.contains("time=")
+            let (newTotalDuration, parsedProgress) = FFMPEGProgressParser.handleOutput(
                 output,
                 totalDuration: totalDuration.value,
                 effectiveDuration: effectiveDuration.value,
-                frameRate: frameRate,
+                frameRate: effectiveFrameRate,
                 frameStallTracker: frameStallTracker,
                 progressThrottler: progressThrottler,
+                allowFrameFallback: !hasTimeProgress,
+                fallbackSpeed: lastSpeed,
+                minProgress: maxProgress,
                 progressUpdate: progressUpdate
             )
             if let newTotalDuration {
@@ -2572,6 +2595,12 @@ actor FFMPEGConverter {
                 if effectiveDuration.value == nil {
                     effectiveDuration.value = newTotalDuration
                 }
+            }
+            if let parsedProgress {
+                if hadTimeLine {
+                    hasTimeProgress = true
+                }
+                maxProgress = max(maxProgress, parsedProgress.0)
             }
         }
     }

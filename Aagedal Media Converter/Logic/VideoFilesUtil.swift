@@ -859,6 +859,9 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var applicationJobOrigin: ApplicationJobOrigin? = nil
     var applicationPresetID: ApplicationPresetID? = nil
     var applicationJobSettingsSummary: String? = nil
+    /// True when this row belongs to an active shared application job whose
+    /// executor has not started encoding this source yet.
+    var isQueuedInApplicationJob: Bool = false
     /// Whether audio should be muted (removed) in the output
     var isMuted: Bool = false
     /// Image sequence configuration (nil for regular video/audio files)
@@ -1048,6 +1051,7 @@ struct VideoItem: Identifiable, Equatable, Sendable {
         progress = 0.0
         eta = nil
         conversionError = nil
+        isQueuedInApplicationJob = false
         outputFileSizeBytes = nil
         analyticsResults = nil
         analyticsSourceRange = nil
